@@ -225,18 +225,19 @@ corrupt stores (`*.corrupt-<ms>`) are removed only on explicit user deletion
   `LaunchRefused`, `ToolsRefused`, or `RunFailure`; `resume` fails with
   `ResumeRefused` (`finished`, `unusableCheckpoint`, `earlierBuild`,
   `pluginUnavailable`, `notResumable`).
-- **Security & platform:** `system` is author-owned Nunjucks rendered once at
-  launch with `CWD`; never place end-user text inside `system` (`AGENTS.md`,
-  `MEMORY.md`, paths, and git branch are never template-rendered). Default
-  approval policy is `yolo`; narrow with `approval: 'ask' | 'never'` or
-  `Settings.set`. Under `ask`, attach `session.attach({ approve })` (requests
-  are durable rows; questions/retries never auto-answer). `nodePlatform({ storageDir })`
-  reads `<storageDir>/mcp.json` (stdio MCP `2025-11-25`), loads
-  `<storageDir>/AGENTS.md` then `<workspace>/AGENTS.md`, exposes writable
-  Markdown memory folders (`MEMORY.md`, first 16,000 chars), strips provider
-  keys from shell children, honors `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` (30m
-  stream timeout), and logs via your Effect `Logger` or `effectDiagnosticsLayer`
-  - `setLogSink`.
+- **System prompt (`system`):** Rendered once at launch as author-owned Nunjucks
+  with `CWD`; never place end-user text inside `system` (`AGENTS.md`,
+  `MEMORY.md`, paths, and git branch are never template-rendered).
+- **Approvals:** Default policy is `yolo`; narrow with
+  `approval: 'ask' | 'never'` or `Settings.set`. Under `ask`, attach
+  `session.attach({ approve })` (requests are durable rows; questions and
+  post-retry prompts never auto-answer).
+- **Platform (`nodePlatform`):** Reads `<storageDir>/mcp.json` (stdio MCP
+  `2025-11-25`), loads `<storageDir>/AGENTS.md` then `<workspace>/AGENTS.md`,
+  exposes writable Markdown memory folders (`MEMORY.md`, first 16,000 chars),
+  strips provider keys from shell children, honors `HTTP_PROXY` / `HTTPS_PROXY`
+  / `NO_PROXY` (30m stream timeout), and logs via your Effect `Logger` or
+  `effectDiagnosticsLayer` and `setLogSink`.
 
 </details>
 

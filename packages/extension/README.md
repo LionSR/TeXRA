@@ -49,7 +49,7 @@ There is one assistant and no agent menu. Tell it what you need and which files
 to work on; it runs shell commands, searches arXiv and Zotero, drives Lean 4,
 delegates coding to Codex or Claude Code, fans large jobs out across parallel
 helper agents, and runs autonomous multi-round goals verified by an independent
-judge. Interrupted runs resume from SQLite without repeating finished work, and
+judge. Interrupted tasks resume from SQLite without repeating finished work, and
 any task or message can be forked.
 
 | Family       | Programs                                                                                                                 | What it returns                                               |
@@ -64,19 +64,10 @@ Codex plugins, MCP servers, and per-project approval controls
 
 ## Models
 
-[![Anthropic](https://img.shields.io/badge/Anthropic-Claude-191919?style=flat)](https://texra.ai/guide/models#anthropic-models)
-[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--6-191919?style=flat)](https://texra.ai/guide/models#openai-models)
-[![Google](https://img.shields.io/badge/Google-Gemini_4-191919?style=flat)](https://texra.ai/guide/models#google-models)
-[![DeepSeek](https://img.shields.io/badge/DeepSeek-V4-191919?style=flat)](https://texra.ai/guide/models#deepseek-models)
-[![xAI](https://img.shields.io/badge/xAI-Grok-191919?style=flat)](https://texra.ai/guide/models#grok-xai-models)
-[![Moonshot](https://img.shields.io/badge/Moonshot-Kimi-191919?style=flat)](https://texra.ai/guide/models#moonshot-kimi-models)
-[![Qwen](https://img.shields.io/badge/DashScope-Qwen-191919?style=flat)](https://texra.ai/guide/models#dashscope-qwen-models)
-[![GLM](https://img.shields.io/badge/Z.AI-GLM-191919?style=flat)](https://texra.ai/guide/models#glm-zhipu-ai-z-ai-models)
-[![MiniMax](https://img.shields.io/badge/MiniMax-M3-191919?style=flat)](https://texra.ai/guide/models#minimax-models)
-[![Meta](https://img.shields.io/badge/Meta-Muse-191919?style=flat)](https://texra.ai/guide/models#meta-muse-models)
-
-Direct routes to all ten providers plus custom OpenAI Responses, Anthropic
-Messages, or Gemini Interactions endpoints. Mix models across helper agents and
+Direct routes to Anthropic, OpenAI, Google Gemini, DeepSeek, xAI Grok, Moonshot
+Kimi, Alibaba Qwen, Zhipu GLM, MiniMax, and Meta Muse, plus ChatGPT, Grok, Kimi
+Code, and GLM subscriptions and custom OpenAI Responses, Anthropic Messages, or
+Gemini Interactions endpoints. Mix models freely across helper agents and
 programs ([Models guide](https://texra.ai/guide/models)).
 
 ## Requirements & Docs

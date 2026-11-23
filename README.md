@@ -18,14 +18,9 @@ Open-source AI theorist for the desktop, VS Code, and the terminal.
 [![Open VSX Version](https://img.shields.io/open-vsx/v/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
 [![npm version](https://img.shields.io/npm/v/@texra-ai/cli?label=%40texra-ai%2Fcli)](https://www.npmjs.com/package/@texra-ai/cli)
 [![CLI downloads](https://img.shields.io/npm/dm/@texra-ai/cli?label=CLI%20downloads)](https://www.npmjs.com/package/@texra-ai/cli)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-6F387A?style=flat)](LICENSE)
 
-[![Desktop App](https://img.shields.io/badge/Desktop_App-macOS_%7C_Windows_%7C_Linux-6F387A?style=for-the-badge)](https://github.com/texra-ai/texra-desktop-releases/releases)
-[![Docs](https://img.shields.io/badge/Docs-texra.ai%2Fguide-270939?style=for-the-badge)](https://texra.ai/guide/)
-[![Worldline Runtime](https://img.shields.io/badge/Agent_Runtime-%40texra--ai%2Fworldline-6F387A?style=for-the-badge)](packages/harness/README.md)
-[![LLM SDK](https://img.shields.io/badge/LLM_Layer-%40texra--ai%2Fllm-270939?style=for-the-badge)](packages/llm/README.md)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-191919?style=for-the-badge)](LICENSE)
-
-[Install](#install) · [Programs](#programs) · [Models](#models) · [Work with TeXRA](#work-produced-with-texra) · [Worldline SDK](#build-on-texras-runtime) · [Sponsor](https://github.com/sponsors/texra-ai)
+[Desktop App](https://github.com/texra-ai/texra-desktop-releases/releases) · [Docs](https://texra.ai/guide/) · [Install](#install) · [Programs](#programs) · [Models](#models) · [Work with TeXRA](#work-produced-with-texra) · [Worldline SDK](#build-on-texras-runtime) · [Sponsor](https://github.com/sponsors/texra-ai)
 
 </div>
 
@@ -50,7 +45,7 @@ subscriptions, and requests go straight from your machine to the provider.
   and files; there is no agent menu. For large jobs, the assistant writes sandboxed
   JavaScript to fan out helper agents in parallel, delegates coding to Codex or
   Claude Code, or runs multi-round goals checked by an independent judge.
-- **Built for multi-hour problems.** Runs persist to SQLite, resume after a
+- **Built for multi-hour problems.** Tasks persist to SQLite, resume after a
   crash without repeating finished work, fork at any turn, and stay alive in a
   shared background service across Desktop, VS Code, and CLI.
 - **Tailored to your project.** Add rules in `AGENTS.md`, Markdown memory,
@@ -99,21 +94,11 @@ Ask the assistant in plain words or run `texra run <program> --input <file>`
 
 ## Models
 
-[![Anthropic](https://img.shields.io/badge/Anthropic-Claude-191919?style=flat)](https://texra.ai/guide/models#anthropic-models)
-[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--6-191919?style=flat)](https://texra.ai/guide/models#openai-models)
-[![Google](https://img.shields.io/badge/Google-Gemini_4-191919?style=flat)](https://texra.ai/guide/models#google-models)
-[![DeepSeek](https://img.shields.io/badge/DeepSeek-V4-191919?style=flat)](https://texra.ai/guide/models#deepseek-models)
-[![xAI](https://img.shields.io/badge/xAI-Grok-191919?style=flat)](https://texra.ai/guide/models#grok-xai-models)
-[![Moonshot](https://img.shields.io/badge/Moonshot-Kimi-191919?style=flat)](https://texra.ai/guide/models#moonshot-kimi-models)
-[![Qwen](https://img.shields.io/badge/DashScope-Qwen-191919?style=flat)](https://texra.ai/guide/models#dashscope-qwen-models)
-[![GLM](https://img.shields.io/badge/Z.AI-GLM-191919?style=flat)](https://texra.ai/guide/models#glm-zhipu-ai-z-ai-models)
-[![MiniMax](https://img.shields.io/badge/MiniMax-M3-191919?style=flat)](https://texra.ai/guide/models#minimax-models)
-[![Meta](https://img.shields.io/badge/Meta-Muse-191919?style=flat)](https://texra.ai/guide/models#meta-muse-models)
-
-Direct routes to all ten providers, ChatGPT / Grok / Kimi Code / GLM
-subscriptions, and custom OpenAI Responses, Anthropic Messages, or Gemini
-Interactions endpoints. Mix models freely across helper agents and programs
-([Models guide](https://texra.ai/guide/models)).
+Direct routes to Anthropic, OpenAI, Google Gemini, DeepSeek, xAI Grok, Moonshot
+Kimi, Alibaba Qwen, Zhipu GLM, MiniMax, and Meta Muse, plus ChatGPT, Grok, Kimi
+Code, and GLM subscriptions and custom OpenAI Responses, Anthropic Messages, or
+Gemini Interactions endpoints. Mix models freely across helper agents and
+programs ([Models guide](https://texra.ai/guide/models)).
 
 ## Work produced with TeXRA
 
