@@ -67,9 +67,16 @@ function afterActivation(
   return { ...recorded, own, goal: [] };
 }
 
+/** Whether two grants decide every kind alike: the same own value, the
+ *  same goal grant and the same limit, whatever order their keys were
+ *  written in. */
 const sameGrants = (a: ApprovalGrants, b: ApprovalGrants): boolean =>
-  JSON.stringify([a.own, a.goal.toSorted(), a.limit]) ===
-  JSON.stringify([b.own, b.goal.toSorted(), b.limit]);
+  a.limit === b.limit &&
+  APPROVAL_BYPASS_KINDS.every(
+    (kind) =>
+      a.own[kind] === b.own[kind] &&
+      a.goal.includes(kind) === b.goal.includes(kind),
+  );
 
 /** The `approval.policy` row that records `snapshot` as a run's grants. */
 const policyRow = (runId: RunId, snapshot: ApprovalGrants) => ({
