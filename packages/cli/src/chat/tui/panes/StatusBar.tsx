@@ -51,9 +51,9 @@ interface StatusBarProps {
   /** True when the focused stream has a composer for slash commands and text. */
   readonly chatInputAvailable: boolean;
   readonly commandName?: string;
-  readonly foregroundInputActive?: boolean;
+  readonly foregroundInputActive: boolean;
   /** The active run's transcript holds a script's calls (Ctrl-O). */
-  readonly scriptAvailable?: boolean;
+  readonly scriptAvailable: boolean;
 }
 
 /**
@@ -192,11 +192,13 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       : (runViewOf(view, focusedRunId)?.label ?? focusedRunId);
 
   const display = buildStatusBarDisplay(displayRun, view, {
-    turn: {
-      elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
-      runningFrame:
-        runStartedAt !== undefined ? loadingFrameAt(now) : undefined,
-    },
+    turn:
+      runStartedAt === undefined
+        ? undefined
+        : {
+            elapsedMs: now - runStartedAt,
+            runningFrame: loadingFrameAt(now),
+          },
     // Until a model is connected, the notice slot keeps saying how to connect
     // one; a real notice still wins while it shows.
     transientNotice:
