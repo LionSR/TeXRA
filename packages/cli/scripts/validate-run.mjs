@@ -1843,7 +1843,7 @@ async function validateTuiFork() {
     const seed = project.firstRun('First message');
     // A finished headless task continues as a fork, never as a chat over it.
     const replies = [
-      'The model holds that conversation; the original is in /resume.',
+      'Original task remains in /resume.',
       'First message | Second message',
     ];
     const exitId = await project.chat(
