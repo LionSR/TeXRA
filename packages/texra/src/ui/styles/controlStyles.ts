@@ -181,8 +181,11 @@ export const buttonStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
+  /* :where keeps the unkinded .action-button at the weight of .btn-ghost, so
+     the modifiers below (.is-row-content, .is-row, .is-compact, .is-link)
+     outrank it on a helper-built button as on a hand-built one. */
   .btn-ghost::part(base),
-  .action-button:not(.btn-primary):not(.btn-secondary)::part(base) {
+  .action-button:not(:where(.btn-primary, .btn-secondary))::part(base) {
     gap: 0;
     min-height: var(--height-button);
     padding-inline: var(--control-padding-inline);
@@ -198,12 +201,12 @@ export const buttonStyles: CSSResult = css`
   }
 
   .btn-ghost::part(base):hover,
-  .action-button:not(.btn-primary):not(.btn-secondary)::part(base):hover {
+  .action-button:not(:where(.btn-primary, .btn-secondary))::part(base):hover {
     background: var(--surface-hover);
   }
 
   .btn-ghost::part(base):active,
-  .action-button:not(.btn-primary):not(.btn-secondary)::part(base):active {
+  .action-button:not(:where(.btn-primary, .btn-secondary))::part(base):active {
     background: var(--surface-active);
   }
 
