@@ -181,7 +181,7 @@ function projectSection(
               className: 'shell-project-row is-row is-row-content',
               icon: 'folder',
               // prettier-ignore
-              text: html`<span class="shell-project-name">${name}</span>`,
+              text: html`<span class="shell-project-name truncate">${name}</span>`,
               title: key,
               current: active,
               onClick: () => callbacks.onSelectProject(key),

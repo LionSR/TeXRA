@@ -37,9 +37,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-workspace-project {
   flex: 1;
   min-width: 48px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
@@ -154,9 +151,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 }
 .shell-project-name {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
@@ -243,9 +237,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-editor-path {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }

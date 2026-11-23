@@ -260,7 +260,9 @@ export function createDesktopCommandPalette({
                             ${waIcon(entry.icon)}
                           </span>
                           <span class="desktop-command-palette-copy">
-                            <span class="desktop-command-palette-label">
+                            <span
+                              class="desktop-command-palette-label truncate"
+                            >
                               ${entry.label}
                             </span>
                           </span>
@@ -269,7 +271,7 @@ export function createDesktopCommandPalette({
                           entry.meta
                             ? html`<kbd
                                 slot="end"
-                                class="desktop-command-palette-meta"
+                                class="desktop-command-palette-meta truncate"
                                 >${entry.meta}</kbd
                               >`
                             : nothing

@@ -29,11 +29,8 @@
 }
 
 .desktop-review-summary strong {
-  overflow: hidden;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .desktop-review-file-count {

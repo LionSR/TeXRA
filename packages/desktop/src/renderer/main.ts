@@ -431,7 +431,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
   return html`
     <header class="shell-workspace-toolbar">
       ${sidebarToggle}
-      <span class="shell-workspace-project"
+      <span class="shell-workspace-project truncate"
         >${activeProject?.display.name ?? 'TeXRA'}</span
       >
       <nav class="shell-view-switch" aria-label="Project views">

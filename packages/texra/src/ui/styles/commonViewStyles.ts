@@ -75,6 +75,13 @@ export const overlineStyles: CSSResult = css`
   }
 `;
 
+/** {@link truncateDeclarations} as a class, for the desktop's light DOM. */
+export const truncateStyles: CSSResult = css`
+  .truncate {
+    ${truncateDeclarations}
+  }
+`;
+
 /**
  * The chevron of a disclosure: it turns to point down while the control
  * around it (anything carrying `aria-expanded`) is open.

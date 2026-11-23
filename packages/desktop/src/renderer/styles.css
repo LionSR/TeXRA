@@ -301,9 +301,6 @@ wa-input.desktop-command-palette-input {
 .desktop-command-palette-label,
 .desktop-command-palette-meta {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .desktop-command-palette-item-icon {
@@ -498,12 +495,9 @@ wa-input.desktop-command-palette-input {
 
 .desktop-log-viewer-header p {
   margin: 0;
-  overflow: hidden;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .desktop-log-viewer-actions {
@@ -645,11 +639,8 @@ wa-input.desktop-command-palette-input {
 
 .desktop-log-entry-preview {
   min-width: 0;
-  overflow: hidden;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .desktop-log-entry-content {
@@ -849,9 +840,6 @@ wa-input.desktop-command-palette-input {
 .desktop-editor-tree-label {
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Small filled circle, shared by every status-indicator dot in the desktop

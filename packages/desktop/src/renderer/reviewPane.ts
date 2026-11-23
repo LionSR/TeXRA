@@ -139,7 +139,9 @@ export function createReviewPane(): ReviewPaneController {
       html`
         <header class="desktop-review-toolbar">
           <div class="desktop-review-summary">
-            <strong>${selected?.title ?? 'Review changes'}</strong>
+            <strong class="truncate"
+              >${selected?.title ?? 'Review changes'}</strong
+            >
             ${buildLineChangeStats({ added: additions, removed: deletions })}
           </div>
           <span class="desktop-review-file-count">

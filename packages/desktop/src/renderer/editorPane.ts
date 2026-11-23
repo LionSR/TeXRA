@@ -451,7 +451,7 @@ export function createEditorPane(
           <span class="desktop-editor-tree-icon">
             ${waIcon(expanded ? 'folder-open' : 'folder')}
           </span>
-          <span class="desktop-editor-tree-label">${node.name}</span>
+          <span class="desktop-editor-tree-label truncate">${node.name}</span>
           ${
             loading
               ? html`<wa-tree-item class="desktop-editor-tree-status" disabled
@@ -484,7 +484,7 @@ export function createEditorPane(
         title=${node.path}
       >
         <span class="desktop-editor-tree-icon">${waIcon('file-lines')}</span>
-        <span class="desktop-editor-tree-label">${node.name}</span>
+        <span class="desktop-editor-tree-label truncate">${node.name}</span>
         ${dirty ? html`<span class="status-dot desktop-editor-dirty-dot"></span>` : nothing}
       </wa-tree-item>
     `;
