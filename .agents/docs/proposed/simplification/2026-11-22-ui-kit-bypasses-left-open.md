@@ -20,12 +20,12 @@ pointer prompt row and render-error line onto the kit.
      always renders `size="s"`) and its local `wa-button::part(base)` height;
    - `desktopShell.ts` project rows (`@dblclick`, `@keydown`) and
      `reviewPane.ts` file rows (`aria-current`, `style`);
-   - `SessionComposer.ts` chip trigger (the `.chip-label` span);
-   - `LatexdiffResults.ts` file link: the helper fits, but `LogList`'s
-     composed-path `.file-link` delegation must be checked against it first.
-2. **`RunTab.ts` expand toggle** hand-builds `renderIconActionButtonParts`
-   (button plus `wa-tooltip`) because the helper takes no `data-*` attribute
-   and no class on its icon.
+   - `SessionComposer.ts` chip trigger (the `.chip-label` span).
+2. **Row buttons that mark the current row.** `desktopShell.ts` project rows
+   and `reviewPane.ts` file rows are the two raw `btn-ghost is-row` buttons
+   with `aria-current`; `SettingsCatalog.ts` writes the same on a native
+   `<button>`. One `current` option on the helper would cover the first two
+   once the project row's rename gestures move to its enclosing item.
 3. **Hard-coded row heights** beside `--row-height` and `--height-control*`:
    `ScriptStage.ts` (32px), `logEntryStyles.ts` (26px), `NewTaskHero.ts`
    (24px), `progressAppStyles.ts` (44px), and the desktop's `styles.css` and
@@ -44,6 +44,21 @@ pointer prompt row and render-error line onto the kit.
    one-row clipping wrapper; `PromptInput` could own that wrapper for
    `maxDisplayRows={1}` once an Ink render check confirms the other three
    rows do not change.
+
+8. **`RunHeader.ts` chips hint two ways.** The forked-from chip names a
+   native `title`, the ancestor chips beside it a `<wa-tooltip>`; both are
+   native `<button class="run-chip">`. Pick one hint for the chip.
+9. **`renderDisclosureToggle` (`wa/settingsSection.ts`)** still builds its
+   own `wa-button` with a `.settings-disclosure-toggle` skin, because its
+   content is a template (a name and a count). The chevron is the kit's;
+   the skin is the remaining per-component one.
+
+The 2026-11-23 run closed two entries: the run tab's expand toggle and the
+script stage's Log toggle take their chevron from the button helper
+(`expanded`), and the latexdiff file links are the kit's link button. Its
+scan of the three hosts found no custom SVG or glyph icon in the web UI,
+no color literal outside the palettes, and no TUI glyph, color or bordered
+box outside `packages/cli/src/tui/ui/`.
 
 ## Checked and declined
 
