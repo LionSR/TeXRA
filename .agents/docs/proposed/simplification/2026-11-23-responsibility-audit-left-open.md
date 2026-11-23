@@ -66,3 +66,22 @@ The PR that adds this note lands five findings:
    `authFailed` headline only in the terminal. Proposed: the clone module
    answers each outcome as a message and its links, which a host renders
    as buttons or as lines.
+   Landed on 2026-11-23 (evening): `overleafCloneNotice`
+   (`packages/texra/src/latex/overleafClone.ts`) words every outcome with
+   its links and git's words; the token guide is offered for Overleaf
+   alone, and both hosts keep the `authFailed` headline. Each host adds
+   only its next step, and the extension its own buttons for a missing
+   git.
+4. **Which models a person can enable is listed twice**
+   (2026-11-23 evening). The settings view's Models tab
+   (`buildSelectionItems`,
+   `packages/texra/src/controllers/settingsView/modelSelection.ts`) lists
+   the configs whose source `MODEL_SOURCE_ORDER` places, read through
+   `readModelOptions`, and names each row's provider by
+   `resolveModelSource`; the terminal's `texra models enabled` and
+   `/models` (`listCliEnabledModelCatalog`,
+   `packages/cli/src/runtime/models/enabledModels.ts`) list `MODELS` minus
+   the unserved ones and name the provider by `config.provider`, so a
+   Kimi Code-only model reads under another provider there. Proposed: one
+   catalog read in the app that both surfaces sort and print their own
+   way. It changes the CLI's JSON `provider` field for those models.

@@ -81,6 +81,9 @@ Held back: the Codex and Claude plugins declare `installCommand` as a getter
 so their probe stays deferred; an array literal would evaluate it when the
 plugin loads. Needs a lazy `actions` first.
 
+Landed on 2026-11-23 (evening): `setup.actions`, a getter on the Codex and
+Claude cards.
+
 ## 6. Smaller
 
 - `ModelSelectionItem`
