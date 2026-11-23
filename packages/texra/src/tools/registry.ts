@@ -31,6 +31,7 @@ import replacementEngine, {
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import { texraPlugin } from '@texra/tools/texraPlugin';
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
+import type { ToolInstallAction } from '@texra/shared/settingsView/settingsViewMessages';
 import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import { hasExtension } from '@texra-ai/worldline/schemas';
@@ -109,14 +110,14 @@ import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
 export interface ToolPluginSetup {
-  readonly installGuide?: string;
-  readonly installUrl?: string;
-  /** VS Code extension ID: when present, the dashboard offers a direct "Install" button. */
-  readonly installExtensionId?: string;
-  /** Shell command the dashboard can run in an integrated terminal to install the tool. */
-  readonly installCommand?: string;
-  /** Shell command the dashboard can run to sign the user in (e.g. `codex login`). */
-  readonly authCommand?: string;
+  /**
+   * The install and sign-in steps the card offers, in order: the guide, a
+   * command the dashboard runs in a terminal to install the tool or sign
+   * the user in, a VS Code extension (offered only where an editor is),
+   * the install page. A plugin whose install command depends on a probe
+   * declares this as a getter, so the probe runs when the card is read.
+   */
+  readonly actions?: readonly ToolInstallAction[];
   readonly configNotes?: string;
   /** Short auth/billing note shown as a badge (e.g. "Uses ChatGPT subscription"). */
   readonly authNote?: string;

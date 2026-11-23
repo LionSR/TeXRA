@@ -8,6 +8,7 @@ import { Argument, Command } from 'effect/cli';
 import { Secrets, type PlatformSecrets } from '@texra-ai/worldline/plugins';
 import {
   cloneOverleafProject,
+  overleafCloneNotice,
   type OverleafCloneOutcome,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
@@ -18,7 +19,6 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import { osPlatformOf } from '@texra/shared/osPlatform';
-import { CLONE_COPY } from '@ui/copy/clone';
 
 // Local imports - runtime
 import {
@@ -65,66 +65,61 @@ function buildOverleafClonePorts(
   };
 }
 
+/** The exit code each outcome but `Cloned` ends the command with. */
+const OUTCOME_EXIT_CODE = {
+  Cancelled: CliExitCode.Cancelled,
+  InvalidToken: CliExitCode.Usage,
+  GitMissing: CliExitCode.AgentError,
+  WorkspaceUnreadable: CliExitCode.AgentError,
+  WorkspaceNotEmpty: CliExitCode.AgentError,
+  AuthFailure: CliExitCode.AgentError,
+  CloneFailed: CliExitCode.AgentError,
+} as const satisfies Record<
+  Exclude<OverleafCloneOutcome['_tag'], 'Cloned'>,
+  CliExitCode
+>;
+
+/** The terminal's own next step after a notice: what to type. */
+const NEXT_STEP: Partial<Record<OverleafCloneOutcome['_tag'], string>> = {
+  WorkspaceNotEmpty:
+    'Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./project',
+  AuthFailure: 'Then rerun the command.',
+};
+
 /** Write the clone's outcome and return its exit code (none on success). */
 function presentCloneOutcome(
   context: CliContext,
   remote: OverleafRemote,
-  workspaceRoot: string,
   outcome: OverleafCloneOutcome,
 ): CliExitCode | undefined {
-  const gitError = (error: string) => {
-    if (!isQuiet(context)) writeTextStderr(`Git clone error: ${error}`);
-  };
-  switch (outcome._tag) {
-    case 'Cloned': {
-      writeCliResult(
-        context.outputFormat,
-        commandResult(
-          'clone',
-          {
-            cloned: true,
-            provider: remote.isOverleaf ? 'overleaf' : 'sharelatex',
-            host: remote.host,
-            destination: outcome.destination,
-          },
-          CLONE_COPY.cloned(remote, outcome.destination),
-        ),
-      );
-      return undefined;
-    }
-    case 'Cancelled':
-      writeTextStderr(CLONE_COPY.cancelled);
-      return CliExitCode.Cancelled;
-    case 'InvalidToken':
-      writeTextStderr(outcome.message);
-      writeTextStderr(`Token instructions: ${OVERLEAF_TOKEN_DOCS_URL}`);
-      return CliExitCode.Usage;
-    case 'GitMissing':
-      writeTextStderr(CLONE_COPY.gitMissing(osPlatformOf(process.platform)));
-      return CliExitCode.AgentError;
-    case 'WorkspaceUnreadable':
-      writeTextStderr(CLONE_COPY.unreadable(outcome.message));
-      return CliExitCode.AgentError;
-    case 'WorkspaceNotEmpty':
-      writeTextStderr(
-        `${CLONE_COPY.notEmpty(workspaceRoot)} Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./project`,
-      );
-      return CliExitCode.AgentError;
-    case 'AuthFailure': {
-      const next = remote.isOverleaf
-        ? `Generate a new token at ${OVERLEAF_GIT_TOKEN_URL}, then rerun the command.`
-        : 'Then rerun the command.';
-      writeTextStderr(
-        `${CLONE_COPY.authFailed} ${CLONE_COPY.authDetail(remote)} ${next}`,
-      );
-      gitError(outcome.error);
-      return CliExitCode.AgentError;
-    }
-    case 'CloneFailed':
-      writeTextStderr(CLONE_COPY.failed);
-      gitError(outcome.error);
-      return CliExitCode.AgentError;
+  const notice = overleafCloneNotice(
+    remote,
+    outcome,
+    osPlatformOf(process.platform),
+  );
+  if (outcome._tag === 'Cloned') {
+    writeCliResult(
+      context.outputFormat,
+      commandResult(
+        'clone',
+        {
+          cloned: true,
+          provider: remote.isOverleaf ? 'overleaf' : 'sharelatex',
+          host: remote.host,
+          destination: outcome.destination,
+        },
+        notice.message,
+      ),
+    );
+    return undefined;
   }
+  const next = NEXT_STEP[outcome._tag];
+  writeTextStderr(next ? `${notice.message} ${next}` : notice.message);
+  for (const link of notice.links)
+    writeTextStderr(`${link.label}: ${link.url}`);
+  if (notice.gitError !== undefined && !isQuiet(context))
+    writeTextStderr(`Git clone error: ${notice.gitError}`);
+  return OUTCOME_EXIT_CODE[outcome._tag];
 }
 
 export const cloneCommand = cliCommand('clone', {
@@ -168,7 +163,7 @@ export const cloneCommand = cliCommand('clone', {
         workspaceRoot,
         buildOverleafClonePorts(context, remote, yield* Secrets),
       );
-      return presentCloneOutcome(context, remote, workspaceRoot, outcome);
+      return presentCloneOutcome(context, remote, outcome);
     });
   },
 }).pipe(

@@ -13,15 +13,11 @@ import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
   cloneOverleafProject as runOverleafClone,
+  overleafCloneNotice,
   type OverleafCloneOutcome,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
-import {
-  OVERLEAF_GIT_TOKEN_URL,
-  OVERLEAF_TOKEN_DOCS_URL,
-  parseLatexGitUrl,
-  type OverleafRemote,
-} from '@latex/overleafProject';
+import { parseLatexGitUrl, type OverleafRemote } from '@latex/overleafProject';
 import {
   installAdvice,
   LATEX_TOOL_ENTRIES,
@@ -144,65 +140,34 @@ function buildOverleafClonePorts(
   };
 }
 
-/** Show the clone's outcome. A cancelled prompt has already said so. */
+/** Show the clone's outcome, its links as buttons. A cancelled prompt has
+ *  already said so, and a missing git offers this editor's own steps. */
 const presentCloneOutcome = Effect.fn('gitCommands.presentCloneOutcome')(
-  function* (
-    remote: OverleafRemote,
-    workspaceRoot: string,
-    outcome: OverleafCloneOutcome,
-  ) {
-    switch (outcome._tag) {
-      case 'Cloned':
-        return yield* vscodeUi.notify(
-          'info',
-          CLONE_COPY.cloned(remote, outcome.destination),
-        );
-      case 'Cancelled':
-        return;
-      case 'InvalidToken': {
-        yield* Effect.logError(outcome.message);
-        const action = yield* announce(
-          vscodeUi.ask('error', outcome.message, {
-            items: outcome.spec.tokenHint ? ['How to get a token'] : [],
-          }),
-          undefined,
-        );
-        if (action === 'How to get a token') {
-          yield* openUrl(OVERLEAF_TOKEN_DOCS_URL);
-        }
-        return;
-      }
-      case 'GitMissing':
-        return yield* promptGitMissing();
-      case 'WorkspaceUnreadable':
-        yield* showLoggedMessage(CLONE_COPY.unreadable(outcome.message));
-        return;
-      case 'WorkspaceNotEmpty':
-        yield* showLoggedMessage(
-          `${CLONE_COPY.notEmpty(workspaceRoot)} Open an empty folder, then clone again.`,
-        );
-        return;
-      case 'AuthFailure': {
-        yield* Effect.logError(`Clone failed: ${outcome.error}`);
-        const selected = yield* announce(
-          vscodeUi.ask('error', CLONE_COPY.authDetail(remote), {
-            items: remote.isOverleaf
-              ? ['Get new token', 'How to get a token']
-              : [],
-          }),
-          undefined,
-        );
-        if (selected === 'Get new token') {
-          yield* openUrl(OVERLEAF_GIT_TOKEN_URL);
-        } else if (selected === 'How to get a token') {
-          yield* openUrl(OVERLEAF_TOKEN_DOCS_URL);
-        }
-        return;
-      }
-      case 'CloneFailed':
-        yield* Effect.logError(`Clone failed: ${outcome.error}`);
-        return yield* vscodeUi.notify('error', CLONE_COPY.failed);
-    }
+  function* (remote: OverleafRemote, outcome: OverleafCloneOutcome) {
+    if (outcome._tag === 'Cancelled') return;
+    if (outcome._tag === 'GitMissing') return yield* promptGitMissing();
+    const notice = overleafCloneNotice(
+      remote,
+      outcome,
+      osPlatformOf(process.platform),
+    );
+    const message =
+      outcome._tag === 'WorkspaceNotEmpty'
+        ? `${notice.message} Open an empty folder, then clone again.`
+        : notice.message;
+    if (notice.level === 'error') yield* Effect.logError(message);
+    if (notice.gitError !== undefined)
+      yield* Effect.logError(`Clone failed: ${notice.gitError}`);
+    if (notice.links.length === 0)
+      return yield* vscodeUi.notify(notice.level, message);
+    const picked = yield* announce(
+      vscodeUi.ask(notice.level, message, {
+        items: notice.links.map((link) => link.label),
+      }),
+      undefined,
+    );
+    const link = notice.links.find(({ label }) => label === picked);
+    if (link) yield* openUrl(link.url);
   },
   withLogChannel(CHANNEL),
 );
@@ -234,7 +199,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
       workspaceRoot,
       buildOverleafClonePorts(yield* Secrets, label),
     );
-    yield* presentCloneOutcome(remote, workspaceRoot, outcome);
+    yield* presentCloneOutcome(remote, outcome);
   },
   withLogChannel(CHANNEL),
 );
