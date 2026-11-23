@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - CLI TUI rendering
-import type { NormalizedToolUse } from '@texra-ai/worldline/schemas';
+import type { ToolCallLog } from '@texra-ai/worldline/schemas';
 import {
   toolUseDisplayLines,
   toolUseStyledLines,
@@ -17,14 +17,9 @@ import type { ToolRow } from '@texra-ai/worldline/transcript';
 function toolUse(
   toolName: string,
   input: unknown,
-  overrides: Partial<NormalizedToolUse> = {},
+  overrides: Partial<ToolCallLog> = {},
 ): ToolRow {
-  const normalized: NormalizedToolUse = {
-    errorText: '',
-    outputText: '',
-    userInstructionText: '',
-    isUserFeedback: false,
-    headerSummary: '',
+  const log: ToolCallLog = {
     status: TOOL_CALL_STATUS.COMPLETED,
     toolName,
     input,
@@ -36,12 +31,8 @@ function toolUse(
     seqNo: 1,
     timestamp: 0,
     level: 'info',
-    model: toolRowModel(normalized),
-    log: {
-      toolName: normalized.toolName,
-      input: normalized.input,
-      status: normalized.status,
-    },
+    model: toolRowModel(log),
+    log,
   };
 }
 
@@ -52,8 +43,8 @@ describe('CLI tool display lines', () => {
       'bash',
       { command },
       {
-        headerSummary: command,
-        outputText: `\u001b[2Jcleared\tcol\rsplit\nkey`,
+        summary: command,
+        output: `\u001b[2Jcleared\tcol\rsplit\nkey`,
       },
     );
 
@@ -81,9 +72,8 @@ describe('CLI tool display lines', () => {
         { command: 'rm -rf build' },
         {
           status: TOOL_CALL_STATUS.FAILED,
-          errorText: 'Rejected by user',
-          userInstructionText: 'keep the build folder',
-          isUserFeedback: true,
+          error: 'Rejected by user',
+          userInstruction: 'keep the build folder',
         },
       ),
     );

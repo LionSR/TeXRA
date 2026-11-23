@@ -12,7 +12,17 @@
  */
 
 // Third-party imports
-import { Clock, Duration, Effect, Random, Ref, Schedule, Schema } from 'effect';
+import {
+  Array as Arr,
+  Clock,
+  Duration,
+  Effect,
+  Order,
+  Random,
+  Ref,
+  Schedule,
+  Schema,
+} from 'effect';
 import { LRUCache } from 'lru-cache';
 
 // Local imports
@@ -251,12 +261,12 @@ function getNewestTimestamp(
     updated_at?: string | null;
   }>,
 ): string | undefined {
-  let best: string | undefined;
-  for (const it of items) {
-    const t = it.updated_at ?? it.created_at;
-    if (t && (!best || t > best)) best = t;
-  }
-  return best;
+  const stamps = items
+    .flatMap((it) => it.updated_at ?? it.created_at ?? [])
+    .filter((stamp) => stamp !== '');
+  return Arr.isArrayNonEmpty(stamps)
+    ? Arr.max(stamps, Order.String)
+    : undefined;
 }
 
 /** A copy of `cache` with the same capacity, entries and recency order. */

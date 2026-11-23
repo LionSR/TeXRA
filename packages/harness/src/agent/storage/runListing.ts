@@ -54,7 +54,6 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
           timestamp: new Date(run.launchedAt).toISOString(),
           outcome: run.outcome,
           ...(run.description === null ? {} : { description: run.description }),
-          ...(run.model === null ? {} : { model: run.model }),
           continuation:
             continuation.kind === 'checkpoint'
               ? { kind: 'continues' }

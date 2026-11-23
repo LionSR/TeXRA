@@ -1,10 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
-import {
-  parseUserQuestionAnswer,
-  userQuestionDecision,
-} from '@cli/runtime/headless/userQuestionAnswer';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   hiddenRowsText,
@@ -28,12 +24,12 @@ import {
 
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import {
-  toggleUserQuestionSelection,
-  updateUserQuestionAnswers,
-} from './UserQuestionState';
+  typedUserQuestionEntry,
+  userQuestionDecision,
+  type UserQuestionEntry,
+} from '@texra/shared/session/userQuestionAnswer';
 import { TextInput } from '../input/TextInput';
 import type {
-  UserQuestionAnswers,
   UserQuestionRequest,
   UserQuestionPrompt,
 } from '@texra-ai/worldline/schemas';
@@ -248,7 +244,7 @@ interface QuestionVariantProps {
   readonly payload: UserQuestionRequest;
   readonly question: UserQuestionPrompt;
   readonly index: number;
-  readonly onSubmit: (answer: string | string[] | undefined) => void;
+  readonly onSubmit: (entry: UserQuestionEntry) => void;
   readonly onCancel: () => void;
 }
 
@@ -357,10 +353,16 @@ function ChoiceQuestion(props: QuestionVariantProps): React.JSX.Element {
         onToggle={
           multi
             ? (label: string) =>
-                setSelected((s) => toggleUserQuestionSelection(s, label))
+                setSelected((s) =>
+                  s.includes(label)
+                    ? s.filter((item) => item !== label)
+                    : [...s, label],
+                )
             : undefined
         }
-        onSelect={multi ? () => props.onSubmit([...selected]) : props.onSubmit}
+        onSelect={(label: string) =>
+          props.onSubmit({ selected: multi ? selected : [label], text: '' })
+        }
         onCancel={props.onCancel}
       />
     </QuestionShell>
@@ -391,6 +393,9 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
       question={props.question}
       index={props.index}
       hints={[
+        ...(props.question.multiSelect
+          ? [{ key: '1,2', action: 'pick options' }]
+          : []),
         { key: 'Enter', action: 'submit answer' },
         { key: 'Esc', action: 'skip' },
       ]}
@@ -422,7 +427,7 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
             // usual Ctrl+C stop or exit behavior.
             onEscape={props.onCancel}
             onSubmit={(value) =>
-              props.onSubmit(parseUserQuestionAnswer(value, props.question))
+              props.onSubmit(typedUserQuestionEntry(value, props.question))
             }
           />
         </Box>
@@ -433,7 +438,7 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
 
 export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
   const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState<UserQuestionAnswers>({});
+  const [entries, setEntries] = useState<readonly UserQuestionEntry[]>([]);
   const { availableRows, onDecide, payload } = props;
   const { questions } = payload;
   const question = questions[index];
@@ -442,13 +447,13 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
     onDecide({ action: 'skip' });
   }
 
-  function submitAnswer(answer: string | string[] | undefined): void {
-    const nextAnswers = updateUserQuestionAnswers(answers, question, answer);
+  function submitAnswer(entry: UserQuestionEntry): void {
+    const nextEntries = [...entries, entry];
     if (index + 1 >= questions.length) {
-      onDecide(userQuestionDecision(nextAnswers));
+      onDecide(userQuestionDecision(questions, nextEntries));
       return;
     }
-    setAnswers(nextAnswers);
+    setEntries(nextEntries);
     setIndex(index + 1);
   }
 
@@ -463,11 +468,13 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
     onCancel: cancel,
   };
 
-  if (question.allowFreeText && !question.multiSelect) {
-    return <FreeTextQuestion {...variantProps} />;
+  // A question that takes typed text is answered on one line, where numbers
+  // pick the listed options: a multi-select one mixes both there.
+  if (question.allowFreeText) {
+    return <FreeTextQuestion key={index} {...variantProps} />;
   }
-  // Keyed by question index: the merged picker is now one element type across
-  // consecutive questions, so without a key React would reuse the instance and
-  // carry the previous question's toggled set into the next one.
+  // Both are keyed by question index: consecutive questions render one
+  // element type, so without a key React would reuse the instance and carry
+  // the previous question's typed line or toggled set into the next one.
   return <ChoiceQuestion key={index} {...variantProps} />;
 }

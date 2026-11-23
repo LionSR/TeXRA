@@ -337,7 +337,6 @@ export class ScriptStage extends LitElement {
       </div>
       <div class="log">
         ${renderLabeledActionButton({
-          icon: this.logOpen ? 'chevron-down' : 'chevron-right',
           text: 'Log',
           expanded: this.logOpen,
           onClick: () => this.toggleLog(),

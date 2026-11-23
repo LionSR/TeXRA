@@ -98,8 +98,8 @@ const review = Effect.gen(function* () {
         },
       });
       const stageOnHost = host.stagePreview.bind(host);
-      vi.spyOn(host, 'stagePreview').mockImplementation((request) =>
-        stageOnHost(request).pipe(
+      vi.spyOn(host, 'stagePreview').mockImplementation((request, warn) =>
+        stageOnHost(request, warn).pipe(
           Effect.tap((preview) => Effect.sync(() => staged.push(preview))),
         ),
       );

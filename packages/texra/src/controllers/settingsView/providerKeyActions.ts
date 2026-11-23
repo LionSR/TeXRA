@@ -50,11 +50,14 @@ export const buildProfilePage = Effect.fn('buildProfilePage')(function* (
             : null,
           providerSettings: yield* Effect.forEach(
             TEXRA_SETTINGS.modelsTab(provider),
-            ({ entry, surface }) =>
+            ({ entry, control: { label, description, warning, link } }) =>
               Settings.get(stores, entry).pipe(
                 Effect.map((value) => ({
-                  ...surface,
                   key: entry.key,
+                  label: label ?? entry.title,
+                  description: description ?? entry.description,
+                  ...(warning !== undefined && { warning }),
+                  ...(link !== undefined && { link }),
                   value: value === true,
                 })),
               ),

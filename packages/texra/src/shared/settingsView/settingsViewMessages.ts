@@ -157,10 +157,8 @@ const ModelSelectionItemSchema = Schema.Struct({
       saved: Schema.optional(ReasoningEffortSchema),
     }),
   ),
-  /** Whether this model qualifies as a "fast first response" pick (price-based). */
-  isFast: Schema.optional(Schema.Boolean),
   /** Whether this model's API pricing earns the premium warning (price-based). */
-  isExpensive: Schema.optional(Schema.Boolean),
+  isExpensive: Schema.Boolean,
   // Resolved once by modelOptionsFrom and carried verbatim so the
   // Models tab renders availability without re-deriving it at render time.
   ...ModelAvailabilityFieldsSchema.fields,

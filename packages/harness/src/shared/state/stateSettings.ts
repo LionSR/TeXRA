@@ -1,5 +1,6 @@
 // Third-party imports
 import { Predicate, Schema } from 'effect';
+import { CHATGPT_SUBSCRIPTION_MAX_CONTEXT_WINDOW } from '@texra-ai/llm';
 import {
   decodingDefault,
   ActiveSkillSourceScopeSchema,
@@ -244,6 +245,10 @@ export const CHATGPT_PREFER_SUBSCRIPTION_SETTING = {
     'Route supported OpenAI models through your signed-in ChatGPT subscription instead of an API key (experimental).',
 } as const satisfies SettingRow<boolean>;
 
+/** The largest ChatGPT-subscription input budget, in the row's unit. */
+const CHATGPT_MAX_CONTEXT_WINDOW_K =
+  CHATGPT_SUBSCRIPTION_MAX_CONTEXT_WINDOW / 1000;
+
 /**
  * The ChatGPT-subscription input budget; unset, each model takes the window
  * the Codex backend grants it.
@@ -260,13 +265,14 @@ export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = {
   slot: 'config',
   schema: decodingDefault(
     Schema.NullOr(
-      Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 872 })),
+      Schema.Int.check(
+        Schema.isBetween({ minimum: 1, maximum: CHATGPT_MAX_CONTEXT_WINDOW_K }),
+      ),
     ),
     null,
   ),
   title: 'Subscription input token budget (K tokens)',
-  description:
-    "Input token budget (in thousands, up to 872) for ChatGPT subscription routing. Leave empty to use each model's default.",
+  description: `Input token budget (in thousands, up to ${CHATGPT_MAX_CONTEXT_WINDOW_K}) for ChatGPT subscription routing. Leave empty to use each model's default.`,
 } as const satisfies SettingRow<number | null>;
 
 export const XAI_PREFER_SUBSCRIPTION_SETTING = {
@@ -461,7 +467,7 @@ export const HELPER_MODEL_SETTING = {
   schema: Schema.UndefinedOr(Schema.NonEmptyString),
   title: 'Helper model',
   description:
-    "Model for quick helper steps like task titles and LaTeX fixes. Leave empty to use the task's own model.",
+    "Model for quick helper steps like task titles and small fixes. Leave empty to use the task's own model.",
 } as const satisfies SettingRow<string | undefined>;
 
 export const KIMI_CODE_PREFER_SETTING = {

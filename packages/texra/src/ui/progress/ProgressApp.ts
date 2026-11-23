@@ -19,6 +19,7 @@
 
 // Third-party imports
 import { getBasename } from '@texra-ai/worldline/schemas';
+import { String as Str } from 'effect';
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -42,7 +43,6 @@ import {
   LAUNCH_FILE_LISTS,
 } from '@ui/copy/fileSelectConfigs';
 import { designTokens } from '@ui/styles';
-import { texraGuideUrl } from '@ui/copy/guide';
 import {
   renderIconActionButton,
   renderIconActionButtonParts,
@@ -50,7 +50,6 @@ import {
 } from '@ui/wa/actionButtons';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
-import { READ_GUIDE_BUTTON_LABEL } from '@ui/copy/instructionActions';
 import { requestErrorText } from '@ui/copy/requestErrors';
 
 // Local imports - progress view frontend
@@ -185,19 +184,7 @@ export class ProgressApp extends LitElement {
     return html`<wa-callout class="request-notice" variant="danger">
       ${waIcon('circle-exclamation', { slot: 'icon' })}
       <div class="request-notice-content">
-        <div>
-          ${requestErrorText(error)}
-          ${
-            error._tag === 'Rejected' && error.docsPage
-              ? html`<a
-                  href=${texraGuideUrl(error.docsPage)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  >${READ_GUIDE_BUTTON_LABEL}</a
-                >`
-              : nothing
-          }
-        </div>
+        <div>${requestErrorText(error)}</div>
         ${renderIconActionButton({
           id: 'dismiss-request-notice',
           icon: 'xmark',
@@ -363,9 +350,7 @@ export class ProgressApp extends LitElement {
     const { data, run } = edited;
     const asking = run?.label ?? 'An agent';
     const askingSubject =
-      asking === 'assistant'
-        ? 'The assistant'
-        : `${asking.charAt(0).toUpperCase()}${asking.slice(1)}`;
+      asking === 'assistant' ? 'The assistant' : Str.capitalize(asking);
     return html`<section class="hero" aria-labelledby="shell-hero-title">
       <div class="hero-mark" aria-hidden="true">${waIcon('pencil')}</div>
       <h1 id="shell-hero-title">Check ${data.label} before it runs</h1>

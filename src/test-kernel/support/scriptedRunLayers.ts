@@ -341,7 +341,6 @@ export function testAgentRun(
     ...testRunTools(),
     finalToolName: null,
     script: null,
-    callbacks: {},
     awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
     ...over,
   };

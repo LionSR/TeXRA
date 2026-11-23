@@ -681,6 +681,14 @@ rest.
 const pathExists: (fs: FileSystem, target: string) => Effect<boolean, PlatformError, never>
 ```
 
+## processRunning
+
+Whether a process with the id `pid` is running on this machine.
+
+```ts
+function processRunning(pid: number): boolean
+```
+
 ## projectValueIgnored
 
 Whether a project file's `value` for a key of catalog row `row` is ignored:

@@ -17,7 +17,6 @@ import {
   type RequestDecision,
   type RequestPayload,
   type RunId,
-  type UserQuestionAnswers,
   type UserQuestionRequest,
   toErrorMessage,
 } from '@texra-ai/worldline/schemas';
@@ -36,11 +35,11 @@ import {
   formatRetryRequestMessage,
   formatUserQuestionPrompt,
 } from '../approval/approvalSummaries';
-import {
-  parseUserQuestionAnswer,
-  userQuestionDecision,
-} from './userQuestionAnswer';
 import { readToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
+import {
+  typedUserQuestionEntry,
+  userQuestionDecision,
+} from '@texra/shared/session/userQuestionAnswer';
 import {
   declineDecision,
   REQUEST_ACTIONS,
@@ -67,7 +66,6 @@ interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
 const askHeadlessUserQuestion = Effect.fn(
   'approvalAdapter.askHeadlessUserQuestion',
 )(function* (payload: UserQuestionRequest, hooks: CliApprovalPromptHooks) {
-  const answers: Record<string, UserQuestionAnswers[string]> = {};
   const asked = yield* Effect.result(
     Effect.forEach(
       payload.questions,
@@ -95,11 +93,10 @@ const askHeadlessUserQuestion = Effect.fn(
             prompt: 'Answer (blank to skip): ',
           }),
         );
-        const parsed = yield* Effect.try({
-          try: () => parseUserQuestionAnswer(answer, question),
+        return yield* Effect.try({
+          try: () => typedUserQuestionEntry(answer, question),
           catch: CliPromptFailed.from,
         });
-        if (parsed != null) answers[question.question] = parsed;
       }),
     ),
   );
@@ -113,7 +110,7 @@ const askHeadlessUserQuestion = Effect.fn(
     } satisfies RequestDecision;
   }
 
-  return userQuestionDecision(answers);
+  return userQuestionDecision(payload.questions, asked.success);
 });
 
 /**

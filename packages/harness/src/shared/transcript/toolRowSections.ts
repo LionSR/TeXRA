@@ -424,7 +424,7 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
           !TOOL_RESULT_METADATA_FIELDS.has(field),
       )
     : {};
-  if (Object.keys(unrendered).length > 0) {
+  if (!EffectRecord.isEmptyRecord(unrendered)) {
     const payload = stringifyPayload(unrendered);
     sections.push({
       kind: 'code',

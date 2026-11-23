@@ -14,15 +14,16 @@ import { CredentialOriginSchema } from '@texra-ai/llm';
 /**
  * A native configuration toggle surfaced in a provider's expanded settings:
  * one Models tab control (a catalog row placed on the tab, `settingSurfaces.ts`
- * `surfaces.models`) with its runtime `value`.
+ * `surfaces.model`) with its runtime `value`.
  */
 const ProviderSettingSchema = Schema.Struct({
   key: Schema.String,
   label: Schema.String,
   description: Schema.String,
   warning: Schema.optional(Schema.String),
-  warningUrl: Schema.optional(Schema.String),
-  warningUrlLabel: Schema.optional(Schema.String),
+  link: Schema.optional(
+    Schema.Struct({ url: Schema.String, label: Schema.String }),
+  ),
   value: Schema.Boolean,
 });
 export type ProviderSetting = typeof ProviderSettingSchema.Type;

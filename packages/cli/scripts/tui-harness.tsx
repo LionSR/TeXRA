@@ -49,7 +49,7 @@ import {
   type ApprovalPolicy,
   type LogLevel,
   type MessageType,
-  type NormalizedToolUse,
+  type ToolUseLog,
   type PlanApprovalRequest,
   type RequestDecision,
   type RequestPayload,
@@ -874,19 +874,16 @@ function makeEntries(count: number): HarnessLogRow[] {
   return entries;
 }
 
-function makeLongToolOutput(): NormalizedToolUse {
+function makeLongToolOutput(): ToolUseLog {
   return {
     toolName: 'bash',
-    errorText: '',
-    outputText: Array.from(
+    output: Array.from(
       { length: 18 },
       (_, index) =>
         `tool-output-line-${String(index + 1).padStart(2, '0')}${index === 9 ? WIDE_TRANSCRIPT_SUFFIX : ''}`,
     ).join('\n'),
-    userInstructionText: '',
     input: { command: 'python3 enumerate_triples.py' },
-    isUserFeedback: false,
-    headerSummary: 'python3 enumerate_triples.py',
+    summary: 'python3 enumerate_triples.py',
     status: TOOL_CALL_STATUS.COMPLETED,
   };
 }
@@ -894,7 +891,7 @@ function makeLongToolOutput(): NormalizedToolUse {
 /** A tool entry the fold projects into a tool row. */
 function harnessToolEntry(
   id: string,
-  toolUse: NormalizedToolUse,
+  toolUse: ToolUseLog,
   seqNo = 2,
 ): HarnessLogRow {
   return {
@@ -902,13 +899,7 @@ function harnessToolEntry(
     level: LOG_LEVELS.INFO,
     timestamp: seqNo,
     messageType: MESSAGE_TYPES.TOOL_USE,
-    data: toJsonValue({
-      toolName: toolUse.toolName,
-      input: toolUse.input,
-      output: toolUse.outputText,
-      summary: toolUse.headerSummary,
-      status: toolUse.status,
-    }),
+    data: toJsonValue(toolUse),
   };
 }
 
@@ -937,12 +928,9 @@ function makeAssistantToolPreambleEntries(): HarnessLogRow[] {
       'preamble-tool',
       {
         toolName: 'read_file',
-        errorText: '',
-        outputText: '',
-        userInstructionText: '',
+        output: '',
         input: { path: 'README.md' },
-        isUserFeedback: false,
-        headerSummary: 'Read README.md',
+        summary: 'Read README.md',
         status: TOOL_CALL_STATUS.COMPLETED,
       },
       3,
@@ -1006,12 +994,9 @@ function makeRejectedBashToolEntries(): HarnessLogRow[] {
     ),
     harnessToolEntry('rejected-bash-tool', {
       toolName: 'bash',
-      errorText: message,
-      outputText: message,
-      userInstructionText: '',
+      output: message,
       input: { command },
-      isUserFeedback: false,
-      headerSummary: command,
+      summary: command,
       status: TOOL_CALL_STATUS.FAILED,
     }),
   ];

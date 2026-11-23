@@ -1,7 +1,7 @@
 import { type BrowserWindow, clipboard } from 'electron';
 import { Effect } from 'effect';
 import type { SubscriptionDeviceCodePrompt } from '@texra-ai/llm/node';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import { fromHostSync } from '@texra/controllers/session/hostCallFailure';
 import type { SubscriptionProvider } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
 import { choose } from './desktopDialogs.js';
@@ -13,10 +13,7 @@ type SignInNames = Pick<SubscriptionProvider, 'displayName' | 'sessionName'>;
  *  link lets it reach the presenter's `onError` and the failure dialog; the
  *  device-code dialog logs it and still shows the code. */
 const copyToClipboard = (text: string) =>
-  Effect.try({
-    try: () => clipboard.writeText(text),
-    catch: (cause) => hostFailed('clipboard.writeText', cause),
-  });
+  fromHostSync('clipboard.writeText', () => clipboard.writeText(text));
 
 /**
  * The window's subscription sign-in dialogs: the "sign in in your other

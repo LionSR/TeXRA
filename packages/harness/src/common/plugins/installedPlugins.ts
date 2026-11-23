@@ -15,7 +15,7 @@ import {
   SkillNameSchema,
   type InstalledPlugin,
 } from '@shared/schemas';
-import { pathExists } from '@utils/files/fsEntryExists';
+import { meansAbsent, pathExists } from '@utils/files/fsEntryExists';
 
 // Local imports - shared contracts
 
@@ -56,6 +56,10 @@ export type PluginOrigin =
 /** `<global storage>/plugins`: each fetched plugin lives in `<name>/` here. */
 const pluginsDir = ({ globalStorage }: Pick<PluginEnv, 'globalStorage'>) =>
   path.join(globalStorage, 'plugins');
+
+/** The managed directory a fetched plugin named `name` lives in. */
+const managedDir = (env: Pick<PluginEnv, 'globalStorage'>, name: string) =>
+  path.join(pluginsDir(env), name);
 
 /** Where the processes over `globalStorage` copy the native code they load
  *  (`@tools/nativePlugins`): beside the managed plugins, under a name no
@@ -216,7 +220,7 @@ const installFromRoot = Effect.fn('installFromRoot')(function* (
     }
     // Each fetched plugin gets its own managed copy of the checkout, so
     // update and remove act on one plugin without touching another.
-    const dest = path.join(pluginsDir(run.env), plugin.name);
+    const dest = managedDir(run.env, plugin.name);
     // A plain mkdir claims the directory: it fails if anything is there.
     yield* fs.makeDirectory(dest).pipe(
       Effect.mapError((error) =>
@@ -257,12 +261,14 @@ function installOrigin(
   ChildProcessSpawner | FileSystem.FileSystem
 > {
   if (origin.kind === 'local') {
+    // Nothing there is a mistyped source; any other failure is the read's.
     return FileSystem.FileSystem.use((fs) => fs.realPath(origin.path)).pipe(
-      Effect.mapError(
-        () =>
-          new PluginRequestError({
-            message: `${origin.path} is not a directory, a git URL, or github.com/<owner>/<repo>.`,
-          }),
+      Effect.mapError((error) =>
+        meansAbsent(error)
+          ? new PluginRequestError({
+              message: `${origin.path} is not a directory, a git URL, or github.com/<owner>/<repo>.`,
+            })
+          : ioError(error),
       ),
       Effect.flatMap((root) =>
         installFromRoot(root, { kind: 'local' }, only, run, nested),
@@ -354,7 +360,7 @@ const removePlugin = Effect.fn('removePlugin')(function* (
   name: string,
   env: PluginEnv,
 ) {
-  const dir = path.join(pluginsDir(env), name);
+  const dir = managedDir(env, name);
   const dataDir = pluginDataDir(env.globalStorage, name);
   const plugin = yield* modifyInstalled(env, (current) => {
     const found = current.find((entry) => entry.name === name);
@@ -423,7 +429,7 @@ const updatePlugins = Effect.fn('updatePlugins')(function* (
         );
   const updates: PluginUpdate[] = [];
   for (const plugin of targets) {
-    const dir = path.join(pluginsDir(env), plugin.name);
+    const dir = managedDir(env, plugin.name);
     const commit =
       plugin.commit === undefined
         ? undefined

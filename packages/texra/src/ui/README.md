@@ -78,6 +78,8 @@ two halves:
   `triangle-exclamation` (`TONE_GLYPH`, `copy/runStatus.ts`). A log level's icon
   and word come from `copy/logLevels.ts`, a run status's from
   `copy/runStatus.ts`.
+- **Disclosure toggles.** A button that opens a section passes `expanded`
+  and names no icon: the helper draws the chevron, which turns while open.
 - **Icons and menus.** `waIcon()` uses a square canvas. Dropdown items reserve
   one icon width and share their padding and type in `controlStyles.ts`.
   Style the `wa-dropdown-item` host: it does not expose a `base` part.

@@ -17,6 +17,7 @@ import {
   decodeWireOrFail,
   parseInboundToolArguments,
   sdkStream,
+  unsupportedStreamEvent,
   wireFail as fail,
 } from './transport.js';
 import { responsesUsage } from './openaiResponsesUsage.js';
@@ -443,12 +444,7 @@ export function responsesWire() {
         ]);
       }
       if (FRAMING_EVENTS.has(type)) return at([]);
-      // The provider sends this event again on every repeat of the request.
-      return yield* new ModelError({
-        kind: 'provider-rejection',
-        retryable: false,
-        message: `OpenAI sent a stream event of a type this version does not support: ${type}.`,
-      });
+      return yield* unsupportedStreamEvent('OpenAI', type);
     });
 }
 

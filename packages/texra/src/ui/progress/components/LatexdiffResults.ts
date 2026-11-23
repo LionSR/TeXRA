@@ -5,7 +5,6 @@ import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Side-effect imports - register WA components
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
@@ -21,6 +20,7 @@ import { LATEXDIFF_STATUS } from '@ui/copy/documentOutputs';
 import { statusGlyph } from '@ui/copy/runStatus';
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - progress view helpers
@@ -59,12 +59,12 @@ export class LatexdiffResults extends TexraElement {
         flex-wrap: wrap;
       }
 
-      .file-link.btn-ghost {
+      .latexdiff-file.action-button {
         flex-shrink: 1;
         min-width: 0;
         overflow-wrap: anywhere;
       }
-      .file-link::part(base) {
+      .latexdiff-file::part(base) {
         white-space: normal;
         text-align: start;
       }
@@ -96,16 +96,13 @@ export class LatexdiffResults extends TexraElement {
     label: string,
     accessibleLabel: string,
   ): TemplateResult {
-    return html`<wa-button
-      class="file-link btn-ghost is-link"
-      appearance="plain"
-      size="s"
-      type="button"
-      data-file=${filePath}
-      @click=${() => this.handleFileClick(filePath)}
-      ><span aria-hidden="true">${label}</span
-      ><span class="visually-hidden">${accessibleLabel}</span></wa-button
-    >`;
+    return renderLabeledActionButton({
+      kind: 'link',
+      className: 'latexdiff-file',
+      text: label,
+      label: accessibleLabel,
+      onClick: () => this.handleFileClick(filePath),
+    });
   }
 
   private renderEntry(entry: LatexdiffEntry, index: number): TemplateResult {

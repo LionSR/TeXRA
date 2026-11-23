@@ -37,6 +37,7 @@ import {
   renderLabeledActionButton,
   type IconActionButtonOptions,
 } from '@ui/wa/actionButtons';
+import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
 import { delegateKeyActivation, getComposedPathElement } from './composedPath';
@@ -54,7 +55,10 @@ import './LatexdiffResults';
 function fileActionButton(
   idPrefix: string,
   verb: string,
-  options: Omit<IconActionButtonOptions, 'id'> & { readonly tooltip: string },
+  options: Pick<IconActionButtonOptions, 'label' | 'onClick'> & {
+    readonly icon: IconName;
+    readonly tooltip: string;
+  },
 ): TemplateResult {
   const id = `${idPrefix}-${verb}`.replaceAll(/[^a-zA-Z0-9_-]/g, '-');
   return renderIconActionButton({ ...options, id });

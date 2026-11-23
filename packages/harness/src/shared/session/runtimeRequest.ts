@@ -262,7 +262,6 @@ export class Cancelled extends Schema.TaggedError<Cancelled>()(
  *  `message`, so a caller that only formats errors still shows why. */
 export class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
   reason: Schema.String,
-  docsPage: Schema.optional(Schema.String),
 }) {
   override get message(): string {
     return this.reason;
