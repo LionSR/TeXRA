@@ -2,8 +2,7 @@
 
 # Worldline
 
-**Kill an agent with `SIGKILL` mid-workflow. Resume without re-running a single finished tool call.**<br />
-A durable, forkable agent runtime in Effect 4, backed by SQLite. Powers [TeXRA](https://texra.ai).
+Worldline is an embeddable agent runtime built on Effect 4 and SQLite. Write multi-agent workflows in JavaScript, resume a run, or fork it at an earlier turn to try a different approach.
 
 [![npm](https://img.shields.io/npm/v/@texra-ai/worldline?label=%40texra-ai%2Fworldline&color=6F387A&logo=npm&logoColor=white)](https://www.npmjs.com/package/@texra-ai/worldline)
 [![Effect](https://img.shields.io/badge/Effect-%5E4.1.3-270939?style=flat)](https://effect.website)
@@ -23,7 +22,7 @@ A durable, forkable agent runtime in Effect 4, backed by SQLite. Powers [TeXRA](
 
 ## Why Worldline
 
-Worldline is the embeddable agent runtime powering TeXRA across VS Code,
+Worldline is the embeddable agent runtime powering [TeXRA](https://texra.ai) across VS Code,
 Electron Desktop, and the terminal.
 
 | Challenge                                        | How Worldline handles it                                                                                                                                                                                   |
