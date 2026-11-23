@@ -67,7 +67,7 @@ describe('PromptBuilder', () => {
         );
         // A folder name is the project's, like a branch name: an expression
         // in one must reach the model as written, never run in this process.
-        const workspace = join(storageRoot, 'ws {{ 7 * 6 }}');
+        const workspace = join(storageRoot, 'ws {{ CWD }}');
         mkdirSync(workspace);
         // cast: the opening reads only the workspace and the storage root.
         const roots = { workspace, storageRoot } as WorkspaceRoots;
@@ -81,7 +81,7 @@ describe('PromptBuilder', () => {
         );
         expect(system).toContain('Work in /work.');
         expect(system).toContain('executes every command from /work.');
-        expect(system).toContain('ws {{ 7 * 6 }}');
+        expect(system).toContain('ws {{ CWD }}');
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
   it.effect(

@@ -109,6 +109,7 @@ const program = Effect.gen(function* () {
       yield* session.attach({ approve: reportOnly });
       const run = yield* session.start({
         label: 'approval_validation',
+        approval: 'ask',
         system: 'GOLDEN-APPROVAL record_approval',
         instruction: argument,
         model: 'openai/gpt-5.6-sol',
