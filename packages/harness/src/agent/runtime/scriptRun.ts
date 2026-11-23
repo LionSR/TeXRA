@@ -34,13 +34,11 @@ export interface ScriptCallCard {
   readonly seq: number;
   readonly toolName: string;
   readonly section: string | null;
-  readonly attempt: number;
+  /** What `result` says became of the call. */
   readonly status: ScriptCallOutcome;
-  readonly reusedFrom: string | null;
-  /** The call's error, when it failed or was skipped. */
-  readonly error: string | null;
-  /** What the guest's `await` got in place of `{ output, summary }`. */
-  readonly value: unknown;
+  /** The call's latest result; none while it has not finished. Its value
+   *  is what the guest's `await` got in place of `{ output, summary }`. */
+  readonly result: ToolResultPayload | undefined;
 }
 
 const statusOf = (result: ToolResultPayload | undefined): ScriptCallOutcome => {
@@ -77,24 +75,7 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
     if (call.toolName.endsWith('()')) return [];
     const { seq, toolName, section, callId } = call;
     const result = latest.get(callId);
-    const error =
-      result?.result.status === 'error' ? result.result.error : null;
-    return [
-      {
-        seq,
-        toolName,
-        section,
-        attempt: result?.attempt ?? 1,
-        status: statusOf(result),
-        reusedFrom:
-          result?.result.status === 'executed'
-            ? (result.result.reusedFrom ?? null)
-            : null,
-        error,
-        value:
-          result?.result.status === 'executed' ? result.result.value : null,
-      },
-    ];
+    return [{ seq, toolName, section, status: statusOf(result), result }];
   });
   return { script, calls };
 });
@@ -151,8 +132,10 @@ function deliveredFiles(
     });
   };
   for (const call of calls) {
+    const result = call.result?.result;
+    if (result?.status !== 'executed') continue;
     const envelope = Schema.decodeUnknownResult(EnvelopeFilesSchema)(
-      call.value,
+      result.value,
     );
     if (!Result.isSuccess(envelope)) continue;
     const { changes } = envelope.success;
