@@ -101,10 +101,13 @@ jobs:
         # texra-ai/texra-action commit 2a327e4 (GitHub App OIDC), which removes
         # the obsolete `--api-mode` CLI argument. Pin the reviewed upstream
         # commit so PR review behavior only changes through an explicit workflow
-        # update. This commit is v1-era: it invokes `texra agents run`, which
-        # 0.41 folds into `texra run`. Both sides of that pair move together —
-        # re-pin this to a texra-action v2 commit in the same change that points
-        # vars.TEXRA_CLI_VERSION at 0.41 or later, never one without the other.
+        # update. This commit is v1-era: it invokes `texra agents run` with
+        # `--instruction-file`, `--model` and `--context`. The 1.0 CLI (npm's
+        # `latest` tag since 1.0.0-preview.4) has none of them, so the CLI is
+        # pinned here to the last 0.40 release instead of following `latest`.
+        # Both sides of that pair move together: re-pin this to an action
+        # commit that speaks the 1.0 CLI in the same change that raises
+        # texra-version, never one without the other.
         # Empty github-token uses TeXRA GitHub App OIDC
         # (id-token: write above). Keep the secret-bearing review job read-only:
         # provider keys are present, so shell/tool mutations must stay disabled.
@@ -116,7 +119,7 @@ jobs:
           allow-bots: dependabot[bot],github-actions[bot]
           model: ${{ vars.TEXRA_REVIEW_MODEL }}
           model-defaults: ${{ vars.TEXRA_REVIEW_MODEL_DEFAULTS }}
-          texra-version: ${{ vars.TEXRA_CLI_VERSION }}
+          texra-version: '0.40.10'
           review-marker: '<!-- texra-review -->'
           resolve-threads: 'true'
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
