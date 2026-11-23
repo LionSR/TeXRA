@@ -19,6 +19,7 @@
 
 // Third-party imports
 import { getBasename } from '@texra-ai/worldline/schemas';
+import { String as Str } from 'effect';
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -363,9 +364,7 @@ export class ProgressApp extends LitElement {
     const { data, run } = edited;
     const asking = run?.label ?? 'An agent';
     const askingSubject =
-      asking === 'assistant'
-        ? 'The assistant'
-        : `${asking.charAt(0).toUpperCase()}${asking.slice(1)}`;
+      asking === 'assistant' ? 'The assistant' : Str.capitalize(asking);
     return html`<section class="hero" aria-labelledby="shell-hero-title">
       <div class="hero-mark" aria-hidden="true">${waIcon('pencil')}</div>
       <h1 id="shell-hero-title">Check ${data.label} before it runs</h1>

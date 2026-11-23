@@ -15,19 +15,13 @@ import { hash } from 'node:crypto';
 import { lstatSync } from 'node:fs';
 import * as path from 'node:path';
 
-import {
-  Effect,
-  FileSystem,
-  PlatformError,
-  Predicate,
-  Result,
-  Stream,
-} from 'effect';
+import { Effect, FileSystem, PlatformError, Result, Stream } from 'effect';
 
 import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@texra-ai/worldline';
+import { processRunning } from '@texra-ai/worldline/node';
 import { GlobalValues, logFailure } from '@texra-ai/worldline/plugins';
 import { toErrorMessage } from '@texra-ai/worldline/schemas';
 
@@ -244,7 +238,7 @@ export const removeDeadSockets: (
     const dead = (yield* fs.readDirectory(paths.socketDirectory)).filter(
       (name) => {
         const pid = Number(SOCKET_NAME.exec(name)?.[1]);
-        return Number.isInteger(pid) && !processAlive(pid);
+        return Number.isInteger(pid) && !processRunning(pid);
       },
     );
     yield* Effect.forEach(
@@ -256,13 +250,3 @@ export const removeDeadSockets: (
   },
   Effect.catch(logFailure(CHANNEL, "Could not remove dead services' sockets")),
 );
-
-/** Whether process `pid` runs (one of another user counts as running). */
-function processAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return Predicate.hasProperty(error, 'code') && error.code === 'EPERM';
-  }
-}

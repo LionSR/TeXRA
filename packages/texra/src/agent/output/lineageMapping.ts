@@ -73,8 +73,7 @@ function createFileMapping(
     return fileMapping;
   }
 
-  const baseNameOf = (filePath: string): string =>
-    path.parse(path.basename(filePath)).name;
+  const baseNameOf = (filePath: string): string => path.parse(filePath).name;
 
   // Source names do not depend on the target, so derive them once up front.
   const sources = sourceFiles.map((sourceFile) => {

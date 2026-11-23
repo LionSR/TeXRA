@@ -55,7 +55,7 @@ function storedOutput(result: FinishedToolResult): unknown {
 
 /** A tool's output as text: an empty object shows no output section. */
 function formatOutputText(content: unknown): string {
-  if (Predicate.isObject(content) && Object.keys(content).length === 0)
+  if (Predicate.isObject(content) && EffectRecord.isEmptyRecord(content))
     return '';
   return stringifyPayload(content).text.full;
 }

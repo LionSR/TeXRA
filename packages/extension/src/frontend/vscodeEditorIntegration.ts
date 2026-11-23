@@ -4,7 +4,7 @@
  * root passes it to the process layer (the setup tools) and to the settings
  * view.
  */
-import { Effect, Predicate } from 'effect';
+import { Effect, Predicate, Record as EffectRecord } from 'effect';
 import * as vscode from 'vscode';
 
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
@@ -66,7 +66,7 @@ function resolveUpdateValue(
     for (const recommendedKey of Object.keys(setting.value)) {
       delete remaining[recommendedKey];
     }
-    return Object.keys(remaining).length > 0 ? remaining : undefined;
+    return EffectRecord.isEmptyRecord(remaining) ? undefined : remaining;
   }
 
   return { ...remaining, ...setting.value };

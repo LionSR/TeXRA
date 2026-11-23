@@ -11,7 +11,7 @@ import { Effect, Exit, Queue, Scope, Stream, SubscriptionRef } from 'effect';
 
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/worldline/host';
 import { logFailure, withLogChannel } from '@texra-ai/worldline/plugins';
-import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import { fromHostSync } from '@texra/controllers/session/hostCallFailure';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   openGuiWindow,
@@ -98,10 +98,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
     const terminalCwd = (root: string | undefined): Effect.Effect<string> =>
       root !== undefined
         ? Effect.succeed(root)
-        : Effect.try({
-            try: homedir,
-            catch: (cause) => hostFailed('homedir', cause),
-          }).pipe(
+        : fromHostSync('homedir', homedir).pipe(
             Effect.catch((error) =>
               logFailure(
                 'desktop',

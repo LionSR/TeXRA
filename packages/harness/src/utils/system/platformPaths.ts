@@ -5,7 +5,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import which from 'which';
-import { Context, Effect, Schema } from 'effect';
+import { Context, Effect, Predicate, Schema } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
@@ -128,6 +128,18 @@ export const withCommandDirs = <T extends NodeJS.ProcessEnv>(
   env: T,
 ): Effect.Effect<T> =>
   Effect.map(CommandDirs, (appDirs) => withExtendedPath(env, appDirs()));
+
+/** Whether a process with the id `pid` is running on this machine. */
+export function processRunning(pid: number): boolean {
+  try {
+    // Signal 0 sends nothing: it only checks that the process can be signalled.
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // Another user's process is refused, and is running.
+    return Predicate.hasProperty(error, 'code') && error.code === 'EPERM';
+  }
+}
 
 /** Whether a command word names a file by path (it holds a separator)
  *  rather than a program to look up on PATH. */

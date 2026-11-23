@@ -98,6 +98,7 @@ import { thirdPartyCommand, withinDeadline } from '@tools/thirdPartyTool';
 import type { NativePlugin } from '@tools/toolTable';
 import { sha256Hex } from '@utils/core/idHash';
 import { ensureError } from '@utils/errors/errorMessage';
+import { processRunning } from '@utils/system/platformPaths';
 
 /**
  * The modules of `effect` a native entry is handed, as this process loaded
@@ -380,18 +381,6 @@ const checked = (
   });
 };
 
-/** Whether a process with the id `pid` is running on this machine. */
-const running = (pid: number): boolean => {
-  try {
-    // Signal 0 sends nothing: it only checks that the process can be signalled.
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    // Another user's process is refused, and is running.
-    return Predicate.hasProperty(error, 'code') && error.code === 'EPERM';
-  }
-};
-
 /**
  * This process's directory under `dir`, where it copies the native code it
  * loads, removed with the scope. A process that is killed leaves its
@@ -404,7 +393,7 @@ const processCopies = Effect.fnUntraced(function* (dir: string) {
   yield* fs.makeDirectory(dir, { recursive: true });
   yield* Effect.forEach(yield* fs.readDirectory(dir), (name) => {
     const pid = /^(\d+)-/.exec(name)?.[1];
-    return pid === undefined || running(Number.parseInt(pid, 10))
+    return pid === undefined || processRunning(Number.parseInt(pid, 10))
       ? Effect.void
       : fs.remove(path.join(dir, name), { recursive: true, force: true });
   }).pipe(
