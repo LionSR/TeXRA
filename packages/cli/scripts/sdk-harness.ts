@@ -110,6 +110,7 @@ const program = Effect.gen(function* () {
       const run = yield* session.start({
         label: 'approval_validation',
         system: 'GOLDEN-APPROVAL record_approval',
+        approval: 'ask',
         instruction: argument,
         model: 'openai/gpt-5.6-sol',
         runTools: tools,
