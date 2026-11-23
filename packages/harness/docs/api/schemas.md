@@ -131,7 +131,7 @@ parent's transcript, are not listed; a lookup by explicit id reads the
 run's records instead.
 
 ```ts
-const AgentRunListingEntrySchema: Struct<{ readonly id: brand<String, "RunId">; readonly timestamp: String; readonly outcome: NullOr<Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>>; readonly description: optional<String>; readonly model: optional<String>; readonly continuation: Union<readonly [Struct<{ readonly kind: Literals<readonly ["continues", "finished"]>; }>, Struct<{ readonly kind: Literal<"blocked">; readonly cause: String; }>]>; readonly identity: Struct<{ readonly kind: Literal<"agent">; readonly agent: NonEmptyString; readonly tool: optional<NonEmptyString>; }>; readonly record: Struct<{ readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly label: String; readonly system: withDecodingDefault<String, never>; readonly tools: withDecodingDefault<$Array<NonEmptyString>, never>; readonly toolScope: optional<Literals<readonly ["declared", "topLevel"]>>; readonly model: String; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<String>; readonly displayInstruction: optional<String>; readonly skills: optional<$Array<String>>; readonly workingDirectory: optional<String>; readonly launch: optional<$Record<String, Codec<Json, Json, never, never>>>; readonly outputSchema: optional<$Record<String, Unknown>>; readonly script: optional<Union<readonly [Struct<{ readonly kind: Literal<"background">; readonly code: NonEmptyString; readonly title: NonEmptyString; readonly tools: $Array<NonEmptyString>; readonly timeoutMs: optional<Int>; }>, Struct<{ readonly kind: Literal<"program">; readonly name: NonEmptyString; readonly args: $Record<String, Codec<Json, Json, never, never>>; }>]>>; }>; }>
+const AgentRunListingEntrySchema: Struct<{ readonly id: brand<String, "RunId">; readonly timestamp: String; readonly outcome: NullOr<Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>>; readonly description: optional<String>; readonly continuation: Union<readonly [Struct<{ readonly kind: Literals<readonly ["continues", "finished"]>; }>, Struct<{ readonly kind: Literal<"blocked">; readonly cause: String; }>]>; readonly identity: Struct<{ readonly kind: Literal<"agent">; readonly agent: NonEmptyString; readonly tool: optional<NonEmptyString>; }>; readonly record: Struct<{ readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly label: String; readonly system: withDecodingDefault<String, never>; readonly tools: withDecodingDefault<$Array<NonEmptyString>, never>; readonly toolScope: optional<Literals<readonly ["declared", "topLevel"]>>; readonly model: String; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<String>; readonly displayInstruction: optional<String>; readonly skills: optional<$Array<String>>; readonly workingDirectory: optional<String>; readonly launch: optional<$Record<String, Codec<Json, Json, never, never>>>; readonly outputSchema: optional<$Record<String, Unknown>>; readonly script: optional<Union<readonly [Struct<{ readonly kind: Literal<"background">; readonly code: NonEmptyString; readonly title: NonEmptyString; readonly tools: $Array<NonEmptyString>; readonly timeoutMs: optional<Int>; }>, Struct<{ readonly kind: Literal<"program">; readonly name: NonEmptyString; readonly args: $Record<String, Codec<Json, Json, never, never>>; }>]>>; }>; }>
 ```
 
 ## ALLOW_ORCHESTRATOR_KILL_SETTING
@@ -1442,28 +1442,6 @@ A whole number that is zero or more: a count, a size, an offset.
 
 ```ts
 const NonNegativeIntSchema: Int
-```
-
-## NormalizedToolUse
-
-The flat, renderer-friendly tool-use view `normalizeToolUse`
-derives from a parsed {@link ToolUseLog}. Declared as a
-plain type, not a schema: the producer builds this shape field-by-field and
-nothing ever parses it, so a schema would own no boundary.
-
-```ts
-type NormalizedToolUse = {
-  toolName: string;
-  errorText: string;
-  outputText: string;
-  exitCode?: number;
-  userInstructionText: string;
-  input: unknown;
-  isUserFeedback: boolean;
-  headerSummary: string;
-  status?: ToolCallStatus;
-  card?: ToolCard;
-};
 ```
 
 ## NormalizedUsage

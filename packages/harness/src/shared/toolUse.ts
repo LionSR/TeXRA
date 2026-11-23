@@ -1,18 +1,12 @@
 // Host-neutral normalization for tool cards.
 //
 // Both the VS Code progress view and the CLI TUI read the same tool card
-// (`ToolCallLog`) off a transcript row and need a flat, renderer-friendly
-// view: tool name, derived output text, error/summary strings, and the
-// runtime tool status. This module is the single entry point for that
-// derivation so hosts don't drift.
+// (`ToolCallLog`) off a transcript row: this module derives the texts a card
+// states and its output, once, so hosts don't drift.
 
 import { Number as Num, Predicate, Record as EffectRecord } from 'effect';
 
-import type {
-  FinishedToolResult,
-  NormalizedToolUse,
-  ToolCallLog,
-} from '@shared/schemas';
+import type { FinishedToolResult, ToolCallLog } from '@shared/schemas';
 import { stringifyPayload } from '@shared/transcript/transcriptText';
 import { formatCount } from '@utils/text/stringUtils';
 
@@ -32,9 +26,7 @@ export const TOOL_RESULT_METADATA_FIELDS: ReadonlySet<string> = new Set([
 
 /** A stored result's fields as its card reads them: without the `status`
  *  the card states, and without a key left `undefined`. */
-export function resultFields(
-  result: FinishedToolResult,
-): Record<string, unknown> {
+function resultFields(result: FinishedToolResult): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(result).filter(
       ([field, value]) => field !== 'status' && value !== undefined,
@@ -63,12 +55,12 @@ function formatOutputText(content: unknown): string {
 /** The texts a call states beside its output, trimmed: from its stored
  *  result when it has one, else from what its tool stated. A call the user
  *  rejected or redirected leads with no error: the error is their own. */
-export function toolCallTexts(
-  log: ToolCallLog,
-): Pick<
-  NormalizedToolUse,
-  'errorText' | 'userInstructionText' | 'isUserFeedback' | 'headerSummary'
-> {
+export function toolCallTexts(log: ToolCallLog): {
+  errorText: string;
+  userInstructionText: string;
+  isUserFeedback: boolean;
+  headerSummary: string;
+} {
   const { result } = log;
   const summaryText = trimmed(result ? result.summary : log.summary);
   const errorText = trimmed(
@@ -86,19 +78,20 @@ export function toolCallTexts(
   };
 }
 
-/** The flat, renderer-friendly view of a tool card. */
-export function normalizeToolUse(log: ToolCallLog): NormalizedToolUse {
-  return {
-    toolName: log.toolName.trim(),
-    ...toolCallTexts(log),
-    outputText: formatOutputText(
-      log.result === undefined ? log.output : storedOutput(log.result),
-    ),
-    ...(log.exitCode !== undefined ? { exitCode: log.exitCode } : {}),
-    input: log.input,
-    status: log.status,
-    ...(log.card ? { card: log.card } : {}),
-  };
+/** A call's output: `parsed` as its structured sections read it (MCP
+ *  content blocks, edit start lines, per-file line changes), the stored
+ *  result's fields when it has one, and `text` as the output block shows it. */
+export function toolCallOutput(log: ToolCallLog): {
+  parsed: unknown;
+  text: string;
+} {
+  const { result } = log;
+  return result === undefined
+    ? { parsed: log.output, text: formatOutputText(log.output) }
+    : {
+        parsed: resultFields(result),
+        text: formatOutputText(storedOutput(result)),
+      };
 }
 
 // ============================================================================

@@ -133,7 +133,7 @@ export type RunState = Omit<RunRowState, 'at'> &
     readonly countStale: boolean;
     readonly pendingResponse: PendingResponse | null;
     /** The `seq` of the latest `run.activate`, when a process last took
-     *  the run: a decision after it (`RequestState.decidedAt`) is one
+     *  the run: a decision after it (`RequestState.decided.at`) is one
      *  nothing waiting has seen yet. Null before the first activation. */
     readonly activatedAt: number | null;
     /** The `seq` of the latest `run.position`: a position before the
@@ -224,8 +224,8 @@ export const cancelRequestRows = (
   state: Pick<RunState, 'requests'> | null,
   cause: string,
 ): Extract<SessionRowDraft, { type: 'request.decided' }>[] =>
-  Object.entries(state?.requests ?? {}).flatMap(([requestId, { decision }]) =>
-    decision === null
+  Object.entries(state?.requests ?? {}).flatMap(([requestId, { decided }]) =>
+    decided === null
       ? [
           {
             type: 'request.decided' as const,

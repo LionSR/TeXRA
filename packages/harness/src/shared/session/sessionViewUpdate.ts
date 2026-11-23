@@ -792,7 +792,9 @@ function applyRowFacts(u: Update, run: RunView, event: SharedRunRow): RunView {
  *  where they are. Identity is (runId, requestId), so the dedupe of
  *  already-listed requests is scoped to this run, never another's. */
 function projectRequests(view: ViewDraft, runId: RunId, rows: SharedRunRows) {
-  const open = Object.entries(rows.requests).filter(([, r]) => !r.decision);
+  const open = Object.entries(rows.requests).filter(
+    ([, r]) => r.decided === null,
+  );
   const ids = new Set(open.map(([requestId]) => requestId));
   const kept = view.requests.filter(
     (r) => r.runId !== runId || ids.has(r.requestId),

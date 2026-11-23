@@ -282,9 +282,6 @@ export const AgentRunListingEntrySchema = Schema.Struct({
   outcome: Schema.NullOr(RunOutcomeSchema),
   /** AI-generated summary of what the session aimed to accomplish. */
   description: Schema.optional(Schema.String),
-  /** The model the run is on, as the view folds it: its newest
-   *  `run.config`'s. */
-  model: Schema.optional(Schema.String),
   /** Whether the run continues in this process (`deriveContinuation`),
    *  whatever its outcome: `continues` for a finished conversation, which
    *  takes another message, as for an interrupted run; `finished` for a

@@ -19,7 +19,6 @@ import {
   type LogPayload,
   type ToolCallLog,
 } from '@shared/schemas';
-import { normalizeToolUse, resultFields } from '@shared/toolUse';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
@@ -213,11 +212,7 @@ export function toolRow(
     ...base,
     ...call,
     kind: 'tool',
-    model: toolRowModel(normalizeToolUse(shown), {
-      ...run,
-      parsedOutput:
-        shown.result === undefined ? shown.output : resultFields(shown.result),
-    }),
+    model: toolRowModel(shown, run),
     log,
   };
 }

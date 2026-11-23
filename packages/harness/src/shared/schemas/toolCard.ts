@@ -150,25 +150,6 @@ export type ToolCallLog = ToolUseLog & {
   readonly result?: FinishedToolResult;
 };
 
-/**
- * The flat, renderer-friendly tool-use view `normalizeToolUse`
- * derives from a parsed {@link ToolUseLog}. Declared as a
- * plain type, not a schema: the producer builds this shape field-by-field and
- * nothing ever parses it, so a schema would own no boundary.
- */
-export type NormalizedToolUse = {
-  toolName: string;
-  errorText: string;
-  outputText: string;
-  exitCode?: number;
-  userInstructionText: string;
-  input: unknown;
-  isUserFeedback: boolean;
-  headerSummary: string;
-  status?: ToolCallStatus;
-  card?: ToolCard;
-};
-
 export const WebSearchPayloadSchema = Schema.Struct({
   query: Schema.optional(Schema.String),
 });

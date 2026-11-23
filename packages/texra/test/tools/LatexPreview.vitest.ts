@@ -33,8 +33,10 @@ describe('previewProposedLatex', () => {
               workspace,
             ),
           },
-          originalUri: { fsPath: path.join(workspace, 'paper.tex') },
-          proposedUri: { fsPath: path.join(workspace, 'proposed.tex') },
+          preview: {
+            originalPath: path.join(workspace, 'paper.tex'),
+            proposedPath: path.join(workspace, 'proposed.tex'),
+          },
           originalContent: 'a',
           proposedContent: 'b',
           files,

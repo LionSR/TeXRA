@@ -438,20 +438,11 @@ export const TEXRA_SETTINGS = Object.freeze({
   },
   /**
    * The Models tab's controls for one provider, in catalog order, each with
-   * its copy resolved (a control without its own label or description shows
-   * the row's title and description).
+   * its row, whose title and description a control without its own shows.
    */
   modelsTab: (provider: string) =>
-    placedRows.flatMap((entry) =>
-      (entry.surfaces.models ?? [])
-        .filter((control) => control.provider === provider)
-        .map(({ provider: _provider, label, description, ...rest }) => ({
-          entry,
-          surface: {
-            ...rest,
-            label: label ?? entry.title,
-            description: description ?? entry.description,
-          },
-        })),
-    ),
+    placedRows.flatMap((entry) => {
+      const control = entry.surfaces.model;
+      return control?.provider === provider ? [{ entry, control }] : [];
+    }),
 });

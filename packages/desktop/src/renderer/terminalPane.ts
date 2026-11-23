@@ -65,12 +65,13 @@ interface TerminalSession {
   readonly host: HTMLElement;
   /** Holds the Restart button while the shell has exited; empty otherwise. */
   readonly exitActions: HTMLElement;
-  /** Input typed before the pane asked for a shell. The main process keeps
-   *  input only for a shell it was asked to start, so the pane holds it
-   *  until then. */
-  heldInput: string;
-  started: boolean;
-  exited: boolean;
+  /** Where the tab's shell stands. `waiting` is before the pane asked for
+   *  one: the main process keeps input only for a shell it was asked to
+   *  start, so the pane holds what is typed until then. */
+  shell:
+    | { readonly state: 'waiting'; heldInput: string }
+    | { readonly state: 'running' }
+    | { readonly state: 'exited' };
 }
 
 /**
@@ -119,8 +120,11 @@ export function createTerminalPane(
     terminal.open(host);
 
     terminal.onData((data) => {
-      if (session.started) callbacks.sendInput(sessionId, data);
-      else session.heldInput += data;
+      // Nothing reads what is typed at a shell that has exited.
+      if (session.shell.state === 'running')
+        callbacks.sendInput(sessionId, data);
+      else if (session.shell.state === 'waiting')
+        session.shell.heldInput += data;
     });
     terminal.onResize(({ cols, rows }) =>
       callbacks.resize(sessionId, cols, rows),
@@ -135,9 +139,7 @@ export function createTerminalPane(
       fitAddon,
       host,
       exitActions,
-      heldInput: '',
-      started: false,
-      exited: false,
+      shell: { state: 'waiting', heldInput: '' },
     };
     sessions.set(sessionId, session);
     return session;
@@ -155,7 +157,7 @@ export function createTerminalPane(
   /** Mark a session's shell gone (it exited, or never started) and offer
    *  to start a new one in the same tab. */
   function offerRestart(sessionId: string, session: TerminalSession): void {
-    session.exited = true;
+    session.shell = { state: 'exited' };
     render(
       renderLabeledActionButton({
         icon: 'rotate-right',
@@ -169,7 +171,7 @@ export function createTerminalPane(
 
   /** Start a new shell for an exited session, below its old output. */
   function restart(sessionId: string, session: TerminalSession): void {
-    session.exited = false;
+    session.shell = { state: 'running' };
     render(null, session.exitActions);
     fit(session);
     const { cols, rows } = session.terminal;
@@ -205,16 +207,14 @@ export function createTerminalPane(
       )
         return;
       fit(session);
-      if (!session.started) {
-        session.started = true;
+      if (session.shell.state === 'waiting') {
+        const { heldInput } = session.shell;
+        session.shell = { state: 'running' };
         // Start only once the terminal has real geometry, so the shell's first
         // prompt is wrapped for the correct width.
         const { cols, rows } = session.terminal;
         callbacks.start(sessionId, Math.max(cols, 20), Math.max(rows, 5));
-        if (session.heldInput) {
-          callbacks.sendInput(sessionId, session.heldInput);
-          session.heldInput = '';
-        }
+        if (heldInput) callbacks.sendInput(sessionId, heldInput);
       }
       if (focus) session.terminal.focus();
     },
@@ -225,7 +225,7 @@ export function createTerminalPane(
 
     reportExit(sessionId, exitCode) {
       const session = sessions.get(sessionId);
-      if (!session || session.exited) return;
+      if (!session || session.shell.state === 'exited') return;
       // Written into the buffer rather than shown as a toast: it belongs with
       // the output it terminates.
       session.terminal.write(

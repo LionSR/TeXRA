@@ -368,8 +368,6 @@ export class ToolEditApprovalController {
         preview,
         applied,
         request: { path: pending.payload.data.path, roots },
-        originalUri: { fsPath: preview.originalPath },
-        proposedUri: { fsPath: preview.proposedPath },
         originalContent: content.originalContent,
         proposedContent: content.proposedContent,
         files,

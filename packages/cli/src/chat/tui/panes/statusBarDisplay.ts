@@ -149,23 +149,23 @@ interface StatusBarSegment {
  * turn clock, the session chrome, and which surface owns input.
  */
 interface StatusBarChrome {
-  /** Liveness of the running turn: omitted entirely in tests/headless runs,
-   *  same as each of its fields individually. */
-  readonly turn?: StatusBarTurnInput;
+  /** Liveness of the running turn; undefined while the displayed run's turn
+   *  has no start time. */
+  readonly turn: StatusBarTurnInput | undefined;
   readonly transientNotice: TransientNotice | undefined;
   readonly commandName?: string;
   readonly approvalDepth: number;
-  readonly approvalKind?: ApprovalQueueStatusKind;
+  readonly approvalKind: ApprovalQueueStatusKind;
   readonly modelAccess: UsageRoute | undefined;
   /** The prospective subscription route could not be resolved. */
   readonly subscriptionProbeFailed?: boolean;
   /** Latest quota snapshot for the subscription serving this model. */
   readonly subscriptionQuota?: SubscriptionUsageSnapshot;
   /** Session approval policy; a non-default policy earns a segment. */
-  readonly approvalPolicy?: ApprovalPolicy;
+  readonly approvalPolicy: ApprovalPolicy;
   /** Terminal width in columns. */
   readonly width: number;
-  readonly ctrlCAction?: CtrlCAction;
+  readonly ctrlCAction: CtrlCAction;
   /** Nested-session location (the focused child's label). Omitted on the
    *  root session, where the header already names the conversation. */
   readonly location?: { readonly label: string };
@@ -183,25 +183,25 @@ interface StatusBarChrome {
 /** Liveness of the currently running turn, shown in the status bar's left
  *  segments so a long token-less "thinking" turn still reads as alive. */
 interface StatusBarTurnInput {
-  /** Milliseconds since the running turn began. When set and `status` is
-   *  `running`, the bar shows a live `Ns` segment. */
-  readonly elapsedMs?: number;
+  /** Milliseconds since the running turn began: while the run is working,
+   *  the bar shows a live `Ns` segment. */
+  readonly elapsedMs: number;
   /** Current 1 Hz spin-cycle character (see `ui/LoadingIndicator`'s
    *  `loadingFrameAt`) shown ahead of the status label while a turn is
    *  active, so "running" reads as alive rather than a static word. */
-  readonly runningFrame?: string;
+  readonly runningFrame: string;
 }
 
 interface StatusBarForegroundInput {
   /** True while a modal, form, palette, or search surface owns input. */
-  readonly inputActive?: boolean;
+  readonly inputActive: boolean;
 }
 
 interface StatusBarChildListInput {
   /** True while the persistent child list, rather than the input, owns keys. */
-  readonly focused?: boolean;
-  readonly selectionKillable?: boolean;
-  readonly selectionResumable?: boolean;
+  readonly focused: boolean;
+  readonly selectionKillable: boolean;
+  readonly selectionResumable: boolean;
 }
 
 interface StatusBarShortcutsInput {
@@ -209,14 +209,14 @@ interface StatusBarShortcutsInput {
   readonly chatInputAvailable: boolean;
   /** True when the displayed run is working a turn, so Shift-Tab can send
    *  a message it reads only once the turn ends. */
-  readonly holdAvailable?: boolean;
+  readonly holdAvailable: boolean;
   /** True when bare Escape can focus the active run's immediate parent. */
-  readonly parentNavigationAvailable?: boolean;
+  readonly parentNavigationAvailable: boolean;
   /** True when the persistent child list has a session row. */
-  readonly childNavigationAvailable?: boolean;
+  readonly childNavigationAvailable: boolean;
   /** True when the focused run has output that can be printed in full. */
-  readonly transcriptAvailable?: boolean;
-  readonly scriptAvailable?: boolean;
+  readonly transcriptAvailable: boolean;
+  readonly scriptAvailable: boolean;
 }
 
 interface StatusBarDisplay {
@@ -422,11 +422,11 @@ function fitStatusBarLeftSegments(
 function statusBarBindingsText(
   {
     chatInputAvailable,
-    holdAvailable = false,
-    childNavigationAvailable = false,
-    parentNavigationAvailable = false,
-    transcriptAvailable = false,
-    scriptAvailable = false,
+    holdAvailable,
+    childNavigationAvailable,
+    parentNavigationAvailable,
+    transcriptAvailable,
+    scriptAvailable,
   }: StatusBarShortcutsInput,
   ctrlCAction: CtrlCAction,
   maxColumns: number,
@@ -479,10 +479,7 @@ function statusBarBindingsText(
 }
 
 function childListBindingsText(
-  {
-    selectionKillable = false,
-    selectionResumable = false,
-  }: StatusBarChildListInput,
+  { selectionKillable, selectionResumable }: StatusBarChildListInput,
   ctrlCAction: CtrlCAction,
   maxColumns: number,
 ): string {
@@ -525,9 +522,8 @@ function childListBindingsText(
 }
 
 function approvalPolicySegment(
-  policy: ApprovalPolicy | undefined,
+  policy: ApprovalPolicy,
 ): StatusBarSegment | undefined {
-  if (policy === undefined) return undefined;
   // A policy that blocks earns a segment, in its tone.
   const tone = approvalPolicyTone(policy);
   if (tone === undefined) return undefined;
@@ -588,7 +584,7 @@ function resolveStatusBarBindings(input: StatusBarChrome): string {
   }
 
   const maxColumns = statusBarInnerWidth(input.width);
-  const ctrlCAction = input.ctrlCAction ?? 'exit';
+  const { ctrlCAction } = input;
   if (input.foreground.inputActive) {
     // The surface above prints its own keys, Esc included; only Ctrl-C,
     // which works over every surface, is the bar's to name.
@@ -625,20 +621,18 @@ export function buildStatusBarDisplay(
   // No run yet: the root keeps its status slot.
   const statusLabel = run ? runStatus(run).word : '-';
   const spinPrefix =
-    active && turn?.runningFrame ? `${turn.runningFrame} ` : '';
+    active && turn !== undefined ? `${turn.runningFrame} ` : '';
 
   // A notice must not hide the only indication that an active run is still
   // alive. Keep that liveness compact so the notice remains the focal text.
   if (input.transientNotice) {
     if (active) {
       const elapsed =
-        turn?.elapsedMs === undefined
-          ? ''
-          : ` ${formatCompactDuration(turn.elapsedMs)}`;
+        turn === undefined ? '' : ` ${formatCompactDuration(turn.elapsedMs)}`;
       left.push({
         text: `${spinPrefix}${statusLabel}${elapsed}`,
         compactText:
-          turn?.elapsedMs === undefined
+          turn === undefined
             ? 'run'
             : `run ${formatCompactDuration(turn.elapsedMs)}`,
         dim: true,
@@ -653,7 +647,7 @@ export function buildStatusBarDisplay(
       priority: STATUS_BAR_PRIORITY.chrome,
       policy: 'keep',
     });
-    if (active && turn?.elapsedMs !== undefined) {
+    if (active && turn !== undefined) {
       left.push({
         text: formatCompactDuration(turn.elapsedMs),
         dim: true,
@@ -765,10 +759,7 @@ export function buildStatusBarDisplay(
           : undefined,
         input.approvalDepth > 0
           ? {
-              text: formatResultCount(
-                input.approvalDepth,
-                input.approvalKind ?? 'approval',
-              ),
+              text: formatResultCount(input.approvalDepth, input.approvalKind),
               color: TONE_PAINT.warning.color,
               priority: STATUS_BAR_PRIORITY.approvalDepth,
               policy: 'drop',

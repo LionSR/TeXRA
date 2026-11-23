@@ -163,26 +163,28 @@ export class ProviderKeyList extends TexraElement {
   }
 
   private renderProviderSetting(setting: ProviderSetting): TemplateResult {
-    const { warningUrl } = setting;
-    const warningLink =
-      warningUrl && setting.warningUrlLabel
-        ? html` ${renderLabeledActionButton({
-            text: setting.warningUrlLabel,
-            kind: 'link',
-            className: 'provider-setting-link',
-            onClick: () =>
-              postToHost({
-                command: SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL,
-                url: warningUrl,
-              }),
-          })}`
-        : nothing;
-
-    const warning = setting.warning
-      ? html`<span class="provider-setting-warning"
-          >${setting.warning}${warningLink}</span
-        >`
-      : nothing;
+    const { warning, link } = setting;
+    // The link follows the warning; a control with a link and no warning
+    // shows the link alone.
+    const note =
+      warning === undefined && link === undefined
+        ? nothing
+        : html`<span class="provider-setting-warning"
+            >${warning ?? nothing}${
+              link
+                ? html` ${renderLabeledActionButton({
+                    text: link.label,
+                    kind: 'link',
+                    className: 'provider-setting-link',
+                    onClick: () =>
+                      postToHost({
+                        command: SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL,
+                        url: link.url,
+                      }),
+                  })}`
+                : nothing
+            }</span
+          >`;
 
     return html`
       <div class="provider-setting provider-setting--block">
@@ -196,7 +198,7 @@ export class ProviderKeyList extends TexraElement {
           ${setting.label}
         </wa-switch>
         <span class="provider-setting-description">${setting.description}</span>
-        ${warning}
+        ${note}
       </div>
     `;
   }
