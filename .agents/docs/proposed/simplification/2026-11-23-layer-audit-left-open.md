@@ -95,7 +95,10 @@ session-carried, or the service forwards it and the TUI follows it.
   (`packages/harness/src/agent/runtime/run/img.ts`), the shell wrapper's
   variable names (`packages/harness/src/utils/system/execUtils.ts`) and one
   export (`texraToolOfClaudeTool`,
-  `packages/harness/src/common/plugins/hookConfig.ts`).
+  `packages/harness/src/common/plugins/hookConfig.ts`). **Landed 2026-11-23
+  evening:** the prefixes are `resized-image-` and `pdf-conversion-`, the
+  variables `_lifeline_pid` and `_command_status`, and the export
+  `harnessToolOfClaudeTool`.
 
 ## Checked and left alone
 

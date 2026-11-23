@@ -91,7 +91,9 @@ On 2026-11-22, by the owner's decision:
    (`takeFrames` in `packages/harness/src/tools/jsonRpc.ts`). A
    multi-megabyte LSP reply is quadratic in copies. Not measured. The fix is
    a scan offset and a chunk list, not an Effect module. (The line decoder
-   went with the MCP client.)
+   went with the MCP client.) **Landed 2026-11-23:** the reader keeps the
+   chunks and, once a frame's header is read, joins them only when the
+   bytes it names have arrived.
 4. **Lean passes no `cancel` hook**, so an interrupted LSP request is never
    cancelled on the server with `$/cancelRequest`. A behavior gap, not a
    helper.

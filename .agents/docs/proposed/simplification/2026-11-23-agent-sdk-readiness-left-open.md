@@ -79,6 +79,19 @@ its subset with `ReasoningEffortLevelSchema.pick(...)`. `ThinkingLevelSchema`
 now picks from the same base, so the effort literals have one source. The
 literal values are unchanged, so no wire, JSON-schema or digest impact.
 
+## Landed the same evening
+
+**A child's parent edge has one owner.** Three launch sites (a background
+`agent` child, an awaited `agent` or `self()` child, a background script)
+each spelled `{ id, call: { callId, card, awaited } }` from the launching
+call, and two carriers restated `run.start`'s fields on the way there
+(`AwaitedChildLaunch`, the background launch's `launch` bag).
+`childOf(call, awaited)` (`delegation/childLaunch.ts`) builds the edge, and
+the launches take the call, the run id, the config and a
+`ChildRegistration` (a pick of `RegisterRunOptions`). The awaited wait reads
+its permit from the call it is given, so the launches no longer require
+`RunCall`. Internal; no row or public-surface change.
+
 ## Open: left for a decision or a broader pass
 
 None of these can land as a net win on its own; each needs either an owner
@@ -112,7 +125,13 @@ decision or a broader pass to sit in. Listed so the theme is not re-mined.
    is the lone holdout. But it deletes no named symbol and, with the six tags
    re-listed in both the capture and the type, is roughly line-neutral under
    oxfmt. Worth doing only folded into a repo-wide "forward captured context via
-   `Context.pick`" pass, not as a standalone diff.
+   `Context.pick`" pass, not as a standalone diff. Re-checked 2026-11-23
+   evening: it is still the only such chain in the harness and llm (the
+   other `provideService` sites provide one or two values built on the
+   spot), and two of its six are `Context.Reference`s
+   (`ConfigProvider`, `ProjectEnvironment`): `Context.pick` over a context
+   that never set one drops it, so the binding would read the reference
+   where it runs instead of where the layer was built. Left as it is.
 
 4. **Inline the single-caller `agentsMd` micro-module into `PromptBuilder`**
    (`agent/prompt/`). `loadAgentsMd` has exactly one consumer, which the

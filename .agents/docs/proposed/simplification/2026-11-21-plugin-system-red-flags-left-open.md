@@ -2,7 +2,8 @@
 
 Date: 2026-11-21
 Status: proposed (re-verified 2026-11-23: 3, 4, 5, 7, 8 and half of 10
-landed; 9 declined; 1, 2, 6, 11 and 12 wait on a decision)
+landed; 9 declined; 11 landed that evening; 1, 2, 6 and 12 wait on a
+decision)
 
 Origin: a pass over the plugin table, the native loader, the install and
 trust modules, hooks and MCP servers for design red flags and
@@ -161,6 +162,13 @@ not reproduced, it says so.
     for when the model actually launches a child. Acceptance: disable a data
     plugin between those two reads, and check that its agent and program
     move together in the saved request.
+    **Landed 2026-11-23 evening:** `readDelegationTargets` lists the agents
+    of the installed plugins the step loaded (`OpenStep`'s `installed`,
+    `pluginAgentsOf`), so its own install scan is gone; a launch's
+    `pluginAgent` reads the install records once for both its check and its
+    agent list. The acceptance run above was not repeated (no live model in
+    this session). The other readers (the catalog, a program's launch, the
+    runtime skills and the facade) are separate entry points.
 
 12. **Names on the plugin authoring entry with no importer.**
     `buildFileAttachment` with its options type has none anywhere;

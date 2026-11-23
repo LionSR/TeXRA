@@ -44,7 +44,9 @@ producer fills the others with `null`, and `scriptCallsView.ts`
 Proposed: keep the call's latest `ToolResultPayload | undefined` on the card
 and let the three readers narrow it; `status` stays as the derived word.
 
-Held back for size only: four sites, internal.
+Held back for size only: four sites, internal. **Landed 2026-11-23
+evening:** the card holds `result`; the executions view and the
+delivered-files fold narrow it.
 
 ## 3. A spend cap's "none" travels as `number | null | undefined`
 
@@ -56,6 +58,14 @@ unchanged through `AgentTool.ts`, `subagentRun.ts`, `childLaunch.ts` and
 
 Proposed: `number | null` from where the input is decoded. About eight
 sites; removes one coalesce.
+
+**Declined 2026-11-23 evening.** The carriers between the input and the
+registration are gone (`ChildRegistration`, a pick of
+`RegisterRunOptions`, see the agent SDK readiness note). The coalesce in
+`runLifecycle.ts` is the registration's default for every launch that
+names no cap (a root, a process child, a background script); removing it
+makes each of them, and the suites' fixtures, name `null`, which adds more
+than it removes.
 
 ## 4. `RunRows.grants` is null only while `start` is
 

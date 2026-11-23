@@ -29,6 +29,10 @@ adds this note:
    `{}`, which the JSON text does not. Decide which of the two a stored row
    can hold before switching. The same question stands for the
    `ifCurrent` check in `packages/texra/src/controllers/server/service.ts`.
+   **Landed 2026-11-23 evening** for `sameGrants`: it compares the grants
+   kind by kind (each kind's own value and goal grant, and the limit), so
+   neither key order nor an absent key against an `undefined` one reads as
+   a change. The `ifCurrent` check in `service.ts` is still open.
 2. **GitHub query strings.** The poll paths under
    `packages/texra/src/tools/github/` (`checkRunsClient.ts`,
    `pullPoller.ts`, `issuePoller.ts`, `githubSubscriptionTool.ts`) write
