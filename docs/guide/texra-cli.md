@@ -252,6 +252,12 @@ models the CLI can reach with the current credentials.
 `texra chat` opens an interactive chat in the terminal. It streams
 reasoning, tool calls, and diffs, and writes to the same run history as the VS
 Code extension. Running bare `texra` in a terminal opens this same session.
+A project has one long-running conversation, its agent: the conversation you
+last started in the folder. `texra chat` (and bare `texra`) opens on it at its
+last message, as the VS Code view and the desktop window do, and `/resume`
+lists it first; it keeps its own model (`/model` switches it). `texra chat
+--new` or `/clear` starts over: the next message begins a new conversation,
+and the old one stays in `/resume`.
 While a run is working, pressing `Enter` delivers your message at its next model
 step, while `Shift-Tab` holds it until the end of the current turn.
 
@@ -260,8 +266,9 @@ step, while `Shift-Tab` holds it until the end of the current turn.
 <p class="hero-caption">A <code>texra chat</code> session streams reasoning and tool calls inline, shows diffs as the agent edits, and lists its key hints at the bottom.</p>
 
 ```bash
-texra chat                                      # default model
-texra chat --model deepseek/deepseek-flash@high # override the session model and effort
+texra chat                                      # the project's conversation
+texra chat --new                                # start over with a new one
+texra chat --new --model deepseek/deepseek-flash@high # a new one on another model and effort
 # one headless answer for scripts and CI
 texra run chat --input main.tex --instruction "Check the proof of Lemma 2." --print
 ```
@@ -495,7 +502,7 @@ If another TeXRA process still holds a task, resume refuses with that process's 
 
 ## Background service
 
-On macOS and Linux, the CLI, VS Code extension, and desktop app share a local background service (started automatically by `texra chat`, `texra tasks`, VS Code, or the desktop app; it exits after 10 minutes idle). Tasks keep running if you close the terminal, and any open VS Code or desktop window for the same project handles window-only actions like diff previews and diagnostics.
+On macOS and Linux, the CLI, VS Code extension, and desktop app share a local background service (started automatically by `texra chat`, `texra tasks`, VS Code, or the desktop app; it exits after 10 minutes idle). A project stays open in it while a task runs or a turn a conversation arranged for later (`wake`) is still due, so that turn runs on time with no window open. Tasks keep running if you close the terminal, and any open VS Code or desktop window for the same project handles window-only actions like diff previews and diagnostics.
 
 If the service cannot start (or `TEXRA_NO_SERVICE=1` is set, or on Windows), `texra chat` runs locally in its own process. `texra run`, `-p`, and `--output-format ndjson` always run locally.
 

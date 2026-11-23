@@ -88,6 +88,26 @@ One researcher on their own machine, in the desktop app, the extension or the
   whose records cannot be read, reads as none, with a `warn` naming the run.
   **Start over** clears it on purpose. Clearing deletes nothing.
 
+Landed 2026-11-23. The row is `PROJECT_AGENT_SETTING`
+(`projectAgent.runId`, `packages/texra/src/shared/settings/texraSettings.ts`);
+its one owner is `packages/texra/src/controllers/session/projectAgent.ts`
+(`projectAgent`, `recordProjectAgent`, `startOver`), which every host asks.
+The GUI launcher's Send (`openGuiWindow.ts`, its `launch` case) and the CLI
+chat's fresh root (`launchRootRun`, `packages/cli/src/chat/chatSessionController.ts`)
+record the run; Start over is the GUI's New task (a shell's `selectNew`
+sends `startOver`, `packages/texra/src/ui/progress/sessionSurfaces.ts`), the
+extension's New Task command, `/clear` and `texra chat --new`. Deviations:
+
+- A later conversation a person starts replaces the record rather than
+  waiting for it to be cleared, so the project opens on the conversation
+  started last (Run again…, or a terminal whose root failed and started a
+  fresh one, would otherwise leave the project on a conversation it left).
+- A program's run and the setup conversation (`SETUP_AGENT_NAME`) are not a
+  project's conversation and record nothing.
+- A record whose read fails (the store, a service out of reach) reads as
+  none with a warning but is kept: a failed read cannot tell a gone run from
+  an unreachable one. A deleted run, or one with no saved setup, is cleared.
+
 ### R2. Every host opens a project on its agent
 
 - The desktop window, the extension's view and bare `texra` in a project
@@ -97,6 +117,17 @@ One researcher on their own machine, in the desktop app, the extension or the
 - The run list shows the agent first, marked. No second control starts or
   stops being "the agent": **Start over** is the one action.
 - A window with no folder has no project and no agent.
+
+Landed 2026-11-23, on the recommended answer to owner question 2. The GUI
+window (`openGuiWindow.ts`, both GUI hosts) selects the agent once its first
+surface attaches (`SessionBridge.attached`), and carries it in the host
+snapshot (`HostSnapshot.agent`), from which the run lists put it first and
+mark it (`projectAgentFirst`, `packages/texra/src/shared/session/projectAgentFirst.ts`;
+`RunTabs`/`RunTab`, `SessionDrawer`, `ProgressApp`, the desktop rail). Bare
+`texra` and `texra chat` resume it (`packages/cli/src/commands/chat.ts`), and
+`--new` starts over; the CLI's history and `/resume` mark it on the listing
+row (`CliHistoryEntry.projectAgent`). A `--model` given while the project has
+an agent is said not to apply: the conversation keeps its own model.
 
 ### R3. A wake not yet due holds its project
 
@@ -110,6 +141,15 @@ One researcher on their own machine, in the desktop app, the extension or the
   (`packages/texra/src/controllers/session/openProjectSession.ts`), and a
   wake fires only while that window is open. The window's existing notice
   about tasks running locally covers it.
+
+Landed 2026-11-23: `holdsWake` (`packages/texra/src/controllers/server/service.ts`)
+beside `runsAtWork`, read where `serve.ts` holds a project. It reads a run's
+queued messages as its pending notes, as the session's own open does
+(`wakePendingNotes`): the view does not carry a note's due time, and a
+message to a run that is not at work starts it, so a queued one is a note.
+A note already due whose resume failed would keep holding the project until
+the service stops; carrying `due` in the view's queued messages would make
+the condition exact.
 
 ### R4. A turn nobody asked for is visible and bounded
 
@@ -159,8 +199,8 @@ changed.
 ## Order
 
 1. R5 (done).
-2. R1 and R2, in the app and the three hosts.
-3. R3, in the service.
+2. R1 and R2, in the app and the three hosts (landed 2026-11-23).
+3. R3, in the service (landed 2026-11-23).
 4. R4's display, where a host does not already show the note.
 
 ## After
@@ -206,6 +246,11 @@ changed.
 
 - Read at the baseline: the files named above; the programs note's phases.
 - Ran for R5: `npm run gate`, `npm test`.
+- Ran for R1 to R3 (2026-11-23): the typecheck, invariants, docs and
+  Effect gates, the changed suites and the crash project; the scenario in
+  `src/test-kernel/cli/chatSessionController.vitest.ts` records the agent at
+  the first message, opens on it, clears it on Start over and reads a
+  deleted one as none with its warning.
 - Not checked: how each host shows a note a run wrote to itself (R4);
-  whether a summary call reads the prompt cache (After 1); the extension's
-  opening path, which was read only through the shared window body.
+  whether a summary call reads the prompt cache (After 1); the GUI's opening
+  on the agent in a running desktop or VS Code window (no E2E run).
