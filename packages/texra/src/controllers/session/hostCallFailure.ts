@@ -5,8 +5,9 @@
  * rather than at the depth that calls it. `hostFailure` passes a refusal
  * the callee already worded through as itself and tags every other
  * rejection with the member it came from, so the bridge can tell a refusal
- * from a defect; `fromHost` tags every rejection, since a host API raises
- * no refusal. `openLink` is the one wording of a browser open that failed.
+ * from a defect; `fromHost` and `fromHostSync` tag every rejection, since a
+ * host API raises no refusal. `openLink` is the one wording of a browser
+ * open that failed.
  */
 import { Effect } from 'effect';
 
@@ -45,9 +46,19 @@ export function isRequestRefusal(error: unknown): error is RequestRefusal {
 }
 
 /** A host member's failure in the cause's own words, for a member that
- *  raises no refusal. */
-export function hostFailed(member: string, cause: unknown): HostFailed {
-  return new HostFailed({ member, message: toErrorMessage(cause), cause });
+ *  raises no refusal. `what` says what the user was denied ("The log could
+ *  not be copied") and goes before those words. */
+export function hostFailed(
+  member: string,
+  cause: unknown,
+  what?: string,
+): HostFailed {
+  const words = toErrorMessage(cause);
+  return new HostFailed({
+    member,
+    message: what === undefined ? words : `${what}: ${words}`,
+    cause,
+  });
 }
 
 /** How a host call's failure is worded, whatever shape it arrived in. */
@@ -64,10 +75,23 @@ export function hostFailure(
 export function fromHost<A>(
   member: string,
   call: () => PromiseLike<A>,
+  what?: string,
 ): Effect.Effect<A, HostFailed> {
   return Effect.tryPromise({
     try: call,
-    catch: (cause) => hostFailed(member, cause),
+    catch: (cause) => hostFailed(member, cause, what),
+  });
+}
+
+/** {@link fromHost} for a host API that answers at once and may throw. */
+export function fromHostSync<A>(
+  member: string,
+  call: () => A,
+  what?: string,
+): Effect.Effect<A, HostFailed> {
+  return Effect.try({
+    try: call,
+    catch: (cause) => hostFailed(member, cause, what),
   });
 }
 

@@ -63,8 +63,8 @@ interface ModelsTabSurface {
   readonly label?: string;
   readonly description?: string;
   readonly warning?: string;
-  readonly warningUrl?: string;
-  readonly warningUrlLabel?: string;
+  /** A page the control points to, shown after its warning when it has one. */
+  readonly link?: { readonly url: string; readonly label: string };
 }
 
 /** The TeXRA UIs that render a row. */
@@ -78,7 +78,7 @@ interface SettingSurfaces {
   /** Listed as an editable row in the CLI `/config` panel. */
   readonly cliConfig?: true;
   /** Shown as a per-provider toggle in the Models tab. */
-  readonly models?: readonly ModelsTabSurface[];
+  readonly model?: ModelsTabSurface;
 }
 
 /** Consequences of writing a row, applied by the settings write handlers. */
@@ -162,7 +162,10 @@ function providerToggle(
     surfaces: Object.freeze({
       settingsView: 'profile',
       cliConfig: true,
-      models: Object.freeze([Object.freeze({ ...model })]),
+      model: Object.freeze({
+        ...model,
+        ...(model.link && { link: Object.freeze({ ...model.link }) }),
+      }),
     }),
   });
 }
@@ -190,7 +193,7 @@ export const HARNESS_ROW_SURFACES: Readonly<
     category: 'model',
     surfaces: Object.freeze({
       settingsView: 'profile',
-      models: Object.freeze([Object.freeze({ provider: 'google' })]),
+      model: Object.freeze({ provider: 'google' }),
     }),
   }),
   [OPENAI_FAST_TIER_SETTING.key]: providerToggle({ provider: 'openai' }),
@@ -286,27 +289,26 @@ export const HARNESS_ROW_SURFACES: Readonly<
     provider: 'moonshot',
     warning:
       'A platform.moonshot.cn key does not work with the international endpoint, and vice versa.',
-    warningUrl: KEY_PAGES.moonshot.international,
-    warningUrlLabel: 'International console',
+    link: {
+      url: KEY_PAGES.moonshot.international,
+      label: 'International console',
+    },
   }),
   [DASHSCOPE_REGION_SETTING.key]: providerToggle({ provider: 'dashscope' }),
   [MINIMAX_REGION_SETTING.key]: providerToggle({
     provider: 'minimax',
     warning:
       'International keys do not work with the China endpoint, and vice versa. Coding Plan keys are also region-specific.',
-    warningUrl: KEY_PAGES.minimax.international,
-    warningUrlLabel: 'Get API key',
+    link: { url: KEY_PAGES.minimax.international, label: 'Get API key' },
   }),
   [GLM_REGION_SETTING.key]: providerToggle({
     provider: 'glm',
-    warningUrl: KEY_PAGES.glm.china,
-    warningUrlLabel: 'BigModel console',
+    link: { url: KEY_PAGES.glm.china, label: 'BigModel console' },
   }),
   [GLM_CODING_PLAN_SETTING.key]: providerToggle(
     {
       provider: 'glm',
-      warningUrl: 'https://z.ai/subscribe',
-      warningUrlLabel: 'Subscribe',
+      link: { url: 'https://z.ai/subscribe', label: 'Subscribe' },
     },
     { invalidatesModelOptions: true },
   ),

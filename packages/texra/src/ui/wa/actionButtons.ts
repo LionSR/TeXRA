@@ -109,13 +109,14 @@ interface ActionButtonCommon {
 }
 
 /**
- * A disclosure toggle sets `expanded` (reflected as `aria-expanded`) and
- * names no icon: its glyph is the chevron `disclosureChevronStyles` turns
- * while the section is open.
+ * A disclosure toggle states whether its section is open (`expanded`,
+ * reflected as `aria-expanded`) and the button draws the chevron, which
+ * turns while open. It names no icon of its own, so no caller swaps or
+ * rotates one by hand.
  */
 interface DisclosureGlyph {
-  readonly icon?: undefined;
   readonly expanded: boolean;
+  readonly icon?: undefined;
 }
 
 export type IconActionButtonOptions = ActionButtonCommon &
@@ -226,14 +227,23 @@ function renderActionButtonParts({
   // the hover hint only where no `wa-tooltip` shows one: both would double
   // it.
   const nativeTitle = title ?? (text ? undefined : ariaLabel);
-  const glyphIcon = expanded === undefined ? icon : 'chevron-right';
-  const glyphClass = expanded === undefined ? undefined : 'disclosure-chevron';
+  const glyph = (slot?: 'start'): TemplateResult | typeof nothing => {
+    if (expanded !== undefined) {
+      return waIcon('chevron-right', { className: 'disclosure-chevron', slot });
+    }
+    return icon ? waIcon(icon, { slot }) : nothing;
+  };
   let content: TemplateResult | typeof nothing = nothing;
-  if (text) {
-    content = html`${glyphIcon ? waIcon(glyphIcon, { slot: 'start', className: glyphClass }) : nothing}${text}`;
-  } else if (glyphIcon) {
-    content = html`${waIcon(glyphIcon, { className: glyphClass })}<span
-        class="action-button-label"
+  if (text && label !== undefined && label !== text) {
+    // A longer accessible name than the visible text: the inner native
+    // button is named by its slotted text, not by the host's `aria-label`,
+    // so the name goes in as hidden text and the short text is skipped.
+    content = html`${glyph('start')}<span aria-hidden="true">${text}</span
+      ><span class="action-button-label">${label}</span>`;
+  } else if (text) {
+    content = html`${glyph('start')}${text}`;
+  } else if (icon || expanded !== undefined) {
+    content = html`${glyph()}<span class="action-button-label"
         >${ariaLabel}</span
       >`;
   }

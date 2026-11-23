@@ -17,7 +17,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
-import { HostFailed } from '@texra/hosts/uiHosts';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 
 // Local file imports
@@ -27,13 +27,12 @@ export const vscodeSetupPlatform: SetupPlatformShape = {
   commands: {
     invoke: (commandId, ...args) =>
       executeVscodeCommand<unknown>(commandId, ...args).pipe(
-        Effect.mapError(
-          (cause) =>
-            new HostFailed({
-              member: 'commands.invoke',
-              message: `VS Code could not run "${commandId}": ${cause.message}`,
-              cause,
-            }),
+        Effect.mapError((cause) =>
+          hostFailed(
+            'commands.invoke',
+            cause,
+            `VS Code could not run "${commandId}"`,
+          ),
         ),
       ),
   },

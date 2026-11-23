@@ -62,7 +62,8 @@ export {
 } from '@platform/defaults/workspaceStorage';
 // Running a program on this machine: run it, and extend the PATH for any
 // other child with the directories an app adds.
-// The home directory, logged at warn where none resolves.
+// The home directory, logged at warn where none resolves, and whether a
+// process id is running.
 export {
   executeCommand,
   type ExecEnd,
@@ -74,6 +75,7 @@ export {
   existsAtAbsolute,
   homeDirectory,
   IS_WINDOWS,
+  processRunning,
   whichOnExtendedPath,
   withCommandDirs,
   withExtendedPath,

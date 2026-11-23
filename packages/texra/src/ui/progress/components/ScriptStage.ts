@@ -28,10 +28,7 @@ import {
   scriptStageSummary,
 } from '@ui/copy/scriptStage';
 import { designTokens } from '@ui/styles';
-import {
-  disclosureChevronStyles,
-  truncateDeclarations,
-} from '@ui/styles/commonViewStyles';
+import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { buttonStyles, formControlStyles } from '@ui/styles/controlStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { isActivationKey } from '@ui/wa/keyActivation';
@@ -168,7 +165,6 @@ export class ScriptStage extends LitElement {
   static override styles = [
     designTokens,
     buttonStyles,
-    disclosureChevronStyles,
     formControlStyles,
     toneStyles,
     scriptStageStyles,

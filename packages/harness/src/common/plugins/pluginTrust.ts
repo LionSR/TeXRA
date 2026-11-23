@@ -15,7 +15,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Number as Num, Result } from 'effect';
+import { Effect, FileSystem, Number as Num, Record, Result } from 'effect';
 
 // Local imports - shared contracts
 import {
@@ -99,7 +99,7 @@ export const describeHook = (hook: ConfiguredHook): Effect.Effect<string> =>
 
 const describeServer = (server: McpServerConfig) =>
   `${server.name.replace(/^plugin_[^_]+_/, '')}: runs \`${[server.command, ...server.args].join(' ')}\`${
-    Object.keys(server.env).length > 0
+    !Record.isEmptyRecord(server.env)
       ? ` with ${Object.keys(server.env).toSorted().join(', ')} set`
       : ''
   }`;

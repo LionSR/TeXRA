@@ -121,7 +121,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           expect(refusalOf(orphanGroup)?.reason).toBe('unprepared-history');
           expect(yield* committed).toBe(written);
           state = yield* cell.append([approvalRequested]);
-          expect(state.requests['req-1']?.decision).toBeNull();
+          expect(state.requests['req-1']?.decided).toBeNull();
           expect(state.pendingResponse?.records['call-a']?.status).toEqual({
             kind: 'started',
             attempt: 1,

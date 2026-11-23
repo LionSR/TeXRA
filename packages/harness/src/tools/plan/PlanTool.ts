@@ -233,7 +233,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   }
 
   // Tell a parent of this run that the proposal was withdrawn.
-  call.run.callbacks.onProgress?.({ kind: 'plan', plan: null });
+  call.run.onProgress?.({ kind: 'plan', plan: null });
 
   // 'cancelled' and 'policy' differ only in wording: a host cancel with an
   // optional cause vs a policy denial with its reason.
@@ -287,7 +287,7 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
   call: RunToolCall,
   plan: Plan,
 ) {
-  call.run.callbacks.onProgress?.({ kind: 'plan', plan });
+  call.run.onProgress?.({ kind: 'plan', plan });
 
   // Every update is a (re-)proposal: with no step statuses to record,
   // the only reason to call update is a new or changed objective, and

@@ -120,8 +120,12 @@ export interface LatexPreviewEntry {
    * workspace scope.
    */
   request: { path: string; roots: WorkspaceRoots };
-  originalUri: { fsPath: string };
-  proposedUri: { fsPath: string };
+  /** Where the host staged the two sides: the files a person may have
+   *  edited by hand since. */
+  readonly preview: {
+    readonly originalPath: string;
+    readonly proposedPath: string;
+  };
   originalContent: string;
   proposedContent: string;
   /**
@@ -133,8 +137,8 @@ export interface LatexPreviewEntry {
   /** One LaTeX operation at a time: one started while another runs does
    *  nothing. */
   readonly operation: Semaphore.Semaphore;
-  /** Platform-specific error reporter, injected by the caller. */
-  onError: (message: string) => void;
+  /** Report a failed operation to the person. */
+  onError: (message: string) => Effect.Effect<void>;
 }
 
 /** Length of the random suffix for temp file names (8 hex digits of a UUID, 2^32 combinations) */
@@ -210,9 +214,7 @@ const withLatexOperation = (
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
-        : Effect.sync(() => {
-            entry.onError(`${operationName} failed: ${toErrorMessage(cause)}`);
-          }),
+        : entry.onError(`${operationName} failed: ${toErrorMessage(cause)}`),
     ),
     entry.operation.withPermitsIfAvailable(1),
     Effect.asVoid,
@@ -226,18 +228,18 @@ const withLatexOperation = (
  *  warns, because the preview would silently drop the user's saved edits. */
 const readFileWithFallback = Effect.fn('latexPreview.readFileWithFallback')(
   function* (
-    uri: { fsPath: string },
+    filePath: string,
     fallback: string,
   ): Effect.fn.Return<string, never, PreviewServices> {
     const fs = yield* FileSystem.FileSystem;
     // The raw bytes decoded as-is, line endings included.
-    return yield* fs.readFile(uri.fsPath).pipe(
+    return yield* fs.readFile(filePath).pipe(
       Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
       Effect.catch((error) =>
         meansAbsent(error)
           ? Effect.succeed(fallback)
           : Effect.logWarning(
-              `Failed to read ${uri.fsPath}; previewing held content (saved hand edits may be missing): ${toErrorMessage(error)}`,
+              `Failed to read ${filePath}; previewing held content (saved hand edits may be missing): ${toErrorMessage(error)}`,
             ).pipe(
               withLogChannel(CHANNEL),
               Effect.annotateLogs({ data: error }),
@@ -294,7 +296,7 @@ export const previewProposedLatex = (
     'Preview',
     Effect.gen(function* () {
       const content = yield* readFileWithFallback(
-        entry.proposedUri,
+        entry.preview.proposedPath,
         entry.proposedContent,
       );
       const tempPath = yield* createTempFileWithCleanup(
@@ -328,8 +330,14 @@ export const runLatexdiff = (
     Effect.gen(function* () {
       const [originalContent, proposedContent] = yield* Effect.all(
         [
-          readFileWithFallback(entry.originalUri, entry.originalContent),
-          readFileWithFallback(entry.proposedUri, entry.proposedContent),
+          readFileWithFallback(
+            entry.preview.originalPath,
+            entry.originalContent,
+          ),
+          readFileWithFallback(
+            entry.preview.proposedPath,
+            entry.proposedContent,
+          ),
         ],
         { concurrency: 2 },
       );

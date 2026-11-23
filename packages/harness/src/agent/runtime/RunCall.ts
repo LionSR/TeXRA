@@ -122,11 +122,11 @@ export interface ScriptScope extends ScriptSource {
 }
 
 /** The run as the harness's built-in tools read it: what a plugin's tool
- *  sees (`ToolRun`), with its open step, its host callbacks and the bound
+ *  sees (`ToolRun`), with its open step, its progress callback and the bound
  *  on the calls it awaits children in. A built-in reads its session's
  *  owners from its run's context. */
 type BuiltinRun = ToolRun &
-  Pick<AgentRunShape, 'steps' | 'callbacks' | 'awaitedCalls'>;
+  Pick<AgentRunShape, 'steps' | 'onProgress' | 'awaitedCalls'>;
 
 /** A call made under a run, as its loop dispatched it (`RunCall`). */
 export interface RunCallShape {

@@ -132,7 +132,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
     const { requests } = yield* log.runRows(aggregateId, 'requests');
     for (const [requestId, request] of Object.entries(requests))
       if (
-        request.decision === null &&
+        request.decided === null &&
         !(id === runId && requestId === except) &&
         grantAnswering((kind) => covering.includes(kind), request.answeredBy)
       )
@@ -215,7 +215,7 @@ export const sessionApprovals: Effect.Effect<
         Effect.gen(function* () {
           const aggregateId = runId;
           const { requests } = yield* log.runRows(aggregateId, 'requests');
-          const open = requests[requestId]?.decision === null;
+          const open = requests[requestId]?.decided === null;
           const all: readonly SessionRowDraft[] = [
             ...(open
               ? [

@@ -10,7 +10,11 @@ import {
 } from '../shared/desktopLogMessages.js';
 import type { SaveDialogOptions, SaveDialogReturnValue } from 'electron';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
-import { HostFailed } from '@texra/hosts/uiHosts';
+import {
+  fromHost,
+  fromHostSync,
+  hostFailed,
+} from '@texra/controllers/session/hostCallFailure';
 import { parsedRoute, type DesktopCommandRoutes } from './desktopIpcTypes.js';
 
 /** How long the log file must stay quiet before a follow pushes it: a burst
@@ -64,45 +68,36 @@ export function createDesktopLogIpc(
   });
 
   const copyLog = (text: string) =>
-    Effect.try({
-      try: () => options.copyLog(text),
-      catch: (cause) =>
-        new HostFailed({
-          member: 'clipboard.writeText',
-          message: `The log could not be copied: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    });
+    fromHostSync(
+      'clipboard.writeText',
+      () => options.copyLog(text),
+      'The log could not be copied',
+    );
 
   // A cancelled dialog, or one that names no file, writes nothing.
   const exportLog = (text: string) =>
-    Effect.tryPromise({
-      try: () =>
+    fromHost(
+      'dialog.showSaveDialog',
+      () =>
         options.showSaveDialog({
           title: 'Export TeXRA Desktop Log',
           defaultPath: 'texra-desktop-log.txt',
           filters: [{ name: 'Text Logs', extensions: ['txt', 'log'] }],
         }),
-      catch: (cause) =>
-        new HostFailed({
-          member: 'dialog.showSaveDialog',
-          message: `The save dialog could not be shown: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    }).pipe(
+      'The save dialog could not be shown',
+    ).pipe(
       Effect.flatMap(({ canceled, filePath }) =>
         canceled || !filePath
           ? Effect.void
           : FileSystem.FileSystem.use((fs) =>
               fs.writeFileString(filePath, text),
             ).pipe(
-              Effect.mapError(
-                (error) =>
-                  new HostFailed({
-                    member: 'exportLog',
-                    message: `The log could not be written to ${filePath}: ${toErrorMessage(error)}`,
-                    cause: error,
-                  }),
+              Effect.mapError((error) =>
+                hostFailed(
+                  'exportLog',
+                  error,
+                  `The log could not be written to ${filePath}`,
+                ),
               ),
             ),
       ),

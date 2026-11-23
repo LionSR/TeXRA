@@ -9,7 +9,7 @@
  * sentence as a doc comment and no field descriptions. The full form is what
  * `describeTool` returns: the whole description, a doc comment per field.
  */
-import { Predicate } from 'effect';
+import { Predicate, Record as EffectRecord } from 'effect';
 
 import { inputSchema } from '@tools/core/toolSchema';
 import type { ToolDefinition } from '@shared/schemas';
@@ -153,7 +153,7 @@ function typeOf(
   if (
     fields.length === 0
       ? extra !== false
-      : Predicate.isObject(extra) && Object.keys(extra).length > 0
+      : Predicate.isObject(extra) && !EffectRecord.isEmptyRecord(extra)
   )
     fields.push(
       `${full ? `${indent}${INDENT}` : ''}[key: string]: ${recur(extra)}${full ? ';' : ''}`,

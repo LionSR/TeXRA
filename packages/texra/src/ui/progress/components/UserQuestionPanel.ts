@@ -19,9 +19,12 @@ import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - styles
 import { userQuestionPanelStyles } from './UserQuestionPanel.styles';
+import {
+  userQuestionDecision,
+  type UserQuestionEntry,
+} from '@texra/shared/session/userQuestionAnswer';
 import type {
-  UserQuestionAnswers,
-  UserQuestionRequest,
+  RequestDecision,
   UserQuestionPrompt,
 } from '@texra-ai/worldline/schemas';
 
@@ -31,18 +34,12 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
 
   /** Question `index`'s picks and typed answer, from the card's draft
    *  (by position: Lit's `repeat` keys the questions by it too). */
-  private answerAt(index: number): {
-    selected: readonly string[];
-    text: string;
-  } {
+  private answerAt(index: number): UserQuestionEntry {
     return this.draft.answers?.[index] ?? { selected: [], text: '' };
   }
 
   /** Change question `index`'s answer in the draft. */
-  private editAnswer(
-    index: number,
-    patch: Partial<{ selected: readonly string[]; text: string }>,
-  ): void {
+  private editAnswer(index: number, patch: Partial<UserQuestionEntry>): void {
     const { questions } = this.permission.data;
     const answers = questions.map((_question, at) => {
       const answer = this.answerAt(at);
@@ -71,7 +68,7 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
 
   override render(): TemplateResult {
     const data = this.permission.data;
-    const canSubmit = this.hasAnyAnswer(data);
+    const canSubmit = this.decision().action === 'submit';
 
     return this.renderCard(html`
       ${
@@ -227,46 +224,23 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
     this.editAnswer(index, { text: event.currentTarget.value ?? '' });
   }
 
+  private decision(): RequestDecision {
+    const { questions } = this.permission.data;
+    return userQuestionDecision(
+      questions,
+      questions.map((_question, index) => this.answerAt(index)),
+    );
+  }
+
   private submitAnswers(): void {
-    const data = this.permission.data;
-    if (!this.hasAnyAnswer(data)) {
+    const decision = this.decision();
+    if (decision.action !== 'submit') {
       this.renderRoot
         .querySelector<HTMLElement>('wa-radio-group, wa-checkbox, wa-textarea')
         ?.focus();
       return;
     }
-    const answers: Record<string, UserQuestionAnswers[string]> = {};
-
-    for (const [index, question] of data.questions.entries()) {
-      const custom = this.answerAt(index).text.trim();
-      const selected = this.answerAt(index).selected;
-      if (question.multiSelect) {
-        // The box is labelled "Another answer", so on a multi-select
-        // question it adds to the checked options instead of replacing them.
-        const merged = custom ? [...selected, custom] : selected;
-        const answer = [...new Set(merged)];
-        if (answer.length === 0) continue;
-        answers[question.question] = answer;
-        continue;
-      }
-      // Single-select holds one answer, so free text stays an override — it is
-      // the escape hatch for "none of these options fit".
-      if (custom) {
-        answers[question.question] = custom;
-        continue;
-      }
-      if (selected.length === 0) continue;
-      answers[question.question] = selected[0];
-    }
-
-    this.emitAction({ action: 'submit', answers });
-  }
-
-  private hasAnyAnswer(data: UserQuestionRequest): boolean {
-    return data.questions.some((_question, index) => {
-      const answer = this.answerAt(index);
-      return answer.text.trim() !== '' || answer.selected.length > 0;
-    });
+    this.emitAction(decision);
   }
 }
 

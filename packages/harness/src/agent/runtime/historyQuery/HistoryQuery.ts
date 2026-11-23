@@ -378,7 +378,6 @@ export class HistoryQueryStore implements Context.Service.Shape<
       for (const id of store.fed.keys()) {
         if (runs.has(id)) continue;
         store.fed.delete(id);
-        store.unreadable.delete(id);
         yield* append(store, [
           { statement: 'removeTools', params: { run_id: id } },
           { statement: 'removeModels', params: { run_id: id } },
@@ -386,6 +385,9 @@ export class HistoryQueryStore implements Context.Service.Shape<
       }
       for (const run of runs.values()) {
         const fed = store.fed.get(run.id);
+        // A run whose rows do not decode in this build never will: its row
+        // in runs says why its calls are missing, and it is not read again.
+        if (fed !== undefined && 'unreadable' in fed) continue;
         // An ended run takes no row before its next activation, which
         // replaces its view.
         if (fed?.view === run && run.outcome !== null) continue;
@@ -399,11 +401,8 @@ export class HistoryQueryStore implements Context.Service.Shape<
               ).pipe(withLogChannel(CHANNEL), Effect.as(error.message)),
           ),
         );
-        // A run whose rows do not decode in this build never will: its row
-        // in runs says why its calls are missing, and it is not read again.
         if (typeof rows === 'string') {
-          store.unreadable.set(run.id, rows);
-          store.fed.set(run.id, { view: run, seq: Number.MAX_SAFE_INTEGER });
+          store.fed.set(run.id, { unreadable: rows });
           continue;
         }
         const kept = rows.filter((row) => row.commit <= target);

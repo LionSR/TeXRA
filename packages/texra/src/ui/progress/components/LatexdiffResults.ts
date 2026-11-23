@@ -59,12 +59,12 @@ export class LatexdiffResults extends TexraElement {
         flex-wrap: wrap;
       }
 
-      .file-link.btn-ghost {
+      .latexdiff-file.action-button {
         flex-shrink: 1;
         min-width: 0;
         overflow-wrap: anywhere;
       }
-      .file-link::part(base) {
+      .latexdiff-file::part(base) {
         white-space: normal;
         text-align: start;
       }
@@ -98,7 +98,7 @@ export class LatexdiffResults extends TexraElement {
   ): TemplateResult {
     return renderLabeledActionButton({
       kind: 'link',
-      className: 'file-link',
+      className: 'latexdiff-file',
       text: label,
       label: accessibleLabel,
       onClick: () => this.handleFileClick(filePath),
