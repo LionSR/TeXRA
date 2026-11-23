@@ -10,7 +10,6 @@ const PositiveTokenCountSchema = Schema.Int.check(Schema.isGreaterThan(0));
  */
 export const ContextManagementDataSchema = Schema.Struct({
   action: Schema.Literal('max_tokens_reduced'),
-  tokensBefore: NonNegativeIntSchema,
   contextWindow: PositiveTokenCountSchema,
   utilizationBefore: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
   details: Schema.optional(Schema.String),

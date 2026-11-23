@@ -12,7 +12,6 @@
 import { absurd } from 'effect';
 import {
   TOOL_CALL_STATUS,
-  type ContextManagementData,
   type ModelFailure,
   type FileListEntry,
   type MediaAttachmentKind,
@@ -193,8 +192,6 @@ export interface StatItem {
 
 export interface ContextManagementRow extends TranscriptRowBase {
   readonly kind: 'contextManagement';
-  readonly data: ContextManagementData;
-  /** `Compacted`, `Cleared tool uses`, … */
   readonly label: string;
   readonly items: readonly StatItem[];
 }
