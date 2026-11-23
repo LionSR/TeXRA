@@ -7,7 +7,7 @@
   "dependencies": {
     "@altmetric/identifiers": "catalog:",
     "@anthropic-ai/claude-agent-sdk": "catalog:",
-    "@awesome.me/webawesome": "^3.14.0",
+    "@awesome.me/webawesome": "^3.15.0",
     "@effect/platform-node": "catalog:",
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
     "@lit-labs/signals": "^0.3.0",

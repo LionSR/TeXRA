@@ -9,7 +9,7 @@
     "build": "vite build"
   },
   "devDependencies": {
-    "@awesome.me/webawesome": "^3.14.0",
+    "@awesome.me/webawesome": "^3.15.0",
     "@lit-labs/signals": "^0.3.0",
     "@texra-ai/worldline": "workspace:*",
     "@typescript/native": "npm:typescript@^7.0.2",
