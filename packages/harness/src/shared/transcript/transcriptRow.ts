@@ -25,6 +25,7 @@ import {
 } from '@shared/schemas';
 import {
   COMPACTION_ACTIVITY_LABEL,
+  isCompactionActivityFinal,
   type CompactionActivityBlock,
 } from '@shared/runs/compactionActivityProjection';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
@@ -258,7 +259,8 @@ const IMMEDIATELY_FINAL_ROW_KINDS = new Set<TranscriptRowKind>([
  * with an append-only surface asks about a row it holds no position for.
  */
 function isSelfFinalRow(row: TranscriptRow): boolean {
-  if (row.kind === 'compactionActivity') return row.block.finalized;
+  if (row.kind === 'compactionActivity')
+    return isCompactionActivityFinal(row.block);
   return (
     row.finalSeqNo !== undefined ||
     row.origin === 'local' ||
@@ -293,7 +295,7 @@ export function isFinalRow(row: TranscriptRow, hasLaterRow: boolean): boolean {
         row.model.status === TOOL_CALL_STATUS.FAILED
       );
     case 'compactionActivity':
-      return row.block.finalized;
+      return isCompactionActivityFinal(row.block);
     case 'webSearch':
     case 'user':
     case 'error':
@@ -352,15 +354,17 @@ export function compactionActivityRow(
     block,
     // `Context compacted · freed 41k tokens (78% → 22%)`; an edit the
     // agent asked for, `Agent edited its context · replaced 12 messages · …`.
-    label: joinFacts([
-      block.replaced === undefined
-        ? COMPACTION_ACTIVITY_LABEL[block.status]
-        : 'Agent edited its context',
-      block.replaced !== undefined &&
-        `replaced ${formatResultCount(block.replaced, 'message')}`,
-      block.freed &&
-        block.freed.tokens > 0 &&
-        `freed ${formatCompactTokenCount(block.freed.tokens)} tokens (${block.freed.utilizationBefore.toFixed(0)}% → ${block.freed.utilizationAfter.toFixed(0)}%)`,
-    ]),
+    label:
+      block.status === 'completed'
+        ? joinFacts([
+            block.replaced === undefined
+              ? COMPACTION_ACTIVITY_LABEL.completed
+              : 'Agent edited its context',
+            block.replaced !== undefined &&
+              `replaced ${formatResultCount(block.replaced, 'message')}`,
+            block.freed.tokens > 0 &&
+              `freed ${formatCompactTokenCount(block.freed.tokens)} tokens (${block.freed.utilizationBefore.toFixed(0)}% → ${block.freed.utilizationAfter.toFixed(0)}%)`,
+          ])
+        : COMPACTION_ACTIVITY_LABEL[block.status],
   };
 }
