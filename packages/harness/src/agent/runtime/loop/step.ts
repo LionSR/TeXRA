@@ -68,9 +68,7 @@ import { SessionRoots } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import {
   PROGRAM_TOOL_NAME,
-  programOf,
-  programOrigin,
-  type ProgramOrigin,
+  programGrants,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
   SCRIPT_TOOL_NAME,
@@ -264,21 +262,8 @@ const openStep = Effect.fn('Step.open')(function* (
     // are fixed; anyone else's, a program read from a file among them,
     // follow the switches read live. The runs a program a plugin ships
     // starts, listed or installed, stand approved by its launch.
-    const program = programOf(run.config);
-    const grants =
-      program === null
-        ? { toolsFixed: false, startsApproved: false }
-        : (
-            {
-              listed: { toolsFixed: true, startsApproved: true },
-              installed: { toolsFixed: false, startsApproved: true },
-              own: { toolsFixed: false, startsApproved: false },
-            } satisfies Record<
-              ProgramOrigin,
-              { toolsFixed: boolean; startsApproved: boolean }
-            >
-          )[programOrigin(program.name)];
-    const off = grants.toolsFixed
+    const grants = programGrants(run.config);
+    const off = grants.appAuthored
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(roots.globalState);
     const pinned = yield* (yield* ProjectTools).pin(off, run.toolInputs.held);

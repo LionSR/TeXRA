@@ -145,6 +145,40 @@ export const programOrigin = (name: string): ProgramOrigin => {
   return name.includes(':') ? 'installed' : 'listed';
 };
 
+/** What a program's launch grants its run ({@link programGrants}). */
+export interface ProgramGrants {
+  /** The program is the app's own (a `listed` plugin's), so its tools are
+   *  fixed past the live switches and the files it hands a child pass as
+   *  written; an `installed` or `own` program's follow the switches and
+   *  resolve like a model's. */
+  readonly appAuthored: boolean;
+  /** The program is one a person reviewed (the app's own or an installed
+   *  plugin's), so the runs it starts stand approved by its launch; a
+   *  program the agent wrote for itself (`own`) is asked about. */
+  readonly startsApproved: boolean;
+}
+
+/**
+ * What a program's launch grants its run, read where its origin
+ * ({@link programOrigin}) decides its tools, the approval the runs it starts
+ * stand on, and how the files it hands a child resolve. A run that opened on
+ * no program is granted neither. One owner for the three reads the loop, the
+ * delegation proposal and the file resolver each make of this fact.
+ */
+export const programGrants = (
+  config: Pick<AgentConfig, 'script'> | typeof RunRecordFieldsSchema.Encoded,
+): ProgramGrants => {
+  const program = programOf(config);
+  if (program === null) return { appAuthored: false, startsApproved: false };
+  return (
+    {
+      listed: { appAuthored: true, startsApproved: true },
+      installed: { appAuthored: false, startsApproved: true },
+      own: { appAuthored: false, startsApproved: false },
+    } satisfies Record<ProgramOrigin, ProgramGrants>
+  )[programOrigin(program.name)];
+};
+
 /**
  * Why a run stops. `user` is an explicit stop of the work (a stop button,
  * Ctrl-C on a running turn, an agent's kill); `released`, the end of the

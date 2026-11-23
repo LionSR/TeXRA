@@ -32,9 +32,7 @@ import {
   type RunEnd,
   type RunId,
   type ToolResult,
-  programOf,
-  programOrigin,
-  type ProgramOrigin,
+  programGrants,
   AGENT_TOOL_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
@@ -377,15 +375,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // run-storage file must be this run's own or a declared output of a
   // completed child of it; a listed program's files pass as named, those
   // of a program read from a file are resolved like a model's.
-  const caller = programOf(run.config);
-  const verbatim =
-    caller !== null &&
-    (
-      { listed: true, installed: false, own: false } satisfies Record<
-        ProgramOrigin,
-        boolean
-      >
-    )[programOrigin(caller.name)];
+  const verbatim = programGrants(run.config).appAuthored;
   const resolved = yield* Effect.result(
     Effect.all(
       [
