@@ -65,9 +65,24 @@ interface StepHook {
   readonly hook: ConfiguredHook;
 }
 
-/** A hook's identity, as `tools.offered` records the step's set. */
+/** A hook's identity, as `tools.offered` records the step's set:
+ *  `<plugin>@<revision>#<hook id>`. The plugin id and the trust digest hold
+ *  no `@` or `#`; the hook id (`<source>/<event>/<group>/<index>`, its
+ *  source a path the plugin chose) may hold either. */
 const identityOf = (step: StepHook) =>
   `${step.plugin}@${step.revision}#${step.hook.id}`;
+
+/** The plugin, hook id and event a recorded identity names. */
+const readIdentity = (identity: string) => {
+  const cut = identity.indexOf('#');
+  const head = identity.slice(0, cut);
+  const hook = identity.slice(cut + 1);
+  return {
+    plugin: head.slice(0, head.lastIndexOf('@')),
+    hook,
+    event: hook.split('/').at(-3),
+  };
+};
 
 /** What the hooks of one point said, and the rows that record it. */
 interface HookPoint {
@@ -94,11 +109,11 @@ const GONE_MESSAGE = 'the hook this call was offered under is gone or changed';
 /** The recorded outcome of a gone `PreToolUse` hook (`identity`) at
  *  `point`: never run, it denies the call. */
 const goneDenial = (point: string, identity: string): HookOutcomePayload => {
-  const [head = '', hook = ''] = identity.split('#');
+  const { plugin, hook } = readIdentity(identity);
   return {
     point,
     event: 'PreToolUse',
-    plugin: head.slice(0, head.lastIndexOf('@')),
+    plugin,
     hook,
     durationMs: 0,
     status: 'unstartable',
@@ -281,9 +296,8 @@ export function stepHooks(
     run.logger.warn(
       `Hook ${identity} was pinned when this call was offered and is gone or changed now: a PreToolUse hook denies the call instead of running.`,
     );
-  // A hook's id is `<source>/<event>/<group>/<index>`.
   const goneBefore = gone.filter(
-    (identity) => identity.split('/').at(-3) === 'PreToolUse',
+    (identity) => readIdentity(identity).event === 'PreToolUse',
   );
   const at = (
     state: RunState,
