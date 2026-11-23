@@ -164,16 +164,32 @@ function encodeFrame(message: object): Uint8Array {
   ]);
 }
 
-/** Split complete frames off the front of `buffer`, parsing their bodies. */
+/** The input not yet split into frames: its chunks as they came, their
+ *  size, and the size its first frame needs once that frame's header has
+ *  been read (0 before), so a long body is joined once, when it is whole,
+ *  and not again with every chunk that brings more of it. */
+interface PendingInput {
+  readonly chunks: Uint8Array[];
+  readonly size: number;
+  readonly frameEnd: number;
+}
+
+/** Add `chunk` to `input` and split the complete frames off its front,
+ *  parsing their bodies. */
 const takeFrames = (
-  buffer: Buffer,
+  input: PendingInput,
+  chunk: Uint8Array,
 ): Effect.Effect<
-  readonly [rest: Buffer, messages: ReadonlyArray<JsonRpcMessage>],
+  readonly [rest: PendingInput, messages: ReadonlyArray<JsonRpcMessage>],
   JsonRpcFrameError
 > =>
   Effect.gen(function* () {
+    input.chunks.push(chunk);
+    const size = input.size + chunk.length;
+    if (size < input.frameEnd) return [{ ...input, size }, []] as const;
     const messages: JsonRpcMessage[] = [];
-    let rest = buffer;
+    let rest = Buffer.concat(input.chunks, size);
+    let frameEnd = 0;
     for (;;) {
       const headerEnd = rest.indexOf(HEADER_END);
       if (headerEnd < 0) break;
@@ -186,14 +202,21 @@ const takeFrames = (
       }
       const bodyStart = headerEnd + HEADER_END.length;
       const bodyEnd = bodyStart + Number.parseInt(length, 10);
-      if (rest.length < bodyEnd) break;
+      if (rest.length < bodyEnd) {
+        frameEnd = bodyEnd;
+        break;
+      }
       messages.push(
         yield* parseBody(rest.subarray(bodyStart, bodyEnd).toString('utf8')),
       );
       rest = rest.subarray(bodyEnd);
     }
     // Copy the tail so the consumed prefix is not retained by the slice.
-    return [Buffer.from(rest), messages] as const;
+    const tail = Buffer.from(rest);
+    return [
+      { chunks: tail.length === 0 ? [] : [tail], size: tail.length, frameEnd },
+      messages,
+    ] as const;
   });
 
 const parseBody = (
@@ -320,8 +343,8 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   yield* Effect.forkScoped(
     options.input.pipe(
       Stream.mapAccumEffect(
-        (): Buffer => Buffer.alloc(0),
-        (buffer, chunk) => takeFrames(Buffer.concat([buffer, chunk])),
+        (): PendingInput => ({ chunks: [], size: 0, frameEnd: 0 }),
+        (input, chunk) => takeFrames(input, chunk),
       ),
       Stream.runForEach(dispatch),
       Effect.catch(

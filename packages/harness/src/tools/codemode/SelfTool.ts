@@ -136,7 +136,6 @@ const runSelf = Effect.fn('self.call')(function* (
   script: ScriptScope,
 ) {
   const { run } = call;
-  const { runId: parentId } = run;
   const { config, source, before, boundAt } = yield* selfOf(call);
   if (input.fork && source === null)
     return yield* new ToolError(
@@ -185,10 +184,10 @@ const runSelf = Effect.fn('self.call')(function* (
           outputFiles: [],
           launch: undefined,
         };
-        return yield* executeSubagentInBand({
+        return yield* executeSubagentInBand(
+          call,
           runId,
-          parentId,
-          config: Schema.decodeUnknownSync(AgentConfigSchema)({
+          Schema.decodeUnknownSync(AgentConfigSchema)({
             ...record,
             // A fork on a named model keeps its seed's binding, as a model
             // switch keeps the conversation's: the child's bind rejects a
@@ -200,11 +199,12 @@ const runSelf = Effect.fn('self.call')(function* (
             // its tools.
             toolScope: record.toolScope ?? 'topLevel',
           }),
-          ...(forked !== null && { seed: forked.seed }),
-          parentCall: { callId: call.callId, card: call.logId },
-          maxCostUsd: input.maxCostUsd,
+          {
+            ...(forked !== null && { seed: forked.seed }),
+            maxCostUsd: input.maxCostUsd,
+          },
           notify,
-        });
+        );
       }),
     ),
   );

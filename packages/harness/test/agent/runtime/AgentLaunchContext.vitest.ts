@@ -87,6 +87,39 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             });
           }),
       );
+
+      it.effect(
+        'records no second approval.policy row for equal grants whose keys are written in another order',
+        () =>
+          Effect.gen(function* () {
+            // Failure mode: the grants are compared as JSON text, so the
+            // same grants with their kinds in another order read as a
+            // change and append a redundant `approval.policy` row.
+            const session = yield* isolatedTestSession();
+            const config = Schema.decodeUnknownSync(AgentConfigSchema)({
+              label: 'chat',
+              model: 'openai/gpt-5.5-2026-04-23',
+            });
+            yield* registerRun(EXECUTION_ID, config, {
+              identity: { kind: 'agent', agent: 'chat' },
+            }).pipe(Effect.provide(session));
+            const approvals = Context.get(session, Approvals);
+            yield* approvals.change(EXECUTION_ID, () => ({
+              own: { bash: 'on', toolEdit: 'on' },
+              goal: [],
+            }));
+            yield* approvals.change(EXECUTION_ID, () => ({
+              own: { toolEdit: 'on', bash: 'on' },
+              goal: [],
+            }));
+            const policies = yield* Context.get(session, SessionLog).history(
+              EXECUTION_ID,
+              undefined,
+              ['approval.policy'],
+            );
+            expect(policies).toHaveLength(1);
+          }),
+      );
     });
   },
 );

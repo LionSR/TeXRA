@@ -18,7 +18,7 @@ import {
   agentChildRunId,
   earlierChild,
 } from '@agent/runtime/delegation/agentChild';
-import { startChildRun } from '@agent/runtime/delegation/childLaunch';
+import { childOf, startChildRun } from '@agent/runtime/delegation/childLaunch';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
@@ -56,7 +56,6 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   grants?: ApprovalGrants,
 ) {
   const { run } = call;
-  const { runId: parentId } = run;
   const earlier = yield* earlierChild(call);
   if (earlier !== null) return receipt(title, earlier, true);
   const bound = yield* ScopedRef.get(run.model);
@@ -96,10 +95,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   // that fails before it fails this call.
   yield* startChildRun(runId, definition, {
     identity: { kind: 'script', title },
-    parent: {
-      id: parentId,
-      call: { callId: call.callId, card: call.logId, awaited: false },
-    },
+    parent: childOf(call, false),
     description: title,
     ...(grants !== undefined && { grants }),
   });
