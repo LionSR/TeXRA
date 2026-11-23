@@ -12,9 +12,12 @@ import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import { credentialOriginLabel } from '@ui/copy/credentials';
 
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';
-import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
-import { runFormWrite } from './_shared/useAsyncListForm';
+import {
+  resourceStatusSummary,
+  runFormWrite,
+  type ResourceStatus,
+} from './_shared/useAsyncListForm';
 import type { Secrets } from '@texra-ai/worldline/plugins';
 import type { Effect } from 'effect';
 import { useChatProcess } from '../chatProcess';
@@ -23,18 +26,12 @@ type ProviderApiKeyStatuses = Partial<
   Readonly<Record<ApiKeyProviderId, CredentialOrigin>>
 >;
 
-export interface ProviderApiKeyStatusView {
-  readonly statuses?: ProviderApiKeyStatuses;
-  readonly loading: boolean;
-  readonly error: boolean;
-}
-
 function providerApiKeyStatusLabel(
   status: CredentialOrigin | undefined,
-  view: ProviderApiKeyStatusView,
+  view: ResourceStatus<ProviderApiKeyStatuses>,
 ): string {
   if (status !== undefined) return credentialOriginLabel(status, 'key');
-  if (view.loading && !view.error) return 'Checking status';
+  if (view.loading && view.error === undefined) return 'Checking status';
   return 'Status unavailable';
 }
 
@@ -47,12 +44,12 @@ function providerApiKeyFormLabel(provider: ApiKeyProviderId): string {
 }
 
 function buildProviderApiKeyItems(
-  view: ProviderApiKeyStatusView,
+  view: ResourceStatus<ProviderApiKeyStatuses>,
 ): Array<{ value: ApiKeyProviderId; label: string; description: string }> {
   return API_KEY_PROVIDER_IDS.map((provider) => ({
     value: provider,
     label: providerApiKeyFormLabel(provider),
-    description: providerApiKeyStatusLabel(view.statuses?.[provider], view),
+    description: providerApiKeyStatusLabel(view.data?.[provider], view),
   }));
 }
 
@@ -69,21 +66,19 @@ function configuredProviderApiKeySummary(
 }
 
 export function formatProviderApiKeySummary(
-  view: ProviderApiKeyStatusView,
+  view: ResourceStatus<ProviderApiKeyStatuses>,
 ): string {
-  return formatStatusViewSummary(
+  return resourceStatusSummary(
     view,
     'Checking configured keys',
-    view.statuses === undefined
-      ? undefined
-      : configuredProviderApiKeySummary(view.statuses),
+    configuredProviderApiKeySummary,
   );
 }
 
 interface ProviderApiKeyFormProps {
   readonly availableRows: number;
   /** Each provider's key status, shown beside its row; never the key. */
-  readonly statusView: ProviderApiKeyStatusView;
+  readonly status: ResourceStatus<ProviderApiKeyStatuses>;
   /** The key write as a program; this form owns its one run. It yields the
    *  extra notice a provider needs, if any. */
   readonly onSave: (
@@ -108,7 +103,7 @@ export function ProviderApiKeyForm(
       <ListForm
         title="Add provider API key"
         availableRows={props.availableRows}
-        items={buildProviderApiKeyItems(props.statusView)}
+        items={buildProviderApiKeyItems(props.status)}
         description={
           <Text dimColor>Choose the service that issued the key.</Text>
         }

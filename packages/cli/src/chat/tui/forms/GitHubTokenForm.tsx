@@ -11,32 +11,25 @@ import {
 } from '@texra/tools/github/githubAuth';
 import { credentialOriginLabel, TOKEN_ACTION_COPY } from '@ui/copy/credentials';
 
-import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
-import { runFormWrite } from './_shared/useAsyncListForm';
+import {
+  resourceStatusSummary,
+  runFormWrite,
+  type ResourceStatus,
+} from './_shared/useAsyncListForm';
 import type { CredentialOrigin } from '@texra-ai/llm';
 import type { Secrets } from '@texra-ai/worldline/plugins';
 import type { Effect } from 'effect';
 import { useChatProcess } from '../chatProcess';
 
-export interface GitHubTokenStatusView {
-  /** Which source backs the GitHub token, as `resolveGitHubTokenSource`
-   *  reports it. */
-  readonly status?: CredentialOrigin;
-  readonly loading: boolean;
-  readonly error: boolean;
-}
-
 type GitHubTokenAction = 'set' | 'remove' | 'open-url';
 
-export function formatGitHubTokenSummary(view: GitHubTokenStatusView): string {
-  return formatStatusViewSummary(
-    view,
-    'Checking token',
-    view.status === undefined
-      ? undefined
-      : credentialOriginLabel(view.status, 'token'),
+export function formatGitHubTokenSummary(
+  status: ResourceStatus<CredentialOrigin>,
+): string {
+  return resourceStatusSummary(status, 'Checking token', (origin) =>
+    credentialOriginLabel(origin, 'token'),
   );
 }
 
@@ -76,7 +69,9 @@ function statusHint(status: CredentialOrigin | undefined): string {
 
 interface GitHubTokenFormProps {
   readonly availableRows: number;
-  readonly statusView?: GitHubTokenStatusView;
+  /** Which source backs the GitHub token, as `resolveGitHubTokenSource`
+   *  reports it. */
+  readonly status: ResourceStatus<CredentialOrigin>;
   /** The credential writes as programs; this form owns their one run. */
   readonly onSave: (token: string) => Effect.Effect<void, Error, Secrets>;
   readonly onRemove: () => Effect.Effect<void, Error, Secrets>;
@@ -124,9 +119,7 @@ export function GitHubTokenForm(
     );
   }
 
-  const status = props.statusView?.status ?? 'none';
-  const loading = props.statusView?.loading ?? false;
-  const statusError = props.statusView?.error ?? false;
+  const status = props.status.data ?? 'none';
   const errorNode = error ? <ToneLine tone="danger" text={error} /> : undefined;
   return (
     <ListForm
@@ -135,7 +128,7 @@ export function GitHubTokenForm(
       items={buildGitHubTokenActionItems(status)}
       description={
         <Text dimColor>
-          {formatGitHubTokenSummary({ status, loading, error: statusError })}
+          {formatGitHubTokenSummary({ ...props.status, data: status })}
           {'. '}
           {statusHint(status)}
         </Text>

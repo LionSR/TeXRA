@@ -9,7 +9,7 @@ import { useInput, useStdin, type Key, type StdinProps } from 'ink';
 import { Cause, Effect, Fiber, FiberHandle } from 'effect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { toErrorMessage } from '@texra-ai/worldline/schemas';
+import { joinFacts, toErrorMessage } from '@texra-ai/worldline/schemas';
 import {
   isEscapeInput,
   isPlainReturnInput,
@@ -33,6 +33,32 @@ interface AsyncResource<T, R = ProcessServices> {
   readonly refresh: () => Effect.Effect<void, never, R>;
   /** Re-run the read, keeping the current data on screen until it returns. */
   readonly reload: () => void;
+}
+
+/** What a status line reads of a resource: its value once loaded, whether a
+ *  read is in flight, and the last read's error. */
+export type ResourceStatus<T> = Pick<
+  AsyncResource<T>,
+  'data' | 'loading' | 'error'
+>;
+
+/** A status line for a resource: before it loads there is no label, so the
+ *  summary is the `checking` placeholder while loading (unless the read
+ *  failed) and 'Status unavailable' otherwise; once loaded, a failed or
+ *  running refresh annotates the loaded label. */
+export function resourceStatusSummary<T>(
+  status: ResourceStatus<T>,
+  checking: string,
+  label: (data: T) => string,
+): string {
+  const failed = status.error !== undefined;
+  if (status.data === undefined) {
+    return status.loading && !failed ? checking : 'Status unavailable';
+  }
+  return joinFacts([
+    label(status.data),
+    failed ? 'status unavailable' : status.loading && 'refreshing',
+  ]);
 }
 
 interface AsyncListFormState<T> extends AsyncResource<T> {

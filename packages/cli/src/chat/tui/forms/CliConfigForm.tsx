@@ -24,15 +24,10 @@ import {
 import { ConfigForm } from './ConfigForm';
 import { useAsyncListForm, useAsyncResource } from './_shared/useAsyncListForm';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
-import {
-  formatGitHubTokenSummary,
-  GitHubTokenForm,
-  type GitHubTokenStatusView,
-} from './GitHubTokenForm';
+import { formatGitHubTokenSummary, GitHubTokenForm } from './GitHubTokenForm';
 import {
   formatProviderApiKeySummary,
   ProviderApiKeyForm,
-  type ProviderApiKeyStatusView,
 } from './ProviderApiKeyForm';
 import { SkillsSettingsForm } from './SkillsSettingsForm';
 import { useChatProcess } from '../chatProcess';
@@ -53,20 +48,10 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     load: () => Effect.flatMap(Secrets, apiKeyOrigins),
     onError: props.onError,
   });
-  const apiKeyStatusView: ProviderApiKeyStatusView = {
-    statuses: apiKeys.data,
-    loading: apiKeys.loading,
-    error: apiKeys.error !== undefined,
-  };
   const githubToken = useAsyncResource({
     load: () => Effect.flatMap(Secrets, resolveGitHubTokenSource),
     onError: props.onError,
   });
-  const githubTokenStatusView: GitHubTokenStatusView = {
-    status: githubToken.data,
-    loading: githubToken.loading,
-    error: githubToken.error !== undefined,
-  };
 
   const settings = useAsyncListForm<Record<string, unknown>>({
     load: () =>
@@ -120,19 +105,19 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         {
           name: 'api-keys',
           label: 'API keys',
-          description: formatProviderApiKeySummary(apiKeyStatusView),
+          description: formatProviderApiKeySummary(apiKeys),
         },
         {
           name: 'github-token',
           label: 'GitHub token',
-          description: formatGitHubTokenSummary(githubTokenStatusView),
+          description: formatGitHubTokenSummary(githubToken),
         },
       ]}
       formRenderers={{
         'api-keys': (onBack) => (
           <ProviderApiKeyForm
             availableRows={props.availableRows}
-            statusView={apiKeyStatusView}
+            status={apiKeys}
             // The save and the refresh that follows it are one program.
             onSave={(provider, key) =>
               Effect.gen(function* () {
@@ -150,7 +135,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         'github-token': (onBack) => (
           <GitHubTokenForm
             availableRows={props.availableRows}
-            statusView={githubTokenStatusView}
+            status={githubToken}
             onSave={(token) =>
               Effect.gen(function* () {
                 yield* saveGitHubToken(token);
