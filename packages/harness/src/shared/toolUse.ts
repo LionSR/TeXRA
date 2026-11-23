@@ -58,7 +58,6 @@ function formatOutputText(content: unknown): string {
 export function toolCallTexts(log: ToolCallLog): {
   errorText: string;
   userInstructionText: string;
-  isUserFeedback: boolean;
   headerSummary: string;
 } {
   const { result } = log;
@@ -69,12 +68,10 @@ export function toolCallTexts(log: ToolCallLog): {
   const userInstructionText = trimmed(
     result ? result.userInstruction : log.userInstruction,
   );
-  const isUserFeedback = userInstructionText.length > 0;
   return {
     errorText,
     userInstructionText,
-    isUserFeedback,
-    headerSummary: summaryText || (isUserFeedback ? '' : errorText),
+    headerSummary: summaryText || (userInstructionText ? '' : errorText),
   };
 }
 

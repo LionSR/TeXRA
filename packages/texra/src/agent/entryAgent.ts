@@ -8,7 +8,7 @@
 import type { ChatLaunch } from '@texra/shared/session/surface';
 
 /** The name its runs carry. */
-export const ENTRY_AGENT_NAME = 'assistant';
+const ENTRY_AGENT_NAME = 'assistant';
 
 const ENTRY_PROMPT = `You are TeXRA, working inside a researcher's project: papers, notes, code, data and proofs. Support the whole workflow: find and read literature, derive and check mathematics, run computations and code, formalize proofs, and write and edit documents.
 

@@ -130,7 +130,8 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     'followup.queued': Object.freeze({ ...V1, listing: 'followup' }),
     'followup.consumed': Object.freeze({ ...V1, listing: 'followup' }),
     // v2: proposals no longer carry attached memory paths.
-    'request.opened': Object.freeze({ version: 2, listing: 'request' }),
+    // v3: a user question stores no nulls and states both of its switches.
+    'request.opened': Object.freeze({ version: 3, listing: 'request' }),
     'request.decided': Object.freeze({ ...V1, listing: 'request' }),
     'approval.policy': Object.freeze({ ...V1, listing: 'own' }),
     'run.position': Object.freeze({ ...V1, listing: 'own' }),

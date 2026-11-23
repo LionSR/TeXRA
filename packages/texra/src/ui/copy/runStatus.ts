@@ -160,9 +160,9 @@ const TOOL_USER_FEEDBACK_LOOK: StatusLook = Object.freeze({
  * an error exactly when this tone is `danger`.
  */
 export function toolRowLook(
-  model: Pick<ToolRowModel, 'status' | 'isUserFeedback'>,
+  model: Pick<ToolRowModel, 'status' | 'userInstruction'>,
 ): StatusLook | undefined {
-  if (model.isUserFeedback) return TOOL_USER_FEEDBACK_LOOK;
+  if (model.userInstruction !== undefined) return TOOL_USER_FEEDBACK_LOOK;
   return model.status && TOOL_STATUS[model.status];
 }
 

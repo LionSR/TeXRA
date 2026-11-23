@@ -73,7 +73,10 @@ export function formatToolUseTemplate(
   // A card wears its tool's icon unless its state has something to say:
   // the user's feedback, an interruption or a failure.
   let iconName: IconName;
-  if (look !== undefined && (model.isUserFeedback || stopped || showAsError)) {
+  if (
+    look !== undefined &&
+    (model.userInstruction !== undefined || stopped || showAsError)
+  ) {
     iconName = statusGlyph(look);
   } else {
     const icon = tools.icons[normalizedToolName];
@@ -148,13 +151,13 @@ export function formatToolUseTemplate(
   return buildToolUseDetails({
     row,
     iconName,
-    running: running && !model.isUserFeedback,
+    running: running && model.userInstruction === undefined,
     label: titleText,
     isError: showAsError,
     content: html`${sections}`,
     defaultOpen: shouldOpen,
     extraClasses: {
-      'tool-use-user-feedback': model.isUserFeedback,
+      'tool-use-user-feedback': model.userInstruction !== undefined,
       'tool-use-in-progress': running,
       [`tone-${TOOL_STATUS.in_progress.tone}`]: running,
       'tool-use-interrupted': stopped,

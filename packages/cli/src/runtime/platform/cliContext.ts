@@ -140,7 +140,7 @@ interface CliAmbientState {
   readonly stdinIsTty: boolean;
   readonly stdoutIsTty: boolean;
   readonly stderrIsTty: boolean;
-  readonly termIsDumb?: boolean;
+  readonly termIsDumb: boolean;
   readonly stdoutColorEnabled: boolean;
   readonly stderrColorEnabled: boolean;
 }
@@ -185,7 +185,6 @@ export function readCliAmbientState(): CliAmbientState {
   const stderrIsTty = process.stderr.isTTY === true;
   const stdinIsTty = process.stdin.isTTY === true;
   const stdoutIsTty = process.stdout.isTTY === true;
-  const dumbTerm = process.env.TERM === 'dumb';
   const stdoutColorEnabled = resolveStreamColor(stdoutIsTty);
   const stderrColorEnabled = resolveStreamColor(stderrIsTty);
   cachedAmbient = {
@@ -193,7 +192,7 @@ export function readCliAmbientState(): CliAmbientState {
     stdinIsTty,
     stdoutIsTty,
     stderrIsTty,
-    termIsDumb: dumbTerm,
+    termIsDumb: process.env.TERM === 'dumb',
     stdoutColorEnabled,
     stderrColorEnabled,
   };
@@ -481,7 +480,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       ...(requestedApprovalPolicy !== undefined && { requestedApprovalPolicy }),
       minimumLogLevel,
       stdoutIsTty: ambient.stdoutIsTty,
-      termIsDumb: ambient.termIsDumb === true,
+      termIsDumb: ambient.termIsDumb,
       stderrIsTty: ambient.stderrIsTty,
       stdoutColorEnabled,
       stderrColorEnabled,

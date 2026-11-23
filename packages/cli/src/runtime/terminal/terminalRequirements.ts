@@ -14,11 +14,10 @@ export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '^22.22.2 || >=24.15.0';
 
 type InteractiveTerminalFailureReason = 'headless' | 'dumb-terminal';
 
-interface InteractiveTerminalContext {
-  readonly mode: CliContext['mode'];
-  readonly stdoutIsTty?: boolean;
-  readonly termIsDumb?: boolean;
-}
+type InteractiveTerminalContext = Pick<
+  CliContext,
+  'mode' | 'stdoutIsTty' | 'termIsDumb'
+>;
 
 export function interactiveTerminalFailure(
   context: InteractiveTerminalContext,

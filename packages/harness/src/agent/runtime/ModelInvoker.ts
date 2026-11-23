@@ -404,7 +404,6 @@ export const modelInvokerLayer = (): Layer.Layer<
             `Token count (${budget.inputTokens}) + max output tokens (${budget.limit}) exceeds context window (${contextWindow}). Reducing to ${maxOutputTokens}.`,
             {
               action: 'max_tokens_reduced',
-              tokensBefore: budget.inputTokens,
               contextWindow,
               utilizationBefore: roundedUtilizationPercent(
                 budget.inputTokens,

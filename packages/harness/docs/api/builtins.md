@@ -25,7 +25,8 @@ A plugin or tool of your own is written with
 
 ## AGENT_TOOL_NAME
 
-The tool that runs a named agent as a child of the calling run.
+The tool that starts a child of the calling run, on the system text
+and tools the call gives it or on an installed plugin's agent.
 
 ```ts
 const AGENT_TOOL_NAME: "agent"

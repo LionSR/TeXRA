@@ -171,7 +171,8 @@ const ErrorToolResultSchema = Schema.Struct({
  *  output through: its finished result's `value` is the run's output. */
 export const STRUCTURED_OUTPUT_TOOL_NAME = 'submit_output';
 
-/** The tool that runs a named agent as a child of the calling run. */
+/** The tool that starts a child of the calling run, on the system text
+ *  and tools the call gives it or on an installed plugin's agent. */
 export const AGENT_TOOL_NAME = 'agent' as const;
 
 /** The tool that starts a registered program (`Plugin.programs`) as a child

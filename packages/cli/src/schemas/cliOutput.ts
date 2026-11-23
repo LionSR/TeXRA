@@ -83,9 +83,6 @@ interface CliCommandResult {
 /** The field each one-field result kind carries its payload under: an NDJSON
  *  line is `{ kind, [field]: payload }`, one per element of a list. */
 export const CLI_RESULT_FIELD = Object.freeze({
-  agent: 'agent',
-  'agent-copy': 'copy',
-  'workspace-agents': 'agents',
   config: 'config',
   service: 'service',
   task: 'task',

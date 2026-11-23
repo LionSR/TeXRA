@@ -78,7 +78,7 @@ export function getDisplayedInstruction(
  * The label is the app's (a session's title in its run list and history),
  * so it is off unless the process layer provides it (`processLayer`
  * does; `Sessions.layer` does not); a child
- * run is never labelled and keeps its agent name.
+ * run is never labelled and keeps the label its call gave it.
  */
 export const LabelsRootRuns = Context.Reference<boolean>(
   '@texra-ai/worldline/agent/LabelsRootRuns',

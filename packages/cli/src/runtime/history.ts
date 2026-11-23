@@ -143,7 +143,6 @@ export type CliHistoryDeleteResult =
   | {
       readonly deleted: 'one';
       readonly id: RunId;
-      readonly found: boolean;
       readonly status: 'deleted' | 'not-found' | 'active';
     };
 
@@ -300,7 +299,6 @@ export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
   return {
     deleted: 'one',
     id: target,
-    found: status !== 'not-found',
     status,
   } satisfies CliHistoryDeleteResult;
 });

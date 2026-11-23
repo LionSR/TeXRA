@@ -198,21 +198,21 @@ export type AgentProposalRequest = (typeof AgentProposalRequestSchema)['Type'];
 // User Question
 // ============================================================================
 
-const UserQuestionOptionSchema = Schema.Struct({
-  label: Schema.NonEmptyString,
-  description: Schema.optional(Schema.NullOr(Schema.String)),
-});
-
-export const UserQuestionPromptSchema = Schema.Struct({
+/** One question as the request stores it: the asking tool turns the
+ *  model's nulls into absent fields and unset switches into `false`. */
+const UserQuestionPromptSchema = Schema.Struct({
   question: Schema.NonEmptyString,
-  header: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMaxLength(12))),
-  ),
-  options: Schema.Array(UserQuestionOptionSchema)
+  header: Schema.optional(Schema.String.check(Schema.isMaxLength(12))),
+  options: Schema.Array(
+    Schema.Struct({
+      label: Schema.NonEmptyString,
+      description: Schema.optional(Schema.String),
+    }),
+  )
     .check(Schema.isMinLength(2))
     .check(Schema.isMaxLength(4)),
-  multiSelect: Schema.optional(Schema.NullOr(Schema.Boolean)),
-  allowFreeText: Schema.optional(Schema.NullOr(Schema.Boolean)),
+  multiSelect: Schema.Boolean,
+  allowFreeText: Schema.Boolean,
 });
 export type UserQuestionPrompt = typeof UserQuestionPromptSchema.Type;
 
@@ -227,7 +227,7 @@ export const UserQuestionRequestSchema = RequestBaseSchema.mapFields(
     questions: Schema.Array(UserQuestionPromptSchema)
       .check(Schema.isMinLength(1))
       .check(Schema.isMaxLength(3)),
-    context: Schema.optional(Schema.NullOr(Schema.String)),
+    context: Schema.optional(Schema.String),
   }),
 );
 export type UserQuestionRequest = (typeof UserQuestionRequestSchema)['Type'];

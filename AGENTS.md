@@ -195,7 +195,7 @@ over `processLayer()` once), `packages/extension/src/commands/`,
 providers in `packages/extension/src/progressView/` and
 `packages/extension/src/settingsView/`.
 
-- Reach process services (`AgentDirectories`, `AppState`, `Secrets`,
+- Reach process services (`HostResources`, `AppState`, `Secrets`,
   `FileSystem`, `SetupPlatform`, …) from the Effect context the process
   runtime serves, and per-workspace ones from the `WorkspaceRoots` the caller
   holds. When agnostic code needs a host-only capability, add a typed port
@@ -257,8 +257,8 @@ as an MCP server's are. The plugin table is not
 fixed: the listed plugins are, and each read of the installed plugins adds
 the native ones loaded now; a step pins the table it read.
 
-**Prompts** (bundled agents, plugin agents, templates, skills,
-`.github/prompts/`) use general behavioral rubrics: never an identifiable
+**Prompts** (the entry agent's text, plugins' `prompt` sections and agents,
+templates, skills, `.github/prompts/`) use general behavioral rubrics: never an identifiable
 person's name, writing samples, voice calibration, or account metadata. Public
 examples are synthetic or licensed with consent; user content, model output and
 credentials never become fixtures. Review a prompt change as the final resolved

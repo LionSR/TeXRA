@@ -305,7 +305,6 @@ export function logPayloadRow(
       return {
         ...base,
         kind: 'contextManagement',
-        data,
         label: 'Max tokens reduced',
         items,
       };

@@ -138,8 +138,8 @@ const runInit = Effect.fn('runInit')(function* (
   const interactive =
     !opts.yes &&
     context.mode !== 'headless' &&
-    context.stdoutIsTty === true &&
-    context.termIsDumb !== true;
+    context.stdoutIsTty &&
+    !context.termIsDumb;
 
   let answers: InitAnswers;
   let gitignore: boolean;

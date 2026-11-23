@@ -21,7 +21,7 @@ import { RpcClientMessageSchema } from '@texra/shared/rpcOverMessages';
 import { ManualCriticismEntrySchema } from '@texra/tools/editorHost';
 import { GenericDiagnosticSchema } from '@texra/utils/diagnostics/diagnosticFormatting';
 
-/** The runtime's notices, by event, as a window presents them: the two a
+/** The runtime's notices, by event, as a window presents them: the one a
  *  refused launch carries among them. */
 const NoticeSchema = Schema.Union([
   Schema.Struct({
@@ -31,7 +31,7 @@ const NoticeSchema = Schema.Union([
       preserveFocus: Schema.Boolean,
     }) satisfies Schema.Codec<OpenFilePayload, unknown>,
   }),
-  ...LaunchNoticeSchema.members,
+  LaunchNoticeSchema,
   Schema.Struct({
     event: Schema.Literal('requestShowError'),
     payload: RequestShowErrorPayloadSchema,

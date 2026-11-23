@@ -42,6 +42,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                           { label: 'Unit volume' },
                           { label: 'Unit mass' },
                         ],
+                        multiSelect: false,
+                        allowFreeText: false,
                       },
                     ],
                   },
