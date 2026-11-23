@@ -11,7 +11,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Duration, Effect, FileSystem, Schema } from 'effect';
+import { Duration, Effect, FileSystem, Schema, String as Str } from 'effect';
 
 // Local imports
 import { redactSecrets } from '@texra-ai/worldline/host';
@@ -112,9 +112,7 @@ const CITATION_COMMAND_STEMS = [
 
 const LATEX_CITATION_COMMANDS: readonly string[] = Object.freeze([
   ...CITATION_COMMAND_STEMS,
-  ...CITATION_COMMAND_STEMS.map(
-    (name) => `${name[0].toUpperCase()}${name.slice(1)}`,
-  ),
+  ...CITATION_COMMAND_STEMS.map(Str.capitalize),
 ]);
 
 /**

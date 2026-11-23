@@ -1,16 +1,15 @@
 import type { Dialogs, DiffViewHost, HostFailed } from '@texra/hosts/uiHosts';
 import type { TranscriptExportFormat } from '@texra/controllers/progressView/exportTranscript';
 import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
-import type { windowNotices } from '@texra/controllers/session/windowNotices';
+import type { AskNotice } from '@texra/controllers/session/windowNotices';
 import type { Effect } from 'effect';
 
 /** Required desktop capabilities used throughout an agent run. */
 export interface DesktopAgentRunHost {
   /** A notice naming the run's project. */
   readonly notify: Dialogs['notify'];
-  /** The window's failure and instruction notices, naming the run's
-   *  project. */
-  readonly notices: ReturnType<typeof windowNotices>;
+  /** A notice with one button per label, naming the run's project. */
+  readonly ask: AskNotice;
   /** The export's format dialog. The Electron dialog behind it is a
    *  promise, lifted once there; a cancelled dialog answers `undefined`. */
   pickTranscriptExportFormat(): Effect.Effect<

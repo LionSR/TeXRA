@@ -5,6 +5,7 @@ import { type RunId } from '@texra-ai/worldline/schemas';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
 import { traceHtml } from '@texra/agent/export/standaloneTraceHtml';
 
+import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   deleteCliHistory,
@@ -51,7 +52,7 @@ const runHistoryList = Effect.fn('runHistoryList')(function* (options: {
       visibleEntries,
       visibleEntries.length
         ? formatCliHistoryText(visibleEntries)
-        : 'No tasks yet. Tasks appear here after you start one.',
+        : EMPTY_TASK_LIST.line,
     ),
   );
 });

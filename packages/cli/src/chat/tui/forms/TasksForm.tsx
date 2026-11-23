@@ -26,6 +26,7 @@ import {
   type ToolEditPreviewRead,
 } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
+import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 
 import { PromptInput } from '../input/TextInput';
@@ -39,19 +40,22 @@ import {
 import { transcriptToLines } from '../state/transcriptLines';
 import { useChatProcess } from '../chatProcess';
 import { useMountScope } from '../state/useMountScope';
-import { FormFrame, formFrameContentWidth } from './_shared/FormFrame';
+import {
+  FormFrame,
+  formFrameChromeRows,
+  formFrameContentWidth,
+} from './_shared/FormFrame';
 import { AsyncListForm } from './_shared/ListForm';
 import type { TuiRequest } from '../state/approvalQueue';
 
 interface TasksFormProps {
   readonly connect: ConnectService;
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly onClose: () => void;
 }
 
-/** Rows the attached view spends outside the transcript: the panel's
- *  border and title, the composer, and the key hints. */
-const ATTACHED_CHROME_ROWS = 6;
+/** Rows the composer takes below the transcript: its margin and its line. */
+const COMPOSER_ROWS = 2;
 /** Rows a pending request's card gets below the transcript. */
 const REQUEST_CARD_ROWS = 10;
 
@@ -94,7 +98,7 @@ export function TasksForm(props: TasksFormProps): React.JSX.Element {
           attach.
         </Text>
       }
-      emptyMessage="The service has no tasks yet."
+      emptyMessage={EMPTY_TASK_LIST.line}
       selectMarginTop={1}
       action="attach"
       onSelect={(runId, { data }) =>
@@ -108,7 +112,7 @@ export function TasksForm(props: TasksFormProps): React.JSX.Element {
 interface AttachedTaskProps {
   readonly task: TaskSummary;
   readonly connect: ConnectService;
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly onClose: () => void;
 }
 
@@ -269,36 +273,40 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     if (!composing && !answering && isEscapeInput(input, key)) props.onClose();
   });
 
-  const lines = level.run
-    ? transcriptToLines(
-        level.run.transcript.rows,
-        formFrameContentWidth(columns),
-      )
-    : [];
-  const budget = Math.max(
-    3,
-    (props.availableRows ?? 24) -
-      ATTACHED_CHROME_ROWS -
-      (presentable ? REQUEST_CARD_ROWS : 0),
-  );
   const runWord = level.run && runStatus(level.run).word;
   const status = level.ended
     ? `detached: ${level.ended}`
     : (runWord ?? 'connecting…');
+  const title = joinFacts([task.label, status]);
+  // While a request is on screen its card owns Esc (reject or skip);
+  // detaching waits until it is answered.
+  const hints = [
+    ...(composing ? [{ key: 'Enter', action: 'send a follow-up' }] : []),
+    ...(answering
+      ? []
+      : [{ key: 'Esc', action: 'detach (the task keeps running)' }]),
+  ];
+  const contentWidth = formFrameContentWidth(columns);
+  const lines = level.run
+    ? transcriptToLines(level.run.transcript.rows, contentWidth)
+    : [];
+  // The transcript gets what the frame, the composer, the notice line and a
+  // request's card leave.
+  const budget = Math.max(
+    3,
+    props.availableRows -
+      formFrameChromeRows(title, hints, contentWidth) -
+      (composing ? COMPOSER_ROWS : 0) -
+      (notice ? 1 : 0) -
+      (presentable ? REQUEST_CARD_ROWS : 0),
+  );
 
   return (
     <Box flexDirection="column">
       <FormFrame
         color={level.ended ? COLOR_ERROR : undefined}
-        title={joinFacts([task.label, status])}
-        // While a request is on screen its card owns Esc (reject or skip);
-        // detaching waits until it is answered.
-        hints={[
-          ...(composing ? [{ key: 'Enter', action: 'send a follow-up' }] : []),
-          ...(answering
-            ? []
-            : [{ key: 'Esc', action: 'detach (the task keeps running)' }]),
-        ]}
+        title={title}
+        hints={hints}
       >
         {lines.slice(-budget).map((line, index) => (
           <Text key={index}>{line}</Text>

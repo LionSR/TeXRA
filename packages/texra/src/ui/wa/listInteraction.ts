@@ -2,6 +2,7 @@
 // which rows a filter keeps and where a keyboard move lands. Pure, so the
 // terminal imports it too. Each surface decides which keys it forwards: a
 // filter input keeps Home and End for its caret.
+import { Number as Num } from 'effect';
 
 /** Whether every word of a filter `query` appears in `text`, in any order
  *  and ignoring case in the user's locale: "paper review" finds "Review a
@@ -38,7 +39,7 @@ export function nextListIndex(
   count: number,
 ): number {
   if (count <= 0) return -1;
-  const at = Math.min(Math.max(index, 0), count - 1);
+  const at = Num.clamp(index, { minimum: 0, maximum: count - 1 });
   switch (move) {
     case 'first':
       return 0;

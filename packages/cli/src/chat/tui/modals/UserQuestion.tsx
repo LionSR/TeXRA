@@ -1,10 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
-import {
-  parseUserQuestionAnswer,
-  userQuestionDecision,
-} from '@cli/runtime/headless/userQuestionAnswer';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   hiddenRowsText,
@@ -16,11 +12,7 @@ import { KeyHints, type KeyHint, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
 import { Select } from '@cli/tui/ui/Select';
 import { COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import {
-  clampModalWidth,
-  confirmCardContentWidth,
-  isCompactRows,
-} from '@cli/tui/ui/theme';
+import { clampModalWidth, confirmCardContentWidth } from '@cli/tui/ui/theme';
 import {
   clipToWidth,
   textDisplayWidth,
@@ -28,19 +20,19 @@ import {
 
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import {
-  toggleUserQuestionSelection,
-  updateUserQuestionAnswers,
-} from './UserQuestionState';
-import { TextInput } from '../input/TextInput';
+  typedUserQuestionEntry,
+  userQuestionDecision,
+  type UserQuestionEntry,
+} from '@texra/shared/session/userQuestionAnswer';
+import { PROMPT_PREFIX_COLUMNS, TextInput } from '../input/TextInput';
 import type {
-  UserQuestionAnswers,
   UserQuestionRequest,
   UserQuestionPrompt,
 } from '@texra-ai/worldline/schemas';
 import { DETAIL_SEPARATOR } from '@texra-ai/worldline/schemas';
 
 interface UserQuestionProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly payload: UserQuestionRequest;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
@@ -50,7 +42,6 @@ interface UserQuestionPromptLine {
   readonly text: string;
 }
 
-const DEFAULT_USER_QUESTION_PROMPT_ROWS = 12;
 const COMPACT_USER_QUESTION_MAX_ROWS = 10;
 const COMPACT_USER_QUESTION_CHROME_ROWS = 4;
 const FULL_USER_QUESTION_CHROME_ROWS = 7;
@@ -100,19 +91,18 @@ function userQuestionChoiceHints({
   return [NAVIGATE_HINT, { key: `1-${optionCount}`, action: shortcutAction }];
 }
 
-function isCompactUserQuestionRows(availableRows: number | undefined): boolean {
-  return isCompactRows(availableRows, COMPACT_USER_QUESTION_MAX_ROWS);
+function isCompactUserQuestionRows(availableRows: number): boolean {
+  return availableRows <= COMPACT_USER_QUESTION_MAX_ROWS;
 }
 
 function userQuestionChoiceRowsBudget({
   availableRows,
   optionCount,
 }: {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly optionCount: number;
 }): number {
   if (optionCount <= 0) return 0;
-  if (availableRows === undefined) return optionCount;
   const compact = isCompactUserQuestionRows(availableRows);
   const chromeRows = compact
     ? COMPACT_USER_QUESTION_CHROME_ROWS
@@ -128,11 +118,10 @@ function userQuestionFreeTextOptionRowsBudget({
   availableRows,
   optionCount,
 }: {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly optionCount: number;
 }): number {
   if (optionCount <= 0) return 0;
-  if (availableRows === undefined) return optionCount;
   if (isCompactUserQuestionRows(availableRows)) return 0;
   return Math.min(
     optionCount,
@@ -148,10 +137,9 @@ function userQuestionPromptRowsBudget({
   availableRows,
   controlRows,
 }: {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly controlRows: number;
 }): number {
-  if (availableRows === undefined) return DEFAULT_USER_QUESTION_PROMPT_ROWS;
   const chromeRows = isCompactUserQuestionRows(availableRows)
     ? COMPACT_USER_QUESTION_CHROME_ROWS
     : FULL_USER_QUESTION_CHROME_ROWS;
@@ -244,11 +232,11 @@ function boundedUserQuestionPromptLines({
 }
 
 interface QuestionVariantProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly payload: UserQuestionRequest;
   readonly question: UserQuestionPrompt;
   readonly index: number;
-  readonly onSubmit: (answer: string | string[] | undefined) => void;
+  readonly onSubmit: (entry: UserQuestionEntry) => void;
   readonly onCancel: () => void;
 }
 
@@ -357,10 +345,16 @@ function ChoiceQuestion(props: QuestionVariantProps): React.JSX.Element {
         onToggle={
           multi
             ? (label: string) =>
-                setSelected((s) => toggleUserQuestionSelection(s, label))
+                setSelected((s) =>
+                  s.includes(label)
+                    ? s.filter((item) => item !== label)
+                    : [...s, label],
+                )
             : undefined
         }
-        onSelect={multi ? () => props.onSubmit([...selected]) : props.onSubmit}
+        onSelect={(label: string) =>
+          props.onSubmit({ selected: multi ? selected : [label], text: '' })
+        }
         onCancel={props.onCancel}
       />
     </QuestionShell>
@@ -391,6 +385,9 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
       question={props.question}
       index={props.index}
       hints={[
+        ...(props.question.multiSelect
+          ? [{ key: '1,2', action: 'pick options' }]
+          : []),
         { key: 'Enter', action: 'submit answer' },
         { key: 'Esc', action: 'skip' },
       ]}
@@ -414,7 +411,7 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
         <Text>{`${POINTER} `}</Text>
         <Box flexGrow={1} flexShrink={1} height={1} overflowY="hidden">
           <TextInput
-            displayWidth={Math.max(1, contentWidth - 2)}
+            displayWidth={Math.max(1, contentWidth - PROMPT_PREFIX_COLUMNS)}
             maxDisplayRows={1}
             value={answer}
             onChange={setAnswer}
@@ -422,7 +419,7 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
             // usual Ctrl+C stop or exit behavior.
             onEscape={props.onCancel}
             onSubmit={(value) =>
-              props.onSubmit(parseUserQuestionAnswer(value, props.question))
+              props.onSubmit(typedUserQuestionEntry(value, props.question))
             }
           />
         </Box>
@@ -433,7 +430,7 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
 
 export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
   const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState<UserQuestionAnswers>({});
+  const [entries, setEntries] = useState<readonly UserQuestionEntry[]>([]);
   const { availableRows, onDecide, payload } = props;
   const { questions } = payload;
   const question = questions[index];
@@ -442,13 +439,13 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
     onDecide({ action: 'skip' });
   }
 
-  function submitAnswer(answer: string | string[] | undefined): void {
-    const nextAnswers = updateUserQuestionAnswers(answers, question, answer);
+  function submitAnswer(entry: UserQuestionEntry): void {
+    const nextEntries = [...entries, entry];
     if (index + 1 >= questions.length) {
-      onDecide(userQuestionDecision(nextAnswers));
+      onDecide(userQuestionDecision(questions, nextEntries));
       return;
     }
-    setAnswers(nextAnswers);
+    setEntries(nextEntries);
     setIndex(index + 1);
   }
 
@@ -463,11 +460,13 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
     onCancel: cancel,
   };
 
-  if (question.allowFreeText && !question.multiSelect) {
-    return <FreeTextQuestion {...variantProps} />;
+  // A question that takes typed text is answered on one line, where numbers
+  // pick the listed options: a multi-select one mixes both there.
+  if (question.allowFreeText) {
+    return <FreeTextQuestion key={index} {...variantProps} />;
   }
-  // Keyed by question index: the merged picker is now one element type across
-  // consecutive questions, so without a key React would reuse the instance and
-  // carry the previous question's toggled set into the next one.
+  // Both are keyed by question index: consecutive questions render one
+  // element type, so without a key React would reuse the instance and carry
+  // the previous question's typed line or toggled set into the next one.
   return <ChoiceQuestion key={index} {...variantProps} />;
 }

@@ -15,6 +15,7 @@ import {
   Clock,
   Effect,
   FileSystem,
+  Order,
   Predicate,
   Schema,
 } from 'effect';
@@ -102,12 +103,13 @@ const DECLINE_RANK: Readonly<Record<RefusalDecision['action'], number>> = {
 function summarizeRejections(
   rejections: Arr.NonEmptyReadonlyArray<RecordedRejection>,
 ): RecordedRejection {
-  const rank = (r: RecordedRejection) => DECLINE_RANK[r.decision.action];
-  const [first, ...rest] = rejections;
   // The first of the highest-ranked rejections.
-  const top = rest.reduce(
-    (best, r) => (rank(r) < rank(best) ? r : best),
-    first,
+  const top = Arr.min(
+    rejections,
+    Order.mapInput(
+      Order.Number,
+      (r: RecordedRejection) => DECLINE_RANK[r.decision.action],
+    ),
   );
   const { action } = top.decision;
   const group = rejections.filter((r) => r.decision.action === action);

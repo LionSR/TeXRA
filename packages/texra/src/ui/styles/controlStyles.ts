@@ -76,6 +76,27 @@ export const buttonStyles: CSSResult = css`
     white-space: nowrap;
   }
 
+  /* The chevron of a disclosure toggle: it turns to point down while the
+     button around it (anything carrying aria-expanded) is open. */
+  .disclosure-chevron {
+    display: inline-grid;
+    width: 1em;
+    height: 1em;
+    flex: 0 0 1em;
+    place-items: center;
+    color: var(--color-text-secondary);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .disclosure-chevron {
+      transition: transform var(--transition-fast);
+    }
+  }
+
+  [aria-expanded='true'] .disclosure-chevron {
+    transform: rotate(90deg);
+  }
+
   /* Native WA buttons and semantic skins share the same geometry. Without
      this reset, WA's font-relative height produces different sizes whenever
      a button inherits a caption, a section heading, or the body font. */

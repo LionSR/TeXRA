@@ -2,11 +2,7 @@ import { useContext } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
 import { COLOR_INFO } from '@cli/tui/ui/colors';
-import {
-  clampModalWidth,
-  confirmCardContentWidth,
-  isCompactRows,
-} from '@cli/tui/ui/theme';
+import { clampModalWidth, confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { fillRows, truncateToWidth } from '@cli/runtime/terminal/terminalText';
 import {
   REQUEST_ACTIONS,
@@ -27,7 +23,7 @@ import {
 import type { PlanApprovalRequest } from '@texra-ai/worldline/schemas';
 
 interface PlanRequestProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly payload: PlanApprovalRequest;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
@@ -50,14 +46,11 @@ const PLAN_APPROVAL_GOAL_ACTIONS: readonly ConfirmCardKeyRow[] = [
   },
 ];
 
-function isCompactPlanApprovalRows(availableRows: number | undefined): boolean {
+function isCompactPlanApprovalRows(availableRows: number): boolean {
   return (
-    availableRows !== undefined &&
     availableRows > 0 &&
-    isCompactRows(
-      availableRows,
-      COMPACT_PLAN_APPROVAL_MAX_ROWS + PLAN_APPROVAL_GOAL_NOTICE_ROWS,
-    )
+    availableRows <=
+      COMPACT_PLAN_APPROVAL_MAX_ROWS + PLAN_APPROVAL_GOAL_NOTICE_ROWS
   );
 }
 
@@ -73,10 +66,9 @@ function planApprovalCompactBodyRowsBudget({
   availableRows,
   columns,
 }: {
-  readonly availableRows: number | undefined;
+  readonly availableRows: number;
   readonly columns: number;
-}): number | undefined {
-  if (availableRows === undefined) return undefined;
+}): number {
   const chromeRows = confirmCardCompactChromeRows({
     kind: 'planApproval',
     title: REQUEST_ASK.plan,
@@ -140,7 +132,7 @@ function PlanApprovalBody({
   goalActionVisible,
   objective,
 }: {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly compact: boolean;
   readonly compactBodyRows: number | undefined;
   readonly goalActionVisible: boolean;

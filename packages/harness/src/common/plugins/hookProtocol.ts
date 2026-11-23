@@ -72,11 +72,9 @@ const HookInputSchema = Schema.Union([
     last_assistant_message: Schema.String,
   }),
 ]);
+/** One event's input, as the harness builds it and a hook reads it on
+ *  stdin as JSON. */
 export type HookInput = typeof HookInputSchema.Encoded;
-
-/** The JSON a hook reads on stdin. */
-export const encodeHookInput = (input: HookInput): string =>
-  JSON.stringify(Schema.decodeUnknownSync(HookInputSchema)(input));
 
 // -------------------------------------------------------------------- output
 
@@ -158,7 +156,18 @@ const HookOutputSchemas = {
   SubagentStop: StopOutput('SubagentStop'),
 } as const satisfies Record<HookEvent, Schema.Top>;
 
-type HookOutput = (typeof HookOutputSchemas)[HookEvent]['Type'];
+/** `json` decoded against `event`'s output `schema`, or why it does not
+ *  match. */
+const decodeOutput = <A>(
+  event: HookEvent,
+  schema: Schema.Codec<A, unknown>,
+  json: unknown,
+): Result.Result<A, string> =>
+  Result.mapError(
+    Schema.decodeUnknownResult(schema)(json),
+    (error) =>
+      `its output does not match the ${event} output: ${error.message}`,
+  );
 
 /** How a hook process ended, as the runner saw it. */
 export type HookRun =
@@ -193,6 +202,9 @@ interface HookVerdict extends Pick<
    *  at warn level, never dropped. */
   readonly warning: string | null;
 }
+
+/** What output that decoded says, before the exit code is read. */
+type HookEffect = Omit<HookVerdict, 'status' | 'warning'>;
 
 /** `PreToolUse`'s deprecated top-level decisions, as the reference maps them. */
 const DEPRECATED_DECISIONS = { approve: 'allow', block: 'deny' } as const;
@@ -235,24 +247,22 @@ function stopBlock(
   return null;
 }
 
-/** The effect of output that parsed and validated. */
-function effectOf(asked: HookAsked, output: HookOutput) {
+/** What output that parsed says, once it decodes against its event's
+ *  output, or why it does not. */
+function effectOf(
+  asked: HookAsked,
+  json: unknown,
+): Result.Result<HookEffect, string> {
   const event = asked.hook_event_name;
   const ignored: string[] = [];
-  if (output.continue === false) ignored.push('continue: false');
-  for (const field of [
-    'stopReason',
-    'suppressOutput',
-    'terminalSequence',
-  ] as const)
-    if (output[field] !== undefined) ignored.push(field);
   let answer = NO_ANSWER;
   let context: string | null = null;
+  let output: (typeof HookOutputSchemas)[HookEvent]['Type'];
   switch (event) {
     case 'PreToolUse': {
-      const pre = Schema.decodeUnknownSync(HookOutputSchemas.PreToolUse)(
-        output,
-      );
+      const read = decodeOutput(event, HookOutputSchemas.PreToolUse, json);
+      if (Result.isFailure(read)) return Result.fail(read.failure);
+      const pre = (output = read.success);
       const hso = pre.hookSpecificOutput;
       const said =
         hso?.permissionDecision ??
@@ -275,9 +285,9 @@ function effectOf(asked: HookAsked, output: HookOutput) {
       break;
     }
     case 'PostToolUse': {
-      const post = Schema.decodeUnknownSync(HookOutputSchemas.PostToolUse)(
-        output,
-      );
+      const read = decodeOutput(event, HookOutputSchemas.PostToolUse, json);
+      if (Result.isFailure(read)) return Result.fail(read.failure);
+      const post = (output = read.success);
       const hso = post.hookSpecificOutput;
       context = joined([
         post.decision === 'block' ? post.reason : undefined,
@@ -292,9 +302,13 @@ function effectOf(asked: HookAsked, output: HookOutput) {
       break;
     }
     case 'UserPromptSubmit': {
-      const prompt = Schema.decodeUnknownSync(
+      const read = decodeOutput(
+        event,
         HookOutputSchemas.UserPromptSubmit,
-      )(output);
+        json,
+      );
+      if (Result.isFailure(read)) return Result.fail(read.failure);
+      const prompt = (output = read.success);
       context = joined([prompt.hookSpecificOutput?.additionalContext]);
       if (prompt.decision === 'block')
         ignored.push('decision: "block" (blocking a prompt)');
@@ -304,10 +318,9 @@ function effectOf(asked: HookAsked, output: HookOutput) {
       break;
     }
     case 'SessionStart': {
-      const start = Schema.decodeUnknownSync(HookOutputSchemas.SessionStart)(
-        output,
-      );
-      const hso = start.hookSpecificOutput;
+      const read = decodeOutput(event, HookOutputSchemas.SessionStart, json);
+      if (Result.isFailure(read)) return Result.fail(read.failure);
+      const hso = (output = read.success).hookSpecificOutput;
       context = joined([hso?.additionalContext]);
       for (const field of [
         'initialUserMessage',
@@ -320,7 +333,15 @@ function effectOf(asked: HookAsked, output: HookOutput) {
     }
     case 'Stop':
     case 'SubagentStop': {
-      const stop = Schema.decodeUnknownSync(HookOutputSchemas[event])(output);
+      const read: Result.Result<
+        (typeof HookOutputSchemas)[typeof event]['Type'],
+        string
+      > =
+        event === 'Stop'
+          ? decodeOutput(event, HookOutputSchemas.Stop, json)
+          : decodeOutput(event, HookOutputSchemas.SubagentStop, json);
+      if (Result.isFailure(read)) return Result.fail(read.failure);
+      const stop = (output = read.success);
       const extra = stop.hookSpecificOutput?.additionalContext;
       const reason = stop.reason ?? `A ${event} hook blocked the stop.`;
       if (stop.decision === 'block')
@@ -334,12 +355,21 @@ function effectOf(asked: HookAsked, output: HookOutput) {
       break;
     }
   }
-  return {
+  // The fields every event's output may carry and v1 does not act on.
+  const common: string[] = [];
+  if (output.continue === false) common.push('continue: false');
+  for (const field of [
+    'stopReason',
+    'suppressOutput',
+    'terminalSequence',
+  ] as const)
+    if (output[field] !== undefined) common.push(field);
+  return Result.succeed({
     ...answer,
     context,
-    ignored,
+    ignored: [...common, ...ignored],
     systemMessage: output.systemMessage ?? null,
-  };
+  });
 }
 
 const ignoredWarning = (event: HookEvent, ignored: readonly string[]) =>
@@ -388,22 +418,16 @@ export function interpretHookRun(asked: HookAsked, run: HookRun): HookVerdict {
     };
   const text = run.stdout.trim();
   const stderr = run.stderr.trim();
-  let parsed: HookOutput | undefined;
+  let effect: HookEffect | null = null;
   let malformed: string | undefined;
   if (text.startsWith('{') && text.endsWith('}')) {
     const json = safeParseJson(text);
-    if (Result.isFailure(json)) {
-      malformed = `its output is not valid JSON (${json.failure.message})`;
-    } else {
-      const result = Schema.decodeUnknownResult(HookOutputSchemas[event])(
-        json.success,
-      );
-      if (Result.isSuccess(result)) parsed = result.success;
-      else
-        malformed = `its output does not match the ${event} output: ${result.failure.message}`;
-    }
+    const read = Result.isFailure(json)
+      ? Result.fail(`its output is not valid JSON (${json.failure.message})`)
+      : effectOf(asked, json.success);
+    if (Result.isSuccess(read)) effect = read.success;
+    else malformed = read.failure;
   }
-  const effect = parsed === undefined ? null : effectOf(asked, parsed);
   if (run.exitCode === 2) {
     const ignored = [...(effect?.ignored ?? [])];
     let context = effect?.context ?? null;

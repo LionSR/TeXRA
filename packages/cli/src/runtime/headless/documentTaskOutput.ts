@@ -207,13 +207,11 @@ export function formatDocumentTaskTextResult(
  */
 const CliLaunchOutputSchema = Schema.Struct({
   /** Workspace file the run's output is copied to. */
-  outputFile: Schema.optional(Schema.NullOr(Schema.String)),
+  outputFile: Schema.optional(Schema.String),
   /** Workspace directory the run's output files are copied to. */
-  outputDirectory: Schema.optional(Schema.NullOr(Schema.String)),
+  outputDirectory: Schema.optional(Schema.String),
   /** Relative artifacts expected under `outputDirectory`. */
-  expectedOutputFiles: Schema.optional(
-    Schema.NullOr(Schema.Array(Schema.String)),
-  ),
+  expectedOutputFiles: Schema.optional(Schema.Array(Schema.String)),
 });
 
 /** The output targets a command-line launch recorded, `{}` for any other. */
@@ -229,7 +227,7 @@ export function resumeDocumentTaskOutputFile(
   if (programOf(config) === null) return undefined;
 
   const cliOutputFile = cliLaunchOutput(config).outputFile;
-  if (typeof cliOutputFile === 'string' && cliOutputFile.trim() !== '') {
+  if (cliOutputFile !== undefined && cliOutputFile.trim() !== '') {
     if (!path.isAbsolute(cliOutputFile)) {
       throw new CliUsageError({
         message: `Stored program output file is not absolute: ${cliOutputFile}`,
@@ -257,7 +255,7 @@ export function resumeDocumentTaskOutputDirectory(
   if (programOf(config) === null) return undefined;
 
   const outputDirectory = cliLaunchOutput(config).outputDirectory;
-  if (typeof outputDirectory !== 'string' || outputDirectory.trim() === '')
+  if (outputDirectory === undefined || outputDirectory.trim() === '')
     return undefined;
   if (!path.isAbsolute(outputDirectory)) {
     throw new CliUsageError({

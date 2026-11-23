@@ -111,7 +111,6 @@ export type {
   ModelFailure,
   ModelAvailabilityKind,
   ModelBackend,
-  NormalizedToolUse,
   RequestPayload,
   ProposalFileGroup,
   OpenFilePayload,

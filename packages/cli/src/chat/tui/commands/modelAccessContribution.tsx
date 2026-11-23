@@ -113,11 +113,7 @@ export function modelAccessContribution(): SlashCommandContribution & {
     return (
       <ProviderApiKeyForm
         availableRows={props.availableRows}
-        statusView={{
-          statuses: apiKeys.data,
-          loading: apiKeys.loading,
-          error: apiKeys.error !== undefined,
-        }}
+        status={apiKeys}
         onSave={(provider, apiKey) =>
           applyCliProviderApiKey(context.stores, provider, apiKey)
         }

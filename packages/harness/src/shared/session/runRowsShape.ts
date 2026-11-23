@@ -20,12 +20,13 @@ type RequestState = {
   readonly payload: RequestPayload;
   /** Who answers it, as it opened. */
   readonly answeredBy: AnsweredBy;
-  /** The recorded decision: the `request.decided` row's, null while
-   *  the request is open. */
-  readonly decision: RequestDecision | null;
-  /** The `seq` of that `request.decided` row, null while the request is
-   *  open: the run's rows order a decision against its activation. */
-  readonly decidedAt: number | null;
+  /** The `request.decided` row's decision and its `seq`, null while the
+   *  request is open: the run's rows order a decision against its
+   *  activation by that `seq`. */
+  readonly decided: {
+    readonly decision: RequestDecision;
+    readonly at: number;
+  } | null;
 };
 
 /**

@@ -12,7 +12,17 @@
  */
 
 // Third-party imports
-import { Clock, Duration, Effect, Random, Ref, Schedule, Schema } from 'effect';
+import {
+  Array as Arr,
+  Clock,
+  Duration,
+  Effect,
+  Order,
+  Random,
+  Ref,
+  Schedule,
+  Schema,
+} from 'effect';
 import { LRUCache } from 'lru-cache';
 
 // Local imports
@@ -29,9 +39,9 @@ import {
   ghGet,
   type ConditionalResponse,
   type GitHubFailure,
+  type GitHubGetOptions,
   type GitHubServices,
 } from './githubClient';
-import { getNewestTimestamp } from './githubPaths';
 import { GITHUB_POLL_INTERVAL_MS } from './prSubscriptionConstants';
 import type { GhUser } from './prTypes';
 import { targetPath, type SubscriptionTarget } from './subscriptionTarget';
@@ -233,15 +243,30 @@ export function logWarning(
 export function pollGet<T>(
   path: string,
   schema: Schema.Codec<T, unknown>,
-  etag?: string,
+  options?: GitHubGetOptions,
 ): Effect.Effect<ConditionalResponse<T>, GitHubFailure, GitHubServices> {
-  return ghGet(path, schema, etag).pipe(
+  return ghGet(path, schema, options).pipe(
     Effect.catchTag('GitHubMalformedBodyError', (error) =>
       logWarning(`Skipping ${path} this poll: malformed body`, error).pipe(
         Effect.as({ status: 304 } as const),
       ),
     ),
   );
+}
+
+/** Newest `updated_at` (falling back to `created_at`) in a list, or undefined. */
+function getNewestTimestamp(
+  items: ReadonlyArray<{
+    created_at?: string | null;
+    updated_at?: string | null;
+  }>,
+): string | undefined {
+  const stamps = items
+    .flatMap((it) => it.updated_at ?? it.created_at ?? [])
+    .filter((stamp) => stamp !== '');
+  return Arr.isArrayNonEmpty(stamps)
+    ? Arr.max(stamps, Order.String)
+    : undefined;
 }
 
 /** A copy of `cache` with the same capacity, entries and recency order. */

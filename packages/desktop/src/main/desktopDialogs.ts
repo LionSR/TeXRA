@@ -6,11 +6,11 @@ import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron';
 import { Effect, Predicate, type Scope } from 'effect';
 
 import { withLogChannel } from '@texra-ai/worldline/plugins';
-import { toErrorMessage } from '@texra-ai/worldline/schemas';
-import {
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
+import type {
   HostFailed,
-  type ConfirmQuestion,
-  type NoticeLevel,
+  ConfirmQuestion,
+  NoticeLevel,
 } from '@texra/hosts/uiHosts';
 import type { DesktopSpawn } from './desktopWindows.js';
 
@@ -67,8 +67,9 @@ export function choose<T>(
       cancelId: closeId,
     }),
   };
-  return Effect.tryPromise({
-    try: () => {
+  return fromHost(
+    'dialog.showMessageBox',
+    () => {
       const window =
         parent ??
         BrowserWindow.getFocusedWindow() ??
@@ -77,13 +78,8 @@ export function choose<T>(
         ? dialog.showMessageBox(window, options)
         : dialog.showMessageBox(options);
     },
-    catch: (cause) =>
-      new HostFailed({
-        member: 'dialog.showMessageBox',
-        message: `A desktop ${box.type} dialog could not be shown: ${toErrorMessage(cause)}`,
-        cause,
-      }),
-  }).pipe(Effect.map(({ response }) => choices[response]?.value));
+    `A desktop ${box.type} dialog could not be shown`,
+  ).pipe(Effect.map(({ response }) => choices[response]?.value));
 }
 
 /** Show a box with nothing to answer on a fiber of `scope`, without waiting
@@ -157,15 +153,10 @@ export function createDesktopDialogs(
       }),
     /** The export's format dialog; a cancelled dialog answers `undefined`. */
     pickTranscriptExportFormat: (project: string) =>
-      Effect.tryPromise({
-        try: () => import('@texra/controllers/progressView/exportTranscript'),
-        catch: (cause) =>
-          new HostFailed({
-            member: 'pickTranscriptExportFormat',
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      }).pipe(
+      fromHost(
+        'pickTranscriptExportFormat',
+        () => import('@texra/controllers/progressView/exportTranscript'),
+      ).pipe(
         Effect.flatMap(
           ({ TRANSCRIPT_EXPORT_FORMAT_CHOICES, TRANSCRIPT_EXPORT_PICK }) =>
             choose(window, {

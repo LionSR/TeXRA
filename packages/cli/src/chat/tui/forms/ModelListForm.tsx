@@ -19,7 +19,7 @@ import { useChatProcess } from '../chatProcess';
 
 interface ModelListFormProps {
   readonly currentModel: string;
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly selectable: boolean;
   readonly getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
   readonly onSelect?: (value: string) => void;

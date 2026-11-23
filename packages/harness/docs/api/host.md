@@ -613,8 +613,8 @@ type PluginOrigin =
 
 ## PluginRequestError
 
-What the user asked for cannot be done as asked: an unknown or taken
-name, or a marketplace that needs the plugin named.
+What the user asked for cannot be done as asked: a source, a name or a
+plugin selection to correct, not a failure of the plugin or of git.
 
 ```ts
 class PluginRequestError extends Schema.TaggedError<PluginRequestError>()(
