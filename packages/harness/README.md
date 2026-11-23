@@ -5,7 +5,7 @@
 **Kill an agent with `SIGKILL` mid-workflow. Resume without re-running a single finished tool call.**<br />
 A durable, forkable agent runtime in Effect 4, backed by SQLite. Powers [TeXRA](https://texra.ai).
 
-[![npm](https://img.shields.io/badge/npm-%40texra--ai%2Fworldline_0.1.0-6F387A?style=flat&logo=npm&logoColor=white)](https://www.npmjs.com/package/@texra-ai/worldline)
+[![npm](https://img.shields.io/npm/v/@texra-ai/worldline?label=%40texra-ai%2Fworldline&color=6F387A&logo=npm&logoColor=white)](https://www.npmjs.com/package/@texra-ai/worldline)
 [![Effect](https://img.shields.io/badge/Effect-%5E4.1.3-270939?style=flat)](https://effect.website)
 [![Node.js](https://img.shields.io/badge/Node.js-22.22%2B_%7C_24.15%2B-339933?style=flat&logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![SQLite](https://img.shields.io/badge/Store-SQLite-003B57?style=flat&logo=sqlite&logoColor=white)](#durable-invariants)
@@ -121,7 +121,8 @@ const echo = defineTool({
   execute: ({ text }) => Effect.succeed(text),
 });
 
-// Swap the HTTP layer in tests:
+// Swap the HTTP layer in tests (dummy key satisfies route selection):
+process.env.ANTHROPIC_API_KEY ??= 'test-key';
 Sessions.layer({ platform, plugins: harnessBuiltins, client }).pipe(
   Layer.provideMerge(Layer.succeed(ModelFetch)(scriptedFetch)),
 );

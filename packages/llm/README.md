@@ -5,7 +5,7 @@
 **One pure Effect `Model` over OpenAI Responses, Anthropic Messages, and Google Interactions.**<br />
 10 providers, 140+ `llm-zoo` models, typed `ModelError`, lazy SDK loading, and subscription sign-in.
 
-[![npm](https://img.shields.io/badge/npm-%40texra--ai%2Fllm_0.1.0-6F387A?style=flat&logo=npm&logoColor=white)](https://www.npmjs.com/package/@texra-ai/llm)
+[![npm](https://img.shields.io/npm/v/@texra-ai/llm?label=%40texra-ai%2Fllm&color=6F387A&logo=npm&logoColor=white)](https://www.npmjs.com/package/@texra-ai/llm)
 [![Effect](https://img.shields.io/badge/Effect-%5E4.1.3-270939?style=flat)](https://effect.website)
 [![Node.js](https://img.shields.io/badge/Node.js-22.22%2B_%7C_24.15%2B-339933?style=flat&logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![Catalog: llm-zoo](https://img.shields.io/badge/Catalog-llm--zoo-6F387A?style=flat)](https://github.com/texra-ai/llm-zoo)
