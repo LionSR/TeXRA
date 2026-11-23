@@ -31,7 +31,6 @@ import {
   formatReviewComment,
 } from './formatPREvent';
 import { formatCommentEvent } from './formatUtils';
-import { withSince } from './githubPaths';
 import {
   checkKey,
   ciTerminalStatus,
@@ -133,7 +132,9 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
   let head = prior?.head;
   let mergeableState = prior?.mergeableState;
   let prEtag = prior?.etags.pr;
-  const prRes = yield* pollGet(prPath, GhPullRequestSchema, prEtag);
+  const prRes = yield* pollGet(prPath, GhPullRequestSchema, {
+    etag: prEtag,
+  });
   if (prRes.status === 200) {
     const prData = prRes.data;
     // A closed PR cannot produce any later activity worth polling.
@@ -174,27 +175,18 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
   const [commentsRes, reviewCommentsRes, reviewsRes, checks] =
     yield* Effect.all(
       [
-        pollGet(
-          withSince(
-            `${issuePath}/comments?per_page=100`,
-            prior?.issueComments?.sinceCursor,
-          ),
-          GhIssueCommentArraySchema,
-          prior?.etags.issueComments,
-        ),
-        pollGet(
-          withSince(
-            `${prPath}/comments?per_page=100`,
-            prior?.reviewComments?.sinceCursor,
-          ),
-          GhReviewCommentArraySchema,
-          prior?.etags.reviewComments,
-        ),
-        pollGet(
-          `${prPath}/reviews?per_page=100`,
-          GhReviewArraySchema,
-          prior?.etags.reviews,
-        ),
+        pollGet(`${issuePath}/comments`, GhIssueCommentArraySchema, {
+          etag: prior?.etags.issueComments,
+          params: { per_page: 100, since: prior?.issueComments?.sinceCursor },
+        }),
+        pollGet(`${prPath}/comments`, GhReviewCommentArraySchema, {
+          etag: prior?.etags.reviewComments,
+          params: { per_page: 100, since: prior?.reviewComments?.sinceCursor },
+        }),
+        pollGet(`${prPath}/reviews`, GhReviewArraySchema, {
+          etag: prior?.etags.reviews,
+          params: { per_page: 100 },
+        }),
         head
           ? fetchAllCheckRuns(
               pr.owner,

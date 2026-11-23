@@ -28,6 +28,13 @@ const TIMEOUT = Duration.seconds(15);
 /** What {@link ghGet} reads from the environment: the token store and the HTTP client. */
 export type GitHubServices = Secrets | HttpClient.HttpClient;
 
+/** What a GET may add to its path: the ETag that makes it conditional and
+ *  the query parameters. */
+export interface GitHubGetOptions {
+  readonly etag?: string | undefined;
+  readonly params?: Readonly<Record<string, string | number | undefined>>;
+}
+
 export type ConditionalResponse<T> =
   | { status: 200; data: T; etag: string | undefined }
   | { status: 304 };
@@ -167,12 +174,14 @@ function classifyFailure(
 /**
  * GET `path`, decoding a 200 body with `schema` (the shape GitHub documents
  * for it); a body that fails it is a `GitHubMalformedBodyError` naming the
- * path and the issue.
+ * path and the issue. `params` is the query string, encoded by the HTTP
+ * client; an `undefined` value is left out. `etag` makes the request
+ * conditional.
  */
 export const ghGet = Effect.fn('ghGet')(function* <T>(
   path: string,
   schema: Schema.Codec<T, unknown>,
-  etag?: string,
+  { etag, params }: GitHubGetOptions = {},
 ): Effect.fn.Return<
   ConditionalResponse<T>,
   GitHubFailure | GitHubMalformedBodyError,
@@ -191,7 +200,10 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
   // aborts the request however the attempt ends.
   return yield* Effect.gen(function* () {
     const client = yield* scopedClient;
-    const response = yield* client.get(`${API_ORIGIN}${path}`, { headers });
+    const response = yield* client.get(`${API_ORIGIN}${path}`, {
+      headers,
+      urlParams: params,
+    });
     if (response.status === StatusCodes.NOT_MODIFIED) {
       return { status: 304 } as const;
     }
