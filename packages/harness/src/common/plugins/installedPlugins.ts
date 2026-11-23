@@ -15,7 +15,7 @@ import {
   SkillNameSchema,
   type InstalledPlugin,
 } from '@shared/schemas';
-import { pathExists } from '@utils/files/fsEntryExists';
+import { meansAbsent, pathExists } from '@utils/files/fsEntryExists';
 
 // Local imports - shared contracts
 
@@ -257,12 +257,14 @@ function installOrigin(
   ChildProcessSpawner | FileSystem.FileSystem
 > {
   if (origin.kind === 'local') {
+    // Nothing there is a mistyped source; any other failure is the read's.
     return FileSystem.FileSystem.use((fs) => fs.realPath(origin.path)).pipe(
-      Effect.mapError(
-        () =>
-          new PluginRequestError({
-            message: `${origin.path} is not a directory, a git URL, or github.com/<owner>/<repo>.`,
-          }),
+      Effect.mapError((error) =>
+        meansAbsent(error)
+          ? new PluginRequestError({
+              message: `${origin.path} is not a directory, a git URL, or github.com/<owner>/<repo>.`,
+            })
+          : ioError(error),
       ),
       Effect.flatMap((root) =>
         installFromRoot(root, { kind: 'local' }, only, run, nested),
