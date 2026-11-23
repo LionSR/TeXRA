@@ -151,7 +151,7 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
 
   const ext = path.extname(imagePath);
   return yield* Effect.acquireUseRelease(
-    fs.makeTempFile({ prefix: 'texra-resized-', suffix: ext }),
+    fs.makeTempFile({ prefix: 'resized-image-', suffix: ext }),
     Effect.fnUntraced(function* (tempPath) {
       // ImageMagick v7+: magick input -resize ... output
       // GraphicsMagick: gm convert input -resize ... output
@@ -325,7 +325,7 @@ export const rasterizePdfPages = Effect.fn('img.rasterizePdfPages')(function* (
   // Private per-conversion directory so the release below can delete every
   // page it holds without touching pages a concurrent conversion is reading.
   const pages = yield* Effect.acquireUseRelease(
-    fs.makeTempDirectory({ prefix: 'texra-pdf-conversion-' }),
+    fs.makeTempDirectory({ prefix: 'pdf-conversion-' }),
     // Each page is its own process writing its own file, so pages
     // convert at once (bounded: each runs Ghostscript), in page order.
     (tempDir) =>

@@ -17,7 +17,7 @@ import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import {
   CLAUDE_COUNTERPART_TOOLS,
-  texraToolOfClaudeTool,
+  harnessToolOfClaudeTool,
 } from '@common/plugins/hookConfig';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
@@ -87,7 +87,7 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
           .map((entry) => entry.trim())
           .filter(Boolean);
   const mapped = (declared ?? []).map((tool) =>
-    tool.startsWith('mcp__') ? tool : texraToolOfClaudeTool(tool),
+    tool.startsWith('mcp__') ? tool : harnessToolOfClaudeTool(tool),
   );
   // Naming only tools the harness lacks must not read as naming none, which
   // would widen the agent to everything it inherits.
