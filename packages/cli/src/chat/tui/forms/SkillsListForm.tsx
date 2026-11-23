@@ -18,7 +18,7 @@ import { AsyncListForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';
 
 interface SkillsListFormProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   /** Called with the selected skill's name. */
   readonly onSelect: (name: string) => void;
   readonly onClose: () => void;

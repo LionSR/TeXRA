@@ -178,7 +178,7 @@ interface ConfigFormProps {
   readonly formRenderers?: Readonly<
     Record<string, (onBack: () => void) => React.JSX.Element>
   >;
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
 }

@@ -49,7 +49,7 @@ import type { TuiRequest } from '../state/approvalQueue';
 
 interface TasksFormProps {
   readonly connect: ConnectService;
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly onClose: () => void;
 }
 
@@ -111,7 +111,7 @@ export function TasksForm(props: TasksFormProps): React.JSX.Element {
 interface AttachedTaskProps {
   readonly task: TaskSummary;
   readonly connect: ConnectService;
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly onClose: () => void;
 }
 
@@ -293,7 +293,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   // request's card leave.
   const budget = Math.max(
     3,
-    (props.availableRows ?? 24) -
+    props.availableRows -
       formFrameChromeRows(title, hints, contentWidth) -
       (composing ? COMPOSER_ROWS : 0) -
       (notice ? 1 : 0) -

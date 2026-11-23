@@ -11,7 +11,6 @@ import {
   NAVIGATE_HINT,
 } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
-import { isCompactRows } from '@cli/tui/ui/theme';
 
 import {
   FormFrame,
@@ -28,25 +27,22 @@ const COMPACT_FORM_MAX_ROWS = 9;
 
 /**
  * How many list rows the form's `Select` may show and whether to spend rows
- * on overflow markers. With no row budget it shows everything. Otherwise the
- * frame (`frameRows`), description and detail rows come off the budget
- * first; on a very short terminal (fewer than 3 list rows) the active choice
- * stays visible instead of the whole budget going to overflow markers.
+ * on overflow markers. The frame (`frameRows`), description and detail rows
+ * come off the budget first; on a very short terminal (fewer than 3 list
+ * rows) the active choice stays visible instead of the whole budget going to
+ * overflow markers.
  */
 function listFormSelectWindow(args: {
-  readonly availableRows: number | undefined;
+  readonly availableRows: number;
   readonly itemCount: number;
   readonly frameRows: number;
   readonly hasDescription?: boolean;
   readonly detailRows?: number;
   readonly selectMarginTop?: number;
 }): {
-  readonly maxVisibleItems: number | undefined;
+  readonly maxVisibleItems: number;
   readonly showOverflow: boolean;
 } {
-  if (args.availableRows == null) {
-    return { maxVisibleItems: undefined, showOverflow: false };
-  }
   const chromeRows =
     args.frameRows +
     (args.hasDescription ? 1 : 0) +
@@ -65,7 +61,7 @@ function listFormSelectWindow(args: {
 interface ListFormProps<T> {
   readonly title: string;
   readonly compactTitle?: string;
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly items: ReadonlyArray<SelectItem<T>>;
   readonly activeValue?: T;
   readonly description?: ReactNode;
@@ -110,7 +106,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
   };
   const escape = props.escape ?? CLOSE_HINT;
 
-  if (isCompactRows(props.availableRows, COMPACT_FORM_MAX_ROWS)) {
+  if (props.availableRows <= COMPACT_FORM_MAX_ROWS) {
     return (
       <FormFrame title={props.compactTitle ?? props.title} hints={[]}>
         {props.compactDetail}

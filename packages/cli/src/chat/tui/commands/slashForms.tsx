@@ -55,7 +55,7 @@ function copyToClipboard(text: string): void {
 /** Submit-side busy/finished surface for the active registered form. */
 function FormBusyFrame(props: {
   readonly progress: FormProgress;
-  readonly availableRows?: number;
+  readonly availableRows: number;
 }): React.JSX.Element {
   const { progress } = props;
   const { columns } = useWindowSize();
@@ -106,7 +106,6 @@ function FormBusyFrame(props: {
       : 1 + wrappedRows(copyableMessage));
   const copyableDoesNotFit =
     liveCopyable !== undefined &&
-    props.availableRows !== undefined &&
     requiredRows(liveCopyable) > props.availableRows;
   useLayoutEffect(() => {
     if (copyableDoesNotFit) progress.archiveCopyable();

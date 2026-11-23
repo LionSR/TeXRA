@@ -129,7 +129,7 @@ export function builtinSlashCommands(options: {
   function makeSelectFormAdapter<T>(
     Form: React.ComponentType<{
       readonly context: SlashCommandContext;
-      readonly availableRows?: number;
+      readonly availableRows: number;
       readonly onSelect: (value: T) => void;
       readonly onClose: () => void;
     }>,

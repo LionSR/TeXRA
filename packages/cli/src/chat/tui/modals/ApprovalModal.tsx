@@ -15,7 +15,7 @@ import { UserQuestion } from './UserQuestion';
 import type { TuiRequest } from '../state/approvalQueue';
 
 interface ApprovalModalProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly payload: TuiRequest;
   /** The run grant the request offers (`offeredGrant`): the one that
    *  answers it, none when a person answers it. */

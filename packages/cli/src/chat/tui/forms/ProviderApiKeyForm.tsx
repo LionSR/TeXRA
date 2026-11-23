@@ -81,7 +81,7 @@ export function formatProviderApiKeySummary(
 }
 
 interface ProviderApiKeyFormProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   /** Each provider's key status, shown beside its row; never the key. */
   readonly statusView: ProviderApiKeyStatusView;
   /** The key write as a program; this form owns its one run. It yields the

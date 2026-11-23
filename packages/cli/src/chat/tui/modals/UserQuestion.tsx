@@ -16,11 +16,7 @@ import { KeyHints, type KeyHint, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
 import { Select } from '@cli/tui/ui/Select';
 import { COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import {
-  clampModalWidth,
-  confirmCardContentWidth,
-  isCompactRows,
-} from '@cli/tui/ui/theme';
+import { clampModalWidth, confirmCardContentWidth } from '@cli/tui/ui/theme';
 import {
   clipToWidth,
   textDisplayWidth,
@@ -40,7 +36,7 @@ import type {
 import { DETAIL_SEPARATOR } from '@texra-ai/worldline/schemas';
 
 interface UserQuestionProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly payload: UserQuestionRequest;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
@@ -50,7 +46,6 @@ interface UserQuestionPromptLine {
   readonly text: string;
 }
 
-const DEFAULT_USER_QUESTION_PROMPT_ROWS = 12;
 const COMPACT_USER_QUESTION_MAX_ROWS = 10;
 const COMPACT_USER_QUESTION_CHROME_ROWS = 4;
 const FULL_USER_QUESTION_CHROME_ROWS = 7;
@@ -100,19 +95,18 @@ function userQuestionChoiceHints({
   return [NAVIGATE_HINT, { key: `1-${optionCount}`, action: shortcutAction }];
 }
 
-function isCompactUserQuestionRows(availableRows: number | undefined): boolean {
-  return isCompactRows(availableRows, COMPACT_USER_QUESTION_MAX_ROWS);
+function isCompactUserQuestionRows(availableRows: number): boolean {
+  return availableRows <= COMPACT_USER_QUESTION_MAX_ROWS;
 }
 
 function userQuestionChoiceRowsBudget({
   availableRows,
   optionCount,
 }: {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly optionCount: number;
 }): number {
   if (optionCount <= 0) return 0;
-  if (availableRows === undefined) return optionCount;
   const compact = isCompactUserQuestionRows(availableRows);
   const chromeRows = compact
     ? COMPACT_USER_QUESTION_CHROME_ROWS
@@ -128,11 +122,10 @@ function userQuestionFreeTextOptionRowsBudget({
   availableRows,
   optionCount,
 }: {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly optionCount: number;
 }): number {
   if (optionCount <= 0) return 0;
-  if (availableRows === undefined) return optionCount;
   if (isCompactUserQuestionRows(availableRows)) return 0;
   return Math.min(
     optionCount,
@@ -148,10 +141,9 @@ function userQuestionPromptRowsBudget({
   availableRows,
   controlRows,
 }: {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly controlRows: number;
 }): number {
-  if (availableRows === undefined) return DEFAULT_USER_QUESTION_PROMPT_ROWS;
   const chromeRows = isCompactUserQuestionRows(availableRows)
     ? COMPACT_USER_QUESTION_CHROME_ROWS
     : FULL_USER_QUESTION_CHROME_ROWS;
@@ -244,7 +236,7 @@ function boundedUserQuestionPromptLines({
 }
 
 interface QuestionVariantProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly payload: UserQuestionRequest;
   readonly question: UserQuestionPrompt;
   readonly index: number;

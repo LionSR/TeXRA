@@ -17,7 +17,7 @@ import type {
 } from '@texra-ai/worldline/schemas';
 
 interface PluginTrustRequestProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly payload: PluginTrustPayload;
   /** The run grant the request offers (`offeredGrant`): none when only a
    *  person answers it, as for native code. */

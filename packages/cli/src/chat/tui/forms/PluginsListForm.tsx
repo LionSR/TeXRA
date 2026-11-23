@@ -34,7 +34,7 @@ import { AsyncListForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';
 
 interface PluginsListFormProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly onClose: () => void;
 }
 

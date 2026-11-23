@@ -17,7 +17,7 @@ import {
 import { type RetryTuiRequest } from '../state/approvalQueue';
 
 interface RetryRequestProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly payload: RetryTuiRequest;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }

@@ -27,7 +27,7 @@ interface ResumeListFormProps {
   /** The session whose stored runs the listing reads: the chat's, here or
    *  in the service. */
   readonly session: Session;
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly onSelect: (value: RunId) => void;
   readonly onClose: () => void;
 }

@@ -42,18 +42,15 @@ export function confirmCardContentRowsBudget({
   availableRows,
   columns,
   title,
-  defaultRows,
   compactMaxRows,
   spaciousFixedRows,
   compactFixedRows,
   extraFixedRows = 0,
 }: {
-  /** Rows granted to the whole modal; undefined means "not constrained". */
-  readonly availableRows?: number;
+  /** Rows granted to the whole modal. */
+  readonly availableRows: number;
   readonly columns: number;
   readonly title: string;
-  /** Budget used when `availableRows` is undefined. */
-  readonly defaultRows: number;
   /** Content rows shown in the compact layout (and spacious cutoff). */
   readonly compactMaxRows: number;
   /** Chrome rows besides the title in the spacious layout. */
@@ -63,8 +60,6 @@ export function confirmCardContentRowsBudget({
   /** Modal-specific rows present in both layouts. */
   readonly extraFixedRows?: number;
 }): number {
-  if (availableRows === undefined) return defaultRows;
-
   const fixedRows =
     wrappedRowCount(
       confirmCardPulsedTitle(0, title),

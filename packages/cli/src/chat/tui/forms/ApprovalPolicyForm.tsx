@@ -19,7 +19,7 @@ interface ApprovalPolicyFormProps {
   /** The focused task's grants that are on, each offered for revoking;
    *  granting is the card's `a`. */
   readonly grants: readonly ApprovalBypassKind[];
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly onSelect: (value: ApprovalFormValue) => void;
   readonly onCancel: () => void;
 }

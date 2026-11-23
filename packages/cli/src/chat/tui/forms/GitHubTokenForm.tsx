@@ -75,7 +75,7 @@ function statusHint(status: CredentialOrigin | undefined): string {
 }
 
 interface GitHubTokenFormProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly statusView?: GitHubTokenStatusView;
   /** The credential writes as programs; this form owns their one run. */
   readonly onSave: (token: string) => Effect.Effect<void, Error, Secrets>;

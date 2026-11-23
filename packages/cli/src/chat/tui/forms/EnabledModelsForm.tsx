@@ -15,7 +15,7 @@ import { enabledLabel } from '@ui/copy/format';
 import { useChatProcess } from '../chatProcess';
 
 interface EnabledModelsFormProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly onClose: () => void;
 }
 

@@ -38,7 +38,7 @@ import { SkillsSettingsForm } from './SkillsSettingsForm';
 import { useChatProcess } from '../chatProcess';
 
 export interface CliConfigFormProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
 }

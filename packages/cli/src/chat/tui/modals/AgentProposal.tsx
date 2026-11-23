@@ -33,7 +33,7 @@ import {
 } from './ScrollableModalText';
 
 interface AgentProposalProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly payload: AgentProposalRequest;
   /** The run grant the request offers (`offeredGrant`). */
   readonly grant: ApprovalBypassKind | null;
