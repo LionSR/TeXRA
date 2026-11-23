@@ -1,5 +1,5 @@
 /**
- * The one fold from a normalized tool-use payload to everything a host paints
+ * The one fold from a tool card to everything a host paints
  * for a tool row: header label, header preview, the structured sections that
  * describe the call, its output and error, and the measurements a host needs
  * to elide any of them.
@@ -14,14 +14,16 @@
 import { Predicate } from 'effect';
 import {
   TOOL_CALL_STATUS,
-  type NormalizedToolUse,
   type ProposalFileGroup,
+  type ToolCallLog,
   type ToolCallStatus,
 } from '@shared/schemas';
 import {
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   executionsWaitTimeoutSeconds,
+  toolCallOutput,
+  toolCallTexts,
 } from '@shared/toolUse';
 import {
   executionsSubagentSummary,
@@ -205,10 +207,6 @@ export interface ToolRowModelContext {
   readonly runLabels?: RunLabels;
   /** Nobody drives the call's run: an open call reads as `interrupted`. */
   readonly interrupted?: boolean;
-  /** The raw `data.output` of the tool-use payload. Structured sections read
-   *  it directly (MCP content blocks, edit start lines, per-file line
-   *  changes); `NormalizedToolUse.outputText` is its flattened text. */
-  readonly parsedOutput?: unknown;
 }
 
 /** Entire output of a `write`-kind tool that wrote a file and said so. */
@@ -238,10 +236,11 @@ function headerSummaryText(summary: string): string {
  * its runs as `runLabels`, so the label lands in the row once, for every host.
  */
 function toolHeaderPreview(
-  normalized: NormalizedToolUse,
+  toolName: string,
+  input: unknown,
+  headerSummary: string,
   ctx: ToolRowModelContext,
 ): string {
-  const { toolName, input, headerSummary } = normalized;
   const labeled =
     normalizeToolName(toolName) === 'executions' && ctx.runLabels
       ? executionsSubagentSummary(input, ctx.runLabels)
@@ -290,7 +289,8 @@ function toolHeaderPreview(
  * time head/tail elision, never a decision to drop the data.
  */
 function rowOutput(
-  { outputText, errorText }: NormalizedToolUse,
+  outputText: string,
+  errorText: string,
   headerPreview: string,
   carriesOutput: boolean,
   fileLinkKind: 'read' | 'write' | undefined,
@@ -356,15 +356,23 @@ function toolTimeoutMs(toolName: string, input: unknown): number | undefined {
 // ---------------------------------------------------------------------------
 
 export function toolRowModel(
-  normalized: NormalizedToolUse,
+  log: ToolCallLog,
   ctx: ToolRowModelContext = {},
 ): ToolRowModel {
-  const headerPreview = toolHeaderPreview(normalized, ctx);
+  const { input, card } = log;
+  const toolName = log.toolName.trim();
+  const texts = toolCallTexts(log);
+  const output = toolCallOutput(log);
+  const headerPreview = toolHeaderPreview(
+    toolName,
+    input,
+    texts.headerSummary,
+    ctx,
+  );
   // A card the tool stated is painted as given, its file lists with the
   // line changes the call's output edits report; any other call's sections
   // are derived from its name and input.
-  const { card } = normalized;
-  const lineChanges = card ? outputLineChanges(ctx.parsedOutput) : undefined;
+  const lineChanges = card ? outputLineChanges(output.parsed) : undefined;
   const { sections, carriesOutput, fileLinkKind } = card
     ? {
         sections: card.sections.map((section): ToolSection => {
@@ -383,25 +391,25 @@ export function toolRowModel(
         fileLinkKind: undefined,
       }
     : dispatchSections({
-        toolName: normalized.toolName,
-        input: normalized.input,
-        filePath: inputFilePath(normalized.input),
-        parsedOutput: ctx.parsedOutput,
-        outputText: normalized.outputText,
-        failed: normalized.status === TOOL_CALL_STATUS.FAILED,
+        toolName,
+        input,
+        filePath: inputFilePath(input),
+        parsedOutput: output.parsed,
+        outputText: output.text,
+        failed: log.status === TOOL_CALL_STATUS.FAILED,
       });
 
   // A bash call's output is its result even when it echoes the description,
   // so the duplicate check compares against the command, as before
   // descriptions named the row.
   const echoPreview =
-    toolDisplayKind(normalized.toolName) === 'bash'
-      ? collapseWhitespace(
-          deriveToolInputPreview(normalized.toolName, normalized.input),
-        ) || headerSummaryText(normalized.headerSummary)
+    toolDisplayKind(toolName) === 'bash'
+      ? collapseWhitespace(deriveToolInputPreview(toolName, input)) ||
+        headerSummaryText(texts.headerSummary)
       : headerPreview;
-  const output = rowOutput(
-    normalized,
+  const shownOutput = rowOutput(
+    output.text,
+    texts.errorText,
     echoPreview,
     carriesOutput,
     fileLinkKind,
@@ -409,39 +417,35 @@ export function toolRowModel(
   // A user-feedback row shows the instruction, not the tool's error text: the
   // "error" is the user's own rejection.
   const errorPreview =
-    normalized.errorText && !normalized.isUserFeedback
-      ? transcriptText(normalized.errorText)
+    texts.errorText && !texts.isUserFeedback
+      ? transcriptText(texts.errorText)
       : undefined;
-  const userInstruction = normalized.userInstructionText
-    ? transcriptText(normalized.userInstructionText)
+  const userInstruction = texts.userInstructionText
+    ? transcriptText(texts.userInstructionText)
     : undefined;
   const status: ToolRowStatus | undefined =
-    normalized.status === TOOL_CALL_STATUS.IN_PROGRESS &&
-    ctx.interrupted === true
+    log.status === TOOL_CALL_STATUS.IN_PROGRESS && ctx.interrupted === true
       ? 'interrupted'
-      : normalized.status;
+      : log.status;
   const timeoutMs =
     status === TOOL_CALL_STATUS.IN_PROGRESS
-      ? toolTimeoutMs(normalized.toolName, normalized.input)
+      ? toolTimeoutMs(toolName, input)
       : undefined;
 
   return {
-    headerLabel: card?.title ?? displayToolName(normalized.toolName),
+    headerLabel: card?.title ?? displayToolName(toolName),
     headerPreview,
     sections,
-    output,
+    output: shownOutput,
     ...(errorPreview ? { errorPreview } : {}),
     ...(userInstruction ? { userInstruction } : {}),
     showsNoOutputMarker:
-      output.kind === 'empty' &&
-      normalized.status === TOOL_CALL_STATUS.COMPLETED &&
-      (toolDisplayKind(normalized.toolName) === 'bash' ||
-        isMcpToolName(normalized.toolName)),
+      shownOutput.kind === 'empty' &&
+      log.status === TOOL_CALL_STATUS.COMPLETED &&
+      (toolDisplayKind(toolName) === 'bash' || isMcpToolName(toolName)),
     ...(status ? { status } : {}),
-    isUserFeedback: normalized.isUserFeedback,
+    isUserFeedback: texts.isUserFeedback,
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
-    ...(normalized.exitCode !== undefined
-      ? { exitCode: normalized.exitCode }
-      : {}),
+    ...(log.exitCode !== undefined ? { exitCode: log.exitCode } : {}),
   };
 }
