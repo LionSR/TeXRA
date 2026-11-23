@@ -12,7 +12,7 @@ Node.js platform implementation and host building blocks for
 
 - **Default SDK platform**: [`nodePlatform`](#nodeplatform) and
   [`NodePlatformOptions`](#nodeplatformoptions) build an `AgentPlatform` from
-  `agentsDir`, `storageDir`, `workspaceDir`, and `settings`.
+  `storageDir`, `workspaceDir`, and `settings`.
 - **Workspace roots & paths**:
   [`openNodeWorkspaceRoots`](#opennodeworkspaceroots),
   [`canonicalizeWorkspaceRoot`](#canonicalizeworkspacepath),
