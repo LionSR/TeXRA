@@ -350,7 +350,7 @@ export const openToolUse = Effect.fn('toolUse.open')(
       const state = yield* run.entry.enter((alongside) =>
         cell.append(born, alongside),
       );
-      run.callbacks.onProgress?.({ kind: 'started' });
+      run.onProgress?.({ kind: 'started' });
       return { cell, activation: state.commit };
     }
     // Keep preparation interruptible inside the masked acquire.
@@ -431,7 +431,7 @@ export const openToolUse = Effect.fn('toolUse.open')(
     const state = yield* run.entry.enter((alongside) =>
       cell.append(rows, alongside),
     );
-    run.callbacks.onProgress?.({ kind: 'started' });
+    run.onProgress?.({ kind: 'started' });
     return { cell, activation: state.commit };
   },
 );
@@ -663,7 +663,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             });
       if (turn.outcome === 'completed') {
         const cost = state.usage.cost;
-        run.callbacks.onProgress?.({
+        run.onProgress?.({
           kind: 'overview',
           toolCallCount: state.toolCalls,
           filesChanged: [...state.edited],

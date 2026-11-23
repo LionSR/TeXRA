@@ -101,7 +101,6 @@ function runLayer(
       agentRunLayer(ctx, {
         modelConfig: buildTestModelConfig(),
         tools,
-        callbacks: {},
       }),
     ),
     Layer.provideMerge(Layer.succeedContext(session)),
