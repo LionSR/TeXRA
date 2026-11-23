@@ -243,28 +243,43 @@ const openProjects = Effect.fn('server.openProjects')(function* (
       Effect.sync(() => open.set(session.roots.storage, session)),
       () => Effect.sync(() => open.delete(session.roots.storage)),
     );
-    // A run at work holds the project through a lease of the project's
-    // own (not one waiting for its next message, which the service's close
-    // stops, resumable), and so does a run's wake not yet due, so its turn
-    // runs on time with no window open. The lease closes before the count
-    // drops, and the view ending counts as idle.
-    const held = Effect.acquireRelease(count(0, 1), () => count(0, -1)).pipe(
-      // The entry exists: this runs inside its own lookup's scope.
-      Effect.andThen(RcMap.get(projects, root)),
-      Effect.orDie,
-      Effect.andThen(Effect.never),
-      Stream.fromEffect,
-      Stream.scoped,
+    /** A lease of the project's own while `holds` reads true of the view,
+     *  taken after `taken` and given back with it; the view ending counts
+     *  as not holding. */
+    const holdWhile = (
+      holds: () => boolean,
+      taken: Effect.Effect<void, never, Scope.Scope>,
+    ) => {
+      const held = taken.pipe(
+        // The entry exists: this runs inside its own lookup's scope.
+        Effect.andThen(RcMap.get(projects, root)),
+        Effect.orDie,
+        Effect.andThen(Effect.never),
+        Stream.fromEffect,
+        Stream.scoped,
+      );
+      return Effect.forkScoped(
+        session.view.changes.pipe(
+          Stream.map(holds),
+          Stream.concat(Stream.succeed(false)),
+          Stream.changes,
+          Stream.switchMap((busy) => (busy ? held : Stream.empty)),
+          Stream.runDrain,
+        ),
+      );
+    };
+    // A run at work holds the project and counts as working (not one
+    // waiting for its next message, which the service's close stops,
+    // resumable): the count is what a drain waits on, so it moves with the
+    // work alone. The lease closes before the count drops.
+    yield* holdWhile(
+      () => runsAtWork(session) > 0,
+      Effect.acquireRelease(count(0, 1), () => count(0, -1)),
     );
-    yield* Effect.forkScoped(
-      session.view.changes.pipe(
-        Stream.map(() => runsAtWork(session) > 0 || holdsWake(session)),
-        Stream.concat(Stream.succeed(false)),
-        Stream.changes,
-        Stream.switchMap((busy) => (busy ? held : Stream.empty)),
-        Stream.runDrain,
-      ),
-    );
+    // A run's wake not yet due holds the project too, so its turn runs on
+    // time with no window open; it is not work, so a drain does not wait
+    // for it.
+    yield* holdWhile(() => holdsWake(session), Effect.void);
     return session;
   });
   const projects: RcMap.RcMap<string, LocalSession, Error> = yield* RcMap.make({
