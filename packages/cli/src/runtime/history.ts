@@ -419,9 +419,8 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.label,
-    // The model the run is on, as the listing derives it from the run's
-    // snapshots; the record keeps the model it was launched with.
-    model: entry.model ?? config.model,
+    // The listing's record is the run's newest config: the model it is on.
+    model: config.model,
     outcome: entry.outcome,
     continuation: entry.continuation,
     inputBasename,
