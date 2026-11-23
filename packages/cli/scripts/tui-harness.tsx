@@ -885,7 +885,6 @@ function makeLongToolOutput(): NormalizedToolUse {
     ).join('\n'),
     userInstructionText: '',
     input: { command: 'python3 enumerate_triples.py' },
-    isUserFeedback: false,
     headerSummary: 'python3 enumerate_triples.py',
     status: TOOL_CALL_STATUS.COMPLETED,
   };
@@ -941,7 +940,6 @@ function makeAssistantToolPreambleEntries(): HarnessLogRow[] {
         outputText: '',
         userInstructionText: '',
         input: { path: 'README.md' },
-        isUserFeedback: false,
         headerSummary: 'Read README.md',
         status: TOOL_CALL_STATUS.COMPLETED,
       },
@@ -1010,7 +1008,6 @@ function makeRejectedBashToolEntries(): HarnessLogRow[] {
       outputText: message,
       userInstructionText: '',
       input: { command },
-      isUserFeedback: false,
       headerSummary: command,
       status: TOOL_CALL_STATUS.FAILED,
     }),

@@ -186,13 +186,13 @@ export interface ToolRowModel {
   readonly output: ToolRowOutput;
   /** Untruncated error text. Named `preview` because hosts cut it. */
   readonly errorPreview?: TranscriptText;
-  /** The instruction a user typed when rejecting or redirecting the call. */
+  /** The instruction a user typed when rejecting or redirecting the call:
+   *  present exactly when the card reads as the user's feedback. */
   readonly userInstruction?: TranscriptText;
   /** A completed shell or MCP call that printed nothing: "it ran and printed
    *  nothing" is a result for a call whose output is the point. */
   readonly showsNoOutputMarker: boolean;
   readonly status?: ToolRowStatus;
-  readonly isUserFeedback: boolean;
   /** The limit a running call is stopped at, the one its tool enforces;
    *  absent once it finished or was interrupted, and on a call with no
    *  limit. */
@@ -409,7 +409,7 @@ export function toolRowModel(
   // A user-feedback row shows the instruction, not the tool's error text: the
   // "error" is the user's own rejection.
   const errorPreview =
-    normalized.errorText && !normalized.isUserFeedback
+    normalized.errorText && !normalized.userInstructionText
       ? transcriptText(normalized.errorText)
       : undefined;
   const userInstruction = normalized.userInstructionText
@@ -438,7 +438,6 @@ export function toolRowModel(
       (toolDisplayKind(normalized.toolName) === 'bash' ||
         isMcpToolName(normalized.toolName)),
     ...(status ? { status } : {}),
-    isUserFeedback: normalized.isUserFeedback,
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     ...(normalized.exitCode !== undefined
       ? { exitCode: normalized.exitCode }

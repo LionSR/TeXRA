@@ -163,7 +163,6 @@ export type NormalizedToolUse = {
   exitCode?: number;
   userInstructionText: string;
   input: unknown;
-  isUserFeedback: boolean;
   headerSummary: string;
   status?: ToolCallStatus;
   card?: ToolCard;

@@ -23,7 +23,6 @@ function toolUse(
     errorText: '',
     outputText: '',
     userInstructionText: '',
-    isUserFeedback: false,
     headerSummary: '',
     status: TOOL_CALL_STATUS.COMPLETED,
     toolName,
@@ -83,7 +82,6 @@ describe('CLI tool display lines', () => {
           status: TOOL_CALL_STATUS.FAILED,
           errorText: 'Rejected by user',
           userInstructionText: 'keep the build folder',
-          isUserFeedback: true,
         },
       ),
     );

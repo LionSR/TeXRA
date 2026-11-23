@@ -67,7 +67,7 @@ export function toolCallTexts(
   log: ToolCallLog,
 ): Pick<
   NormalizedToolUse,
-  'errorText' | 'userInstructionText' | 'isUserFeedback' | 'headerSummary'
+  'errorText' | 'userInstructionText' | 'headerSummary'
 > {
   const { result } = log;
   const summaryText = trimmed(result ? result.summary : log.summary);
@@ -77,12 +77,10 @@ export function toolCallTexts(
   const userInstructionText = trimmed(
     result ? result.userInstruction : log.userInstruction,
   );
-  const isUserFeedback = userInstructionText.length > 0;
   return {
     errorText,
     userInstructionText,
-    isUserFeedback,
-    headerSummary: summaryText || (isUserFeedback ? '' : errorText),
+    headerSummary: summaryText || (userInstructionText ? '' : errorText),
   };
 }
 
