@@ -225,7 +225,13 @@ function renderActionButtonParts({
     return icon ? waIcon(icon, { slot }) : nothing;
   };
   let content: TemplateResult | typeof nothing = nothing;
-  if (text) {
+  if (text && label !== undefined && label !== text) {
+    // A longer accessible name than the visible text: the inner native
+    // button is named by its slotted text, not by the host's `aria-label`,
+    // so the name goes in as hidden text and the short text is skipped.
+    content = html`${glyph('start')}<span aria-hidden="true">${text}</span
+      ><span class="action-button-label">${label}</span>`;
+  } else if (text) {
     content = html`${glyph('start')}${text}`;
   } else if (icon || expanded !== undefined) {
     content = html`${glyph()}<span class="action-button-label"
