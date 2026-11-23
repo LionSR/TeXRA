@@ -151,22 +151,22 @@ function verifyPackagedDocs(vsixPath, entries, failures) {
     '',
   );
 
-  for (const [sourceName, packagedName] of [
-    ['README.md', 'readme.md'],
-    ['CHANGELOG.md', 'changelog.md'],
+  for (const [sourcePath, packagedName] of [
+    [path.join(extensionDir, 'README.md'), 'readme.md'],
+    [path.join(rootDir, 'CHANGELOG.md'), 'changelog.md'],
   ]) {
     const entryPath = `extension/${packagedName}`;
     assertEntryExists(entries, entryPath, failures);
     if (!entries.has(entryPath)) continue;
 
     const expected = normalizePackagedMarkdown(
-      fs.readFileSync(path.join(rootDir, sourceName), 'utf8'),
+      fs.readFileSync(sourcePath, 'utf8'),
       repositoryUrl,
     );
     const actual = readVsixEntry(vsixPath, entryPath).toString('utf8');
     assert(
       expected === actual,
-      `VSIX ${packagedName} does not match the repository ${sourceName}`,
+      `VSIX ${packagedName} does not match ${path.relative(rootDir, sourcePath)}`,
       failures,
     );
   }

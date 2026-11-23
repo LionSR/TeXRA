@@ -48,7 +48,7 @@ runs directly from your machine to your chosen provider with no TeXRA account.
 Task history, settings (`.texra/config.json` and `~/.texra`), and credentials
 (`~/.texra/secrets/`) are shared with the
 [VS Code extension](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
-and the upcoming [Desktop App](https://texra.ai/guide/desktop).
+and the [Desktop App](https://github.com/texra-ai/texra-desktop-releases/releases).
 
 ## Documentation & Support
 
