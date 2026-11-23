@@ -406,7 +406,6 @@ export {
   UserQuestionAnswersSchema,
   type UserQuestionRequest,
   type UserQuestionPrompt,
-  UserQuestionPromptSchema,
   type WorktreeInfo,
   ToolDependencyStatusSchema,
   type ToolDependencyStatus,

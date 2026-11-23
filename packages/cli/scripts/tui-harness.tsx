@@ -1253,6 +1253,8 @@ function makeUserQuestionPayload(): UserQuestionRequest {
         header: 'Direction',
         question:
           'Which proof direction should the agent prioritize for the next pass?',
+        multiSelect: false,
+        allowFreeText: false,
         options: [
           {
             label: 'Finite check',
@@ -1272,6 +1274,7 @@ function makeUserQuestionPayload(): UserQuestionRequest {
         header: 'Include',
         question: 'Which supporting details should be included?',
         multiSelect: true,
+        allowFreeText: false,
         options: [
           {
             label: 'Enumeration table',
@@ -1290,6 +1293,7 @@ function makeUserQuestionPayload(): UserQuestionRequest {
       {
         header: 'Note',
         question: 'Add a short instruction for the final write-up.',
+        multiSelect: false,
         allowFreeText: true,
         options: [
           {

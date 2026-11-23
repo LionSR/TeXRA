@@ -10,8 +10,7 @@ import {
 import {
   formatResultCount,
   UserQuestionAnswersSchema,
-  UserQuestionPromptSchema,
-  type UserQuestionRequest,
+  type UserQuestionPrompt,
 } from '@texra-ai/worldline/schemas';
 
 const CHANNEL = 'UserQuestionTool';
@@ -21,8 +20,45 @@ function withDetail(base: string, detail: string | undefined): string {
   return detail ? `${base}: ${detail}` : `${base}.`;
 }
 
+const QuestionInputSchema = Schema.Struct({
+  question: Schema.NonEmptyString,
+  header: Schema.optional(
+    Schema.NullOr(Schema.String.check(Schema.isMaxLength(12))),
+  ),
+  options: Schema.Array(
+    Schema.Struct({
+      label: Schema.NonEmptyString,
+      description: Schema.optional(Schema.NullOr(Schema.String)),
+    }),
+  )
+    .check(Schema.isMinLength(2))
+    .check(Schema.isMaxLength(4)),
+  multiSelect: Schema.optional(Schema.NullOr(Schema.Boolean)),
+  allowFreeText: Schema.optional(Schema.NullOr(Schema.Boolean)),
+});
+
+/** The question as its request stores it: no nulls, both switches stated. */
+function storedQuestion({
+  question,
+  header,
+  options,
+  multiSelect,
+  allowFreeText,
+}: typeof QuestionInputSchema.Type): UserQuestionPrompt {
+  return {
+    question,
+    ...(header != null && { header }),
+    options: options.map(({ label, description }) => ({
+      label,
+      ...(description != null && { description }),
+    })),
+    multiSelect: multiSelect ?? false,
+    allowFreeText: allowFreeText ?? false,
+  };
+}
+
 const AskUserQuestionInputSchema = Schema.Struct({
-  questions: Schema.Array(UserQuestionPromptSchema)
+  questions: Schema.Array(QuestionInputSchema)
     .check(Schema.isMinLength(1))
     .check(Schema.isMaxLength(3))
     // The answers are keyed by question text, so two questions with one
@@ -64,15 +100,14 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     withLogChannel(CHANNEL),
   );
 
-  const permission: UserQuestionRequest = {
-    requestId,
-    questions: input.questions,
-    context: input.context ?? undefined,
-    runId,
-  };
   const { decision } = yield* requests.open({
     kind: 'userQuestion',
-    data: permission,
+    data: {
+      requestId,
+      questions: input.questions.map(storedQuestion),
+      ...(input.context != null && { context: input.context }),
+      runId,
+    },
   });
 
   switch (decision.action) {

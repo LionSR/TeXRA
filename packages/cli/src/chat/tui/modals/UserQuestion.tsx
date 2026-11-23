@@ -320,7 +320,7 @@ function QuestionShell(props: QuestionShellProps): React.JSX.Element {
  */
 function ChoiceQuestion(props: QuestionVariantProps): React.JSX.Element {
   const [selected, setSelected] = useState<readonly string[]>([]);
-  const multi = props.question.multiSelect === true;
+  const multi = props.question.multiSelect;
   const options = props.question.options;
   const maxVisibleOptions = userQuestionChoiceRowsBudget({
     availableRows: props.availableRows,
@@ -350,7 +350,7 @@ function ChoiceQuestion(props: QuestionVariantProps): React.JSX.Element {
         items={options.map((option) => ({
           value: option.label,
           label: option.label,
-          description: option.description ?? undefined,
+          description: option.description,
         }))}
         maxVisibleItems={maxVisibleOptions}
         selectedValues={multi ? selectedValues : undefined}
