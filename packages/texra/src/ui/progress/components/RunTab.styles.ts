@@ -38,11 +38,6 @@ export const runTabStyles = css`
     overflow: hidden;
   }
 
-  /* Pending approval uses the warning glyph and the warning tone's colour. */
-  .tab-container.has-pending-approval {
-    --tone-color: var(--color-warning);
-  }
-
   .tab-select-tooltip-anchor {
     flex: 1;
     display: flex;
@@ -131,7 +126,7 @@ export const runTabStyles = css`
     ${truncateDeclarations}
   }
 
-  .tone-running:not(.has-pending-approval) .tab-status-icon {
+  .tone-running .tab-status-icon {
     font-size: 8px;
   }
 
@@ -203,7 +198,7 @@ export const runTabStyles = css`
     min-width: 0;
     ${truncateDeclarations}
     font-size: var(--font-size-xs);
-    color: var(--color-warning);
+    color: var(--tone-color);
   }
 
   /* A row at rest is its title and status glyph; its status detail (the
@@ -288,10 +283,6 @@ export const runTabStyles = css`
   }
 
   @media (forced-colors: active) {
-    .tab-container.has-pending-approval {
-      --tone-color: Highlight;
-    }
-
     /* System selection colors override authored status hues. The focused
        button keeps its native forced-color outline. */
     .tab-container.is-active {

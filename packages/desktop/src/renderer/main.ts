@@ -422,7 +422,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
     ${
       sidebarCollapsedWithPendingApproval
         ? html`<span
-            class="status-dot shell-header-pending-approval-badge"
+            class="status-dot shell-header-pending-approval-badge tone-warning"
             aria-hidden="true"
           ></span>`
         : nothing

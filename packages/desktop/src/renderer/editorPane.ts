@@ -462,7 +462,7 @@ export function createEditorPane(
           ${
             failed
               ? html`<wa-tree-item
-                  class="desktop-editor-tree-status is-error"
+                  class="desktop-editor-tree-status tone-danger"
                   disabled
                   >Could not load folder</wa-tree-item
                 >`

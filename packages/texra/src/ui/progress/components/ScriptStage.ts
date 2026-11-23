@@ -124,8 +124,8 @@ const scriptStageStyles = css`
     flex: 1 1 0;
   }
 
-  .row-last.is-error {
-    color: var(--color-error);
+  :is(.row-last, .row-rejected):is(.tone-danger, .tone-warning) {
+    color: var(--tone-color);
   }
 
   .row-meta {
@@ -154,7 +154,6 @@ const scriptStageStyles = css`
   .row-rejected {
     flex: 0 1 auto;
     font-size: var(--font-size-xs);
-    color: var(--color-warning);
   }
 
   .row-actions {
@@ -279,14 +278,14 @@ export class ScriptStage extends LitElement {
       <span
         class=${classMap({
           'row-last': true,
-          'is-error': call.detail?.kind === 'error',
+          'tone-danger': call.detail?.kind === 'error',
         })}
         ><bdi dir="auto">${last}</bdi></span
       >
       ${
         rejected === undefined
           ? nothing
-          : html`<span class="row-rejected" role="status"
+          : html`<span class="row-rejected tone-warning" role="status"
               >${requestErrorText(rejected)}</span
             >`
       }

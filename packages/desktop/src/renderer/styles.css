@@ -831,8 +831,8 @@ wa-input.desktop-command-palette-input {
   padding: var(--row-padding);
 }
 
-.desktop-editor-tree-status.is-error {
-  color: var(--color-error);
+.desktop-editor-tree-status.tone-danger {
+  color: var(--tone-color);
 }
 
 /* Each row renders one path segment. Preserve its reading direction and

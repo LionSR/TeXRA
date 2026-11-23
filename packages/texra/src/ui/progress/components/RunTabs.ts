@@ -13,8 +13,9 @@ import {
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
-import { runListSections, runStatus } from '@ui/copy/runStatus';
+import { runListSections, runSectionTone, runStatus } from '@ui/copy/runStatus';
 import { overlineDeclarations } from '@ui/styles/commonViewStyles';
+import { toneStyles } from '@ui/styles/toneStyles';
 import { TexraElement } from '@ui/litBase';
 
 // Side-effect imports - register WA components
@@ -46,6 +47,7 @@ export class RunTabs extends TexraElement {
     TexraElement.styles,
     layoutStyles,
     runTabsContainerStyles,
+    toneStyles,
     css`
       .group-heading {
         display: flex;
@@ -58,8 +60,8 @@ export class RunTabs extends TexraElement {
         font-weight: var(--font-weight-normal);
         color: var(--color-text-secondary);
       }
-      .group-heading:is(.group-waiting, .group-interrupted) {
-        color: var(--color-warning);
+      .group-heading.tone-warning {
+        color: var(--tone-color);
       }
     `,
   ];
@@ -201,7 +203,7 @@ export class RunTabs extends TexraElement {
     } else {
       body = html`${runListSections(top).map(
         ({ section, label, runs }) =>
-          html`<div class="group-heading group-${section}">
+          html`<div class="group-heading tone-${runSectionTone(section)}">
               <span>${label}</span>
               <span class="group-count">${runs.length}</span>
             </div>

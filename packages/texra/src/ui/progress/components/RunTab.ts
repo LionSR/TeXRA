@@ -77,12 +77,11 @@ function rowStatus(run: RunView): {
   const status = runStatus(run);
   if (run.approval === 'none')
     return { ...status, waiting: false, shown: status.tone !== 'neutral' };
+  const look = runStatusLook('waitingOnUser');
   return {
     word: runStatusLabel('waitingOnUser'),
-    // The row keeps its run's own tone; only its word and glyph say a
-    // request waits under it.
-    tone: status.tone,
-    glyph: statusGlyph(runStatusLook('waitingOnUser')),
+    tone: look.tone,
+    glyph: statusGlyph(look),
     waiting: true,
     shown: true,
   };
@@ -238,7 +237,6 @@ export class RunTab extends LitElement {
           'tab-container': true,
           'is-active': this.active,
           [`tone-${status.tone}`]: true,
-          'has-pending-approval': status.waiting,
           'is-unseen': this.unseen,
         })}
       >
@@ -351,7 +349,7 @@ export class RunTab extends LitElement {
               >
               ${waIcon(this.decorator.icon, { id: 'run-tab-kind', className: 'run-kind' })}
             </div>
-            ${notice ? html`<div class="tab-detail">${notice}</div>` : nothing}
+            ${notice ? html`<div class="tab-detail tone-warning">${notice}</div>` : nothing}
           </button>
           ${status.shown ? html`<wa-tooltip for="run-tab-status">${status.word}</wa-tooltip>` : nothing}
         </div>

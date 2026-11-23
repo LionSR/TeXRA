@@ -136,10 +136,6 @@ export class RunHeader extends TexraElement {
         margin: 0 var(--wa-space-3xs);
       }
 
-      .stop-button {
-        color: var(--color-error);
-      }
-
       .menu-status {
         padding: var(--wa-space-2xs) var(--wa-space-s) var(--wa-space-3xs);
         font-size: var(--font-size-xs);
@@ -326,7 +322,6 @@ export class RunHeader extends TexraElement {
                 icon: 'circle-stop',
                 label: 'Stop',
                 tooltip: 'Stop',
-                className: 'stop-button',
                 onClick: () =>
                   this.dispatchEvent(
                     SessionUiEvents.runtime({

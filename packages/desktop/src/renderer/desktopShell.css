@@ -31,7 +31,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   position: absolute;
   right: 0;
   top: 0;
-  --dot-color: var(--color-warning);
+  --dot-color: var(--tone-color);
   pointer-events: none;
 }
 .shell-workspace-project {
