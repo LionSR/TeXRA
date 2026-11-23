@@ -371,7 +371,7 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
         : [];
       const expectedOutputFiles = declaredOutputFiles.length
         ? declaredOutputFiles
-        : (cliLaunchOutput(config).expectedOutputFiles ?? undefined);
+        : cliLaunchOutput(config).expectedOutputFiles;
       // The task's documents are its documents row, read from the
       // store, which holds every row the run committed once its end is.
       const outputResult = yield* Effect.result(

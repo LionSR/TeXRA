@@ -119,6 +119,8 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
   const rows = modelOptionsFrom(options);
 
   const items: ModelSelectionItem[] = [];
+  /** The current fast-first-response models (price-based), by name. */
+  const leading = new Set<string>();
   for (const [index, decided] of options.entries()) {
     const option = rows[index];
     const name = decided.model;
@@ -136,23 +138,23 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
       deprecated: config.deprecated ?? false,
       contextWindow: option.context,
       cost: option.cost,
-      isFast: isFastFirstResponseModel(config.inputPrice),
       isExpensive: isExpensiveModel(config.outputPrice),
       availability: option.availability,
       usageRoute: option.usageRoute,
     };
 
+    if (!item.deprecated && isFastFirstResponseModel(config.inputPrice))
+      leading.add(name);
     const reasoning = reasoningChoice(decided);
     items.push(reasoning === undefined ? item : { ...item, reasoning });
   }
 
   // Name order, except that a current fast-first-response model leads its
   // provider's list; the Models tab groups by provider in this order.
-  const leads = (item: ModelSelectionItem): boolean =>
-    !item.deprecated && item.isFast === true;
   return items.toSorted(
     (a, b) =>
-      Number(leads(b)) - Number(leads(a)) || a.name.localeCompare(b.name),
+      Number(leading.has(b.name)) - Number(leading.has(a.name)) ||
+      a.name.localeCompare(b.name),
   );
 });
 
