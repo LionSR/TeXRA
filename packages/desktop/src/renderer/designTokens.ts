@@ -9,7 +9,7 @@
 // in a layer: any unlayered renderer rule then refines it, whatever order
 // the sheets load in.
 import { designTokens, visuallyHiddenStyles } from '@ui/styles';
-import { overlineStyles } from '@ui/styles/commonViewStyles';
+import { overlineStyles, truncateStyles } from '@ui/styles/commonViewStyles';
 import { placeholderStyles } from '@ui/wa/emptyState';
 import { lineChangeStatsStyles, noticeStyles } from '@ui/styles/surfaceStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
@@ -37,6 +37,7 @@ shared.replaceSync(
     lineChangeStatsStyles,
     placeholderStyles,
     overlineStyles,
+    truncateStyles,
   ]
     .map((sheet) => sheet.cssText)
     .join('\n')}\n}`,

@@ -72,7 +72,7 @@ async function expectForm(
   page: Page,
   form: { readonly instruction: string; readonly context: readonly string[] },
 ): Promise<void> {
-  await expect(page.locator('#composer-model')).toHaveText(
+  await expect(page.locator('#composer-model')).toContainText(
     'GPT-6.1 Sol (high)',
   );
   await expect(page.locator('#composer-text')).toHaveValue(form.instruction);

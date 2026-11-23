@@ -45,6 +45,7 @@ import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
+  renderLabeledActionButtonParts,
 } from '@ui/wa/actionButtons';
 import { isCommitEnter } from '@ui/wa/keyActivation';
 import { selectedItemValue } from '@ui/wa/selectTemplates';
@@ -470,30 +471,24 @@ export class SessionComposer extends TexraElement {
   }
 
   private renderChip(menu: ChipMenu): TemplateResult {
+    const trigger = renderLabeledActionButtonParts({
+      id: menu.id,
+      slot: 'trigger',
+      kind: 'ghost',
+      className: 'chip-trigger is-compact',
+      icon: menu.icon,
+      // prettier-ignore
+      text: html`<span class="chip-label">${menu.label}</span>`,
+      label: `${menu.title}: ${menu.label}`,
+      tooltip: menu.description ?? menu.title,
+      caret: true,
+    });
     return html`<wa-dropdown
         placement="top-start"
         @wa-select=${(event: WaSelectEvent) =>
           menu.onSelect(selectedItemValue(event))}
-      >
-        <wa-button
-          slot="trigger"
-          id=${menu.id}
-          class="chip-trigger btn-ghost is-compact"
-          appearance="plain"
-          variant="neutral"
-          size="s"
-          type="button"
-          with-caret
-          aria-label=${`${menu.title}: ${menu.label}`}
-          >${waIcon(menu.icon, { slot: 'start' })}<span class="chip-label"
-            >${menu.label}</span
-          ></wa-button
-        >
-        ${menu.items}
-      </wa-dropdown>
-      <wa-tooltip for=${menu.id}
-        >${menu.description ?? menu.title}</wa-tooltip
-      >`;
+        >${trigger.button} ${menu.items}</wa-dropdown
+      >${trigger.tooltip}`;
   }
 
   private renderChips(): TemplateResult {

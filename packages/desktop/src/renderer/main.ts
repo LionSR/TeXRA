@@ -422,7 +422,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
     ${
       sidebarCollapsedWithPendingApproval
         ? html`<span
-            class="status-dot shell-header-pending-approval-badge"
+            class="status-dot shell-header-pending-approval-badge tone-warning"
             aria-hidden="true"
           ></span>`
         : nothing
@@ -431,7 +431,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
   return html`
     <header class="shell-workspace-toolbar">
       ${sidebarToggle}
-      <span class="shell-workspace-project"
+      <span class="shell-workspace-project truncate"
         >${activeProject?.display.name ?? 'TeXRA'}</span
       >
       <nav class="shell-view-switch" aria-label="Project views">

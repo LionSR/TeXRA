@@ -285,7 +285,9 @@ export function createProjectWorkbench(options: {
     const footer = document.createElement('footer');
     footer.className = 'shell-editor-toolbar';
     render(
-      html`<span class="shell-editor-path" title=${target}>${target}</span>
+      html`<span class="shell-editor-path truncate" title=${target}
+          >${target}</span
+        >
         ${renderLabeledActionButton({
           text: 'Save',
           icon: 'floppy-disk',

@@ -75,6 +75,13 @@ export const overlineStyles: CSSResult = css`
   }
 `;
 
+/** {@link truncateDeclarations} as a class, for the desktop's light DOM. */
+export const truncateStyles: CSSResult = css`
+  .truncate {
+    ${truncateDeclarations}
+  }
+`;
+
 /**
  * Busy state for an icon action button: a spinner overlays the button while
  * it works, instead of taking its own slot. The button stays in the flow

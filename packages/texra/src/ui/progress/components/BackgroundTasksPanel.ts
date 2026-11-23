@@ -37,7 +37,11 @@ import { dispatchedChildren } from '@texra-ai/worldline/transcript';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TickerController } from '@ui/litControllers/TickerController';
-import { runStatus, sectionCountLabel } from '@ui/copy/runStatus';
+import {
+  runStatus,
+  runStatusLook,
+  sectionCountLabel,
+} from '@ui/copy/runStatus';
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
@@ -152,7 +156,7 @@ export class BackgroundTasksPanel extends TexraElement {
         color: var(--color-text-secondary);
       }
       .task-elapsed.is-approval {
-        color: var(--color-warning);
+        color: var(--tone-color);
       }
 
       .task-chevron {
@@ -323,7 +327,10 @@ function renderClock(
   nowMs: number,
 ): TemplateResult {
   if (pendingApproval) {
-    return html`<span class="task-elapsed is-approval">approval</span>`;
+    return html`<span
+      class="task-elapsed is-approval tone-${runStatusLook('waitingOnUser').tone}"
+      >approval</span
+    >`;
   }
   if (child.runStartedAt !== null) {
     return html`<span class="task-elapsed"

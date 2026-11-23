@@ -190,7 +190,9 @@ export function createLogsPane(): LogsPaneController {
           <time class="desktop-log-entry-time" datetime=${entry.timestamp ?? ''}
             >${entry.timestampLabel}</time
           >
-          <span class="desktop-log-entry-preview">${entry.summary}</span>
+          <span class="desktop-log-entry-preview truncate"
+            >${entry.summary}</span
+          >
         </div>
         <pre class="desktop-log-entry-content">${entry.raw}</pre>
       </wa-details>
@@ -231,7 +233,7 @@ export function createLogsPane(): LogsPaneController {
         <header class="desktop-log-viewer-header">
           <div>
             <h2>Desktop logs</h2>
-            <p>${state.meta}</p>
+            <p class="truncate">${state.meta}</p>
           </div>
           <div class="desktop-log-viewer-actions">
             ${action('arrows-rotate', 'Refresh', requestSnapshot)}

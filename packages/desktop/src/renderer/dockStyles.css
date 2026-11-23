@@ -77,9 +77,6 @@
 }
 .shell-dock-tab-label {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .shell-dock-tab-close {
   display: flex;

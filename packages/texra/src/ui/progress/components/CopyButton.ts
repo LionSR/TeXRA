@@ -9,21 +9,24 @@
  */
 
 // Third-party imports
-import { html, LitElement, type TemplateResult } from 'lit';
+import { LitElement, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
 import { isActivationKey } from '@ui/wa/keyActivation';
 
 /** The three places a template puts a Copy button, each with its look. */
 type CopyButtonLook = 'icon' | 'labeled' | 'code';
 
-const LOOK_CLASS: Readonly<Record<CopyButtonLook, string>> = {
-  icon: 'action-icon-button banner-content-copy',
-  labeled: 'action-button message-copy banner-content-copy',
-  code: 'action-icon-button',
+const LOOK_CLASS: Readonly<Record<CopyButtonLook, string | undefined>> = {
+  icon: 'banner-content-copy',
+  labeled: 'message-copy banner-content-copy',
+  code: undefined,
 };
 
 /**
@@ -53,6 +56,10 @@ export class CopyButton extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this.style.display = 'contents';
+    // The host is the button's only light-DOM parent, so its keydown
+    // reaches here before any enclosing summary. Re-adding one listener on
+    // reconnect is a no-op.
+    this.addEventListener('keydown', stopSummaryToggleKeydown);
   }
 
   /**
@@ -69,12 +76,17 @@ export class CopyButton extends LitElement {
   override render(): TemplateResult {
     const { copied } = this.copier;
     const title = copied ? 'Copied!' : this.label;
-    const content =
-      this.look === 'labeled'
-        ? html`${copied ? 'Copied' : 'Copy'}`
-        : waIcon('copy');
-    // prettier-ignore
-    return html`<wa-button class="${LOOK_CLASS[this.look]}${copied ? ' copy-success' : ''}" appearance="plain" variant="neutral" size="s" type="button" title=${title} aria-label=${title} @click=${this.handleClick} @keydown=${stopSummaryToggleKeydown}>${content}</wa-button>`;
+    const className = [LOOK_CLASS[this.look], copied ? 'copy-success' : '']
+      .filter(Boolean)
+      .join(' ');
+    const shared = { title, className, onClick: this.handleClick };
+    return this.look === 'labeled'
+      ? renderLabeledActionButton({
+          ...shared,
+          text: copied ? 'Copied' : 'Copy',
+          label: title,
+        })
+      : renderIconActionButton({ ...shared, icon: 'copy', label: title });
   }
 }
 

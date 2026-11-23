@@ -128,7 +128,9 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
     render(
       html`
         ${waIcon(WORKBENCH_KIND_META[tab.kind].icon)}
-        <span class="shell-dock-tab-label" title=${tab.target ?? tab.title}
+        <span
+          class="shell-dock-tab-label truncate"
+          title=${tab.target ?? tab.title}
           >${tab.title}</span
         >
         ${actions.isDirty(id) ? html`<span class="status-dot shell-dock-dirty" role="img" aria-label="Unsaved changes"></span>` : nothing}

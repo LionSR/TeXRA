@@ -81,7 +81,7 @@ export function createPdfPane(options: {
     footer.className = 'shell-editor-toolbar';
     const path = filePathOf(tab.target ?? '');
     render(
-      html`<span class="shell-editor-path" title=${path}>${path}</span>
+      html`<span class="shell-editor-path truncate" title=${path}>${path}</span>
         ${renderLabeledActionButton({
           text: 'Open externally',
           icon: 'arrow-up-right-from-square',

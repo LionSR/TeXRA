@@ -1,4 +1,3 @@
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
@@ -209,38 +208,27 @@ export class OnboardingWelcomeCard extends TexraElement {
           </div>
           <div class="choices">
             <div class="choice">
-              <wa-button
-                id="onboardingChatGptButton"
-                class="btn-primary"
-                variant="brand"
-                appearance="filled"
-                size="m"
-                @click=${this.handleChatGpt}
-              >
-                ${waIcon('comments', { slot: 'start' })}
-                ${ONBOARDING_CHOICE_CHATGPT.label}
-                <span class="visually-hidden"
-                  >. ${ONBOARDING_CHOICE_CHATGPT.description}</span
-                >
-              </wa-button>
+              ${renderLabeledActionButton({
+                id: 'onboardingChatGptButton',
+                kind: 'primary',
+                icon: 'comments',
+                text: ONBOARDING_CHOICE_CHATGPT.label,
+                label: `${ONBOARDING_CHOICE_CHATGPT.label}. ${ONBOARDING_CHOICE_CHATGPT.description}`,
+                onClick: () => this.handleChatGpt(),
+              })}
               <span class="choice-description" aria-hidden="true">
                 ${ONBOARDING_CHOICE_CHATGPT.description}
               </span>
             </div>
             <div class="choice">
-              <wa-button
-                id="onboardingApiKeyButton"
-                class="btn-secondary"
-                appearance="outlined"
-                size="m"
-                @click=${this.handleApiKey}
-              >
-                ${waIcon('key', { slot: 'start' })}
-                ${ONBOARDING_CHOICE_API_KEY.label}
-                <span class="visually-hidden"
-                  >. ${ONBOARDING_CHOICE_API_KEY.description}</span
-                >
-              </wa-button>
+              ${renderLabeledActionButton({
+                id: 'onboardingApiKeyButton',
+                kind: 'secondary',
+                icon: 'key',
+                text: ONBOARDING_CHOICE_API_KEY.label,
+                label: `${ONBOARDING_CHOICE_API_KEY.label}. ${ONBOARDING_CHOICE_API_KEY.description}`,
+                onClick: () => this.handleApiKey(),
+              })}
               <span class="choice-description" aria-hidden="true">
                 ${ONBOARDING_CHOICE_API_KEY.description}
               </span>

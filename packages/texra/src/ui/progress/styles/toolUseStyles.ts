@@ -112,7 +112,7 @@ export const toolUseStyles = css`
 
   /* An open call on an interrupted run: stopped, waiting for Resume. */
   .tool-use-interrupted > .details-summary :is(wa-icon, .tool-interrupted) {
-    color: var(--color-warning);
+    color: var(--tone-color);
   }
 
   .tool-interrupted {

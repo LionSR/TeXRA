@@ -158,6 +158,7 @@ export function formatToolUseTemplate(
       'tool-use-in-progress': running,
       [`tone-${TOOL_STATUS.in_progress.tone}`]: running,
       'tool-use-interrupted': stopped,
+      [`tone-${TOOL_STATUS.interrupted.tone}`]: stopped,
     },
     extraContent,
   });
