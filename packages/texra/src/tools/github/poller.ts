@@ -29,9 +29,9 @@ import {
   ghGet,
   type ConditionalResponse,
   type GitHubFailure,
+  type GitHubGetOptions,
   type GitHubServices,
 } from './githubClient';
-import { getNewestTimestamp } from './githubPaths';
 import { GITHUB_POLL_INTERVAL_MS } from './prSubscriptionConstants';
 import type { GhUser } from './prTypes';
 import { targetPath, type SubscriptionTarget } from './subscriptionTarget';
@@ -233,15 +233,30 @@ export function logWarning(
 export function pollGet<T>(
   path: string,
   schema: Schema.Codec<T, unknown>,
-  etag?: string,
+  options?: GitHubGetOptions,
 ): Effect.Effect<ConditionalResponse<T>, GitHubFailure, GitHubServices> {
-  return ghGet(path, schema, etag).pipe(
+  return ghGet(path, schema, options).pipe(
     Effect.catchTag('GitHubMalformedBodyError', (error) =>
       logWarning(`Skipping ${path} this poll: malformed body`, error).pipe(
         Effect.as({ status: 304 } as const),
       ),
     ),
   );
+}
+
+/** Newest `updated_at` (falling back to `created_at`) in a list, or undefined. */
+function getNewestTimestamp(
+  items: ReadonlyArray<{
+    created_at?: string | null;
+    updated_at?: string | null;
+  }>,
+): string | undefined {
+  let best: string | undefined;
+  for (const it of items) {
+    const t = it.updated_at ?? it.created_at;
+    if (t && (!best || t > best)) best = t;
+  }
+  return best;
 }
 
 /** A copy of `cache` with the same capacity, entries and recency order. */

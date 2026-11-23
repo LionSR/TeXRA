@@ -140,22 +140,41 @@ export const pollRepo = Effect.fn('github.pollRepo')(function* (
   const seedCursor = new Date(
     Date.parse(subscribedAt) - SEED_WINDOW_MS,
   ).toISOString();
-  const since = (cursor: string | undefined) =>
-    `&since=${encodeURIComponent(cursor ?? seedCursor)}`;
-  const issuePath = `/repos/${repo.owner}/${repo.repo}/issues/comments?per_page=${PER_PAGE}${since(prior?.issueComments?.sinceCursor)}&sort=updated&direction=asc`;
-  const reviewPath = `/repos/${repo.owner}/${repo.repo}/pulls/comments?per_page=${PER_PAGE}${since(prior?.reviewComments?.sinceCursor)}&sort=updated&direction=asc`;
-  // The /pulls list endpoint does NOT support `since`; we get the top
-  // 100 most-recently-updated PRs every tick. The `prStateByNumber`
-  // transition tracker is what makes that safe.
-  const pullsPath = `/repos/${repo.owner}/${repo.repo}/pulls?state=all&per_page=${PER_PAGE}&sort=updated&direction=desc`;
+  const repoPath = `/repos/${repo.owner}/${repo.repo}`;
+  const commentsSince = (cursor: string | undefined) => ({
+    params: {
+      per_page: PER_PAGE,
+      since: cursor ?? seedCursor,
+      sort: 'updated',
+      direction: 'asc',
+    },
+  });
 
   // Each list stands on its own: a malformed one is skipped for this poll
   // (`pollGet`) and keeps its cursor, so the same window is read again.
   const [issueRes, reviewRes, pullsRes] = yield* Effect.all(
     [
-      pollGet(issuePath, GhIssueCommentArraySchema),
-      pollGet(reviewPath, GhReviewCommentArraySchema),
-      pollGet(pullsPath, GhPullsListEntryArraySchema),
+      pollGet(
+        `${repoPath}/issues/comments`,
+        GhIssueCommentArraySchema,
+        commentsSince(prior?.issueComments?.sinceCursor),
+      ),
+      pollGet(
+        `${repoPath}/pulls/comments`,
+        GhReviewCommentArraySchema,
+        commentsSince(prior?.reviewComments?.sinceCursor),
+      ),
+      // The /pulls list endpoint does NOT support `since`; we get the top
+      // 100 most-recently-updated PRs every tick. The `prStateByNumber`
+      // transition tracker is what makes that safe.
+      pollGet(`${repoPath}/pulls`, GhPullsListEntryArraySchema, {
+        params: {
+          state: 'all',
+          per_page: PER_PAGE,
+          sort: 'updated',
+          direction: 'desc',
+        },
+      }),
     ],
     { concurrency: 3 },
   );

@@ -1,6 +1,7 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Option } from 'effect';
+import { HttpClientRequest } from 'effect/http';
 import { describe, expect } from 'vitest';
 
 // Local imports - platform
@@ -91,7 +92,7 @@ describe('pull request poll annotation drain', () => {
         );
         expect(
           github.requests.some((request) =>
-            request.url.endsWith(
+            Option.getOrThrow(HttpClientRequest.toUrl(request)).href.endsWith(
               '/check-runs/42/annotations?per_page=100&page=1',
             ),
           ),
