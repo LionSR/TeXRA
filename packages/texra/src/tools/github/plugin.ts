@@ -82,11 +82,16 @@ export const githubActivity: TexraPlugin = texraPlugin({
     description:
       'Watch GitHub repositories, pull requests, and issues for new comments, reviews, and CI updates.',
     setup: {
-      installGuide:
-        'Requires a git repository with a github.com remote and a GitHub personal access token:\n\n' +
-        '  1. Add a token in Settings → General → Git (or /config → GitHub token in the CLI), or export GITHUB_TOKEN / GH_TOKEN.\n' +
-        '  2. Scopes: "repo" for private repositories, "public_repo" for public only.',
-      installUrl: 'https://github.com/settings/tokens',
+      actions: [
+        {
+          kind: 'guide',
+          text:
+            'Requires a git repository with a github.com remote and a GitHub personal access token:\n\n' +
+            '  1. Add a token in Settings → General → Git (or /config → GitHub token in the CLI), or export GITHUB_TOKEN / GH_TOKEN.\n' +
+            '  2. Scopes: "repo" for private repositories, "public_repo" for public only.',
+        },
+        { kind: 'url', url: 'https://github.com/settings/tokens' },
+      ],
       configNotes: `Polls every ${Duration.format(Duration.millis(GITHUB_POLL_INTERVAL_MS))} (up to ${MAX_SUBSCRIPTIONS.pull} PRs and ${MAX_SUBSCRIPTIONS.repo} repos). Bot events are ignored.`,
       authNote: 'Uses personal access token',
     },

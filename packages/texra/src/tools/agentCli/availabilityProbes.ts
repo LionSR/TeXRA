@@ -141,7 +141,7 @@ export const probeSdkBinaryStatus = Effect.fn('probeSdkBinaryStatus')(
  * Only managers this command map names are probed, so a Linux box with both
  * apt and Linuxbrew still gets the brew command rather than npm.
  *
- * Definitions call this from an `installCommand` getter so the probe stays
+ * Definitions call this from an `actions` getter so the probe stays
  * lazy: it runs when an install action or a "not found" status reads the
  * command.
  */
