@@ -62,7 +62,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
     stores: SettingsStores,
   ) {
     if (registry.get(AGENT_TOOL_NAME) === undefined) return undefined;
-    const agents = (yield* scanPluginAgents).entries.map((entry) => ({
+    const agents = (yield* scanPluginAgents(stores)).entries.map((entry) => ({
       name: entry.name,
       // One line per agent: a blank line in a description would otherwise
       // read as the end of the list.
