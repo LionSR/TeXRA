@@ -175,7 +175,7 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
   if (result === null) return CliExitCode.Usage;
 
   // JSON/NDJSON consumers get the structured result (including
-  // `found:false`) so scripts can branch on it; text consumers get a stderr
+  // `status: 'not-found'`) so scripts can branch on it; text consumers get a stderr
   // error + Usage exit because the human-readable path can't render "not
   // found" usefully.
   if (result.deleted === 'one' && context.outputFormat === 'text') {
