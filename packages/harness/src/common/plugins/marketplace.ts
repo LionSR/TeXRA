@@ -16,6 +16,7 @@ import {
   containedPath,
   failPlugin,
   PLUGIN_MANIFEST_FILES,
+  PluginRequestError,
   readJsonFile,
   readPluginManifests,
 } from './pluginManifest';
@@ -116,9 +117,9 @@ export const readPluginCandidates = Effect.fn('readPluginCandidates')(
   function* (root: string, only: readonly string[]) {
     if ((yield* readPluginManifests(root)).length > 0) {
       if (only.length > 0) {
-        return yield* failPlugin(
-          `${root} is a single plugin, not a marketplace; drop --plugin.`,
-        );
+        return yield* new PluginRequestError({
+          message: `${root} is a single plugin, not a marketplace; drop --plugin.`,
+        });
       }
       return [{ kind: 'dir', dir: root }] satisfies PluginCandidate[];
     }
@@ -131,14 +132,14 @@ export const readPluginCandidates = Effect.fn('readPluginCandidates')(
       const names = marketplace.plugins.map((entry) => entry.name);
       const unknown = Arr.difference(only, names);
       if (unknown.length > 0) {
-        return yield* failPlugin(
-          `Marketplace ${marketplace.name} has no plugin named ${unknown.join(', ')}. It lists: ${names.join(', ')}.`,
-        );
+        return yield* new PluginRequestError({
+          message: `Marketplace ${marketplace.name} has no plugin named ${unknown.join(', ')}. It lists: ${names.join(', ')}.`,
+        });
       }
       if (only.length === 0 && names.length > 1) {
-        return yield* failPlugin(
-          `Marketplace ${marketplace.name} lists ${names.length} plugins (${names.join(', ')}). Choose with --plugin <name>.`,
-        );
+        return yield* new PluginRequestError({
+          message: `Marketplace ${marketplace.name} lists ${names.length} plugins (${names.join(', ')}). Choose with --plugin <name>.`,
+        });
       }
       const selected = marketplace.plugins.filter(
         (entry) => only.length === 0 || only.includes(entry.name),
