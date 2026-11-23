@@ -16,7 +16,11 @@ const vscodeIgnorePath = path.join(packageDir, '.vscodeignore');
 // Paths produced by the build from canonical repo-root sources. They do not
 // need to exist in the extension source tree, but verify-vsix-contents.mjs
 // still checks that the built VSIX includes them with matching hashes.
-const BUILD_TIME_PACKAGED_PATHS = new Set(['readme.md', 'changelog.md']);
+const BUILD_TIME_PACKAGED_PATHS = new Set(['changelog.md']);
+
+// vsce lowercases `README.md` to `readme.md` inside the VSIX; check the
+// canonical uppercase file in the extension source tree on case-sensitive hosts.
+const PACKAGED_SOURCE_PATHS = new Map([['readme.md', 'README.md']]);
 
 const REQUIRED_VSCODEIGNORE_LINES = [
   'src/**',
@@ -97,17 +101,18 @@ function verifyAssets(packageJson, failures) {
 
   for (const packagedPath of REQUIRED_PACKAGED_PATHS) {
     if (isBuildTimePackagedPath(packagedPath)) continue;
-    const absolutePath = path.join(packageDir, packagedPath);
+    const sourcePath = PACKAGED_SOURCE_PATHS.get(packagedPath) ?? packagedPath;
+    const absolutePath = path.join(packageDir, sourcePath);
     const exists = fs.existsSync(absolutePath);
     assert(
       exists,
-      `Required extension package path is missing: ${packagedPath}`,
+      `Required extension package path is missing: ${sourcePath}`,
       failures,
     );
     if (exists && fs.statSync(absolutePath).isDirectory()) {
       assert(
-        hasFiles(packagedPath),
-        `Required extension package directory is empty: ${packagedPath}`,
+        hasFiles(sourcePath),
+        `Required extension package directory is empty: ${sourcePath}`,
         failures,
       );
     }

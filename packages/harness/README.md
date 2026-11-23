@@ -1,66 +1,48 @@
-# Worldline (`@texra-ai/worldline`)
+<div align="center">
 
-An embeddable agent runtime in Effect, from [TeXRA](https://texra.ai): run an
-agent from a Node program and consume its trace as a stream.
+# Worldline
 
-> **0.x: the API may change in any minor release.** The package is versioned
-> on its own, not with the TeXRA app. The surface below is real and
-> type-checked against the packed tarball, but it is not yet a stability
-> promise; expect the gaps in [Current limits](#current-limits) to move.
+**Kill an agent with `SIGKILL` mid-workflow. Resume without re-running a single finished tool call.**<br />
+A durable, forkable agent runtime in Effect 4, backed by SQLite. Powers [TeXRA](https://texra.ai).
 
-## Install
+[![npm](https://img.shields.io/npm/v/@texra-ai/worldline?label=%40texra-ai%2Fworldline&color=6F387A&logo=npm&logoColor=white)](https://www.npmjs.com/package/@texra-ai/worldline)
+[![Effect](https://img.shields.io/badge/Effect-%5E4.1.3-270939?style=flat)](https://effect.website)
+[![Node.js](https://img.shields.io/badge/Node.js-22.22%2B_%7C_24.15%2B-339933?style=flat&logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![SQLite](https://img.shields.io/badge/Store-SQLite-003B57?style=flat&logo=sqlite&logoColor=white)](#durable-invariants)
+[![MCP](https://img.shields.io/badge/MCP-2025--11--25-191919?style=flat)](#runtime-reference)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-6F387A?style=flat)](./LICENSE.txt)
 
-Requires Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later. The
-package is ESM only.
+[Why Worldline](#why-worldline) · [Quick Start](#quick-start) · [At a Glance](#at-a-glance) · [Entry Points](#entry-points-and-examples) · [14 Examples](./example/README.md) · [Invariants](#durable-invariants) · [Spec](./docs/spec.md) · [API](./docs/api/index.md)
+
+</div>
+
+---
+
+> **0.x notice:** Versioned independently from TeXRA. Tested against packed
+> tarballs, but APIs and row versions may change before 1.0 ([limits](#current-limits)).
+
+## Why Worldline
+
+Worldline is the embeddable agent runtime powering TeXRA across VS Code,
+Electron Desktop, and the terminal.
+
+| Challenge                                        | How Worldline handles it                                                                                                                                                                                   |
+| :----------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Crashes waste spend & duplicate side effects** | Every turn, tool result, approval, and child run commits to SQLite. A crash-conformance suite slices real stores back to every commit point and verifies 9 invariants ([I1–I9](#durable-invariants)).      |
+| **Graph DSLs break on real workflows**           | With `codemode`, agents write plain JavaScript (`Promise.all`, loops, `try`/`catch`) in a QuickJS worker calling `agent()`, `self()`, `program()`, and tools. Calls journal to SQLite and replay on crash. |
+| **Linear history blocks branching**              | Every settled turn records a `forkPoint`. Fork any run (`run.fork`), steer live runs (`followUp.send`), or let agents rewrite their own context (`context`) without losing the transcript.                 |
+| **Agent loops are hard to test cleanly**         | Native Effect 4: scoped lifetimes, typed tagged errors, zero internal `Effect.runPromise`, and one-line `ModelFetch` swapping for zero-key offline tests.                                                  |
+| **UI hosts rebuild state from scratch**          | Immutable copy-on-touch `SessionView`, `RunView`, and `TranscriptView` snapshots with browser-safe `./schemas` and `./transcript` entries.                                                                 |
+
+## Quick start
+
+Node.js 22.22.2+ (22.x) or 24.15+, ESM only.
 
 ```bash
 npm install @texra-ai/worldline @texra-ai/llm effect @effect/platform-node @effect/sql-sqlite-node
 ```
 
-[`@texra-ai/llm`](https://www.npmjs.com/package/@texra-ai/llm), the model
-package, is a peer too: the harness checks a model's failures with
-`instanceof ModelError`, so a model your program binds and the harness must
-share one copy of the package.
-
-`effect` is a peer dependency of both packages, and the harness also takes
-`@effect/platform-node` and `@effect/sql-sqlite-node` as peers so the host
-process resolves a single copy of `effect` and `@effect/*` (duplicate copies
-break `Context.Service`, `Context.Reference`, and `Stream` identity). Install them in
-the host package with matching caret ranges; do not pin `effect` to an exact
-patch while `@effect/*` packages float.
-
-```jsonc
-{
-  "dependencies": {
-    "@effect/platform-node": "^4.1.3",
-    "@effect/sql-sqlite-node": "^4.1.3",
-    "@texra-ai/worldline": "^0.1.0",
-    "@texra-ai/llm": "^0.1.0",
-    "effect": "^4.1.3",
-  },
-}
-```
-
-A provider API key can come from the environment (`ANTHROPIC_API_KEY`, …).
-A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers)
-that an Anthropic API key can spend once you link a Console organization to
-the plan.
-A ChatGPT Pro or Business plan includes [monthly API credits](https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions)
-that an OpenAI API key can spend once you claim them for an API organization
-you own.
-
-## Usage
-
-The package's surface is Effect: `Sessions.layer({ platform, plugins, client })`
-composes the process and provides the session owner for one `Scope`, and the
-embedder runs the program at its own entry point. `plugins` is the list of
-what the runs can use: the harness's built-ins (`harnessBuiltins`) and any
-plugin of the embedder's own beside them. `session.start` runs a conversation: its system text, the tools it declares and the instruction. A plugin can also register
-a program (`Plugin.programs`): one of its script modules, started by name
-with the `program` tool or a `script` of kind `program`, whose run is that
-module's default export called with the launch's arguments, instruction
-and files.
-`@texra-ai/worldline` ships no built-in programs.
+Run an agent in 25 lines (no agent files; a run is plain data):
 
 ```ts
 import { Effect, Stream } from 'effect';
@@ -71,8 +53,7 @@ import { harnessBuiltins } from '@texra-ai/worldline/builtins';
 const platform = nodePlatform({ storageDir: './.agent-storage' });
 
 const program = Effect.gen(function* () {
-  const sessions = yield* Sessions;
-  const session = yield* sessions.open(platform.roots);
+  const session = yield* (yield* Sessions).open(platform.roots);
   const run = yield* session.start({
     label: 'polish',
     system: 'You edit prose for concision. Keep every claim.',
@@ -80,8 +61,6 @@ const program = Effect.gen(function* () {
     instruction: 'Tighten the summary in notes.md.',
     model: 'anthropic/claude-sonnet-5-5',
   });
-  // The events end when the run does; `responseText` keeps the answer's
-  // text and drops the model's thinking and tool output.
   yield* Stream.runForEach(run.events.pipe(responseText), (text) =>
     Effect.sync(() => process.stdout.write(text)),
   );
@@ -101,529 +80,175 @@ const result = await Effect.runPromise(program);
 console.log(result.outcome);
 ```
 
-### What a run is
+## At a glance
 
-There are no agent files. Each `session.start` call describes the run directly
-(`StartRequestSchema` from `@texra-ai/worldline/schemas`):
-
-- `system`: the run's own system text, placed before what the harness appends
-  (the user's and project's `AGENTS.md`, tool-use instructions, memory indexes,
-  and active plugin sections). `system` is a
-  [Nunjucks](https://mozilla.github.io/nunjucks/) template rendered once at
-  launch with `CWD` (the run's working directory) among its variables. Because
-  its expressions are evaluated in your process, treat `system` as author-owned
-  code: pass end-user text as `instruction`, never inside `system`. Nothing else
-  the system prompt carries (workspace paths and git branch, `AGENTS.md`, memory
-  indexes) is rendered as a template.
-- `tools`: the tool names the run declares (`mcp__<server>__*` expands to every
-  tool of a configured MCP server; omit or leave empty for text-only replies).
-  Naming a tool that no plugin provides fails the run before any model call.
-- `label`: the display label shown on cards, listings, and the run directory.
-- `runTools`: custom tools built with `defineTool` for this run alone (pass the
-  same `runTools` again when calling `session.resume`).
-
-The run stores its configuration in history, so resuming it reads nothing else
-from disk. When a run spawns a child via `agent`, it records the child's
-`system`, `tools`, and `label` the same way. Passing `agentName`
-(`<plugin>:<name>`) reads an installed Claude Code or Codex plugin's agent once
-at call time and writes it into the child's configuration.
-
-Nothing in the package calls `Effect.runPromise` itself: the `Effect.runPromise`
-call above belongs to the embedder's entry point, just as it does in any host.
-
-### A persistent session, and resume
-
-`sessions.open(roots, { persistent: true })` keeps session history in the root's
-SQLite store under the platform's `storageDir`. Without `persistent: true`, the
-store is in memory and ends with the session. Reopening an already-open
-workspace root returns the existing session; passing a different `persistent`
-option fails with `SessionOptionsConflict` until the session is closed.
-
-A later process can open the same root and call `session.resume(runId)` to
-continue a run from its committed history, returning the same `Run` handle as
-`start` (pass the same `runTools` that were given to `start`):
-
-- **Unresumable runs:** Fails with `ResumeRefused`, whose `reason` is a
-  `ResumeRefusal` with `kind` set to `finished`, `unusableCheckpoint`,
-  `earlierBuild` (with its `cause`), `pluginUnavailable` (naming the missing
-  `plugin` whose facts the run holds), or `notResumable` (the run was deleted).
-- **Owned child runs:** If `runId` belongs to a child owned by an active parent
-  call, `session.resume` resumes the parent instead and sets
-  `run.redirectedFrom` to the requested child `runId`.
-- **Already active runs:** Calling `resume` on a run already active in this
-  process starts nothing—it returns the live activation's `Run` handle and reads
-  no input. `run.activation` identifies that activation's commit, and
-  `session.run(runId, activation)` recovers the same handle across a process
-  boundary.
+**Fork and resume across processes** (`persistent: true` writes to SQLite):
 
 ```ts
-const program = Effect.gen(function* () {
-  const session = yield* (yield* Sessions).open(platform.roots, {
-    persistent: true,
+const session =
+  yield * (yield * Sessions).open(platform.roots, { persistent: true });
+const { runId: branchId } =
+  yield * session.request({ kind: 'run.fork', runId });
+yield *
+  session.request({
+    kind: 'followUp.send',
+    runId: branchId,
+    text: 'Try a formal proof.',
   });
-  const run = yield* session.resume(runId, { runTools });
-  return yield* run.result;
-});
+const resumed = yield * session.resume(runId);
 ```
 
-### Approvals
+**Multi-agent workflows in plain JavaScript** (`codemode` QuickJS sandbox,
+journaled and crash-replayed; see [`example/08-crash-and-resume.ts`](./example/08-crash-and-resume.ts)):
 
-By default a run's commands and file edits run without asking anyone: the
-approval policy (`APPROVAL_POLICY_SETTING` from `./schemas`, set with
-`Settings.set(platform.roots, …)`) defaults to `yolo`. With `harnessBuiltins`
-that means a run can run shell commands in the workspace, write its files,
-fetch a URL and search the web, with or without a handler attached. Narrow it
-for a workspace by setting the policy to `ask` or `never`, or for one run by
-starting it with `approval: 'ask'` or `'never'`; leave a plugin out of
-`plugins` for a run that must not have its tools at all.
-
-Under `ask`, a run asks before a command, an edit or a custom tool with
-`requiresApproval`, and a session with no attached approval handler has
-nobody to ask: it denies every such request and offers no tool that would
-raise one. A question to the person and a retry after the automatic attempts
-are never answered on a person's behalf, whatever the policy.
-`session.attach({ approve })`
-attaches a host with a handler for the caller's scope, an Effect function from
-a `PendingRequest` (which run asks, the request's id, and its `payload`, whose
-`kind` is a command (`bash`), an edit (`toolEdit`), a plan (`planApproval`),
-a proposal, a plugin's trust (`pluginTrust`), a retry, or a question
-(`userQuestion`)) to the
-`RequestDecision` it records. The handler is called once for each request a run
-waits on (also listed in `SessionView.requests`), or an embedder can answer a
-listed request directly with `session.request({ kind: 'request.decide', ... })`;
-whichever answer lands first is the decision. A handler that fails, throws, or
-answers with a decision the request's kind does not take denies the request and
-logs a warning; it may take as long as it needs, so a person's prompt carries its
-own deadline, or none.
-
-A request is a stored row and survives restarts. On a persistent session, a run
-interrupted while waiting for approval still waits after a restart: reopen the
-session, attach a handler, and call `resume` to receive the same request under
-the same id.
-
-```ts
-const program = Effect.gen(function* () {
-  const session = yield* (yield* Sessions).open(platform.roots, {
-    persistent: true,
-  });
-  yield* session.attach({
-    approve: (request) =>
-      Effect.succeed(
-        request.payload.kind === 'bash'
-          ? { action: 'approve' }
-          : { action: 'deny', reason: 'Only commands are approved here.' },
-      ),
-  });
-  const run = yield* session.start({
-    label: 'polish',
-    system: 'You edit prose for concision. Keep every claim.',
-    tools: ['read_file', 'edit_file'],
-    instruction: 'Tighten the summary in notes.md.',
-    model: 'anthropic/claude-sonnet-5-5',
-  });
-  return yield* run.result;
-});
+```js
+const [a, b] = await Promise.all([
+  self('Check section 1.', { schema: verdictSchema }),
+  self('Check section 2.', { schema: verdictSchema }),
+]);
+return { verdicts: [a.structured.verdict, b.structured.verdict] };
 ```
 
-| Service    | What it is                                                                                                                                                                                                                                                                                                                          |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins, client })` composes that process for the layer's lifetime. Build it once per process.                                                    |
-| `Session`  | One workspace's runs: `start` and `resume` give a `Run`; `request` sends everything else (follow-ups, approvals, stop, fork); `attach(host)` answers approvals until the caller's scope closes; `view.current()` and `view.changes` read the session's state as immutable snapshots. `roots` names the workspace.                   |
-| `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts. A run is stopped with `session.request({ kind: 'run.stop', runId, reason: 'user' })`. `start` returns once the run exists, before its first model call. |
-
-`run.events` is the run's trace as a `Stream`, and any number of readers
-can read it at any time. Each read is the run's events read back from the
-session, from the start of the activation the handle is for, following the
-run until that activation ends; it fails as `result` does. A `Run` is a
-view of one activation of the run in its session and holds nothing: ending a
-read stops that reader, not the run. Every event except `stream.chunk` is a
-stored row, and streamed text arrives as the session holds it: a stream
-that ended before the read reached it comes as one chunk of its final text,
-so a reader's chunks always add up to each stream's final text.
-
-Every failure is a typed error on the effect that owns it. A refusal before
-any model work fails `session.start` with one of the tagged errors the
-surface names: `LaunchRefused` for an input the launch will not run (an
-unknown model, a config its schema rejects, a run id
-already in use), or `ToolsRefused`. A launch that fails for any other reason
-before its run enters the session fails `start` with `RunFailure`, whose
-`cause` is exactly what the launch path threw. No host is shown such a
-failure: an unknown model's `LaunchRefused` carries the `notice`
-to show for it. A run that fails after entering stores a failed end, which
-`run.result` returns.
-
-`run.view` is the derived session state every host renders, so run
-status, transcript rows, and pending approvals are read from it rather than
-rebuilt from the trace. It yields the current view first, then subsequent
-changes through the first view containing the run's durable outcome. That
-final view is included even when consumption starts after `result` completes,
-and the first view yielded always holds the run's row. `result` completes
-only once the final view is applied, independently of whether the caller
-reads it; if the session's state reducer dies first, `result` and every `view`
-consumer die with its defect instead of waiting. Ending consumption stops that
-reader while the run continues. If launch fails before the run enters the
-session, there is no `view` at all: `start` itself carries the failure.
-
-Every yielded view is a value: the state reducer publishes immutable levels with
-copy-on-touch structural sharing, so an older view stays exactly what it was
-for as long as it is held, and a branch the later level did not touch is the
-same object in both. An older view is stable to read; updates always apply to
-the latest level. The exported `SessionView`, `RunView`, and
-`TranscriptView` types are read-only all the way down (`ReadonlyMap`, readonly
-arrays); a write through a cast corrupts the session every later run in the
-process reads. A run is a row of `SessionView.runs`. The run's transcript rows
-(`RunView.transcript`) are subscribed while its `run.view` is read, the run
-itself and its descendants as they appear, until the run's final view: a
-reader that needs them otherwise watches them (`view.watch`).
-
-Runs share one session per workspace storage root: opening a root twice
-resolves the session already open there, while a second root gets its own. A
-session ends through `sessions.close(roots)`: it refuses new runs on the
-root, interrupts the runs it owns and waits for them to finish within the
-runtime's shutdown budget, flushes its artifacts, and releases the session,
-returning `{ abandoned }`: empty when every run ended in time, and otherwise
-the ids of the runs still live, in which case the session stays open,
-refusing new runs, until they end. Releasing the `Sessions.layer`
-closes every session the owner holds this way and then releases the process
-under them, so an embedder that drains its scope on shutdown needs no
-separate close call.
-
-**Build the layer once per process.** It is an ordinary Effect layer: provide
-it once at the application's edge (`ManagedRuntime.make(Sessions.layer(...))`,
-or one `Effect.provide` around the whole program) and run every program on
-it. Two live builds share one process identity, so a second build that opens
-a root the first holds is refused at open ("already open in this process";
-the guard is `processRoots` beside `SessionOwner`): share that session
-instead. Builds over different roots each work, and a later build after the
-first one is released is fine.
-
-### Messages to a run
-
-`session.request({ kind: 'followUp.send', runId, text })` sends a run a
-message and answers `{ kind: 'followUp', status }`:
-
-- `sent`: a launch in this process holds the run, which reads the message
-  at its next model request (with `holdUntil: 'turn'`, when its current turn
-  ends);
-- `queued`: no launch here holds the run. The message waits in the run's
-  stored queue, and the send resumes the run for it when the run can
-  continue.
-
-A run that cannot take the message refuses it with `Unavailable`, which
-says why.
-
-Each send queues one message, so a send repeated after a lost reply queues a
-second one. The answer says the message was accepted, not what the run made
-of it: read that from the run, as for any turn. Its view returns to
-`waiting` with a new `forkPoint` (the `seq` of its newest wait) when the turn
-that took the message ends; a run that ends answers through its handle's
-`result`.
-
-## Durable invariants
-
-The full protocol, with what each commit point guarantees, is specified in
-[`docs/spec.md`](./docs/spec.md).
-
-A run's next step comes from its committed history. The session publishes a
-whole batch through one inbox, and the run reducer checks the batch before the
-store commits it. Live trace chunks are transient; they are not recovery input.
-
-The repository's crash-conformance suite checks the following contracts: it
-cuts a real SQLite store back to each commit point of a run, as a process
-killed there would leave it, then reopens the store and resumes the run,
-under both the harness built-ins and a full app's plugins:
-
-- **I1** Recovery reaches the clean run's outcome: its committed answers,
-  tool results, owned children, and context edits are preserved.
-- **I2** A tool call finishes once. A result committed before a crash
-  is reused, and a finished call is not executed again.
-- **I3** A model invocation has at most one committed response. Recovery
-  does not append another answer for an invocation already answered.
-- **I4** A command subject to approval runs only after approval. An unfinished
-  command whose outcome is unknown is retried only after a person chooses to retry
-  that call. Recovery does not assume that an absent result means no effect
-  occurred.
-- **I5** An owned child that ended cleanly answers its awaiting call on
-  recovery. Relaunching a child for the same call requires a retry decision,
-  and owned children are left with terminal rows.
-- **I6** A child's result delivery commits with the turn that produced it.
-  Recovery queues and consumes that delivery once, including results from
-  detached agents, scripts, and commands.
-- **I7** Compaction and fork preserve the context they committed.
-  A fork is recovered with the history it was registered with.
-- **I8** A stopped run's halt and terminal outcome commit together.
-  Recovery cannot treat an acknowledged stop as an interrupted run to continue.
-- **I9** Turning off a run's shell approval bypass is acknowledged only
-  after the policy row is durable, so recovery cannot restore the old bypass.
-
-These are committed-state contracts. An external effect that finished before
-its result was committed can remain uncertain; **I4** governs that uncertainty,
-without promising exactly-once execution of arbitrary external effects.
-
-## Storage failures
-
-Every session-store error ends in one of a few outcomes, so a host knows what
-happens without reading the code. The full table is kept with
-the session store's source; in short:
-
-- **S1** The store does not open (`DatabaseOpenFailed`): the session does
-  not open, and the error says why. A store an earlier build wrote is
-  refused unchanged, and the error says to move it away. A store SQLite
-  reports damaged is moved aside instead (`storeMovedAside`), never read
-  again.
-- **S2** A store a newer build wrote (`DatabaseStoreNewer`, the cause of an
-  open, read or write failure) is refused whole: nothing is read in part or
-  written beside it.
-- **S3** A read fails (`DatabaseReadFailed`): the call that read fails. A
-  run whose own rows do not decode (`DatabaseRowCorrupt`, or
-  `DatabaseRowEarlier` from an earlier build) cannot open; it is listed as
-  unreadable and is never resumed. A listing or a tail leaves such a row out
-  with one warning instead.
-- **S4** A write fails (`DatabaseWriteFailed`): the batch rolled back and
-  the call fails. Inside a run, the run ends, whatever the tool or model
-  call that met it did with it.
-- **S5** The aggregate is closed (`DatabaseAggregateClosed`, typed):
-  nothing was written. A run whose aggregate closed under it stops, with no
-  retry. A project store another process holds does not open at all: the
-  open fails with `STORE_HELD_MESSAGE`.
-- **S6** A run's deletion was asked against a lifetime that has since ended
-  (`RunChanged`, typed): nothing was written, and the request says the run
-  started again. A row that breaks the store's own rules (a second
-  `run.start`) is the writer's defect: it fails the writing fiber, never
-  as a failed write.
-
-## Generated files and deletion
-
-The first row-format baseline starts a new project history beside the development
-database. The older database stays at `<namespace>.db`; an earlier build can
-still open it. The global settings database keeps its existing filename.
-
-Under its storage root a session owns the store (`<namespace>.project-v1.db`, named
-for the settings catalog's namespace: `harness.project-v1.db` unless `nodePlatform`
-is given a catalog of the embedder's own) and one
-directory per run, `executions/<runId>/`, holding the files the run
-generated. A deletion removes nothing else: the project's own files are
-never touched, and a store moved aside (`<namespace>.project-v1.db.corrupt-<ms>`) is never read again
-and goes only when a person deletes it (`deleteStorageInventory`, which
-`texra doctor --prune-storage` runs after asking).
-
-- Deleting a run (the `run.delete` request) commits a deletion marker, the
-  `run.removed` row that closes the run and every run it owns. Nothing on
-  disk is removed before that row commits, and a deletion removes only the
-  directories of the runs its marker closed.
-- The session collects committed markers when it opens and after each
-  deletion: it removes the closed runs' directories, then their rows and the
-  blobs no other row uses. Each step may run twice, in one process or two,
-  with the same result.
-- A removal that fails leaves its marker pending, with a warning, and the
-  next collection retries it. The deleted run stays deleted meanwhile.
-- The only runs the harness deletes on its own are ended background shells
-  an earlier process left, at session open, through the same marker.
-- Before removing anything, the collector resolves the storage root and its
-  `executions` directory, which must resolve to itself. If it was replaced by
-  a link elsewhere, the collection is refused and stays pending; each target
-  must also fall inside it. This is resolve-then-check: a directory replaced
-  between the check and the removal is not detected.
-- The `run.files` request copies a stopped run's directory into the project,
-  or removes the directory without deleting the run.
-
-## Run results
-
-There is exactly one result shape: `RunEnd`, the end the run stored for
-its activation. It carries an `outcome`, an optional `usage`, an `output`,
-and, on a failed run, its classified `error`: `kind: 'model'` with the
-provider's `failure`, or a local `kind` with its `message`
-(`runEndErrorMessage` from `./schemas` words either). A failed
-run's `result` succeeds with that end, and fails with `RunFailure` only when
-no end was stored. Every run's
-output is one shape, `{ response, files, structured? }`: the reply text, the
-workspace-relative files its tool calls edited, and the `structured` value of
-a `submit_output` tool when the run used one. A program's run (`script.kind:
-'program'`) ends with its script's return value as `structured`; how the run
-reads to whoever launched it is the program's registered result
-(`ProgramResult`, exported from `@texra-ai/worldline/plugins`: the schema of
-the plugin's fact it reads, its delivery body, and the files it changed). There is no category to switch on.
-
-`run.result` is terminal-only. A run of this package runs one cycle and
-ends; one waiting on a request (an approval, a retry, a question) has no
-outcome yet, so its `result` waits until the request is answered (see
-[Approvals](#approvals)) and the run goes on to end. `SessionView.requests`
-lists what it waits for.
-
-Accounting is `usage`, present once a round recorded any: one totals record
-covering the run and its subagents, whose `usage.cost` is the run's cost
-and the only cost this surface states. The harness computes no diffs: a
-program's plugin records any it computes in its own value, and otherwise the
-embedding contract leaves diffing to the embedder, which already owns the
-files.
-
-## Entry points
-
-| Entry                            | Contents                                                                                                                                                                                                                                                                                                                                                                                   |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@texra-ai/worldline`            | What an embedder needs to run agents: `Sessions`, `Session`, `Run`, their inputs, `AgentEvent`, the presentation surface a `SessionHost` serves (`HostInteractions`), and every tagged error the surface fails with. About fifty names; start here                                                                                                                                         |
-| `@texra-ai/worldline/schemas`    | Browser-safe: Effect schemas + derived types for run configurations and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                                                                                                                      |
-| `@texra-ai/worldline/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                                                                                                                       |
-| `@texra-ai/worldline/builtins`   | The built-in plugins: `harnessBuiltins`, or one by one (`codemode`, `fileOps`, `goal`, `memoryWorkflow`, `multiAgent`, `web`)                                                                                                                                                                                                                                                              |
-| `@texra-ai/worldline/plugins`    | What a plugin or tool is written with: `defineTool`, `definePlugin`, `ToolContext`, `Settings`, `WorkspaceFs`, `Secrets`, `withLogChannel`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`; the config and state store ports (`ConfigProvider`, `StateStore`) and the process services a plugin layer reads (`AppState`, `GlobalValues`, `ToolCatalog`) |
-| `@texra-ai/worldline/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                                                                                                                      |
-| `@texra-ai/worldline/host`       | What a full application host composes beyond the root: `processLayer`, skills, installed plugins, model options, and shared file, error and log helpers. No signature on another entry names a type only this one exports, except the requirement unions `RunServices` and `PlatformServices` on `./plugins`. TeXRA's own hosts read it; no stability promise                              |
-
-Every entry needs the peers installed. See [Install](#install). Each entry's
-exports, with their TSDoc and declarations, are listed in its API reference
-under [`docs/api/`](./docs/api/index.md), generated from the source. A runnable
-version of the usage program against a packed tarball is in
-[`example/`](./example).
-
-## The platform
-
-Every run needs an `AgentPlatform`: the process services the package composes
-(its secret store and an optional `resourcesRoot` for plugin assets) plus the
-`WorkspaceRoots` for the target folder (workspace path, storage path, config,
-workspace state, and process-wide global state).
-
-- **MCP servers and project rules:** The tool registry reads stdio MCP servers
-  from `mcp.json` at the storage root (`roots.storageRoot` / `storageDir`, not
-  `roots.globalStorage`; servers must speak MCP revision `2025-11-25`, and those
-  answering an older revision do not start). Each run's system prompt carries
-  the storage root's `AGENTS.md` (the person's own, for every workspace) and
-  then the workspace's.
-- **Memory:** While the `memory.enabled` setting is on (the default), a run with
-  file tools has two folders of Markdown notes it reads and writes with those
-  tools: `<storageDir>/memories`, for what holds across workspaces, and
-  `memories/` under the workspace's own storage directory. The run's system text
-  names both folders and carries each folder's `MEMORY.md` index as it reads at
-  every request (the first 16,000 characters). There is no memory tool and
-  nothing else is loaded automatically: a note is read when the model opens it.
-  `memoryFolders(platform.roots)` from `./plugins` names the two folders. Turn
-  memory off with `Settings.set(platform.roots, MEMORY_ENABLED_SETTING, false)`.
-- **`nodePlatform(options)`:** Supplies ready-made defaults—process-local config
-  and state, the standard layout under the required `storageDir` (the package
-  never falls back to a per-user directory), that directory's `mcp.json` and
-  `AGENTS.md`, and environment-variable secrets (nothing persisted). The harness
-  reads provider keys and proxy variables from the workspace's `.env` file over
-  `process.env` at each launch, while commands a run starts inherit `.env` over
-  `process.env` with provider keys withheld. Point `workspaceDir` only at a
-  folder whose `.env` you would load yourself.
-- **Custom settings:** Pass plugin settings via `nodePlatform({ settings })`,
-  using `settingsCatalog({ namespace, rows })` from `@texra-ai/worldline/schemas`
-  (or attach the catalog to your own `ConfigProvider` as `catalog`). Keys are
-  relative to the namespace (such as `'memory.enabled'`), which the stores
-  prepend on write. Code reads and writes settings through `Settings` (`get`,
-  `set`, `reset`).
-
-Model requests carry their own HTTP transport: the environment's proxy policy
-(`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and a 30-minute stream inactivity
-timeout, bound to each model rather than installed as your process's global
-dispatcher. To answer model requests yourself, for a scripted model in a test
-or a recording transport, merge `ModelFetch` (a `fetch`) beneath
-`Sessions.layer`; every model request of the layer's runs then goes through
-it, and it owns the proxy policy and timeouts too:
+**Typed tools, approvals, and zero-key offline tests** (`defineTool`, `session.attach`, `ModelFetch`):
 
 ```ts
-import { Effect, Layer } from 'effect';
-import { ModelFetch, Sessions } from '@texra-ai/worldline';
-
-const scripted: typeof fetch = async () =>
-  new Response(/* the provider's wire reply */);
-
-program.pipe(
-  Effect.provide(
-    Sessions.layer({
-      platform,
-      plugins: harnessBuiltins,
-      client: { name: 'Example App', id: 'example-app' },
-    }).pipe(Layer.provideMerge(Layer.succeed(ModelFetch)(scripted))),
-  ),
-);
-```
-
-The fetch has to stay in the runtime's context, where the runs read it, so
-the sample merges it with `Layer.provideMerge` rather than handing it only to
-the layer's build with `Layer.provide`. Leave it out and the harness's own
-transport carries the requests.
-[`example/_support.ts`](./example/_support.ts) answers with an in-memory
-Anthropic Messages stream this way.
-
-The harness logs with `Effect.log*`, and `Sessions.layer` installs no logger
-of its own: its entries (a store that failed, a plugin that did not load, a
-run's warnings) go through the loggers, minimum level and tracer your program
-provides. Effect's default logger prints `Info` and above to the console;
-provide your own with `Logger.layer([...])`, or `Logger.layer([])` to drop
-them. To send them through the harness's sink instead, which redacts secrets,
-provide `effectDiagnosticsLayer(level)` from `@texra-ai/worldline/node` around
-the program and name a destination with `setLogSink({ write(entry) { … } })`:
-it receives each `LogEntry`, Effect's structured record (level, message,
-cause, annotations), and `entryLine` / `entryDetail` from `./schemas` word
-it as text. Setting a sink disposes the one it replaces (its optional `dispose`),
-and `setLogSink(null)` restores the console. Entries reach the sink with
-secrets redacted, unless you pass `{ trusted: true }`. The few lines written
-outside any fiber (a trace sink that threw, a stored setting that does not
-read) always go to the sink, the console until you set one.
-
-The platform is **process-wide** for the layer's lifetime: create one and
-reuse it for every run, with the one `Sessions.layer` built over it.
-
-Implement the `AgentPlatform` ports and the `roots` yourself when embedding in a
-host that already owns those services. Supply a fresh, application-owned
-storage directory in custom `WorkspaceRoots`; the SDK uses that exact
-directory. Do not reuse a storage directory an earlier release wrote.
-`nodePlatform()` selects the separate `v1` storage layout under `storageDir`
-automatically. Earlier histories and checkpoints
-are not imported or removed.
-
-## Custom tools
-
-Custom tools return Effect programs. The SDK supplies the run scope and
-interrupts tool work when the run stops. `defineTool` validates the input and
-normalizes ordinary failures into tool feedback; `execute` implements the work.
-
-```ts
-import { defineTool } from '@texra-ai/worldline/plugins';
-import { Effect, Schema } from 'effect';
-
-const EchoTool = defineTool({
+const echo = defineTool({
   name: 'echo',
-  description: 'Return the supplied text.',
+  description: 'Return supplied text.',
+  lane: 'parallel',
+  replay: 'safe',
   schema: Schema.Struct({ text: Schema.String }),
   execute: ({ text }) => Effect.succeed(text),
 });
 
-const tools = [EchoTool];
+// Swap the HTTP layer in tests (dummy key satisfies route selection):
+process.env.ANTHROPIC_API_KEY ??= 'test-key';
+Sessions.layer({ platform, plugins: harnessBuiltins, client }).pipe(
+  Layer.provideMerge(Layer.succeed(ModelFetch)(scriptedFetch)),
+);
 ```
 
-`execute` succeeds with the text the model reads back, or with a whole
-`ToolResult` (`executed(output, summary)` from `./plugins`) when the tool
-also reports a summary, attachments or facts. Failing with an `Error` gives
-the model its message as the tool's error.
+## Entry points and examples
 
-Pass `tools` to `session.start` as `runTools`. A custom tool that requires
-approval runs only on a session with an approval handler attached
-(`session.attach`); on any other session it fails the launch with
-`ToolsRefused`. A directly implemented `ITool` also returns an Effect from
-`call`; asynchronous operations compose inside that program. Execute programs
-only at the embedding application's host boundary.
+| Entry                            | Contents                                                                                                                        |
+| :------------------------------- | :------------------------------------------------------------------------------------------------------------------------------ |
+| `@texra-ai/worldline`            | Core surface (~50 exports): `Sessions`, `Session`, `Run`, `AgentEvent`, `HostInteractions`, `ModelFetch`, tagged errors.        |
+| `@texra-ai/worldline/schemas`    | Browser-safe: Effect schemas, read-only `SessionView` / `RunView` / `TranscriptView`, approval policy, error formatters.        |
+| `@texra-ai/worldline/transcript` | Browser-safe: `RemoteSessionView` over transport `SessionInputs`, transcript rows and projections.                              |
+| `@texra-ai/worldline/builtins`   | Built-in plugins: `harnessBuiltins` (`codemode`, `fileOps`, `goal`, `memoryWorkflow`, `multiAgent`, `web`).                     |
+| `@texra-ai/worldline/plugins`    | Authoring: `defineTool`, `definePlugin`, `ToolContext`, `Settings`, `WorkspaceFs`, `Secrets`, `executed`, `nullishWithDefault`. |
+| `@texra-ai/worldline/node`       | `nodePlatform(options)`, `setLogSink`, `LogSink`, `effectDiagnosticsLayer`.                                                     |
+| `@texra-ai/worldline/host`       | Full app host composition (`processLayer`, skills, installed plugins). Consumed by TeXRA; no stability promise.                 |
+
+Explore all **[14 runnable packed-tarball examples](./example/README.md)**
+(custom plugins, approvals, `run.fork`, live `SIGKILL` crash recovery,
+judge-verified goals, external npm plugins, self-editing context; zero API key
+needed):
+
+```bash
+corepack pnpm --filter @texra-ai/worldline run example:packed
+```
+
+Full API reference: [`docs/api/`](./docs/api/index.md) · Protocol spec: [`docs/spec.md`](./docs/spec.md)
+
+## Durable invariants
+
+A run's next step comes strictly from committed SQLite rows (live stream chunks
+are never recovery input). The crash-conformance suite slices real stores back
+to every commit point and verifies ([`docs/spec.md`](./docs/spec.md)):
+
+| ID     | Guarantee                                                                                                                   |
+| :----- | :-------------------------------------------------------------------------------------------------------------------------- |
+| **I1** | Recovery reaches the clean run's outcome: committed answers, tool results, owned children, and context edits are preserved. |
+| **I2** | A tool call finishes once; committed results are reused and never re-executed.                                              |
+| **I3** | A model invocation has at most one committed response.                                                                      |
+| **I4** | Approval-gated commands run only after approval; unfinished commands with unknown outcome retry only after human choice.    |
+| **I5** | Cleanly ended owned children answer their awaiting call on recovery; relaunching requires a retry decision.                 |
+| **I6** | Child result delivery commits atomically with the turn that produced it and is consumed once.                               |
+| **I7** | Compaction and fork preserve committed context; forks recover with their registered history.                                |
+| **I8** | A stopped run's halt and terminal outcome commit together; recovery cannot continue an acknowledged stop.                   |
+| **I9** | Disabling a shell approval bypass is acknowledged only after the policy row is durable.                                     |
+
+## Storage failures
+
+<details>
+<summary><strong>S1–S6 error contract</strong></summary>
+
+- **S1** `DatabaseOpenFailed`: store does not open. Earlier-build stores are refused unchanged; SQLite-damaged stores are moved aside (`storeMovedAside`) and never read again.
+- **S2** `DatabaseStoreNewer`: store written by a newer build is refused whole (nothing read or written beside it).
+- **S3** `DatabaseReadFailed`: failing read rejects. Undecodable runs (`DatabaseRowCorrupt`, `DatabaseRowEarlier`) list as unreadable and never resume; listings/tails skip with one warning.
+- **S4** `DatabaseWriteFailed`: batch rolls back; inside a run, the run ends regardless of tool/model handling.
+- **S5** `DatabaseAggregateClosed`: nothing written; the run stops without retry. A store held by another process fails open with `STORE_HELD_MESSAGE`.
+- **S6** `RunChanged`: deletion against a superseded lifetime writes nothing. Store-rule violations (duplicate `run.start`) fail the writer fiber as a defect.
+
+</details>
+
+## Generated files and deletion
+
+<details>
+<summary><strong>Store layout (`&lt;namespace&gt;.project-v1.db`), `executions/`, and deletion rules</strong></summary>
+
+Under its storage root, a session owns `<namespace>.project-v1.db` (default
+`harness.project-v1.db`; older `<namespace>.db` files stay untouched) and
+per-run directories `executions/<runId>/`. Project files are never touched;
+corrupt stores (`*.corrupt-<ms>`) are removed only on explicit user deletion
+(`deleteStorageInventory` / `texra doctor --prune-storage`).
+
+- `run.delete` commits a `run.removed` marker closing the run and its owned
+  descendants before touching disk; collection runs on open and after delete
+  (idempotent across processes), removing closed directories, rows, and
+  unreferenced blobs, retrying failed removals later.
+- Only ended background shells left by earlier processes are auto-deleted at
+  session open via the same marker.
+- Before deleting, the collector resolves the storage root and `executions/`
+  (refusing symlinks pointing outside; resolve-then-check).
+- `run.files` copies a stopped run's directory into the project or removes it
+  without deleting the run.
+
+</details>
+
+## Runtime reference
+
+<details>
+<summary><strong>Peer deps, approvals, Nunjucks `system` note, MCP, memory, logging, and limits</strong></summary>
+
+- **Peers & credentials:** Install `effect`, `@effect/platform-node`,
+  `@effect/sql-sqlite-node` (`^4.1.3`), and [`@texra-ai/llm`](../llm/README.md)
+  (`^0.1.0`) with matching caret ranges so the host resolves one Effect and one
+  `ModelError` instance. Keys come from `process.env` / workspace `.env` (Claude
+  Max/Team and ChatGPT Pro/Business include monthly API credits).
+- **Services & lifecycle:** Build `Sessions.layer` once per process (a second
+  live build opening the same root fails). `sessions.close(roots)` returns
+  `{ abandoned }`; releasing the layer closes all sessions. `RunEnd` is
+  `{ outcome, usage?, output: { response, files, structured? }, error? }`
+  (`runEndErrorMessage` formats errors). Pre-entry refusals fail with
+  `LaunchRefused`, `ToolsRefused`, or `RunFailure`; `resume` fails with
+  `ResumeRefused` (`finished`, `unusableCheckpoint`, `earlierBuild`,
+  `pluginUnavailable`, `notResumable`).
+- **System prompt (`system`):** Rendered once at launch as author-owned Nunjucks
+  with `CWD`; never place end-user text inside `system` (`AGENTS.md`,
+  `MEMORY.md`, paths, and git branch are never template-rendered).
+- **Approvals:** Default policy is `yolo`; narrow with
+  `approval: 'ask' | 'never'` or `Settings.set`. Under `ask`, attach
+  `session.attach({ approve })` (requests are durable rows; questions and
+  post-retry prompts never auto-answer).
+- **Platform (`nodePlatform`):** Reads `<storageDir>/mcp.json` (stdio MCP
+  `2025-11-25`), loads `<storageDir>/AGENTS.md` then `<workspace>/AGENTS.md`,
+  exposes writable Markdown memory folders (`MEMORY.md`, first 16,000 chars),
+  strips provider keys from shell children, honors `HTTP_PROXY` / `HTTPS_PROXY`
+  / `NO_PROXY` (30m stream timeout), and logs via your Effect `Logger` or
+  `effectDiagnosticsLayer` and `setLogSink`.
+
+</details>
 
 ## Current limits
 
-These are enforced, not undocumented — each fails or degrades loudly rather
-than failing quietly:
-
-- **Under `ask` without a handler, requests are denied.** A session whose
-  policy asks and that no attached host answers denies every request its
-  runs raise, and fails a launch whose custom tools need approval with
-  `ToolsRefused`. A question or a retry is denied under any policy when
-  nobody can answer it.
-- **Runs are one cycle long** unless `interactive`: `start` and `resume`
-  end the run after its cycle rather than waiting for a follow-up message.
-- **A persistent store may not carry across 0.x releases.** No row schema
-  is frozen before 1.0, so a release can change a row kind's version with no
-  upcaster. A run holding a row of a kind whose version changed is listed as
-  unreadable and is not resumed (S3); runs whose row kinds kept their
-  versions still resume. A store whose schema stamp differs from this
-  release's is refused whole (S1, S2). Do not rely on a persistent store
-  surviving an upgrade.
+- **No handler under `ask` denies requests** and fails launches with
+  `requiresApproval` tools (`ToolsRefused`); questions and post-retry prompts
+  deny under any policy when unanswered.
+- **Single-cycle by default** unless `interactive: true`.
+- **0.x store compatibility:** Row schemas are not frozen before 1.0 (S1–S3).
 
 ## License
 
-See `LICENSE.txt`.
+Licensed under [Apache-2.0](./LICENSE.txt).
