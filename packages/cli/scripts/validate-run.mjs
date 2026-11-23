@@ -3400,7 +3400,8 @@ async function validateServiceSharedTask() {
     );
     assert(
       orphaned.exit === 1 &&
-        orphaned.stderr.includes('no TeXRA service is running it'),
+        orphaned.stderr.includes(`Task ${orphan} stopped unexpectedly`) &&
+        orphaned.stderr.includes(`texra tasks send ${orphan}`),
       `an attach to a task no service runs should say so and exit 1 (exit ${orphaned.exit})\n${orphaned.stderr}`,
     );
   } finally {
