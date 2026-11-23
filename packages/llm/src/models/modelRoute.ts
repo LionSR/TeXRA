@@ -153,11 +153,24 @@ export function isUnservedModel(
   );
 }
 
+/** The largest input window, in tokens, the Codex backend grants any model on
+ *  a ChatGPT subscription: the bound on a user's override
+ *  (`RouteFacts.chatgptContextWindow`). */
+export const CHATGPT_SUBSCRIPTION_MAX_CONTEXT_WINDOW = 872_000;
+
 /** Whether the Codex backend runs `config` for TeXRA: an OpenAI model it
  *  serves on a ChatGPT subscription that TeXRA serves too. The Codex CLI's
  *  model choices are these. */
 export function isCodexModel(config: ModelConfig): boolean {
   return codexSubscriptionOf(config) !== undefined && !isUnservedModel(config);
+}
+
+/** Whether the Claude Code CLI runs `config` for TeXRA: an Anthropic model
+ *  TeXRA serves. The Claude Code CLI's model choices are these. */
+export function isClaudeCodeModel(config: ModelConfig): boolean {
+  return (
+    config.provider === ModelProvider.ANTHROPIC && !isUnservedModel(config)
+  );
 }
 
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `id`. */

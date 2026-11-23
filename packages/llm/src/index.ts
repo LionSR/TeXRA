@@ -142,6 +142,8 @@ export type { SelectedModel } from './models/modelSelection.js';
 export {
   codexBackendModelId,
   decideModelRoute,
+  CHATGPT_SUBSCRIPTION_MAX_CONTEXT_WINDOW,
+  isClaudeCodeModel,
   isCodexModel,
   isUnservedModel,
   kimiCodeServing,
