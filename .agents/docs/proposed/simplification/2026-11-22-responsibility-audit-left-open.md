@@ -57,3 +57,6 @@ shared window body owns was decided by a host instead:
    all of `ProcessServices`, which `Context.pick` cannot forward wholesale.
    First narrow `HostVerb`'s requirements for `setApiKey` to what the two
    hosts read, then the body owns the notice's verb.
+   Landed on 2026-11-23: `setApiKey` requires only the key store, and the
+   body builds the window's notices from its bindings
+   (`2026-11-23-responsibility-audit-left-open.md`).
