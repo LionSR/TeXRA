@@ -80,6 +80,10 @@ there; take it with a typed pane table.
   only on `completed`; a status union would hold both. Its unread
   `finishedAt` landed in this PR; the rest changes the public transcript
   type (`transcriptEntry.ts`) for little gain.
+  Landed 2026-11-23: the block is a union on `status` (`interrupted`
+  carries `finalThroughSeqNo`, `completed` its `freed` and `replaced`),
+  and `isCompactionActivityFinal` reads finality where `finalized` was
+  read.
 - The CLI chat's `slashPaletteOpen` and `reverseSearchOpen`
   (`packages/cli/src/chat/tui/state/cliState.ts`) are never both true, and
   every layout reader ORs them. One `inputOverlay` field would need the
@@ -90,3 +94,35 @@ there; take it with a typed pane table.
   (`packages/cli/src/runtime/history.ts`) repeats `status !== 'not-found'`
   and has no code reader; it is in the `--output-format json` output, so
   dropping it is a CLI contract change.
+  Landed 2026-11-23: `found` is gone; the JSON output states `status`
+  alone.
+
+## 6. Landed beside them, 2026-11-23
+
+The 2026-11-23 data-structure sweep took §5's first and last items and
+four more of the same kind:
+
+- `ToolRowModel.isUserFeedback` and `NormalizedToolUse.isUserFeedback`
+  restated whether the call has a user instruction; readers ask
+  `userInstruction`.
+- A stored `userQuestion` request kept the model's nulls (a question's
+  `header`, an option's `description`, the request's `context`) and left
+  `multiSelect` and `allowFreeText` absent, null or a boolean. The tool
+  keeps the nullable input and stores absent fields and two booleans
+  (`request.opened` v3).
+- A `max_tokens_reduced` event's `tokensBefore` and the context-management
+  row's `data` had no reader.
+- The CLI's ambient `termIsDumb` was optional though always set.
+
+Still open, each for the reason given:
+
+- `WorkbenchTab`'s union on `kind` (§4): needs the typed pane table, and
+  its readers are the desktop renderer's.
+- `slashPaletteOpen` / `reverseSearchOpen` (§5): terminal UI state, for an
+  input-bar rework.
+- `ExecResult.success` (`packages/harness/src/utils/system/execUtils.ts`)
+  is `end._tag === 'Exited' && end.code === 0` stated beside `end`. It is
+  on the `./node` surface with about twenty readers across the hosts; a
+  predicate over `end` would replace it, for no fewer lines.
+- `ToolFileAttachment`'s three payload fields and the LaTeX settings
+  status stay with the decisions the 2026-11-18 and 2026-11-15 notes name.
