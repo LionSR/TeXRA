@@ -70,9 +70,9 @@
  *   external effect and before its result commits. The file it left is the
  *   fixture's artifact (`golden-effect/approved.txt`), which the golden
  *   suite puts back before it resumes the run.
- * - one `golden_child` run, deleted with `texra history delete` once
- *   `texra serve` has left the project: the tombstoned run, which no
- *   later open is left to collect.
+ * - one `golden_child` run, deleted with `texra history delete` through the
+ *   running service while its generated-file directory is redirected: the
+ *   collector leaves the deletion pending when that directory is a link.
  * - last, a `golden_script` task in that service (`texra tasks start`) that
  *   sends a shell command to the background, and the service's
  *   `task.resume` of the finished command: a run with no agent record, so
@@ -97,7 +97,9 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { connect } from 'node:net';
@@ -949,8 +951,7 @@ async function generate(root) {
   // command to the background, which runs once `bash.release` appears and
   // reports back. The service's `task.resume` of that finished command, a
   // run with no agent record, closes its input (`followup.closed`) and
-  // refuses it. The one open that follows, the deletion below, removes
-  // nothing of it: a finished command goes with the next open after that.
+  // refuses it.
   // The service follows the project's persisted policy (the user's local
   // config beside its store), never a client's: Auto-approve, so the
   // background command runs unasked.
@@ -1021,12 +1022,17 @@ async function generate(root) {
       () => rowsOf(task, `e.type = 'run.end'`) > 0,
       service,
     );
+    // Reuse the service's session so opening another one cannot sweep the
+    // finished command before the fixture is dumped.
+    // The collector refuses a redirected executions directory. Leave a real
+    // pending deletion for the fixture regardless of when the collector runs.
+    const executions = path.join(path.dirname(cli.store()), 'executions');
+    const redirected = path.join(root, 'redirected-executions');
+    if (existsSync(executions)) renameSync(executions, redirected);
+    else mkdirSync(redirected);
+    symlinkSync(redirected, executions, 'junction');
+    client(['history', 'delete', doomed, '--yes', '--print']);
   });
-
-  // The tombstone, last: the service holds the store while it runs, so the
-  // deletion is a CLI's own open once the service has left, and no open
-  // follows that would collect it (or remove the finished command).
-  cli.run(['history', 'delete', doomed, '--yes', '--print']);
 
   // A TeX stand-in that ran: the store would hold what this machine's TeX
   // answers.
