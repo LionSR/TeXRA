@@ -103,14 +103,26 @@ interface ActionButtonCommon {
   readonly disabled?: boolean;
   /** Selected state for toggle buttons. Reflected as `aria-pressed`. */
   readonly pressed?: boolean;
-  /** Open state for a disclosure toggle. Reflected as `aria-expanded`. */
-  readonly expanded?: boolean;
   readonly onClick?: (event: MouseEvent) => void;
 }
 
+/**
+ * A disclosure toggle states whether its section is open (`expanded`,
+ * reflected as `aria-expanded`) and the button draws the chevron, which
+ * turns while open. It names no icon of its own, so no caller swaps or
+ * rotates one by hand.
+ */
+interface DisclosureGlyph {
+  readonly expanded: boolean;
+  readonly icon?: undefined;
+}
+
 export type IconActionButtonOptions = ActionButtonCommon &
-  ActionButtonTooltip & {
-    readonly icon: IconName;
+  ActionButtonTooltip &
+  (
+    | { readonly icon: IconName; readonly expanded?: undefined }
+    | DisclosureGlyph
+  ) & {
     readonly label: string;
     /** Icon-button geometry off the `--control-size` scale. Defaults to `s`. */
     readonly size?: ActionButtonSize;
@@ -125,8 +137,11 @@ export type IconActionButtonOptions = ActionButtonCommon &
   };
 
 export type LabeledActionButtonOptions = ActionButtonCommon &
-  ActionButtonTooltip & {
-    readonly icon?: IconName;
+  ActionButtonTooltip &
+  (
+    | { readonly icon?: IconName; readonly expanded?: undefined }
+    | DisclosureGlyph
+  ) & {
     readonly text: string;
     readonly label?: string;
     /** The main half of a split button: the trigger's accent chrome. */
@@ -138,6 +153,7 @@ export type LabeledActionButtonOptions = ActionButtonCommon &
 type ActionButtonBaseOptions = ActionButtonCommon &
   ActionButtonTooltip & {
     readonly icon?: IconName;
+    readonly expanded?: boolean;
     readonly label?: string;
     readonly text?: string;
     readonly size?: ActionButtonSize;
@@ -202,11 +218,17 @@ function renderActionButtonParts({
   // the hover hint only where no `wa-tooltip` shows one: both would double
   // it.
   const nativeTitle = title ?? (text ? undefined : ariaLabel);
+  const glyph = (slot?: 'start'): TemplateResult | typeof nothing => {
+    if (expanded !== undefined) {
+      return waIcon('chevron-right', { className: 'disclosure-chevron', slot });
+    }
+    return icon ? waIcon(icon, { slot }) : nothing;
+  };
   let content: TemplateResult | typeof nothing = nothing;
   if (text) {
-    content = html`${icon ? waIcon(icon, { slot: 'start' }) : nothing}${text}`;
-  } else if (icon) {
-    content = html`${waIcon(icon)}<span class="action-button-label"
+    content = html`${glyph('start')}${text}`;
+  } else if (icon || expanded !== undefined) {
+    content = html`${glyph()}<span class="action-button-label"
         >${ariaLabel}</span
       >`;
   }

@@ -238,7 +238,7 @@ export class RunTabs extends TexraElement {
   private handleTabClick(event: MouseEvent): void {
     const actionElement = getComposedPathElement(
       event,
-      '[data-run][data-action]',
+      '[data-action]',
       HTMLElement,
     );
     if (!actionElement) return;
