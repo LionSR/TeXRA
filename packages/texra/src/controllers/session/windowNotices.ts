@@ -3,15 +3,22 @@
  * extension and the desktop: a request's failure (with "Read the guide" when
  * it names a docs page), an instruction (its key's actions, plus "Never
  * remind again" where the key allows it), and a GitHub token GitHub
- * rejected. A host supplies only its message with buttons and the verbs the
- * buttons run.
+ * rejected. A host supplies only its message with buttons; the verbs the
+ * buttons run are the ones the window's requests run (`openGuiWindow`).
  */
 
 // Third-party imports
 import { Effect, Schema, Stream } from 'effect';
 
 // Local imports
-import { appSignalStream } from '@texra-ai/worldline/host';
+import type {
+  HostPresentation,
+  RuntimePresentationEventPayloads,
+} from '@texra-ai/worldline';
+import {
+  appSignalStream,
+  type PresentationEventHandlers,
+} from '@texra-ai/worldline/host';
 import {
   Settings,
   withLogChannel,
@@ -34,7 +41,6 @@ import {
   type InstructionAction,
 } from '@ui/copy/instructionActions';
 import { shownFailureText } from '@ui/copy/modelAccess';
-import type { GuiWindowHost } from './openGuiWindow';
 
 const CHANNEL = 'windowNotices';
 
@@ -43,17 +49,18 @@ const OPEN_GIT_SETTINGS = 'Open Git settings';
 
 /** A message with one button per label: the label chosen, or `undefined`
  *  when the person dismissed it. */
-type AskNotice = (
+export type AskNotice = (
   level: NoticeLevel,
   message: string,
   labels: readonly string[],
 ) => Effect.Effect<string | undefined, HostFailed>;
 
-/** What a window's notices need from its host. */
+/** What a window's notices run: its host's message with buttons, and the
+ *  window's own verbs behind the buttons. */
 interface WindowNoticeHost {
   readonly ask: AskNotice;
-  /** Ask for a provider API key: a prompt on one host, the Models tab on
-   *  the other. */
+  /** Ask for a provider API key, as the window's banner and onboarding
+   *  card do. */
   readonly setApiKey: Effect.Effect<void, Error>;
   /** Open a page of the TeXRA guide. */
   openGuide(page: string): Effect.Effect<void, Error>;
@@ -109,9 +116,9 @@ const ACTION_RUN: Record<
  */
 export function windowNotices(
   host: WindowNoticeHost,
-): Pick<
-  GuiWindowHost['notices'],
-  'requestShowError' | 'requestShowInstruction'
+): Omit<
+  PresentationEventHandlers<RuntimePresentationEventPayloads, HostPresentation>,
+  'openFile'
 > {
   const requestShowError = (
     failure: RequestShowErrorPayload,

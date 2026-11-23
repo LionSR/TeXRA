@@ -13,7 +13,7 @@ import {
   Stream,
 } from 'effect';
 
-import { scopedFork } from '@texra-ai/worldline/host';
+import { scopedFork, withProcessServices } from '@texra-ai/worldline/host';
 import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   attentionOf,
@@ -23,7 +23,6 @@ import {
   type RunId,
 } from '@texra-ai/worldline/schemas';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
-import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { openBuilt, type ShowBuilt } from '@frontend/latex/openBuild';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
@@ -283,7 +282,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         }).pipe(
           Effect.map((requests) => ({
             ...requests,
-            notices: createAgentPresentationHost(roots, runtime, showBuilt),
+            // The open-and-build program takes this window's file services
+            // from the runtime's context, which the session that forks it
+            // does not carry.
+            openFile: (payload) =>
+              withProcessServices(
+                runtime,
+                showBuilt([payload.location], {
+                  preserveFocus: payload.preserveFocus,
+                }),
+              ),
             window: editor,
             runs: {
               openFinalOutput: previewFinalOutput,
