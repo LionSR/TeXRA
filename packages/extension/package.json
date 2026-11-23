@@ -447,7 +447,7 @@
   },
   "homepage": "https://texra.ai",
   "devDependencies": {
-    "@awesome.me/webawesome": "^3.14.0",
+    "@awesome.me/webawesome": "^3.15.0",
     "@lit-labs/signals": "^0.3.0",
     "@texra-ai/worldline": "workspace:*",
     "@texra-ai/llm": "workspace:*",
