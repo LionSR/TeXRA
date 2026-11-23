@@ -23,6 +23,12 @@ What follows each needs a decision.
 
 ## 1. A user-question answer is assembled per surface
 
+Landed 2026-11-23: `userQuestionDecision`
+(`packages/texra/src/shared/session/userQuestionAnswer.ts`) builds the
+answer for all three surfaces. Free text adds to a multi-select question's
+picked options, and the terminal reads one typed line
+(`typedUserQuestionEntry`).
+
 `parseUserQuestionAnswer` (`packages/cli/src/runtime/headless/userQuestionAnswer.ts`)
 returns free text as one string even on a multi-select question. The TUI
 modal (`packages/cli/src/chat/tui/modals/UserQuestion.tsx`) drops free text

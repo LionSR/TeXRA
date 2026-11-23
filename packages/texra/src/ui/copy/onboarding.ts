@@ -45,9 +45,11 @@ export const ONBOARDING_CHOICE_API_KEY = {
   description: 'Anthropic, OpenAI, Google, DeepSeek, and more',
 } as const;
 
+/** The two ways to connect a model, as every first-run surface names them. */
+export const ONBOARDING_WAYS = 'Sign in with ChatGPT or add an API key.';
+
 /** The card's lede: what connecting a model leads to. */
-export const ONBOARDING_CARD_LEDE =
-  'Sign in with ChatGPT or add an API key. Then the setup assistant checks this project and starts your first task.';
+export const ONBOARDING_CARD_LEDE = `${ONBOARDING_WAYS} Then the setup assistant checks this project and starts your first task.`;
 
 /**
  * The API-key banner: shown once a task has finished and no sign-in or API

@@ -9,7 +9,6 @@ import {
 } from '@texra-ai/worldline/schemas';
 import { Effect, Number as Num, Predicate } from 'effect';
 
-import { isClaudeCodeModel } from '@texra/shared/agentCliSettings';
 import type { AgentCliEffort } from '@texra/shared/agentCliSettings';
 
 import {
@@ -24,7 +23,7 @@ import {
   type SettingsStores,
   type StateReadFailed,
 } from '@texra-ai/worldline/plugins';
-import type { ModelConfig } from '@texra-ai/llm';
+import { isClaudeCodeModel, type ModelConfig } from '@texra-ai/llm';
 
 import type {
   EffortLevel,

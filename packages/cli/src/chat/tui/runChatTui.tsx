@@ -54,7 +54,10 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
-import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
+import {
+  runsHereOnlyMessage,
+  sessionStoreMovedAsideMessage,
+} from '@ui/copy/sessionStore';
 
 import {
   createChatSessionController,
@@ -173,7 +176,7 @@ export async function runChat(
             sessionStoreMovedAsideMessage(local.storeMovedAside),
           );
         startupNotices.push(
-          `This chat runs here only, so other terminals and windows will not see it: ${service.failure.message}`,
+          runsHereOnlyMessage('terminal', service.failure.message),
         );
       }
       // Without a usable credential the chat still opens: the "Connect a

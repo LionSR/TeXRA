@@ -181,6 +181,16 @@ The route a binding bills through: a plan, or the caller's API key.
 type BillingRoute = PlanRoute | 'api-key';
 ```
 
+## CHATGPT_SUBSCRIPTION_MAX_CONTEXT_WINDOW
+
+The largest input window, in tokens, the Codex backend grants any model on
+a ChatGPT subscription: the bound on a user's override
+(`RouteFacts.chatgptContextWindow`).
+
+```ts
+const CHATGPT_SUBSCRIPTION_MAX_CONTEXT_WINDOW: 872000
+```
+
 ## checkPreparedHistory
 
 The history a turn sends: each assistant's local calls answered by the
@@ -463,6 +473,15 @@ rate-limit headers.
 
 ```ts
 const isAuthFailureStatus: (status: number | undefined) => boolean
+```
+
+## isClaudeCodeModel
+
+Whether the Claude Code CLI runs `config` for TeXRA: an Anthropic model
+TeXRA serves. The Claude Code CLI's model choices are these.
+
+```ts
+function isClaudeCodeModel(config: ModelConfig): boolean
 ```
 
 ## isCodexModel

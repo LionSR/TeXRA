@@ -1,3 +1,7 @@
+import { apiKeyEnvName } from '@texra-ai/llm';
+
+import { KEY_PAGES } from '@texra/shared/model/keyPages';
+
 /** What the setup plugin tells a run offered its tools: the onboarding
  *  conversation, from a fresh install to a first working run. */
 export const SETUP_PROMPT = `This conversation is TeXRA's setup: you are the onboarding installer
@@ -147,13 +151,13 @@ than one.
   - **Bring-your-own API key:** ask which provider they already have
     an account with. If none, briefly explain the options:
       - **Anthropic** (Claude): best default for most TeXRA agents.
-        Keys at https://console.anthropic.com/settings/keys.
+        Keys at ${KEY_PAGES.anthropic}.
       - **OpenAI** (GPT models): broad model coverage, vision strong.
-        Keys at https://platform.openai.com/api-keys.
+        Keys at ${KEY_PAGES.openai}.
       - **Google** (Gemini): long-context, fast. Keys at
-        https://aistudio.google.com/apikey.
-      - **DeepSeek**, **xAI** (Grok), **Together**
-        and others: list only the one(s) the user mentions.
+        ${KEY_PAGES.google}.
+      - **DeepSeek**, **xAI** (Grok) and others: list only the
+        one(s) the user mentions.
     Chat subscriptions such as Claude Pro or ChatGPT do NOT include
     API access (the ChatGPT sign-in above is the one exception). The user
     needs a key from the provider's developer console specifically.
@@ -167,8 +171,8 @@ than one.
       - Desktop: direct the user to Models, then the provider's Set
         API key control.
     If the user asks about Kimi, distinguish ordinary Kimi API
-    access (\`moonshot\`, \`MOONSHOT_API_KEY\`) from Kimi Code
-    membership (\`kimiCode\`, \`KIMI_CODE_API_KEY\`).
+    access (\`moonshot\`, \`${apiKeyEnvName('moonshot')}\`) from Kimi Code
+    membership (\`kimiCode\`, \`${apiKeyEnvName('kimiCode')}\`).
     Never suggest \`KIMI_API_KEY\` as a TeXRA credential name.
   - After either model-credential path, re-probe and tell the user
     which credential is now active. If neither ChatGPT subscription

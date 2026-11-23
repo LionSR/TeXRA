@@ -3,11 +3,10 @@ import { decodingDefault } from '@texra-ai/worldline/schemas';
 import type { SettingChoiceCopy } from '@texra-ai/worldline/schemas';
 import {
   DEFAULT_EFFORT,
+  isClaudeCodeModel,
   isCodexModel,
-  isUnservedModel,
   MODEL_CONFIGS,
   type ModelConfig,
-  ModelProvider,
   type ModelRef,
   ReasoningEffort,
 } from '@texra-ai/llm';
@@ -23,10 +22,6 @@ import {
 // ============================================================================
 // Models and effort — both agent CLIs name their model by llm-zoo reference
 // ============================================================================
-
-/** A model the Claude Code CLI can run: any Anthropic model still served. */
-export const isClaudeCodeModel = (config: ModelConfig): boolean =>
-  config.provider === ModelProvider.ANTHROPIC && !isUnservedModel(config);
 
 /** The picker's models: the eligible ones that are not deprecated, in registry order. */
 function pickerModels(eligible: (config: ModelConfig) => boolean) {
