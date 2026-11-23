@@ -8,6 +8,7 @@ import { loadMonaco, type MonacoModule } from '@ui/monaco/monacoLoader';
 import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - shared Web Awesome helpers
+import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { applyMonacoTheme } from './monacoTheme';
 import { monacoPresentationOptions } from './monacoOptions';
@@ -57,18 +58,7 @@ export class TexraDiffView extends LitElement {
         min-height: 0;
       }
 
-      .error {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: var(--diff-min-height);
-        padding: var(--wa-space-xs);
-        border: var(--border-thin) solid var(--color-border);
-        color: var(--color-error);
-        background: var(--color-bg-secondary);
-      }
-
-      .loading-state {
+      :is(.loading-state, .empty-state) {
         min-height: var(--diff-min-height);
         border: var(--border-thin) solid var(--color-border);
         background: var(--color-bg-secondary);
@@ -139,7 +129,12 @@ export class TexraDiffView extends LitElement {
 
   override render(): TemplateResult {
     if (this.errorMessage) {
-      return html`<div class="error">${this.errorMessage}</div>`;
+      return renderEmptyState({
+        icon: 'circle-exclamation',
+        title: 'Failed to load diff editor',
+        body: this.errorMessage,
+        headingTag: 'h3',
+      });
     }
     const loading = this.editorLoad !== undefined;
     return html`
@@ -182,8 +177,7 @@ export class TexraDiffView extends LitElement {
       this.observeResize(container);
     } catch (error) {
       if (current())
-        this.errorMessage =
-          extractErrorMessage(error) ?? 'Failed to load diff editor.';
+        this.errorMessage = extractErrorMessage(error) ?? 'Unknown error.';
     } finally {
       if (current()) this.editorLoad = undefined;
     }
