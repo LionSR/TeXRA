@@ -13,14 +13,12 @@ import { Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import type { ScopedFork } from '@texra-ai/worldline/host';
-import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   VscodeDiffViewHost,
   type DiffSession,
 } from '@frontend/approval/VscodeDiffViewHost';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { ShowBuilt } from '@frontend/latex/openBuild';
-import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   fromHost,
   hostFailure,
@@ -36,8 +34,6 @@ import { writeApprovalTempFiles } from '@texra/controllers/approval/tempFileMana
 import { UNAPPLIED_TOOL_EDIT } from '@ui/copy/toolEditPreview';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
-const CHANNEL = 'ToolEditApproval';
-
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost = new VscodeDiffViewHost();
   readonly openBuildDisplay: BuildDisplayFn;
@@ -46,7 +42,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly fork: ScopedFork<never>;
   constructor(
     storageDirectory: string,
-    /** The view's run function, where a report or warning is shown. */
+    /** The view's run function, where a notice is shown. */
     fork: ScopedFork<never>,
     showBuilt: ShowBuilt,
   ) {
@@ -62,6 +58,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
 
   stagePreview(
     request: ToolEditPreviewRequest,
+    warn: (message: string) => Effect.Effect<void>,
   ): Effect.Effect<ToolEditPreview, HostCommandFailure, FileSystem.FileSystem> {
     return FileSystem.FileSystem.use((fs) =>
       fs.makeDirectory(this.storageDirectory, { recursive: true }),
@@ -77,31 +74,16 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
       ),
       Effect.map(
         (staged) =>
-          new VscodeToolEditPreview(
-            this.diffViewHost,
-            request,
-            staged,
-            this.warn,
-          ),
+          new VscodeToolEditPreview(this.diffViewHost, request, staged, warn),
       ),
     );
   }
 
-  reportError(message: string): void {
-    // Fire-and-forget: the report is logged and shown on its own fiber, and
-    // the caller does not wait for the toast.
-    this.fork(showLoggedMessage(message).pipe(withLogChannel(CHANNEL)));
+  notify(level: 'error' | 'warning', message: string): void {
+    // Fire-and-forget: the notice is shown on its own fiber, and the caller
+    // does not wait for the toast.
+    this.fork(vscodeUi.notify(level, message));
   }
-
-  /** A warning, logged and shown on its own fiber, as a report is. */
-  private readonly warn = (message: string): void => {
-    this.fork(
-      Effect.logWarning(message).pipe(
-        withLogChannel(CHANNEL),
-        Effect.andThen(vscodeUi.notify('warning', message)),
-      ),
-    );
-  };
 }
 
 class VscodeToolEditPreview implements ToolEditPreview {
@@ -110,13 +92,12 @@ class VscodeToolEditPreview implements ToolEditPreview {
   private readonly diffViewHost: VscodeDiffViewHost;
   private readonly request: ToolEditPreviewRequest;
   private readonly staged: ApprovalTempFiles;
-  /** Tell the user something without waiting for them to read it. */
-  private readonly warn: (message: string) => void;
+  private readonly warn: (message: string) => Effect.Effect<void>;
   constructor(
     diffViewHost: VscodeDiffViewHost,
     request: ToolEditPreviewRequest,
     staged: ApprovalTempFiles,
-    warn: (message: string) => void,
+    warn: (message: string) => Effect.Effect<void>,
   ) {
     this.diffViewHost = diffViewHost;
     this.request = request;
@@ -170,10 +151,8 @@ class VscodeToolEditPreview implements ToolEditPreview {
             .keepProposedText(this.diffSession, unapplied)
             .pipe(
               Effect.andThen(
-                Effect.sync(() =>
-                  this.warn(
-                    UNAPPLIED_TOOL_EDIT.inEditor(this.request.relativePath),
-                  ),
+                this.warn(
+                  UNAPPLIED_TOOL_EDIT.inEditor(this.request.relativePath),
                 ),
               ),
             );

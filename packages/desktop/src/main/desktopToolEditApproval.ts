@@ -76,6 +76,7 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
 
   stagePreview(
     request: ToolEditPreviewRequest,
+    warn: (message: string) => Effect.Effect<void>,
   ): Effect.Effect<ToolEditPreview, HostCommandFailure, FileSystem.FileSystem> {
     const { ui } = this.options;
     return FileSystem.FileSystem.use((fs) =>
@@ -95,7 +96,7 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
                 ui,
                 request,
                 { tempDir, originalPath, proposedPath },
-                (message) => this.show(ui.notify('warning', message)),
+                warn,
               ),
           ),
           // A failed write leaves the directory it made; nothing else would
@@ -116,13 +117,9 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
     );
   }
 
-  reportError(message: string): void {
-    this.show(this.options.ui.notify('error', message));
-  }
-
   /** Fire-and-forget: the dialog waits for the user, its caller does not. */
-  private show(dialog: Effect.Effect<void>): void {
-    this.options.spawn(dialog);
+  notify(level: 'error' | 'warning', message: string): void {
+    this.options.spawn(this.options.ui.notify(level, message));
   }
 }
 
@@ -136,13 +133,12 @@ class DesktopToolEditPreview implements ToolEditPreview {
   private readonly ui: DesktopToolEditApprovalUi;
   private readonly request: ToolEditPreviewRequest;
   private readonly staged: DesktopStagedFiles;
-  /** Tell the user something without waiting for them to read it. */
-  private readonly warn: (message: string) => void;
+  private readonly warn: (message: string) => Effect.Effect<void>;
   constructor(
     ui: DesktopToolEditApprovalUi,
     request: ToolEditPreviewRequest,
     staged: DesktopStagedFiles,
-    warn: (message: string) => void,
+    warn: (message: string) => Effect.Effect<void>,
   ) {
     this.ui = ui;
     this.request = request;
@@ -198,23 +194,22 @@ class DesktopToolEditPreview implements ToolEditPreview {
     unapplied?: string,
   ): Effect.Effect<void, HostCommandFailure, FileSystem.FileSystem> {
     const { tempDir, originalPath, proposedPath } = this.staged;
-    return Effect.suspend(() => {
-      if (unapplied !== undefined)
-        this.warn(
-          UNAPPLIED_TOOL_EDIT.inFile(this.request.relativePath, proposedPath),
-        );
-      return this.ui.closeDiff(this.request.requestId).pipe(
-        Effect.andThen(
-          FileSystem.FileSystem.use((fs) =>
-            unapplied === undefined
-              ? fs.remove(tempDir, { recursive: true, force: true })
-              : fs.remove(originalPath, { force: true }),
-          ),
+    const warned =
+      unapplied === undefined
+        ? Effect.void
+        : this.warn(
+            UNAPPLIED_TOOL_EDIT.inFile(this.request.relativePath, proposedPath),
+          );
+    return warned.pipe(
+      Effect.andThen(this.ui.closeDiff(this.request.requestId)),
+      Effect.andThen(
+        FileSystem.FileSystem.use((fs) =>
+          unapplied === undefined
+            ? fs.remove(tempDir, { recursive: true, force: true })
+            : fs.remove(originalPath, { force: true }),
         ),
-        Effect.mapError((cause) =>
-          hostFailure('approval.removeTempDir', cause),
-        ),
-      );
-    });
+      ),
+      Effect.mapError((cause) => hostFailure('approval.removeTempDir', cause)),
+    );
   }
 }

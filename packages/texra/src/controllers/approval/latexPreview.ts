@@ -133,8 +133,8 @@ export interface LatexPreviewEntry {
   /** One LaTeX operation at a time: one started while another runs does
    *  nothing. */
   readonly operation: Semaphore.Semaphore;
-  /** Platform-specific error reporter, injected by the caller. */
-  onError: (message: string) => void;
+  /** Report a failed operation to the person. */
+  onError: (message: string) => Effect.Effect<void>;
 }
 
 /** Length of the random suffix for temp file names (8 hex digits of a UUID, 2^32 combinations) */
@@ -210,9 +210,7 @@ const withLatexOperation = (
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
-        : Effect.sync(() => {
-            entry.onError(`${operationName} failed: ${toErrorMessage(cause)}`);
-          }),
+        : entry.onError(`${operationName} failed: ${toErrorMessage(cause)}`),
     ),
     entry.operation.withPermitsIfAvailable(1),
     Effect.asVoid,

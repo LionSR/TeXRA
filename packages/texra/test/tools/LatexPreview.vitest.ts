@@ -39,7 +39,7 @@ describe('previewProposedLatex', () => {
           proposedContent: 'b',
           files,
           operation: yield* Semaphore.make(1),
-          onError: (message) => errors.push(message),
+          onError: (message) => Effect.sync(() => errors.push(message)),
         },
         {
           openBuildDisplay: (location) =>
