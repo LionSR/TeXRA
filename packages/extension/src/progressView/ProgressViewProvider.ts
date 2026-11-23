@@ -33,6 +33,7 @@ import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import { sectionCountLabel } from '@ui/copy/runStatus';
 import {
   fromHost,
+  fromHostSync,
   hostFailed,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
@@ -568,17 +569,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    */
   private reveal(preserveFocus: boolean): Effect.Effect<void, HostFailed> {
     const { editor, sidebar } = this.surfaces;
-    const host = (member: string, call: () => void) =>
-      Effect.try({
-        try: call,
-        catch: (cause) => hostFailed(member, cause),
-      });
     if (editor)
-      return host('reveal', () => editor.view.reveal(undefined, preserveFocus));
+      return fromHostSync('reveal', () =>
+        editor.view.reveal(undefined, preserveFocus),
+      );
     // A quiet reveal shows a resolved sidebar in place; one that takes focus
     // runs the focus command, which also opens a collapsed container.
     if (sidebar && preserveFocus)
-      return host('reveal', () => sidebar.view.show(true));
+      return fromHostSync('reveal', () => sidebar.view.show(true));
     return showInSidebar;
   }
 

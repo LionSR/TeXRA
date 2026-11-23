@@ -7,8 +7,8 @@
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { toErrorMessage } from '@texra-ai/worldline/schemas';
-import { HostFailed } from '@texra/hosts/uiHosts';
+import { fromHost } from '@texra/controllers/session/hostCallFailure';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 
 /**
  * Clamp a 1-based line number to a 0-based VS Code line index. Floors first
@@ -46,15 +46,11 @@ function showTextDocument(
   document: vscode.TextDocument,
   options: vscode.TextDocumentShowOptions,
 ): Effect.Effect<vscode.TextEditor, HostFailed> {
-  return Effect.tryPromise({
-    try: () => vscode.window.showTextDocument(document, options),
-    catch: (cause) =>
-      new HostFailed({
-        member: 'openFileInEditor',
-        message: `Could not show ${uri.fsPath} in an editor: ${toErrorMessage(cause)}`,
-        cause,
-      }),
-  });
+  return fromHost(
+    'openFileInEditor',
+    () => vscode.window.showTextDocument(document, options),
+    `Could not show ${uri.fsPath} in an editor`,
+  );
 }
 
 /**
@@ -74,15 +70,11 @@ function showDocument(
     });
   }
   return Effect.gen(function* () {
-    const document = yield* Effect.tryPromise({
-      try: () => vscode.workspace.openTextDocument(uri),
-      catch: (cause) =>
-        new HostFailed({
-          member: 'openFileInEditor',
-          message: `Could not open ${uri.fsPath}: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    });
+    const document = yield* fromHost(
+      'openFileInEditor',
+      () => vscode.workspace.openTextDocument(uri),
+      `Could not open ${uri.fsPath}`,
+    );
     return yield* showTextDocument(uri, document, {
       preview,
       preserveFocus,
