@@ -146,7 +146,7 @@ export const programOrigin = (name: string): ProgramOrigin => {
 };
 
 /** What a program's launch grants its run ({@link programGrants}). */
-export interface ProgramGrants {
+interface ProgramGrants {
   /** The program is the app's own (a `listed` plugin's), so its tools are
    *  fixed past the live switches and the files it hands a child pass as
    *  written; an `installed` or `own` program's follow the switches and
