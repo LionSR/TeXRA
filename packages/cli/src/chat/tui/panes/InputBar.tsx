@@ -12,9 +12,10 @@ import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { attachClipboardImage } from '@cli/runtime/terminal/clipboardImage';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';
+import { BORDERED_PANEL_CHROME_COLUMNS } from '@cli/tui/ui/BorderedPanel';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { TextInput } from '../input/TextInput';
+import { PROMPT_PREFIX_COLUMNS, TextInput } from '../input/TextInput';
 import { textInputCappedRowCount } from '../input/textInputDisplay';
 import {
   EMPTY_DRAFT,
@@ -104,11 +105,12 @@ function slashSubmitText(
  *  transcript. Must match `maxDisplayRows` so Box height and the caret-aware
  *  window share one budget (see textInputCappedRowCount). */
 const INPUT_BAR_MAX_CONTENT_ROWS = 5;
-/** Round border (2) + paddingX (2) + pointer prompt `› ` (2). Must match
+/** The round border and paddingX, plus the pointer prompt `› `. Must match
  *  the rendered chrome exactly: telling the window a wider width than Ink
  *  actually gives the inner Text makes Ink re-wrap the windowed row and the
  *  overflow row gets clipped by the height-capped Box. */
-const INPUT_BAR_DECORATION_COLUMNS = 6;
+const INPUT_BAR_DECORATION_COLUMNS =
+  BORDERED_PANEL_CHROME_COLUMNS + PROMPT_PREFIX_COLUMNS;
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
   const { disabled, history, holdsKeystroke, onSubmit } = props;

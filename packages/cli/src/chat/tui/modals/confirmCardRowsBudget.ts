@@ -2,9 +2,9 @@ import { BORDERED_PANEL_CHROME_COLUMNS } from '@cli/tui/ui/BorderedPanel';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { confirmCardPulsedTitle } from './ConfirmCardState';
+import { PROMPT_PREFIX_COLUMNS } from '../input/TextInput';
 
 const FEEDBACK_MARGIN_ROWS = 1;
-const FEEDBACK_PREFIX_COLUMNS = 2;
 
 /**
  * Rows the rejection-feedback input occupies inside a ConfirmCard: its blank
@@ -21,8 +21,7 @@ export function confirmCardFeedbackRows({
   readonly value: string;
 }): number {
   const text = value.length > 0 ? value : placeholder;
-  const width =
-    columns - BORDERED_PANEL_CHROME_COLUMNS - FEEDBACK_PREFIX_COLUMNS;
+  const width = columns - BORDERED_PANEL_CHROME_COLUMNS - PROMPT_PREFIX_COLUMNS;
   return FEEDBACK_MARGIN_ROWS + wrappedRowCount(text, width);
 }
 

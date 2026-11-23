@@ -17,6 +17,7 @@ import {
   metaChordInput,
 } from '@cli/tui/inputKeys';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
+import { textDisplayWidth } from '@cli/runtime/terminal/terminalText';
 import {
   restingCursor,
   graphemeAt,
@@ -104,13 +105,18 @@ interface TextInputProps {
 
 /** A text input behind the pointer gutter: the one-line answer a card or
  *  form asks for. */
+const PROMPT_PREFIX = `${POINTER} `;
+/** Columns a prompt's `› ` takes before its input, which the input's own
+ *  wrap width leaves out. */
+export const PROMPT_PREFIX_COLUMNS = textDisplayWidth(PROMPT_PREFIX);
+
 export function PromptInput({
   marginTop = 0,
   ...props
 }: TextInputProps & { readonly marginTop?: number }): React.JSX.Element {
   return (
     <Box marginTop={marginTop}>
-      <Text>{`${POINTER} `}</Text>
+      <Text>{PROMPT_PREFIX}</Text>
       <TextInput {...props} />
     </Box>
   );

@@ -27,7 +27,7 @@ import {
   toggleUserQuestionSelection,
   updateUserQuestionAnswers,
 } from './UserQuestionState';
-import { TextInput } from '../input/TextInput';
+import { PROMPT_PREFIX_COLUMNS, TextInput } from '../input/TextInput';
 import type {
   UserQuestionAnswers,
   UserQuestionRequest,
@@ -406,7 +406,7 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
         <Text>{`${POINTER} `}</Text>
         <Box flexGrow={1} flexShrink={1} height={1} overflowY="hidden">
           <TextInput
-            displayWidth={Math.max(1, contentWidth - 2)}
+            displayWidth={Math.max(1, contentWidth - PROMPT_PREFIX_COLUMNS)}
             maxDisplayRows={1}
             value={answer}
             onChange={setAnswer}
