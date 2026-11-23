@@ -1,7 +1,7 @@
 /**
  * The notices with buttons a GUI window shows, worded and wired once for the
- * extension and the desktop: a request's failure (with "Read the guide" when
- * it names a docs page), an instruction (its key's actions, plus "Never
+ * extension and the desktop: a request's failure, an instruction (its key's
+ * actions, plus "Never
  * remind again" where the key allows it), and a GitHub token GitHub
  * rejected. A host supplies only its message with buttons; the verbs the
  * buttons run are the ones the window's requests run (`openGuiWindow`).
@@ -37,7 +37,6 @@ import {
   INSTRUCTION_ACTION_BUTTON_LABELS,
   instructionActions,
   instructionSuppressible,
-  READ_GUIDE_BUTTON_LABEL,
   type InstructionAction,
 } from '@ui/copy/instructionActions';
 import { shownFailureText } from '@ui/copy/modelAccess';
@@ -122,30 +121,8 @@ export function windowNotices(
 > {
   const requestShowError = (
     failure: RequestShowErrorPayload,
-  ): Effect.Effect<void, Error> => {
-    const { docsPage } = failure;
-    return host
-      .ask(
-        'error',
-        shownFailureText(failure),
-        docsPage ? [READ_GUIDE_BUTTON_LABEL] : [],
-      )
-      .pipe(
-        Effect.flatMap((choice) =>
-          choice && docsPage
-            ? // The notice has been answered: a guide that fails to open is
-              // a diagnostic.
-              host.openGuide(docsPage).pipe(
-                Effect.ignore({
-                  log: 'Warn',
-                  message: `Failed to open the ${docsPage} guide`,
-                }),
-                withLogChannel(CHANNEL),
-              )
-            : Effect.void,
-        ),
-      );
-  };
+  ): Effect.Effect<void, Error> =>
+    Effect.asVoid(host.ask('error', shownFailureText(failure), []));
   return {
     requestShowError,
     requestShowInstruction: ({ key, message }) => {

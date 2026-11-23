@@ -42,7 +42,6 @@ import {
   LAUNCH_FILE_LISTS,
 } from '@ui/copy/fileSelectConfigs';
 import { designTokens } from '@ui/styles';
-import { texraGuideUrl } from '@ui/copy/guide';
 import {
   renderIconActionButton,
   renderIconActionButtonParts,
@@ -50,7 +49,6 @@ import {
 } from '@ui/wa/actionButtons';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
-import { READ_GUIDE_BUTTON_LABEL } from '@ui/copy/instructionActions';
 import { requestErrorText } from '@ui/copy/requestErrors';
 
 // Local imports - progress view frontend
@@ -185,19 +183,7 @@ export class ProgressApp extends LitElement {
     return html`<wa-callout class="request-notice" variant="danger">
       ${waIcon('circle-exclamation', { slot: 'icon' })}
       <div class="request-notice-content">
-        <div>
-          ${requestErrorText(error)}
-          ${
-            error._tag === 'Rejected' && error.docsPage
-              ? html`<a
-                  href=${texraGuideUrl(error.docsPage)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  >${READ_GUIDE_BUTTON_LABEL}</a
-                >`
-              : nothing
-          }
-        </div>
+        <div>${requestErrorText(error)}</div>
         ${renderIconActionButton({
           id: 'dismiss-request-notice',
           icon: 'xmark',

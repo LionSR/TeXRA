@@ -1798,7 +1798,6 @@ The runtime refused the request for a worded reason, which is also its
 ```ts
 class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
   reason: Schema.String,
-  docsPage: Schema.optional(Schema.String),
 })
 ```
 
@@ -1880,7 +1879,7 @@ type RequestShowErrorPayload = typeof RequestShowErrorPayloadSchema.Type;
 Show an error message via a host notification.
 
 ```ts
-const RequestShowErrorPayloadSchema: Struct<{ readonly message: String; readonly docsPage: optional<String>; readonly failure: optional<Union<readonly [Struct<{ readonly kind: Literals<readonly ["invalid-request", "authentication", "context-overflow", "continuation-gone", "transport", "provider-rejection"]>; readonly message: String; readonly requestId: optional<String>; readonly status: optional<Int>; readonly quota: optional<Struct<{ readonly plan: NullOr<Literals<("chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription")[]>>; readonly planType: optional<String>; readonly resetsInMs: optional<Int>; }>>; readonly source: Literal<"model">; readonly provider: optional<String>; readonly partialText: optional<String>; }>, Struct<{ readonly message: String; readonly missingApiKey: optional<Literal<true>>; readonly session: optional<Struct<{ readonly route: Literals<("chatgpt-subscription" | "xai-subscription")[]>; readonly needsReauth: Boolean; }>>; readonly source: Literal<"route">; readonly provider: optional<String>; }>]>>; }>
+const RequestShowErrorPayloadSchema: Struct<{ readonly message: String; readonly failure: optional<Union<readonly [Struct<{ readonly kind: Literals<readonly ["invalid-request", "authentication", "context-overflow", "continuation-gone", "transport", "provider-rejection"]>; readonly message: String; readonly requestId: optional<String>; readonly status: optional<Int>; readonly quota: optional<Struct<{ readonly plan: NullOr<Literals<("chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription")[]>>; readonly planType: optional<String>; readonly resetsInMs: optional<Int>; }>>; readonly source: Literal<"model">; readonly provider: optional<String>; readonly partialText: optional<String>; }>, Struct<{ readonly message: String; readonly missingApiKey: optional<Literal<true>>; readonly session: optional<Struct<{ readonly route: Literals<("chatgpt-subscription" | "xai-subscription")[]>; readonly needsReauth: Boolean; }>>; readonly source: Literal<"route">; readonly provider: optional<String>; }>]>>; }>
 ```
 
 ## RequestShowInstructionPayload
