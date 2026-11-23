@@ -1224,12 +1224,12 @@ type LaunchApproval = typeof LaunchApprovalSchema.Type;
 
 The notice a refused launch carries for its caller to show
 (`LaunchRefused.notice`), as the presentation event and payload a host's
-`emit` takes: the instruction for a model the build does not recognize,
-or the agent the launch named that the catalog does not hold. The launch
-shows nothing itself; the caller shows this where it shows the failure.
+`emit` takes: the instruction for a model the build does not recognize.
+The launch shows nothing itself; the caller shows this where it shows the
+failure.
 
 ```ts
-const LaunchNoticeSchema: Union<readonly [Struct<{ readonly event: Literal<"requestShowInstruction">; readonly payload: Struct<{ readonly key: String; readonly message: String; }>; }>]>
+const LaunchNoticeSchema: Struct<{ readonly event: Literal<"requestShowInstruction">; readonly payload: Struct<{ readonly key: String; readonly message: String; }>; }>
 ```
 
 ## launchPolicy

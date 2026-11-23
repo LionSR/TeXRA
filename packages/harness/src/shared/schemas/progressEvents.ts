@@ -42,19 +42,17 @@ export interface RequestShowInstructionPayload {
 /**
  * The notice a refused launch carries for its caller to show
  * (`LaunchRefused.notice`), as the presentation event and payload a host's
- * `emit` takes: the instruction for a model the build does not recognize,
- * or the agent the launch named that the catalog does not hold. The launch
- * shows nothing itself; the caller shows this where it shows the failure.
+ * `emit` takes: the instruction for a model the build does not recognize.
+ * The launch shows nothing itself; the caller shows this where it shows the
+ * failure.
  */
-export const LaunchNoticeSchema = Schema.Union([
-  Schema.Struct({
-    event: Schema.Literal('requestShowInstruction'),
-    payload: Schema.Struct({
-      key: Schema.String,
-      message: Schema.String,
-    }) satisfies Schema.Codec<RequestShowInstructionPayload, unknown>,
-  }),
-]);
+export const LaunchNoticeSchema = Schema.Struct({
+  event: Schema.Literal('requestShowInstruction'),
+  payload: Schema.Struct({
+    key: Schema.String,
+    message: Schema.String,
+  }) satisfies Schema.Codec<RequestShowInstructionPayload, unknown>,
+});
 
 /** Show an error message via a host notification. */
 export const RequestShowErrorPayloadSchema = Schema.Struct({
