@@ -135,7 +135,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(function* (
   GitHubFailure | GitHubMalformedBodyError,
   GitHubServices
 > {
-  const basePath = `/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=${CHECK_RUNS_PAGE_SIZE}`;
+  const path = `/repos/${owner}/${repo}/commits/${sha}/check-runs`;
 
   // Seed a scratch cache we'll return. We rebuild from
   // scratch each tick (rather than mutating in-place) so any pages dropped
@@ -166,11 +166,10 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(function* (
     GitHubServices
   > {
     const pageEtag = cache?.pages.get(page)?.etag;
-    const res = yield* ghGet(
-      `${basePath}&page=${page}`,
-      GhCheckRunsPageSchema,
-      pageEtag,
-    );
+    const res = yield* ghGet(path, GhCheckRunsPageSchema, {
+      etag: pageEtag,
+      params: { per_page: CHECK_RUNS_PAGE_SIZE, page },
+    });
     if (res.status === 304) {
       // Reuse cached page. Carry forward the ETag we sent.
       const cachedRuns = cache?.pages.get(page)?.runs ?? [];
@@ -341,10 +340,13 @@ export const fetchAnnotations = Effect.fn('fetchAnnotations')(function* (
   const annotations: GhCheckAnnotation[] = [];
   for (let page = 1; page <= MAX_ANNOTATION_PAGES_PER_RUN; page += 1) {
     yield* claim;
-    const path = `/repos/${owner}/${repo}/check-runs/${checkRunId}/annotations?per_page=${ANNOTATIONS_PAGE_SIZE}&page=${page}`;
     // A malformed page ends the walk with what was read, so one bad optional
     // response cannot stop the PR's subscription.
-    const res = yield* ghGet(path, GhCheckAnnotationArraySchema).pipe(
+    const res = yield* ghGet(
+      `/repos/${owner}/${repo}/check-runs/${checkRunId}/annotations`,
+      GhCheckAnnotationArraySchema,
+      { params: { per_page: ANNOTATIONS_PAGE_SIZE, page } },
+    ).pipe(
       Effect.catchTag('GitHubMalformedBodyError', (error) =>
         logWarning(
           `Malformed annotations page ${page} for check ${checkRunId}`,

@@ -3,7 +3,7 @@ import { Box, Text, useWindowSize } from 'ink';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
-import { clampModalWidth, isCompactRows } from '@cli/tui/ui/theme';
+import { clampModalWidth } from '@cli/tui/ui/theme';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 
 import { ConfirmCard, ConfirmCardFeedback } from './ConfirmCard';
@@ -35,10 +35,9 @@ const EDIT_DIFF_PADDING = 6;
 const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
 const EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 const COMPACT_EDIT_APPROVAL_MAX_ROWS = 9;
-const DEFAULT_EDIT_DIFF_ROWS = 30;
 
 interface ToolEditRequestProps {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly payload: ToolEditTuiRequest;
   /** The run grant the request offers (`offeredGrant`). */
   readonly grant: ApprovalBypassKind | null;
@@ -51,7 +50,7 @@ function toolEditDiffRowsBudget({
   feedbackRows = 0,
   title,
 }: {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly columns: number;
   /** Rows the card's open rejection note takes (`ConfirmCardFeedback`). */
   readonly feedbackRows?: number;
@@ -61,7 +60,6 @@ function toolEditDiffRowsBudget({
     availableRows,
     columns,
     title,
-    defaultRows: DEFAULT_EDIT_DIFF_ROWS,
     compactMaxRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     spaciousFixedRows: EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
     compactFixedRows: EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE,
@@ -80,10 +78,7 @@ export function ToolEditRequest(
       title={title}
       kind="toolEdit"
       grant={props.grant}
-      compact={isCompactRows(
-        props.availableRows,
-        COMPACT_EDIT_APPROVAL_MAX_ROWS,
-      )}
+      compact={props.availableRows <= COMPACT_EDIT_APPROVAL_MAX_ROWS}
       onDecide={props.onDecide}
     >
       {props.payload.tui.kind === 'preview' ? (
@@ -117,7 +112,7 @@ function ToolEditDiff({
   payload,
   title,
 }: {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   /** The staged preview the diff shows. */
   readonly content: ToolEditContent;
   readonly payload: ToolEditTuiRequest;

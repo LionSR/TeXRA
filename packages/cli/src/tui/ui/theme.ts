@@ -17,17 +17,3 @@ export function clampModalWidth(
 export function confirmCardContentWidth(columns: number): number {
   return clampModalWidth(columns - BORDERED_PANEL_CHROME_COLUMNS);
 }
-
-/**
- * Shared "below N rows, switch to compact chrome" predicate. Each modal/form
- * still owns its own threshold constant (chrome differs per widget) and
- * usually its own named wrapper (e.g. `isCompactPlanApprovalRows`) for
- * call-site readability and any widget-specific threshold adjustment — this
- * just names the one comparison every one of those wrappers makes.
- */
-export function isCompactRows(
-  availableRows: number | undefined,
-  threshold: number,
-): boolean {
-  return availableRows !== undefined && availableRows <= threshold;
-}

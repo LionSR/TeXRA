@@ -16,7 +16,6 @@ import { Effect } from 'effect';
 // Local imports
 import { formatIssueClosed, formatIssueReopened } from './formatIssueEvent';
 import { formatCommentEvent } from './formatUtils';
-import { withSince } from './githubPaths';
 import {
   pollGet,
   readNewItems,
@@ -48,15 +47,11 @@ export const pollIssue = Effect.fn('github.pollIssue')(function* (
   const issuePath = `/repos/${issue.owner}/${issue.repo}/issues/${issue.number}`;
   const [issueRes, commentsRes] = yield* Effect.all(
     [
-      pollGet(issuePath, GhIssueSchema, prior?.etags.issue),
-      pollGet(
-        withSince(
-          `${issuePath}/comments?per_page=100`,
-          prior?.comments?.sinceCursor,
-        ),
-        GhIssueCommentArraySchema,
-        prior?.etags.comments,
-      ),
+      pollGet(issuePath, GhIssueSchema, { etag: prior?.etags.issue }),
+      pollGet(`${issuePath}/comments`, GhIssueCommentArraySchema, {
+        etag: prior?.etags.comments,
+        params: { per_page: 100, since: prior?.comments?.sinceCursor },
+      }),
     ],
     { concurrency: 2 },
   );

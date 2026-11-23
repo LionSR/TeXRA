@@ -2,9 +2,9 @@ import { BORDERED_PANEL_CHROME_COLUMNS } from '@cli/tui/ui/BorderedPanel';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { confirmCardPulsedTitle } from './ConfirmCardState';
+import { PROMPT_PREFIX_COLUMNS } from '../input/TextInput';
 
 const FEEDBACK_MARGIN_ROWS = 1;
-const FEEDBACK_PREFIX_COLUMNS = 2;
 
 /**
  * Rows the rejection-feedback input occupies inside a ConfirmCard: its blank
@@ -21,8 +21,7 @@ export function confirmCardFeedbackRows({
   readonly value: string;
 }): number {
   const text = value.length > 0 ? value : placeholder;
-  const width =
-    columns - BORDERED_PANEL_CHROME_COLUMNS - FEEDBACK_PREFIX_COLUMNS;
+  const width = columns - BORDERED_PANEL_CHROME_COLUMNS - PROMPT_PREFIX_COLUMNS;
   return FEEDBACK_MARGIN_ROWS + wrappedRowCount(text, width);
 }
 
@@ -42,18 +41,15 @@ export function confirmCardContentRowsBudget({
   availableRows,
   columns,
   title,
-  defaultRows,
   compactMaxRows,
   spaciousFixedRows,
   compactFixedRows,
   extraFixedRows = 0,
 }: {
-  /** Rows granted to the whole modal; undefined means "not constrained". */
-  readonly availableRows?: number;
+  /** Rows granted to the whole modal. */
+  readonly availableRows: number;
   readonly columns: number;
   readonly title: string;
-  /** Budget used when `availableRows` is undefined. */
-  readonly defaultRows: number;
   /** Content rows shown in the compact layout (and spacious cutoff). */
   readonly compactMaxRows: number;
   /** Chrome rows besides the title in the spacious layout. */
@@ -63,8 +59,6 @@ export function confirmCardContentRowsBudget({
   /** Modal-specific rows present in both layouts. */
   readonly extraFixedRows?: number;
 }): number {
-  if (availableRows === undefined) return defaultRows;
-
   const fixedRows =
     wrappedRowCount(
       confirmCardPulsedTitle(0, title),

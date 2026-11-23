@@ -40,7 +40,11 @@ import {
   type GitHubCheckAnnotationLevel,
 } from './checkAnnotationLevels';
 import { getGitHubToken } from './githubAuth';
-import { ghGet, type GitHubServices } from './githubClient';
+import {
+  ghGet,
+  type GitHubGetOptions,
+  type GitHubServices,
+} from './githubClient';
 import {
   GITHUB_POLL_INTERVAL_MS,
   MAX_SUBSCRIPTIONS,
@@ -257,9 +261,15 @@ function pullOf(issue: IssueTarget): PullTarget {
 const ghGetOk = <T>(
   path: string,
   schema: Schema.Codec<T, unknown>,
-  failure = (status: number) => `Unexpected GitHub response status: ${status}`,
+  {
+    params,
+    failure = (status) => `Unexpected GitHub response status: ${status}`,
+  }: {
+    readonly params?: GitHubGetOptions['params'];
+    readonly failure?: (status: number) => string;
+  } = {},
 ): Effect.Effect<T, Error, GitHubServices> =>
-  Effect.flatMap(ghGet(path, schema), (res) =>
+  Effect.flatMap(ghGet(path, schema, { params }), (res) =>
     res.status === 200
       ? Effect.succeed(res.data)
       : Effect.fail(new ToolError(failure(res.status))),
@@ -277,9 +287,11 @@ const resolveIssueIsPR = (
     ghGetOk(
       `/repos/${issue.owner}/${issue.repo}/issues/${issue.number}`,
       GhIssueSchema,
-      (status) =>
-        `Failed to resolve ${targetPath(issue)}: GitHub returned status ${status}. ` +
-        `Verify the number exists and the repo is accessible.`,
+      {
+        failure: (status) =>
+          `Failed to resolve ${targetPath(issue)}: GitHub returned status ${status}. ` +
+          `Verify the number exists and the repo is accessible.`,
+      },
     ),
     (found) => found.pull_request != null,
   );
@@ -355,10 +367,9 @@ const listOpenPullSuggestions = (
   repo: string,
 ): Effect.Effect<string, Error, GitHubServices> =>
   Effect.map(
-    ghGet(
-      `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
-      OpenPullSummariesSchema,
-    ),
+    ghGet(`/repos/${owner}/${repo}/pulls`, OpenPullSummariesSchema, {
+      params: { state: 'open', per_page: 5 },
+    }),
     (res) => {
       if (res.status !== 200 || res.data.length === 0) {
         return '';
@@ -441,12 +452,18 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
         'HEAD is detached: cannot infer a PR branch.',
       );
     }
-    const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
     const [pr] = yield* ghGetOk(
-      apiPath,
+      `/repos/${remote.owner}/${remote.repo}/pulls`,
       Schema.Array(
         Schema.Struct({ number: Schema.Number, html_url: Schema.String }),
       ),
+      {
+        params: {
+          state: 'open',
+          head: `${remote.owner}:${branch}`,
+          per_page: 1,
+        },
+      },
     );
     if (!pr) {
       const { defaultBranch, suggestions } = yield* getFindCurrentFallbackInfo(

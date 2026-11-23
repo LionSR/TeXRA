@@ -3,7 +3,8 @@
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Option } from 'effect';
+import { HttpClientRequest } from 'effect/http';
 import { describe, expect } from 'vitest';
 
 // Local imports - platform
@@ -21,13 +22,17 @@ import { fetchAnnotations } from '@texra/tools/github/checkRunsClient';
 import type { GhCheckAnnotation } from '@texra/tools/github/prTypes';
 import { HARNESS_APP } from '@test/support/FakePlatform';
 
+/** The URL a request is sent to, its query parameters included. */
+const urlOf = (request: HttpClientRequest.HttpClientRequest): URL =>
+  Option.getOrThrow(HttpClientRequest.toUrl(request));
+
 /**
  * The GitHub API as the client sees it: `pages[n - 1]` answers page `n`
  * of the annotation walk, over a process secret store holding no token.
  */
 function githubServing(pages: readonly unknown[]) {
   const http = scriptedHttpClientLayer((request) => {
-    const page = Number(new URL(request.url).searchParams.get('page'));
+    const page = Number(urlOf(request).searchParams.get('page'));
     return jsonResponse(pages[page - 1]);
   });
   return {
@@ -37,8 +42,8 @@ function githubServing(pages: readonly unknown[]) {
     ),
     /** Each request's path and query, as `ghGet` was handed it. */
     paths: () =>
-      http.requests.map(({ url }) => {
-        const { pathname, search } = new URL(url);
+      http.requests.map((request) => {
+        const { pathname, search } = urlOf(request);
         return pathname + search;
       }),
   };

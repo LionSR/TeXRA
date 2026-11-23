@@ -24,7 +24,6 @@ import { useScrollableOffset } from '../state/useScrollableOffset';
 
 type ModalTextDisplayLine = ScrollableDisplayLine<'text'>;
 
-const DEFAULT_MODAL_TEXT_ROWS = 12;
 const SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 7;
 const COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 
@@ -35,7 +34,7 @@ export function scrollableModalTextRowsBudget({
   extraFixedRows = 0,
   title,
 }: {
-  readonly availableRows?: number;
+  readonly availableRows: number;
   readonly columns: number;
   /** Modal-specific rows present in both layouts (metadata, feedback…). */
   readonly extraFixedRows?: number;
@@ -45,7 +44,6 @@ export function scrollableModalTextRowsBudget({
     availableRows,
     columns,
     title,
-    defaultRows: DEFAULT_MODAL_TEXT_ROWS,
     compactMaxRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     spaciousFixedRows: SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
     compactFixedRows: COMPACT_FIXED_ROWS_EXCLUDING_TITLE,
