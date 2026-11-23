@@ -65,7 +65,7 @@
     "typescript": "catalog:",
     "undici": "catalog:",
     "vite": "^8.3.8",
-    "vitest": "^5.1.0",
+    "vitest": "^5.1.1",
     "yaml": "catalog:"
   }
 }
