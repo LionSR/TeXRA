@@ -84,10 +84,10 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
 - **Document tasks are programs, not agents.** The agents `correct`,
   `polish`, `generic`, `devise`, `criticize`, `firstread`, `logic`,
   `notation`, `enhance`, `apply`, `merge`, `ocr`, `transcribe_audio`,
-  `paper2slide`, `paper2poster` and `critic` are replaced by eight programs:
-  `edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides`
-  and `poster`. What to change and from which point of view is the
-  instruction: `edit` covers a proofread and a restructuring, `annotate` a
+  `paper2slide`, `paper2poster` and `critic` are replaced by seven programs:
+  `edit`, `annotate`, `enhance`, `apply`, `transcribe`, `slides` and
+  `poster`. The Merge action for partial document edits has been removed.
+  What to change and from which point of view is the instruction: `edit` covers a proofread and a restructuring, `annotate` a
   referee and a first reader. Start one with
   `texra run <program> --input <file>` or ask the assistant. `texra run` no longer
   takes `--reflect`, `--attachTeXCount`, `--autoExtractFigure`,
