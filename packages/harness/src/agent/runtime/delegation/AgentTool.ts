@@ -374,10 +374,10 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const outputSchema = yield* childOutputSchema(
     launch.program === null ? launch.schema : null,
   );
-  // The call's files, the program's file arguments among them: a
-  // run-storage file must be this run's own or a declared output of a
-  // completed child of it; a listed program's files pass as named, those
-  // of a program read from a file are resolved like a model's.
+  // The call's files: a run-storage file must be this run's own or a
+  // declared output of a completed child of it; a listed program's files
+  // pass as named, while those of a program read from a file are resolved
+  // like a model's.
   const caller = programOf(run.config);
   const verbatim =
     caller !== null &&

@@ -12,8 +12,8 @@
 //
 // Root carries `.mockup`, so the shared `--mk-*` tokens and the
 // .surface/.cl/.kw mono-code vocabulary from theme/mockup.css resolve here and
-// flip with the docs light / dark theme. Static strings only — mirrors the
-// MergeFlowHero frameless-flow pattern (central node, arrows, mobile stacking).
+// flip with the docs light / dark theme. Static strings only — uses a
+// frameless-flow pattern (central node, arrows, mobile stacking).
 import StatusPill from './StatusPill.vue';
 </script>
 

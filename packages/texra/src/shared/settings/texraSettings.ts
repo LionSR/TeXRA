@@ -366,8 +366,8 @@ const TEXRA_PLACED_ROWS: readonly TexraSettingRow[] = [
 ];
 
 /**
- * TeXRA's helper model while the person has chosen none (polishing, agent
- * creation, merge, session descriptions). DeepSeek V4.1 Flash is the cheapest
+ * TeXRA's helper model while the person has chosen none (task titles, LaTeX
+ * fixes, and other short auxiliary steps). DeepSeek V4.1 Flash is the cheapest
  * capable option (~$0.15/$0.60 per MTok) and keeps these one-shot,
  * non-streaming helper calls fast.
  */

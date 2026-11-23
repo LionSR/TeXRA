@@ -234,7 +234,7 @@ const getEnabledModels: (stores: Pick<SettingsStores, "config" | "globalState">)
 
 ## getHelperModelName
 
-The helper model a run, a merge, or the Models tab uses: the configured
+The helper model a run or the Models tab uses: the configured
 choice while it is enabled, else the catalog's default for the setting;
 `undefined` when neither names one, and a run's helper calls use its own
 model. The harness names no default: an app's catalog supplies its own
