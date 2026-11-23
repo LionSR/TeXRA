@@ -5,16 +5,16 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue'
 
 # Programs: how they work
 
-A document program (`edit`, `annotate`, `enhance`, `apply`, `merge`,
-`transcribe`, `slides`, `poster`) takes your input files, read-only context
+A document program (`edit`, `annotate`, `enhance`, `apply`, `transcribe`,
+`slides`, `poster`) takes your input files, read-only context
 files and instruction, has a model write each revision, and writes versioned
 diffs to run storage. This page covers the stages of a program run and the
 optional critic. For the list of programs, read
 [The assistant and programs](./programs.md).
 
 ::: tip When to run a program
-Programs are built for **deep, single-shot work**: rewriting a whole section,
-converting a paper to slides, or merging edits. Each revision produces the
+Programs are built for **deep, single-shot work**: rewriting a whole section
+or converting a paper to slides. Each revision produces the
 full documents, and most programs review the first revision in a second one,
 so runs with frontier reasoning models can take **10–30 minutes**.
 
@@ -25,11 +25,10 @@ pipeline. For a problem too big for one run, the assistant can start several
 programs at once; read [Multi-agent workflows](./multi-agent-workflows.md).
 :::
 
-A program is started in one of three ways:
+A program is started in one of two ways:
 
 - you ask the assistant, which proposes the run for you to approve;
-- `texra run <program> --input …` in the terminal;
-- the **Merge** action, which starts `merge`.
+- `texra run <program> --input …` in the terminal.
 
 The Lean programs (`prove`, `lean-simplify`, `blueprint`, `lean-search`) are
 described in [Lean 4 proofs](./lean.md#lean-programs); the task programs
@@ -99,13 +98,13 @@ A `program` call can switch on extra context with `args`, each a boolean: `attac
 
 ### Built-in review pass
 
-Each program fixes its own number of revisions. `edit`, `annotate`, `enhance`, `transcribe`, `slides`, and `poster` run two: a first revision (`r0/`), then a review pass (`r1/`) that rereads the first revision against the original and outputs the corrected documents. `apply` and `merge` run one. A run ends earlier only on failure or cancellation.
+Each program fixes its own number of revisions. `edit`, `annotate`, `enhance`, `transcribe`, `slides`, and `poster` run two: a first revision (`r0/`), then a review pass (`r1/`) that rereads the first revision against the original and outputs the corrected documents. `apply` runs one. A run ends earlier only on failure or cancellation.
 
 `annotate` also checks each revision itself: when a revision changes text outside its `\criticize{}` comments, the next revision is told to restore the original.
 
 ### Optional critic review (`reflect`)
 
-Started with `args: { reflect: true }` on a `program` call, a program inserts an independent critic between revisions. After each revision (except the last) is compiled and diffed, the critic reads the requests so far, the diff against the original input, and the compile result, then returns grounded corrections tied to locations plus one high-value optional improvement. The next revision's prompt carries that critique in a `<critique>` block. The revision count stays the same, so `reflect: true` has no effect on single-revision programs (`apply` and `merge`).
+Started with `args: { reflect: true }` on a `program` call, a program inserts an independent critic between revisions. After each revision (except the last) is compiled and diffed, the critic reads the requests so far, the diff against the original input, and the compile result, then returns grounded corrections tied to locations plus one high-value optional improvement. The next revision's prompt carries that critique in a `<critique>` block. The revision count stays the same, so `reflect: true` has no effect on single-revision programs (`apply`).
 
 ::: warning Potential XML Issues
 Occasionally an LLM generates slightly malformed XML, especially for very long or complex outputs. TeXRA closes an unclosed `<document>` tag itself and tries to recover untagged files, and it keeps every revision's raw reply (`r{n}/output.xml`, for example `r0/output.xml`). If a file still fails to extract, open that `.xml` file to recover the text. Read the [Troubleshooting guide](./troubleshooting.md#missing-or-truncated-output-files) for details.

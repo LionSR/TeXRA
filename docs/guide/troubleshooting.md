@@ -182,7 +182,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 - **Rate limits and quota**: Check your provider dashboard if requests fail with quota or billing errors.
 - **Large documents**: If a run times out or hits the output token limit on a long `.tex` file, split the file into per-section inputs.
 - **Slow turnaround**: Programs run multi-pass reasoning and can take 10–30 minutes on frontier reasoning models. For quick edits, pick a faster model (`google/gemini-3.8-flash`, `anthropic/claude-haiku-5-5`, `deepseek/deepseek-flash`, or `openai/gpt-6-luna`), or ask the assistant in a chat instead.
-- **Stronger reasoning**: For hard derivations, proofs, or complex merges, use a flagship model (`anthropic/claude-fable-5-1`, `anthropic/claude-opus-5-5`, `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, or `google/gemini-4-argon`). The assistant can also start a program with a critic reviewing each revision (`args: { reflect: true }`).
+- **Stronger reasoning**: For hard derivations, proofs, or deep manuscript reviews, use a flagship model (`anthropic/claude-fable-5-1`, `anthropic/claude-opus-5-5`, `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, or `google/gemini-4-argon`). The assistant can also start a program with a critic reviewing each revision (`args: { reflect: true }`).
 
 ### Missing or truncated output files
 

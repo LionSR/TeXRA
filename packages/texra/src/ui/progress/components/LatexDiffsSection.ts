@@ -63,13 +63,6 @@ const EDITED_REVIEW_ACTIONS: readonly DiffActionSpec[] = [
 /** Apply the edited file's changes onto the base file. */
 const EDITED_APPLY_ACTIONS: readonly DiffActionSpec[] = [
   {
-    id: 'mergeButton',
-    icon: 'code-merge',
-    label: 'Merge',
-    tooltip: 'Merge edits into a new version of the base file',
-    action: 'merge',
-  },
-  {
     id: 'acceptButton',
     icon: 'check',
     label: 'Accept',
@@ -208,7 +201,6 @@ export class LatexDiffsSection extends LitElement {
       case 'compare':
       case 'latexdiff':
       case 'accept':
-      case 'merge':
         return {
           kind: 'fileAction',
           action,
@@ -330,7 +322,7 @@ export class LatexDiffsSection extends LitElement {
               <label id="editedFileLabel" for="editedFile">Edited</label>
               <wa-tooltip for="editedFileLabel">
                 The edited version of the base file: the one to diff or compare
-                against it, merge into it or accept over it
+                against it or accept over it
               </wa-tooltip>
             </div>
             <div class="file-select-actions">

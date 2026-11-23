@@ -32,8 +32,8 @@ const actions = [
   },
   {
     icon: 'diff-single',
-    label: 'latexdiff / merge',
-    hint: 'Diff, compare, or merge edits from the latexdiff panel',
+    label: 'latexdiff / accept',
+    hint: 'Diff, compare, or accept edits from the latexdiff panel',
   },
 ];
 </script>

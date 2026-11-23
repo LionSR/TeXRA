@@ -79,9 +79,6 @@ import MockupFrame from './MockupFrame.vue';
               ><wa-icon library="texra" name="diff"></wa-icon> Compare</span
             >
             <span class="act"
-              ><wa-icon library="texra" name="merge"></wa-icon> Merge</span
-            >
-            <span class="act"
               ><wa-icon library="texra" name="check"></wa-icon> Accept</span
             >
           </div>

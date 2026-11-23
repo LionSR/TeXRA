@@ -297,7 +297,6 @@ After your first task with TeXRA, you can:
 
 - Explore the [programs](./programs.md) for specialized tasks
 - Learn about [LaTeX diff](./latex-diff.md) for comparing document versions
-- Use [intelligent merge](./intelligent-merge.md) to combine changes
 - Tune your workflow with [custom configuration](./configuration.md)
 
 For issues or questions, read the [troubleshooting guide](/guide/troubleshooting) or check the [GitHub issues page](https://github.com/LionSR/TeXRA/issues).

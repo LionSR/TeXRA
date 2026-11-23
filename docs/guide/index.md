@@ -75,7 +75,7 @@ graph TB
     Assistant --> IA[Helper agents]
     Assistant --> Tools
 
-    WA --> |edit, annotate, merge| Output[Versioned Output Files]
+    WA --> |edit, annotate, apply| Output[Versioned Output Files]
     Output --> Diff[Color-Coded Diff]
 
     IA --> Tools[Tool Access]

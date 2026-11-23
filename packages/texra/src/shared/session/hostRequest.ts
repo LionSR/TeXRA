@@ -39,7 +39,6 @@ export const FileActionSchema = Schema.Literals([
   'compare',
   'latexdiff',
   'accept',
-  'merge',
 ]);
 
 export const HostCommandSchema = Schema.Union([

@@ -77,4 +77,3 @@ Use [LaTeX Diff](./latex-diff.md) to visualize changes between versions.
 
 - [Configuration](/guide/configuration): Customize TeXRA
 - [Tailoring TeXRA](/guide/customizing): Project instructions, skills, plugins and your own programs
-- [Intelligent Merge](/guide/intelligent-merge): Merge document versions

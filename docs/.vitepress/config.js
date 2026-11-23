@@ -70,7 +70,6 @@ const guideSidebar = [
     items: [
       { text: 'Polish a Draft', link: '/guide/workflows/polish-a-draft' },
       { text: 'LaTeX Diff', link: '/guide/latex-diff' },
-      { text: 'Intelligent Merge', link: '/guide/intelligent-merge' },
       { text: 'Research Tools', link: '/guide/research-tools' },
       { text: 'Lean 4 Proofs', link: '/guide/lean' },
       { text: 'LaTeX Tools', link: '/guide/latex-tools' },

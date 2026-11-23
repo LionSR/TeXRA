@@ -375,12 +375,6 @@ export class FileList extends TexraElement {
         tooltip: 'Accept edits into the project file',
         onClick: act('accept'),
       })}
-      ${fileActionButton(idPrefix, 'merge', {
-        icon: 'code-merge',
-        label: `Merge edits for ${displayPath}`,
-        tooltip: 'Merge edits into the project file',
-        onClick: act('merge'),
-      })}
     `;
   }
 }

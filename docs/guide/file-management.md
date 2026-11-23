@@ -196,4 +196,3 @@ ln -s /path/to/Dropbox/texra-projects/ProjectName/History /path/to/local/Project
 
 - [Research tools](/guide/research-tools): how TeXRA uses external tools
 - [LaTeX Diff](/guide/latex-diff): how to compare document versions
-- [Intelligent Merge](/guide/intelligent-merge): how edited documents are merged
