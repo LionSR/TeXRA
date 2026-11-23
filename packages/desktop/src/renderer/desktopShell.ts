@@ -33,7 +33,6 @@ import {
 import { actionMenu } from '@ui/wa/actionMenu';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { inlineRenameField } from '@ui/wa/inlineRename';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { Shell } from './shell';
 
 /** One open project as the rail lists it: how its host names it, its session,
@@ -117,6 +116,15 @@ function projectStatus(
   return undefined;
 }
 
+/** The project row's own button: the menu and the rename field beside it
+ *  answer neither a double-click nor F2. */
+function onProjectRow(event: Event): boolean {
+  return (
+    event.target instanceof Element &&
+    event.target.closest('wa-button.shell-project-row') !== null
+  );
+}
+
 /** Project selection is separate from the active project's task history. */
 function projectSection(
   project: RailProject,
@@ -147,7 +155,17 @@ function projectSection(
     },
   ]);
   return html`
-    <div class="shell-project-item ${active ? 'is-active' : ''}">
+    <div
+      class="shell-project-item ${active ? 'is-active' : ''}"
+      @dblclick=${(event: MouseEvent) => {
+        if (onProjectRow(event)) callbacks.onProjectAction(key, 'rename');
+      }}
+      @keydown=${(event: KeyboardEvent) => {
+        if (event.key !== 'F2' || !onProjectRow(event)) return;
+        event.preventDefault();
+        callbacks.onProjectAction(key, 'rename');
+      }}
+    >
       ${
         model.renamingProjectKey === key
           ? inlineRenameField({
@@ -158,27 +176,16 @@ function projectSection(
               onRename: (value) => callbacks.onRenameProject?.(key, value),
               onClose: () => callbacks.onCloseRename?.(),
             })
-          : html`<wa-button
-              type="button"
-              class="shell-project-row btn-ghost is-row is-row-content"
-              appearance="plain"
-              size="s"
-              title=${key}
-              aria-current=${active ? 'true' : nothing}
-              @click=${() => callbacks.onSelectProject(key)}
-              @dblclick=${() => callbacks.onProjectAction(key, 'rename')}
-              @keydown=${(event: KeyboardEvent) => {
-                if (event.key === 'F2') {
-                  event.preventDefault();
-                  callbacks.onProjectAction(key, 'rename');
-                }
-              }}
-            >
-              ${waIcon('folder', { slot: 'start' })}<span
-                class="shell-project-name"
-                >${name}</span
-              >
-            </wa-button>`
+          : renderLabeledActionButton({
+              kind: 'ghost',
+              className: 'shell-project-row is-row is-row-content',
+              icon: 'folder',
+              // prettier-ignore
+              text: html`<span class="shell-project-name">${name}</span>`,
+              title: key,
+              current: active,
+              onClick: () => callbacks.onSelectProject(key),
+            })
       }
       ${
         // The dot is the row's whole status line; its words are the tooltip.

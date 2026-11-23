@@ -117,9 +117,11 @@
   font-size: var(--font-size-icon);
 }
 
+/* A file sits one step below the directory holding it, whose depth it
+   inherits; a top-level file inherits none. */
 .desktop-review-file {
   padding-inline-start: calc(
-    var(--wa-space-xs) + var(--tree-depth, 0) * var(--wa-space-s)
+    var(--wa-space-xs) + (var(--tree-depth, -1) + 1) * var(--wa-space-s)
   );
 }
 

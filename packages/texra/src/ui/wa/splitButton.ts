@@ -1,15 +1,18 @@
 // Third-party imports
-import { css, html, type CSSResult, type TemplateResult } from 'lit';
+import {
+  css,
+  html,
+  type CSSResult,
+  type nothing,
+  type TemplateResult,
+} from 'lit';
 
 // Side-effect imports - register WA components
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - Web Awesome
+import { renderIconActionButtonParts } from './actionButtons';
 import { actionMenu, type ActionMenuItem } from './actionMenu';
-import { waIcon } from './webAwesomeIcons';
 
 interface SplitButtonMenuOptions {
   /** Component-specific prefix for the menu and caret-trigger classes. */
@@ -24,7 +27,7 @@ interface SplitButtonMenuOptions {
 
 interface SplitButtonMenuParts {
   readonly menu: TemplateResult;
-  readonly tooltip: TemplateResult;
+  readonly tooltip: TemplateResult | typeof nothing;
 }
 
 /**
@@ -72,6 +75,15 @@ export function renderSplitButtonMenuParts({
   items,
 }: SplitButtonMenuOptions): SplitButtonMenuParts {
   const menu = actionMenu(items);
+  const trigger = renderIconActionButtonParts({
+    id: triggerId,
+    slot: 'trigger',
+    className: `${classPrefix}-trigger split-trigger`,
+    icon: 'chevron-down',
+    label: triggerAriaLabel,
+    tooltip,
+    splitMain: true,
+  });
   return {
     menu: html`
       <wa-dropdown
@@ -79,21 +91,9 @@ export function renderSplitButtonMenuParts({
         placement="bottom-end"
         @wa-select=${menu.onSelect}
       >
-        <wa-button
-          id=${triggerId}
-          slot="trigger"
-          class="${classPrefix}-trigger split-trigger"
-          appearance="accent"
-          variant="brand"
-          size="s"
-          type="button"
-          aria-label=${triggerAriaLabel}
-        >
-          ${waIcon('chevron-down')}
-        </wa-button>
-        ${menu.items}
+        ${trigger.button} ${menu.items}
       </wa-dropdown>
     `,
-    tooltip: html`<wa-tooltip for=${triggerId}>${tooltip}</wa-tooltip>`,
+    tooltip: trigger.tooltip,
   };
 }

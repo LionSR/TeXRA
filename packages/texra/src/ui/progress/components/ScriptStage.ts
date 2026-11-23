@@ -28,7 +28,10 @@ import {
   scriptStageSummary,
 } from '@ui/copy/scriptStage';
 import { designTokens } from '@ui/styles';
-import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import {
+  disclosureChevronStyles,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
 import { buttonStyles, formControlStyles } from '@ui/styles/controlStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { isActivationKey } from '@ui/wa/keyActivation';
@@ -166,6 +169,7 @@ export class ScriptStage extends LitElement {
   static override styles = [
     designTokens,
     buttonStyles,
+    disclosureChevronStyles,
     formControlStyles,
     toneStyles,
     scriptStageStyles,
@@ -337,7 +341,6 @@ export class ScriptStage extends LitElement {
       </div>
       <div class="log">
         ${renderLabeledActionButton({
-          icon: this.logOpen ? 'chevron-down' : 'chevron-right',
           text: 'Log',
           expanded: this.logOpen,
           onClick: () => this.toggleLog(),

@@ -213,7 +213,6 @@ export class RunTabs extends TexraElement {
       <div class="tabs">
         <div class="tabs-content">
           <div
-            @click=${this.handleTabClick}
             @run-row-delete=${(event: Event) => {
               const tab = getComposedPathElement(event, 'run-tab', RunTab);
               if (tab && this.removable && tab.run.actions.includes('delete'))
@@ -233,40 +232,5 @@ export class RunTabs extends TexraElement {
         </div>
       </div>
     `;
-  }
-
-  private handleTabClick(event: MouseEvent): void {
-    const actionElement = getComposedPathElement(
-      event,
-      '[data-run][data-action]',
-      HTMLElement,
-    );
-    if (!actionElement) return;
-
-    // The action element lives in the row's own `run-tab`, whose `run`
-    // is the typed view: the id is read from it, never re-parsed from the DOM.
-    const tab = getComposedPathElement(event, 'run-tab', RunTab);
-    const run = tab?.run;
-    if (!tab || !run) return;
-    const runId = run.id;
-    const { action } = actionElement.dataset;
-
-    switch (action) {
-      case 'select':
-        this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', runId }));
-        break;
-      case 'delete':
-        this.deleteRun(tab, runId);
-        break;
-      case 'toggle-children':
-        this.dispatchEvent(
-          SessionUiEvents.surface({
-            kind: 'expand',
-            runId,
-            expanded: !this.isExpanded(run),
-          }),
-        );
-        break;
-    }
   }
 }

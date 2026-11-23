@@ -103,14 +103,27 @@ interface ActionButtonCommon {
   readonly disabled?: boolean;
   /** Selected state for toggle buttons. Reflected as `aria-pressed`. */
   readonly pressed?: boolean;
-  /** Open state for a disclosure toggle. Reflected as `aria-expanded`. */
-  readonly expanded?: boolean;
+  /** The current row of a navigation list. Reflected as `aria-current`. */
+  readonly current?: boolean;
   readonly onClick?: (event: MouseEvent) => void;
 }
 
+/**
+ * A disclosure toggle sets `expanded` (reflected as `aria-expanded`) and
+ * names no icon: its glyph is the chevron `disclosureChevronStyles` turns
+ * while the section is open.
+ */
+interface DisclosureGlyph {
+  readonly icon?: undefined;
+  readonly expanded: boolean;
+}
+
 export type IconActionButtonOptions = ActionButtonCommon &
-  ActionButtonTooltip & {
-    readonly icon: IconName;
+  ActionButtonTooltip &
+  (
+    | { readonly icon: IconName; readonly expanded?: undefined }
+    | DisclosureGlyph
+  ) & {
     readonly label: string;
     /** Icon-button geometry off the `--control-size` scale. Defaults to `s`. */
     readonly size?: ActionButtonSize;
@@ -122,12 +135,21 @@ export type IconActionButtonOptions = ActionButtonCommon &
      * sense over a square icon button.
      */
     readonly busy?: boolean;
+    /** The caret half of a split button: the main half's accent chrome. */
+    readonly splitMain?: boolean;
   };
 
 export type LabeledActionButtonOptions = ActionButtonCommon &
-  ActionButtonTooltip & {
-    readonly icon?: IconName;
-    readonly text: string;
+  ActionButtonTooltip &
+  (
+    | { readonly icon?: IconName; readonly expanded?: undefined }
+    | DisclosureGlyph
+  ) & {
+    /**
+     * The visible label. A template (a styled span) names the button
+     * through its text unless `label` gives the accessible name.
+     */
+    readonly text: string | TemplateResult;
     readonly label?: string;
     /** The main half of a split button: the trigger's accent chrome. */
     readonly splitMain?: boolean;
@@ -138,8 +160,9 @@ export type LabeledActionButtonOptions = ActionButtonCommon &
 type ActionButtonBaseOptions = ActionButtonCommon &
   ActionButtonTooltip & {
     readonly icon?: IconName;
+    readonly expanded?: boolean;
     readonly label?: string;
-    readonly text?: string;
+    readonly text?: string | TemplateResult;
     readonly size?: ActionButtonSize;
     readonly busy?: boolean;
     readonly splitMain?: boolean;
@@ -170,6 +193,7 @@ function renderActionButtonParts({
   disabled,
   pressed,
   expanded,
+  current,
   busy,
   tooltip,
   splitMain,
@@ -192,7 +216,7 @@ function renderActionButtonParts({
   ]
     .filter(Boolean)
     .join(' ');
-  const ariaLabel = label ?? text ?? '';
+  const ariaLabel = label ?? (typeof text === 'string' ? text : undefined);
   // wa-tooltip is position:absolute, so the sibling never affects flex flow.
   const tooltipTemplate =
     tooltip === undefined
@@ -202,11 +226,14 @@ function renderActionButtonParts({
   // the hover hint only where no `wa-tooltip` shows one: both would double
   // it.
   const nativeTitle = title ?? (text ? undefined : ariaLabel);
+  const glyphIcon = expanded === undefined ? icon : 'chevron-right';
+  const glyphClass = expanded === undefined ? undefined : 'disclosure-chevron';
   let content: TemplateResult | typeof nothing = nothing;
   if (text) {
-    content = html`${icon ? waIcon(icon, { slot: 'start' }) : nothing}${text}`;
-  } else if (icon) {
-    content = html`${waIcon(icon)}<span class="action-button-label"
+    content = html`${glyphIcon ? waIcon(glyphIcon, { slot: 'start', className: glyphClass }) : nothing}${text}`;
+  } else if (glyphIcon) {
+    content = html`${waIcon(glyphIcon, { className: glyphClass })}<span
+        class="action-button-label"
         >${ariaLabel}</span
       >`;
   }
@@ -220,7 +247,8 @@ function renderActionButtonParts({
       variant=${skin.variant}
       size="s"
       type="button"
-      aria-label=${ariaLabel}
+      aria-label=${ifDefined(ariaLabel)}
+      aria-current=${ifDefined(current ? 'true' : undefined)}
       aria-pressed=${ifDefined(
         pressed === undefined ? undefined : String(pressed),
       )}

@@ -1,12 +1,12 @@
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import './TexraDiffView';
-import { html, nothing, render, type TemplateResult } from 'lit';
+import { html, render, type TemplateResult } from 'lit';
 import { styleMap } from 'lit/directives/style-map.js';
 import { formatResultCount } from '@texra-ai/worldline/schemas';
 
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
 import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyMessage, renderEmptyState } from '@ui/wa/emptyState';
 import { renderFilterField } from '@ui/wa/filterField';
 import { matchesQuery } from '@ui/wa/listInteraction';
@@ -92,22 +92,15 @@ export function createReviewPane(): ReviewPaneController {
       }
       const entry = shown.get(node.path);
       if (!entry) return html``;
-      const active = entry.previewId === selectedId;
-      return html`
-        <wa-button
-          type="button"
-          class="desktop-review-file btn-ghost is-row is-compact"
-          style=${styleMap({ '--tree-depth': String(depth) })}
-          appearance="plain"
-          size="s"
-          aria-current=${active ? 'true' : nothing}
-          title=${entry.displayPath}
-          @click=${() => select(entry)}
-        >
-          ${waIcon('file-code', { slot: 'start' })}
-          <span>${node.name}</span>
-        </wa-button>
-      `;
+      return renderLabeledActionButton({
+        kind: 'ghost',
+        className: 'desktop-review-file is-row is-compact',
+        icon: 'file-code',
+        text: node.name,
+        title: entry.displayPath,
+        current: entry.previewId === selectedId,
+        onClick: () => select(entry),
+      });
     });
   }
 
