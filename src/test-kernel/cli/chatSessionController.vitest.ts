@@ -16,7 +16,10 @@
  * - a root whose result cannot be read exits as a success;
  * - a resume of a run that does not exist exits as a success;
  * - a message's late reply that resumed the old root takes the chat's root
- *   back from the conversation the user resumed meanwhile.
+ *   back from the conversation the user resumed meanwhile;
+ * - the project's agent is recorded before the person speaks, is not the
+ *   run their first message started, survives Start over, or names a
+ *   deleted run as the conversation to open.
  */
 import { computed } from '@lit-labs/signals';
 import { layer } from '@effect/vitest';
@@ -68,6 +71,13 @@ import {
 } from '@test/support/testKernel';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { entryAgent } from '@texra/agent/entryAgent';
+import { Settings } from '@texra-ai/worldline/plugins';
+import {
+  projectAgent,
+  startOver,
+} from '@texra/controllers/session/projectAgent';
+import { PROJECT_AGENT_SETTING } from '@texra/shared/settings/texraSettings';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 
 /** The validation host's model, which its stored key makes available. */
 const MODEL = 'openai/gpt-5.6-sol';
@@ -438,6 +448,77 @@ describe('createChatSessionController', { timeout: REAL_RUN_TIMEOUT }, () => {
             yield* Fiber.join(resuming);
 
             expect(rootRunId.get()).toBe(picked);
+          }),
+      );
+
+      it.effect(
+        "records the project's agent at the first message, opens on it, and clears it on Start over and deletion",
+        () =>
+          Effect.gen(function* () {
+            const capture = yield* captureLogEntries;
+            const { session, ctrl, storage } = yield* openChat();
+            const { roots } = session;
+            const recorded = Settings.get(roots, PROJECT_AGENT_SETTING);
+            /** Stop the chat's root and wait until nothing holds it. */
+            const stopRoot = (runId: RunId) =>
+              Effect.gen(function* () {
+                ctrl.stop();
+                yield* until(() => {
+                  const run = shown(runId);
+                  return run?.outcome === 'cancelled' && run.holder !== 'here';
+                });
+              });
+
+            // Opening records nothing: no run exists before the person
+            // speaks, and the project opens on none.
+            expect(yield* projectAgent(session)).toBeNull();
+            expect(rootStarts(storage)).toHaveLength(0);
+
+            // The first message's run is the project's agent, and the
+            // project opens on it.
+            yield* ctrl.submit(typed('Start here.'));
+            const first = rootRunId.get();
+            assert(first !== undefined, 'the first message started no root');
+            expect(yield* recorded).toBe(first);
+            expect((yield* projectAgent(session))?.runId).toBe(first);
+            yield* until(() => shown(first)?.position === 'waiting');
+            yield* stopRoot(first);
+
+            // Start over clears the record and deletes nothing.
+            yield* startOver(roots);
+            expect(yield* recorded).toBeNull();
+            expect(yield* projectAgent(session)).toBeNull();
+            expect(yield* session.records(first).exists).toBe(true);
+
+            // The next conversation's first message begins the new agent.
+            startChat();
+            patchSessionMeta({ chat: entryAgent(), model: MODEL });
+            yield* ctrl.submit(typed('A new direction.'));
+            const second = rootRunId.get();
+            assert(second !== undefined, 'the new message started no root');
+            expect(second).not.toBe(first);
+            expect(yield* recorded).toBe(second);
+            yield* until(() => shown(second)?.position === 'waiting');
+            yield* stopRoot(second);
+
+            // A deleted agent reads as none, says so naming the run, and
+            // its record is cleared rather than pointed elsewhere.
+            const deletion = yield* session.deleteRuns(second);
+            expect(deletion.deleted).toStrictEqual([second]);
+            expect(yield* projectAgent(session)).toBeNull();
+            expect(
+              capture.has(
+                'WARN',
+                'ProjectAgent',
+                `The project's agent, run ${second}, was deleted`,
+              ),
+            ).toBe(true);
+            expect(yield* recorded).toBeNull();
+            // The run history: the deleted conversation is gone, the one
+            // Start over left behind is still listed.
+            expect((yield* session.listRuns).map(({ id }) => id)).toStrictEqual(
+              [first],
+            );
           }),
       );
     });

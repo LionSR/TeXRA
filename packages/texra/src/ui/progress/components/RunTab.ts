@@ -57,6 +57,7 @@ import {
   NESTED_AGENT,
   nestedCountsLabel,
   nestedRollupLabel,
+  PROJECT_AGENT_MARK,
   TASK_ACTIONS,
 } from '@ui/copy/nestedRuns';
 import { formatRelativeTime } from '@ui/copy/format';
@@ -143,6 +144,8 @@ export class RunTab extends LitElement {
   @property({ type: Boolean, reflect: true }) expanded = false;
   /** This row has a child list to expand. */
   @property({ type: Boolean }) expandable = false;
+  /** The project's agent: its row is marked. */
+  @property({ type: Boolean }) agent = false;
   /** Finished since the user last had it on screen. */
   @property({ type: Boolean }) unseen = false;
   /** Messages queued on the run that it has not read yet. */
@@ -310,6 +313,11 @@ export class RunTab extends LitElement {
                     : nothing
                 }${runTitle}</span
               >
+              ${
+                this.agent
+                  ? html`<span class="tab-rollup">${PROJECT_AGENT_MARK}</span>`
+                  : nothing
+              }
               ${
                 showRollup
                   ? html`<span class="tab-rollup"

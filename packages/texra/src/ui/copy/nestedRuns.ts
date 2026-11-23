@@ -128,6 +128,9 @@ export const TASK_ACTIONS = Object.freeze({
   resumeHint: 'Resume this task with:',
 } as const);
 
+/** The mark on the project's agent's row, in every host's run list. */
+export const PROJECT_AGENT_MARK = "Project's agent";
+
 /** A task list with nothing in it, in every host: its heading, and what
  *  fills it. A host that starts tasks by command adds that command. */
 const EMPTY_TASK_TITLE = 'No tasks yet';

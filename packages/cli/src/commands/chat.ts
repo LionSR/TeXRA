@@ -7,8 +7,15 @@ import {
   interactiveTerminalFailure,
 } from '../runtime/terminal/terminalRequirements';
 import { notifyCliUpdate } from '../runtime/platform/updateChecker';
+import { cliPlatform } from '../runtime/platform/initPlatform';
+import { writeTextStderr } from '../runtime/platform/logSinks';
+import {
+  projectAgent,
+  startOver,
+} from '@texra/controllers/session/projectAgent';
 
 import {
+  boolFlag,
   cliCommand,
   SKILL_SOURCES_CONFIG,
   modelFlag,
@@ -17,12 +24,48 @@ import {
 
 const chatConfig = {
   ...SKILL_SOURCES_CONFIG,
-  model: modelFlag('Model for the session'),
+  model: modelFlag(
+    "Model for a new conversation (the project's agent keeps its own)",
+  ),
+  new: boolFlag(
+    'new',
+    "Start over: a new conversation instead of the project's agent",
+  ),
 };
+
+/**
+ * Where the chat opens: on the project's agent, the conversation recorded
+ * as the project's, unless `--new` starts over (the record is cleared,
+ * nothing is deleted, and the first message records the new one).
+ */
+const openChat = Effect.fn('openChat')(function* (
+  fresh: boolean,
+  modelOverride: string | undefined,
+) {
+  const session = yield* (yield* cliPlatform).runSession;
+  if (fresh) {
+    yield* startOver(session.roots);
+    return { chat: { modelOverride } };
+  }
+  const agent = yield* projectAgent(session);
+  if (agent === null) return { chat: { modelOverride } };
+  // The conversation continues on its own model: a model asked for here is
+  // said not to apply, never dropped silently.
+  if (modelOverride !== undefined && modelOverride !== agent.config.model)
+    writeTextStderr(
+      `Note: the project's conversation continues on ${agent.config.model}, not ${modelOverride}; switch with /model, or start over with --new.`,
+    );
+  return {
+    chat: {
+      modelOverride,
+      initialResume: { id: agent.runId, config: agent.config },
+    },
+  };
+});
 
 /** The chat, which bare `texra` also starts on an interactive terminal. */
 export const chatOptions: CliCommandOptions<typeof chatConfig, Error> = {
-  description: 'Interactive tool-use chat session',
+  description: "Interactive chat, continuing the project's agent",
   config: chatConfig,
   // Every chat is a client of the one service, and shows a store moved
   // aside in its transcript.
@@ -52,14 +95,11 @@ export const chatOptions: CliCommandOptions<typeof chatConfig, Error> = {
     }
     // An update that ran (or was cancelled) is the command's outcome: the
     // next `texra` runs the new version, so no chat mounts.
-    return notifyCliUpdate(context).pipe(
-      Effect.map(
-        (code) =>
-          code ?? {
-            chat: { modelOverride },
-          },
-      ),
-    );
+    return Effect.gen(function* () {
+      const code = yield* notifyCliUpdate(context);
+      if (code !== undefined) return code;
+      return yield* openChat(input.new, modelOverride);
+    });
   },
 };
 

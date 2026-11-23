@@ -5,6 +5,7 @@ import { Effect } from 'effect';
 import {
   toErrorMessage,
   isRunId,
+  joinFacts,
   programOf,
   type RunId,
   type RunOutcome,
@@ -21,6 +22,10 @@ import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
 import { formatBytes } from '@ui/copy/format';
+import { PROJECT_AGENT_MARK } from '@ui/copy/nestedRuns';
+import { Settings } from '@texra-ai/worldline/plugins';
+import { projectAgentFirst } from '@texra/shared/session/projectAgentFirst';
+import { PROJECT_AGENT_SETTING } from '@texra/shared/settings/texraSettings';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 import type { RunStatusKey } from '@texra/shared/session/runStatusKey';
 
@@ -62,6 +67,8 @@ export interface CliHistoryEntry {
   /** A document task's run, or a chat. */
   readonly kind?: 'task' | 'chat';
   readonly description?: string;
+  /** The project's agent, which bare `texra` opens on: listed first. */
+  readonly projectAgent: boolean;
 }
 
 interface CliHistoryDetails {
@@ -152,10 +159,18 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
 
 /** The history readers take the project's session
  *  (`CliPlatformServices.runSession`): this process's own, or the
- *  service's, whichever holds the runs. */
+ *  service's, whichever holds the runs. The project's agent comes first,
+ *  marked. */
 export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
   function* (session: Session) {
-    return (yield* session.listRuns).map(toCliHistoryEntry);
+    const agent = yield* Settings.get(session.roots, PROJECT_AGENT_SETTING);
+    return projectAgentFirst(
+      (yield* session.listRuns).map((entry) =>
+        toCliHistoryEntry(entry, entry.id === agent),
+      ),
+      (entry) => entry.id,
+      agent,
+    );
   },
 );
 
@@ -312,7 +327,7 @@ export function formatCliHistoryText(
         entry.id,
         entry.timestamp,
         entry.agent,
-        historyStanding(entry),
+        listedStanding(entry),
         formatCliHistorySubject(entry, '-'),
       ].join('\t'),
     )
@@ -338,7 +353,7 @@ function continueNote(outcome: RunOutcome | null): string {
 /** How a listed run stands in `texra history`'s text and the `/resume`
  *  form: its outcome in the word every host gives it, else none, and
  *  whether `texra resume` continues it. */
-export function historyStanding(
+function historyStanding(
   entry: Pick<CliHistoryEntry, 'outcome' | 'continuation'>,
 ): string {
   const outcome =
@@ -346,6 +361,16 @@ export function historyStanding(
   return entry.continuation.kind === 'continues'
     ? `${outcome} (${continueNote(entry.outcome)})`
     : outcome;
+}
+
+/** {@link historyStanding}, after the project's agent's mark on its row. */
+export function listedStanding(
+  entry: Pick<CliHistoryEntry, 'outcome' | 'continuation' | 'projectAgent'>,
+): string {
+  return joinFacts([
+    entry.projectAgent && PROJECT_AGENT_MARK,
+    historyStanding(entry),
+  ]);
 }
 
 export function formatCliHistoryDetailsText(
@@ -409,7 +434,10 @@ export function formatCliHistoryDetailsText(
   return lines.join('\n');
 }
 
-function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
+function toCliHistoryEntry(
+  entry: AgentRunListingEntry,
+  projectAgent: boolean,
+): CliHistoryEntry {
   const config = entry.record;
   const firstInputFile = config.inputFiles.at(0);
   const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
@@ -424,6 +452,7 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     inputBasename,
     kind: runKindOf(config),
     description: entry.description,
+    projectAgent,
   };
 }
 

@@ -139,7 +139,7 @@ export class ProgressApp extends LitElement {
       <div class=${classMap({ shell: true, 'is-editor': docked })}>
         ${this.renderHeader(run, host, surface, view)}
         <div class="shell-body">
-          ${docked ? this.renderDockedList(view, surface) : nothing}
+          ${docked ? this.renderDockedList(view, surface, host) : nothing}
           <main class="reading">
             <div role="status" aria-live="polite">
               ${this.renderRequestError()}
@@ -293,11 +293,17 @@ export class ProgressApp extends LitElement {
   private renderDockedList(
     view: SessionView,
     surface: Surface,
+    host: HostSnapshot,
   ): TemplateResult {
     return html`
       <aside class="dock" aria-label="Tasks">
         ${renderTaskFilter(this, surface.search)}
-        <run-tabs sections .view=${view} .surface=${surface}></run-tabs>
+        <run-tabs
+          sections
+          .view=${view}
+          .surface=${surface}
+          .agent=${host.agent}
+        ></run-tabs>
       </aside>
     `;
   }
@@ -442,6 +448,7 @@ export class ProgressApp extends LitElement {
                   topLevelOnly
                   .view=${view}
                   .surface=${surface}
+                  .agent=${host.agent}
                 ></run-tabs>
               </section>`
             : nothing

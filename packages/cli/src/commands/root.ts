@@ -112,7 +112,7 @@ const startChatOrHelp = Effect.fn('startChatOrHelp')(function* (input: {
   return yield* selectCliCommand(
     'chat',
     chatOptions,
-  )({ ...input, model: Option.none() });
+  )({ ...input, model: Option.none(), new: false });
 });
 
 const rootCommand = Command.make(

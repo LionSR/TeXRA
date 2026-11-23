@@ -15,6 +15,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import type { SessionView } from '@texra-ai/worldline/schemas';
 import {
   projectName,
+  type HostSnapshot,
   type ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
@@ -41,6 +42,8 @@ export interface RailProject {
   readonly display: ProjectDisplay;
   readonly view: SessionView;
   readonly surface: Surface;
+  /** The project's agent, listed first and marked. */
+  readonly agent: HostSnapshot['agent'];
 }
 
 interface ShellSidebarModel {
@@ -293,6 +296,7 @@ export function shellSidebarTemplate(
                   <run-tabs
                     .view=${active.view}
                     .surface=${active.surface}
+                    .agent=${active.agent}
                     .topLevelOnly=${true}
                     removable
                   ></run-tabs>

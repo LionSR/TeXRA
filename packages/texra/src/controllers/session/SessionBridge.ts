@@ -29,6 +29,7 @@ import { randomUUID } from 'node:crypto';
 
 import {
   Cause,
+  Deferred,
   Effect,
   Exit,
   Fiber,
@@ -153,6 +154,10 @@ export class SessionBridge {
   /** The session key on every message: the session's storage root. */
   readonly key: string;
   private readonly ports = new Map<string, PortEntry>();
+  private readonly firstPort = Deferred.makeUnsafe<void>();
+  /** Done once a port has attached: a host action meant for the window's
+   *  opening (the project's agent shown) waits for a surface to take it. */
+  readonly attached: Effect.Effect<void> = Deferred.await(this.firstPort);
 
   private readonly options: SessionBridgeOptions;
   private readonly scope: Scope.Scope;
@@ -225,6 +230,7 @@ export class SessionBridge {
         }),
       );
       this.ports.set(port.id, entry);
+      yield* Deferred.succeed(this.firstPort, undefined);
       return {
         receive: (message) =>
           Effect.suspend(() => {

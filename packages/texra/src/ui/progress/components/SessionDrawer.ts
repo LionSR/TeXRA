@@ -121,6 +121,7 @@ export class SessionDrawer extends TexraElement {
             sections
             .view=${this.view}
             .surface=${this.surface}
+            .agent=${this.host?.agent ?? null}
           ></run-tabs>
         </div>
         <div class="drawer-footer">

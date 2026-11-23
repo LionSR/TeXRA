@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 
 import {
   listCliHistoryEntries,
-  historyStanding,
+  listedStanding,
   listResumableCliHistoryEntries,
   type CliHistoryEntry,
 } from '@cli/runtime/history';
@@ -43,7 +43,7 @@ function resumeEntryDescription(entry: CliHistoryEntry): string {
   const when = formatShortDateTime(entry.timestamp) ?? entry.timestamp;
   return joinFacts([
     when,
-    historyStanding(entry),
+    listedStanding(entry),
     entry.agent,
     entry.continuation.kind === 'blocked' &&
       `cannot resume: ${entry.continuation.cause}`,

@@ -89,7 +89,7 @@ import {
 import { openHostSnapshotSource } from './hostSnapshotSource';
 import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
-import { recordProjectAgent, startOver } from './projectAgent';
+import { projectAgent, recordProjectAgent, startOver } from './projectAgent';
 import { windowNotices, type AskNotice } from './windowNotices';
 import { answerWorkspaceFile } from './workspaceFileRequest';
 import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
@@ -331,6 +331,25 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     onPortClosed: draftRequests.closePort,
   }).pipe(Scope.provide(bridgeScope));
   const host = yield* ports.host;
+  // The window opens on the project's agent: its run is listed first and
+  // marked, and the first surface to attach shows it.
+  const agent = yield* projectAgent(session);
+  if (agent !== null) {
+    yield* snapshot.setAgent(agent.runId);
+    yield* Effect.forkScoped(
+      bridge.attached.pipe(
+        Effect.andThen(
+          Effect.sync(() =>
+            bridge.surfaceAction({ kind: 'select', runId: agent.runId }),
+          ),
+        ),
+      ),
+    );
+  }
+  /** Start over: the project has no agent until the next launch. */
+  const startOverHere = startOver(roots).pipe(
+    Effect.andThen(snapshot.setAgent(null)),
+  );
 
   // The window is its project's window wherever its runs run: here,
   // through this process's own windows, or in the service, whose runs ask
@@ -659,11 +678,12 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             .pipe(Effect.mapError(() => new Cancelled()));
           // The launcher's Send is the first message of a conversation the
           // person started: its run is the project's agent.
-          yield* recordProjectAgent(roots, run.runId, config);
+          if (yield* recordProjectAgent(roots, run.runId, config))
+            yield* snapshot.setAgent(run.runId);
           return done;
         }
         case 'startOver':
-          yield* startOver(roots);
+          yield* startOverHere;
           return done;
         case 'resume':
           yield* runActions.resume(request.runId);
@@ -837,7 +857,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     snapshot,
     /** Start over from a host's own New-task command: the project's agent
      *  is cleared and every surface shows the New-task form. */
-    startOver: startOver(roots).pipe(
+    startOver: startOverHere.pipe(
       Effect.andThen(
         Effect.sync(() => bridge.surfaceAction({ kind: 'selectNew' })),
       ),

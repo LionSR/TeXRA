@@ -119,6 +119,7 @@ interface Inputs {
   readonly missingTools: readonly MissingTool[];
   readonly recording: HostSnapshot['recording'];
   readonly service: HostSnapshot['banners']['service'];
+  readonly agent: HostSnapshot['agent'];
   /** A dismissal lasts the session. */
   readonly dismissed: ReadonlySet<DismissibleBanner>;
   /** Whether a usable credential exists; undefined until a check answers. */
@@ -176,6 +177,9 @@ export interface HostSnapshotSource {
   setServiceBanner(
     banner: HostSnapshot['banners']['service'],
   ): Effect.Effect<void>;
+  /** The project's agent changed: read at open, recorded by a launch,
+   *  cleared by Start over. */
+  setAgent(agent: HostSnapshot['agent']): Effect.Effect<void>;
 }
 
 /** A failed read keeps its fields' last values and says why at `warn`, so
@@ -219,6 +223,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       missingTools: [],
       recording: null,
       service: null,
+      agent: null,
       dismissed: new Set(),
       credential: undefined,
       flags: undefined,
@@ -404,6 +409,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
 
     const snapshotOf = (s: Inputs): HostSnapshot => ({
       project: options.project,
+      agent: s.agent,
       tools: options.tools,
       approvalPolicy: Settings.getConfig(
         stores.config,
@@ -480,6 +486,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
               }),
         ),
       setServiceBanner: (service) => write({ service }),
+      setAgent: (agent) => write({ agent }),
     };
   },
 );

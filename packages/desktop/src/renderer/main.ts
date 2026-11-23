@@ -213,14 +213,17 @@ projectSessions.onChange(scheduleShellRender);
 const railProjects = (): RailProject[] =>
   shell.open.flatMap((key) => {
     const session = projectSessions.get(key);
-    const canonicalDisplay = session?.host$.get()?.project;
-    if (!session || !canonicalDisplay) return [];
+    const host = session?.host$.get();
+    const canonicalDisplay = host?.project;
+    if (!session || !host || !canonicalDisplay) return [];
     const projectName = projectWorkbenches.get(key)?.getState().projectName;
     const display = projectName
       ? { ...canonicalDisplay, name: projectName }
       : canonicalDisplay;
     const view = session.view$.get();
-    return [{ display, view, surface: session.surface$.get() }];
+    return [
+      { display, view, surface: session.surface$.get(), agent: host.agent },
+    ];
   });
 const activeRailProject = (projects: readonly RailProject[]) =>
   projects.find((project) => project.display.key === shell.active);

@@ -11,6 +11,7 @@ import {
   getBasename,
   ApprovalPolicySchema,
   APPROVAL_POLICY_DEFAULT,
+  RunIdSchema,
 } from '@texra-ai/worldline/schemas';
 import { ModelOptionDataSchema } from '@texra/shared/pickerOptions';
 
@@ -78,6 +79,10 @@ export type OnboardingFunnelState = typeof OnboardingFunnelStateSchema.Type;
 
 export const HostSnapshotSchema = Schema.Struct({
   project: ProjectDisplaySchema,
+  /** The project's agent: the run the window opens on, listed first and
+   *  marked in the run list. Null with none recorded and for a window with
+   *  no folder. */
+  agent: Schema.NullOr(RunIdSchema),
   modelOptions: Schema.Array(ModelOptionDataSchema),
   /** How a tool call is painted, from what the process's plugins declare
    *  (`TexraPlugin`): its icon by normalized tool name, and the tools whose
@@ -127,6 +132,7 @@ export type HostSnapshot = typeof HostSnapshotSchema.Type;
 export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
   return {
     project,
+    agent: null,
     modelOptions: [],
     tools: { icons: {}, terminalOutput: [] },
     workspaceRoots: [],

@@ -121,7 +121,7 @@ function project(
     shown:
       selected === null ? { _tag: 'New' } : { _tag: 'Run', runId: selected },
   };
-  return { display: displayRecord, view, surface };
+  return { display: displayRecord, view, surface, agent: null };
 }
 
 const LP = display('LP', 'LDT-Lean-Paper');
