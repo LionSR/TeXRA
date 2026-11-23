@@ -25,7 +25,7 @@ import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { startChildRun } from './childLaunch';
+import { childOf, startChildRun, type ChildRegistration } from './childLaunch';
 
 /**
  * One compact line per child progress update, for an awaited child: the
@@ -118,63 +118,46 @@ export interface ApprovalMeta {
 }
 
 /**
- * Launch one background child under `runId` and return the receipt the
- * model reads: the child's report arrives later as a follow-up. The
- * receipt names a child that exists: the child's opening commits in this
- * fiber, and a launch that fails before it fails the call, which the
- * parent reads as the call's result.
+ * Launch one background child of `call` under `runId` and return the
+ * receipt the model reads: the child's report arrives later as a
+ * follow-up. The receipt names a child that exists: the child's opening
+ * commits in this fiber, and a launch that fails before it fails the call,
+ * which the parent reads as the call's result.
  */
 export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
   function* (
-    parent: RunToolCall,
+    call: RunToolCall,
+    runId: RunId,
     childConfig: AgentConfig,
-    launch: {
-      readonly runId: RunId;
-      /** The grants the child is registered with. */
-      readonly grants: ApprovalGrants;
-      /** The spend cap the child is registered with. */
-      readonly maxCostUsd?: number | null;
-      readonly approvalMeta?: ApprovalMeta;
-    },
+    registration: ChildRegistration,
+    approvalMeta: ApprovalMeta,
   ) {
-    const { runId, grants } = launch;
-    const { runId: parentId } = parent.run;
     const agentName = childConfig.label;
     // Like every child, it ends with its reply, and a follow-up to it is
     // a resume with a message.
     const definition = yield* prepareAgentDefinition({ config: childConfig });
-    const { config } = definition;
     // The child registers with its opening, which commits here.
     yield* startChildRun(runId, definition, {
-      identity: { kind: 'agent', agent: config.label },
-      parent: {
-        id: parentId,
-        call: { callId: parent.callId, card: parent.logId, awaited: false },
-      },
-      grants,
-      maxCostUsd: launch.maxCostUsd,
+      ...registration,
+      identity: { kind: 'agent', agent: definition.config.label },
+      parent: childOf(call, false),
     });
-
-    const meta = launch.approvalMeta;
-    const metaLines: string[] = [];
-    if (meta) {
-      const modelInfo = meta.model
-        ? `Model: ${meta.model.chosen} (overridden from ${meta.model.proposed})`
-        : `Model: ${childConfig.model}`;
-      const approval =
-        meta.childApproval === 'inherit' ? 'user-approved' : 'auto-approved';
-      metaLines.push(`Approval: ${approval}. ${modelInfo}.`);
-    }
-    const receipt = executed(
+    const model = approvalMeta.model
+      ? `${approvalMeta.model.chosen} (overridden from ${approvalMeta.model.proposed})`
+      : childConfig.model;
+    const approval =
+      approvalMeta.childApproval === 'inherit'
+        ? 'user-approved'
+        : 'auto-approved';
+    return executed(
       [
         `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
         `Run ID: ${runId}`,
-        ...metaLines,
+        `Approval: ${approval}. Model: ${model}.`,
         `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
         `To send follow-up instructions once it has reported: executions tool, action=send, path=/executions/${runId}; it continues from where it ended and reports again.`,
       ].join('\n'),
       `Launched '${agentName}' (async)`,
     );
-    return receipt;
   },
 );

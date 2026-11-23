@@ -35,7 +35,7 @@ import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 // Local imports
 import { getRunRecords, callChildRunId } from '@agent/storage/runOwnership';
-import type { RunCall, RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
+import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   RUN_OUTCOME,
   type RunEnd,
@@ -200,8 +200,7 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
      *  child's read is not timed. */
     readonly timeoutMs: number | null | undefined;
   },
-): Effect.fn.Return<Recovered, Error, AgentRunServices | RunCall> {
-  const { runId: parentId } = call.run;
+): Effect.fn.Return<Recovered, Error, AgentRunServices> {
   const earlier = yield* earlierChild(call);
   if (earlier === null) return { kind: 'launch' };
   const standing = yield* standingOf(earlier);
@@ -213,11 +212,7 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
     case 'resume': {
       const { result } = yield* withinTime(
         recovery.timeoutMs,
-        resumeSubagentInBand({
-          runId: earlier,
-          parentId,
-          notify: recovery.notify,
-        }),
+        resumeSubagentInBand(call, earlier, recovery.notify),
       );
       return { kind: 'ended', runId: earlier, result };
     }
