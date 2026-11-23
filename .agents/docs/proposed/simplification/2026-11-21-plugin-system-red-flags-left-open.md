@@ -144,9 +144,23 @@ not reproduced, it says so.
 
 11. **The enabled plugins are read and digested from six places.**
     `readInstalledPluginLoad` is called by the catalog, the plugin agents
-    (twice), a program's launch, the runtime skills and the facade. Whether
-    two of them can read different states within one step was not
-    established.
+    (twice), a program's launch, the runtime skills and the facade.
+    **Established 2026-11-23: two reads disagree within one model request.**
+    A CLI run on `main` (`6b29e26c7f`) disabled one installed plugin between
+    the step's pin and the delegation listing. The offer kept the plugin's
+    program (`openStep` lists the contributions it accepted), while
+    `stepFor` then called `readDelegationTargets`, which scans the install
+    records again and found the plugin's agent gone. So the same request
+    told the model "Agents no longer available: alfalfa:companion" and still
+    declared `alfalfa:summary` in the `script` tool
+    (`packages/harness/src/agent/runtime/loop/step.ts`,
+    `packages/harness/src/agent/runtime/delegation/pluginAgents.ts`).
+    Proposed fix: keep the model-facing agent metadata with the installed
+    revision the step pinned, and build the delegation section from that
+    value, deleting its own install scan. Keep the live authorization check
+    for when the model actually launches a child. Acceptance: disable a data
+    plugin between those two reads, and check that its agent and program
+    move together in the saved request.
 
 12. **Names on the plugin authoring entry with no importer.**
     `buildFileAttachment` with its options type has none anywhere;
