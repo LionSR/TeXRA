@@ -471,10 +471,10 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
   // A question that takes typed text is answered on one line, where numbers
   // pick the listed options: a multi-select one mixes both there.
   if (question.allowFreeText) {
-    return <FreeTextQuestion {...variantProps} />;
+    return <FreeTextQuestion key={index} {...variantProps} />;
   }
-  // Keyed by question index: the merged picker is now one element type across
-  // consecutive questions, so without a key React would reuse the instance and
-  // carry the previous question's toggled set into the next one.
+  // Both are keyed by question index: consecutive questions render one
+  // element type, so without a key React would reuse the instance and carry
+  // the previous question's typed line or toggled set into the next one.
   return <ChoiceQuestion key={index} {...variantProps} />;
 }
