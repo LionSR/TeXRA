@@ -40,6 +40,7 @@ import { LRUCache } from 'lru-cache';
 
 // Local imports
 import { shouldDropBotEvent } from './botFilter';
+import { withSince } from './githubPaths';
 import {
   formatRepoIssueComment,
   formatRepoMergeConflictDetected,
@@ -140,10 +141,13 @@ export const pollRepo = Effect.fn('github.pollRepo')(function* (
   const seedCursor = new Date(
     Date.parse(subscribedAt) - SEED_WINDOW_MS,
   ).toISOString();
-  const since = (cursor: string | undefined) =>
-    `&since=${encodeURIComponent(cursor ?? seedCursor)}`;
-  const issuePath = `/repos/${repo.owner}/${repo.repo}/issues/comments?per_page=${PER_PAGE}${since(prior?.issueComments?.sinceCursor)}&sort=updated&direction=asc`;
-  const reviewPath = `/repos/${repo.owner}/${repo.repo}/pulls/comments?per_page=${PER_PAGE}${since(prior?.reviewComments?.sinceCursor)}&sort=updated&direction=asc`;
+  const commentsPath = (kind: 'issues' | 'pulls', cursor: string | undefined) =>
+    withSince(
+      `/repos/${repo.owner}/${repo.repo}/${kind}/comments?per_page=${PER_PAGE}&sort=updated&direction=asc`,
+      cursor ?? seedCursor,
+    );
+  const issuePath = commentsPath('issues', prior?.issueComments?.sinceCursor);
+  const reviewPath = commentsPath('pulls', prior?.reviewComments?.sinceCursor);
   // The /pulls list endpoint does NOT support `since`; we get the top
   // 100 most-recently-updated PRs every tick. The `prStateByNumber`
   // transition tracker is what makes that safe.
