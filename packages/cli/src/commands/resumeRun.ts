@@ -8,6 +8,7 @@ import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
+import { runsHereOnlyMessage } from '@ui/copy/sessionStore';
 
 import { executeCliRun } from './run';
 import {
@@ -100,7 +101,9 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   // said, since nothing after this would say it.
   const stores = yield* cliPlatform;
   if (Result.isFailure(stores.service))
-    writeTextStderr(`Running locally: ${stores.service.failure.message}`);
+    writeTextStderr(
+      runsHereOnlyMessage('terminal', stores.service.failure.message),
+    );
   const runSession = yield* stores.runSession;
   const configResult = yield* Effect.result(runSession.records(id).readConfig);
   if (Result.isFailure(configResult)) {
@@ -112,11 +115,6 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     return yield* failUsage(`Task not found: ${id}`);
   }
   const documentTask = programOf(config) !== null;
-  if (fork && documentTask) {
-    return yield* failUsage(
-      `Task ${id} is a program task; only conversations can be forked.`,
-    );
-  }
   // A fork reads the source's committed rows, whoever holds it, and the
   // chat continues the new task.
   if (fork) {

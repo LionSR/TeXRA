@@ -33,7 +33,10 @@ import {
 import { writeFileIfUnchanged } from '@texra/common/files/projectFileWrite';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
+import {
+  runsHereOnlyMessage,
+  sessionStoreMovedAsideMessage,
+} from '@ui/copy/sessionStore';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import type { GuiSession } from './openGuiWindow';
 
@@ -99,7 +102,7 @@ export const openProjectSession = Effect.fn('openProjectSession')(function* (
   // a window with no folder always runs here.
   const local =
     roots.workspace !== undefined && Result.isFailure(reached)
-      ? `TeXRA runs this project's tasks in this window only, so other windows and terminals will not see them: ${reached.failure.message}`
+      ? runsHereOnlyMessage('window', reached.failure.message)
       : null;
   if (local !== null)
     yield* Effect.logWarning(local).pipe(withLogChannel(CHANNEL));

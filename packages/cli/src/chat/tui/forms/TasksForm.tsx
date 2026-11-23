@@ -26,6 +26,7 @@ import {
   type ToolEditPreviewRead,
 } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
+import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 
 import { PromptInput } from '../input/TextInput';
@@ -94,7 +95,7 @@ export function TasksForm(props: TasksFormProps): React.JSX.Element {
           attach.
         </Text>
       }
-      emptyMessage="The service has no tasks yet."
+      emptyMessage={EMPTY_TASK_LIST.line}
       selectMarginTop={1}
       action="attach"
       onSelect={(runId, { data }) =>

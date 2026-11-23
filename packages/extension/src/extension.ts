@@ -63,6 +63,7 @@ import {
   subscriptionProvider,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
+import { ONBOARDING_CARD_TITLE, ONBOARDING_WAYS } from '@ui/copy/onboarding';
 import { makeInlineCriticism } from '@frontend/latex/inlineCriticism';
 import { makeInlineComments } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
@@ -457,8 +458,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   );
   setupPill.name = 'TeXRA Setup';
   setupPill.text = '$(rocket) TeXRA: Get Started';
-  setupPill.tooltip =
-    'Connect a model: sign in with ChatGPT or add a provider API key';
+  setupPill.tooltip = `${ONBOARDING_CARD_TITLE}. ${ONBOARDING_WAYS}`;
   setupPill.command = 'texra.runSetupAssistant' satisfies CommandId;
   setupPill.accessibilityInformation = { label: 'TeXRA setup, get started' };
   context.subscriptions.push(setupPill);
