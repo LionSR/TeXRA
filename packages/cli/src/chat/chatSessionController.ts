@@ -39,6 +39,7 @@ import {
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { launchApproval } from '@cli/runtime/platform/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
+import { recordProjectAgent } from '@texra/controllers/session/projectAgent';
 import { createHostRunActions } from '@texra/controllers/session/hostRunActions';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure';
@@ -403,6 +404,10 @@ export function createChatSessionController(
             approval: launchApproval(init.approvalPolicy()),
           });
           held = true;
+          // A fresh root is the first message of a conversation: its run is
+          // the project's agent, recorded before the launch ends, so a chat
+          // that has sent its message has recorded it.
+          yield* recordProjectAgent(runSession.roots, run.runId, config);
           moveLocalTranscriptToRun(run.runId);
           focusRun(run.runId);
           return { runId: run.runId, result: yield* handOver(launched, run) };

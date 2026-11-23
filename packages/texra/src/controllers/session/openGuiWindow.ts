@@ -89,6 +89,7 @@ import {
 import { openHostSnapshotSource } from './hostSnapshotSource';
 import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
+import { recordProjectAgent, startOver } from './projectAgent';
 import { windowNotices, type AskNotice } from './windowNotices';
 import { answerWorkspaceFile } from './workspaceFileRequest';
 import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
@@ -653,11 +654,17 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           // The launcher has told, in this window, why a run did not start:
           // `Cancelled` is the answer the form shows nothing for, and it keeps
           // the instruction to send again.
-          yield* runActions
+          const run = yield* runActions
             .runValidated(config, launchApprovalOptions(request))
             .pipe(Effect.mapError(() => new Cancelled()));
+          // The launcher's Send is the first message of a conversation the
+          // person started: its run is the project's agent.
+          yield* recordProjectAgent(roots, run.runId, config);
           return done;
         }
+        case 'startOver':
+          yield* startOver(roots);
+          return done;
         case 'resume':
           yield* runActions.resume(request.runId);
           return done;
@@ -828,6 +835,13 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   return {
     bridge,
     snapshot,
+    /** Start over from a host's own New-task command: the project's agent
+     *  is cleared and every surface shows the New-task form. */
+    startOver: startOver(roots).pipe(
+      Effect.andThen(
+        Effect.sync(() => bridge.surfaceAction({ kind: 'selectNew' })),
+      ),
+    ),
     runValidated: runActions.runValidated,
     runSetup,
     settingsRuns,

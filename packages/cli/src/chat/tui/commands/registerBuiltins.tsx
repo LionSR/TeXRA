@@ -7,6 +7,7 @@ import { type RunId, runBypasses } from '@texra-ai/worldline/schemas';
 import { InstalledPlugins } from '@texra-ai/worldline/host';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
+import { startOver } from '@texra/controllers/session/projectAgent';
 import type { ConnectService } from '../state/attachedTask';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
@@ -254,13 +255,17 @@ export function builtinSlashCommands(options: {
         },
         {
           name: 'clear',
-          description: 'Start a new task',
+          description: 'Start over with a new task',
           category: 'session',
           echo: 'ifPersists',
+          // Start over: the project's agent is cleared (nothing is
+          // deleted), and the next message begins the new one.
           handler: (_remainder, context) =>
-            Effect.sync(() => {
-              context.resetSession();
-            }),
+            Effect.suspend(() =>
+              context.resetSession()
+                ? startOver(context.runSession.roots)
+                : Effect.void,
+            ),
         },
       ],
     },

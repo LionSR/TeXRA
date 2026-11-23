@@ -141,6 +141,10 @@ export const HostCommandSchema = Schema.Union([
     launch: LaunchSurfaceSchema,
     instruction: Schema.String,
   }),
+  /** Start over (New task): the project's agent is cleared, nothing is
+   *  deleted, and the next launch begins the new one. The surface has
+   *  already moved to the New-task form. */
+  Schema.Struct({ kind: Schema.Literal('startOver') }),
   Schema.Struct({ kind: Schema.Literal('polish'), text: Schema.String }),
   /** A pasted image, stored host-side; the outcome names the file the
    *  follow-up's `media` then carries. */

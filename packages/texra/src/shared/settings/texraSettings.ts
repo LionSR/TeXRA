@@ -9,8 +9,8 @@
  *
  * Owner by key: the CLI's startup rows (`agent`, `model`, `chat`, `run`,
  * `outputFormat`), `agentOutputs.autoOpenFinal`, the bibliography
- * (`bib.*`), LaTeX (`latex.*`, the formatter), inline criticism and
- * telemetry.
+ * (`bib.*`), LaTeX (`latex.*`, the formatter), inline criticism,
+ * telemetry and the project's agent (`projectAgent.runId`).
  */
 
 // Third-party imports
@@ -21,7 +21,9 @@ import {
   GIT_AUTHOR_EMAIL_SETTING,
   GIT_AUTHOR_NAME_SETTING,
   HELPER_MODEL_SETTING,
+  RunIdSchema,
   settingsCatalog,
+  type RunId,
   type SettingRow,
   type SettingsCatalog,
 } from '@texra-ai/worldline/schemas';
@@ -333,7 +335,25 @@ export const SOX_PATH_SETTING = Object.freeze({
   description: 'Path to the SoX executable. Overrides automatic detection.',
 } as const satisfies SettingRow<string>);
 
+/**
+ * The project's agent: the run of the conversation a person last started in
+ * the project, which every host opens the project on. Set when that
+ * conversation's first message starts its run, cleared by Start over (a new
+ * conversation) and when the run is gone; never repaired. The app owns it
+ * (`packages/texra/src/controllers/session/projectAgent.ts`); the harness
+ * does not read it.
+ */
+export const PROJECT_AGENT_SETTING = Object.freeze({
+  key: 'projectAgent.runId',
+  slot: 'workspaceState',
+  schema: decodingDefault(Schema.NullOr(RunIdSchema), null),
+  title: "Project's agent",
+  description:
+    'The conversation this project opens on, until Start over begins a new one.',
+} as const satisfies SettingRow<RunId | null>);
+
 const TEXRA_UNSHOWN_ROWS: readonly SettingRow[] = [
+  PROJECT_AGENT_SETTING,
   GIT_COMMITS_TO_SHOW_SETTING,
   SOX_PATH_SETTING,
   CLI_MODEL_SETTING,

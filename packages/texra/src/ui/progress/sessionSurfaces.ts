@@ -96,7 +96,8 @@ export interface SessionSurfaces {
   /** Open the sessions the host names and close the rest. */
   sync(keys: readonly string[]): void;
   get(key: string): SessionSurface | undefined;
-  /** Apply a surface action to one session's surface. */
+  /** Apply a shell's surface action to one session's surface (New task
+   *  also starts over, as a click on it does). */
   act(key: string, action: SurfaceAction): void;
   /** A host request answered to its caller, not presented on the surface. */
   answer: WebviewTransport['hostRequest'];
@@ -186,6 +187,15 @@ export function createSessionSurfaces(options: {
 
   function act(entry: Held, action: SurfaceAction): void {
     setSurface(entry, applySurfaceAction(entry.surface$.get(), action));
+  }
+
+  /** An action the shell dispatched (a click, a rail's `+`): New task is
+   *  Start over, so the host also clears the project's agent. A host's own
+   *  `selectNew` (Run again…, the onboarding card) decides that itself. */
+  function shellAct(entry: Held, action: SurfaceAction): void {
+    act(entry, action);
+    if (action.kind === 'selectNew')
+      hostRequestFor(entry, { kind: 'startOver' });
   }
 
   function open(key: string): void {
@@ -633,7 +643,7 @@ export function createSessionSurfaces(options: {
     get: (key) => held.get(key),
     act(key, action) {
       const entry = held.get(key);
-      if (entry) act(entry, action);
+      if (entry) shellAct(entry, action);
     },
     runtime: transport.runtime,
     answer: transport.hostRequest,
@@ -652,7 +662,7 @@ export function createSessionSurfaces(options: {
       };
       const onSurface = (event: CustomEvent<SurfaceAction>) => {
         const entry = entryOf(event);
-        if (entry) act(entry, event.detail);
+        if (entry) shellAct(entry, event.detail);
       };
       const onSubmit = (event: Event) => {
         const entry = entryOf(event);
