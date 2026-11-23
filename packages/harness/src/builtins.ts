@@ -29,7 +29,8 @@ export {
   multiAgent,
   web,
 } from '@tools/builtinPlugins';
-/** The name of the `multiAgent` plugin's tool, which runs a named agent as
- *  a child of the calling run: an agent whose tools name it orchestrates. */
+/** The name of the `multiAgent` plugin's tool, which starts a child of the
+ *  calling run on the system text and tools the call gives it, or on an
+ *  installed plugin's agent: a run whose tools name it can delegate. */
 export { AGENT_TOOL_NAME } from '@shared/schemas';
 export type { WriteFilter } from '@tools/WriteTool';
