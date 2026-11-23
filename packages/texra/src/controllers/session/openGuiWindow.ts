@@ -331,25 +331,15 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     onPortClosed: draftRequests.closePort,
   }).pipe(Scope.provide(bridgeScope));
   const host = yield* ports.host;
-  // The window opens on the project's agent: its run is listed first and
-  // marked, and the first surface to attach shows it.
-  const agent = yield* projectAgent(session);
-  if (agent !== null) {
-    yield* snapshot.setAgent(agent.runId);
-    yield* Effect.forkScoped(
-      bridge.attached.pipe(
-        Effect.andThen(
-          Effect.sync(() =>
-            bridge.surfaceAction({ kind: 'select', runId: agent.runId }),
-          ),
-        ),
-      ),
-    );
-  }
+  /** Set once this window has decided the project's agent itself (a
+   *  launch recorded one, or Start over cleared it): the agent the window
+   *  read at its open no longer applies. */
+  let decidedHere = false;
   /** Start over: the project has no agent until the next launch. */
-  const startOverHere = startOver(roots).pipe(
-    Effect.andThen(snapshot.setAgent(null)),
-  );
+  const startOverHere = Effect.suspend(() => {
+    decidedHere = true;
+    return startOver(roots).pipe(Effect.andThen(snapshot.setAgent(null)));
+  });
 
   // The window is its project's window wherever its runs run: here,
   // through this process's own windows, or in the service, whose runs ask
@@ -396,6 +386,20 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   const present = presenterOn(window);
   yield* Effect.forkScoped(
     attachWindowHost(runs.link, workspace, window, ports.focused),
+  );
+  // The window opens on the project's agent: its run is listed first and
+  // marked, and the first surface to attach shows it, unless the window
+  // decided otherwise meanwhile. Forked: the window's open waits on no
+  // read of the service.
+  yield* Effect.forkScoped(
+    Effect.gen(function* () {
+      const agent = yield* projectAgent(session);
+      if (agent === null || decidedHere) return;
+      yield* snapshot.setAgent(agent.runId);
+      yield* bridge.attached;
+      if (!decidedHere)
+        bridge.surfaceAction({ kind: 'select', runId: agent.runId });
+    }),
   );
   // The banner says where the window's tasks run when it is not where the
   // user expects: a folder's tasks running here, because the service was
@@ -678,8 +682,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             .pipe(Effect.mapError(() => new Cancelled()));
           // The launcher's Send is the first message of a conversation the
           // person started: its run is the project's agent.
-          if (yield* recordProjectAgent(roots, run.runId, config))
+          if (yield* recordProjectAgent(roots, run.runId, config)) {
+            decidedHere = true;
             yield* snapshot.setAgent(run.runId);
+          }
           return done;
         }
         case 'startOver':
