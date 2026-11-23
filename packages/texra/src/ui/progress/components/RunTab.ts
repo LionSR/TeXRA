@@ -35,7 +35,10 @@ import {
   focusRingStyles,
   formControlStyles,
 } from '@ui/styles/controlStyles';
-import { renderIconActionButtonParts } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderIconActionButtonParts,
+} from '@ui/wa/actionButtons';
 import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 import { inlineRenameField } from '@ui/wa/inlineRename';
@@ -241,21 +244,14 @@ export class RunTab extends LitElement {
       >
         ${
           this.expandable
-            ? html`<wa-button
-                  id="run-tab-expand-button"
-                  class="action-icon-button tab-expand"
-                  appearance="plain"
-                  variant="neutral"
-                  size="s"
-                  type="button"
-                  data-run=${run.id}
-                  data-action="toggle-children"
-                  aria-label=${childToggleLabel}
-                  aria-expanded=${this.expanded ? 'true' : 'false'}
-                  >${waIcon('chevron-right', { className: 'disclosure-chevron' })}</wa-button
-                ><wa-tooltip for="run-tab-expand-button"
-                  >${childToggleLabel}</wa-tooltip
-                >`
+            ? renderIconActionButton({
+                id: 'run-tab-expand-button',
+                className: 'tab-expand',
+                action: 'toggle-children',
+                label: childToggleLabel,
+                tooltip: childToggleLabel,
+                expanded: this.expanded,
+              })
             : nothing
         }
         <div class="tab-select-tooltip-anchor">
