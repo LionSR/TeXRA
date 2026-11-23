@@ -428,7 +428,7 @@ const openStep = Effect.fn('Step.open')(function* (
     // Memory: the folders are roots this step's file tools read and write,
     // and their indexes are in its system text as they read now, so a note
     // one step writes is listed to the next. A run that takes no injected
-    // tool (a program, a text-only persona) has none, as it had no memory
+    // tool (a program, a text-only run) has none, as it had no memory
     // tool, and neither has a step with nothing to read a note with.
     const remembers =
       run.toolInputs.injectTools &&

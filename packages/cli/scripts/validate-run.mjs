@@ -1577,13 +1577,13 @@ export default ({ plugins, effect }) => {
 }
 
 /**
- * An SDK run of an inline persona (`StartInput.agent` as an object): the
- * embedder writes no agent file, the echo model's reply shows the
- * instruction reached a run of that persona, and the session view names the
- * run by the persona. The reply and the run's identity are the artifact.
+ * An SDK run that names its own label and system text (`StartInput`): the
+ * echo model's reply shows the instruction reached the run, and the session
+ * view names the run by its label. The reply and the run's identity are the
+ * artifact.
  */
-function validateSdkInlinePersona() {
-  const cwd = makeScratch('texra-sdk-inline-persona-');
+function validateSdkInlineRun() {
+  const cwd = makeScratch('texra-sdk-inline-run-');
   try {
     const home = path.join(cwd, 'home');
     const work = path.join(cwd, 'work');
@@ -1597,7 +1597,7 @@ function validateSdkInlinePersona() {
         work,
         path.join(cwd, 'storage'),
         'inline',
-        'Inline persona message',
+        'Inline run message',
       ],
       {
         cwd: work,
@@ -1613,16 +1613,16 @@ function validateSdkInlinePersona() {
       'SDK harness',
     );
     const response = String(ended?.output?.response ?? '');
-    const artifactPath = writeArtifact('sdk-inline-persona.json', {
+    const artifactPath = writeArtifact('sdk-inline-run.json', {
       outcome: ended?.outcome,
       response,
       identity,
     });
     assert(
       ended?.outcome === 'completed' &&
-        response === 'Model saw: Inline persona message' &&
+        response === 'Model saw: Inline run message' &&
         identity?.agent === 'inline_echo',
-      `the inline persona's run should complete with the echoed instruction under the persona's name (artifact: ${artifactPath})`,
+      `the inline run should complete with the echoed instruction under its label (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);
@@ -3718,7 +3718,7 @@ async function validateCliRunArtifacts(options = {}) {
   validateStopHookBlock();
   validatePluginProgram();
   validateNativePlugin();
-  validateSdkInlinePersona();
+  validateSdkInlineRun();
   await validateSdkResumeApproval();
   await validateFork();
   await validateTuiFork();

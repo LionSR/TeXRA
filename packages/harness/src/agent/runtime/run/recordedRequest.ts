@@ -61,7 +61,7 @@ export const RecordedRequestSchema = Schema.Struct({
   /** The resolved controls: tool choice, output limit, storage and every
    *  other parameter the binding (the attempt's `origin`) sent. */
   controls: Schema.Json,
-  /** The resolved agent definition the run was launched with. */
+  /** The run's label, system text and declared tools, as it launched. */
   agent: Sha256Schema,
 });
 
@@ -103,7 +103,7 @@ export function blobRows(
 }
 
 /** The recorded context of a request that sends `resolved`, and the
- *  resolved agent definition it names. */
+ *  run's label, system text and tools it names. */
 function recorded(run: Pick<AgentRunShape, 'config'>, resolved: ResolvedTurn) {
   const { label, system, tools } = run.config;
   const agent = { label, system, tools };
