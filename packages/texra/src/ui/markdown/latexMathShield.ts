@@ -15,12 +15,13 @@ import {
 } from './latexPlaceholders';
 
 const REGEX_SPACE_RE = /\s/u;
-// What ends a candidate `$…$` span for the terminal, which parses HTML: an
-// opening or closing tag of an element the terminal reads (math has no
-// `<strong>`), so `$5 for <strong>$x$</strong>` keeps the currency outside
-// the formula and `<code>` text stays literal.
+// What ends a candidate `$…$` span for the terminal, which parses HTML: a
+// tag of an element the terminal reads (math has no `<strong>`), so
+// `$5 for <strong>$x$</strong>` keeps the currency outside the formula and
+// `<code>` text stays literal. A one-letter element counts only when it
+// closes: `$0<p>1$` is an inequality.
 const NOT_MATH_TAG_RE =
-  /<\/?(?:strong|b|em|i|code|p|div|blockquote|h[1-6])[\s/>]/iu;
+  /<\/?(?:strong|em|code|div|blockquote|h[1-6])[\s/>]|<\/[bip]\s*>/giu;
 
 function isAsciiDigitCode(code: number): boolean {
   return code >= 0x30 && code <= 0x39;
@@ -57,6 +58,15 @@ function protectRenderInlineDollarSpans(
       }
     }
     nextValidDollar[index] = next;
+  }
+  // End offset of the first not-math tag starting at or after each offset,
+  // so rejecting a candidate stays constant-time.
+  const nextTagEnd = new Int32Array(content.length).fill(-1);
+  for (const match of content.matchAll(NOT_MATH_TAG_RE)) {
+    nextTagEnd[match.index] = match.index + match[0].length;
+  }
+  for (let index = content.length - 2; index >= 0; index--) {
+    if (nextTagEnd[index] === -1) nextTagEnd[index] = nextTagEnd[index + 1];
   }
 
   const pieces: string[] = [];
@@ -103,7 +113,7 @@ function protectRenderInlineDollarSpans(
       continue;
     }
     // `<code>$HOME</code> or <code>$PATH</code>` holds two shell variables.
-    if (NOT_MATH_TAG_RE.test(content.slice(index, closer))) {
+    if (nextTagEnd[index] !== -1 && nextTagEnd[index] <= closer) {
       index++;
       continue;
     }
