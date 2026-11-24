@@ -140,14 +140,83 @@ type ChildLaunch = {
         readonly name: string;
         readonly args: Readonly<Record<string, Schema.Json>>;
       };
-      readonly files: {
-        readonly inputFiles: readonly string[];
-        readonly contextFiles: readonly string[];
-        readonly mediaFiles: readonly string[];
-        readonly outputFiles: readonly string[];
-      };
+      readonly files: ChildFiles;
     }
 );
+
+/** The four lists of files a child is handed. */
+type ChildFiles = {
+  readonly inputFiles: readonly string[];
+  readonly contextFiles: readonly string[];
+  readonly mediaFiles: readonly string[];
+  readonly outputFiles: readonly string[];
+};
+
+/**
+ * What a launch's child is, the one place a chat and a program differ in
+ * it: the agent it runs as and the files it is handed. A program's child
+ * is the program's own run, named for it, over the program's four lists; a
+ * name no plugin registers fails here, before anyone is asked to approve
+ * it. A chat's is what the call wrote, or an installed plugin's agent read
+ * now, so the child's config holds its system text and tools and a resume
+ * reads no file; its files are the media on its prompt.
+ */
+const childOf = Effect.fn('AgentTool.childOf')(function* (
+  call: RunToolCall,
+  launch: ChildLaunch,
+) {
+  if (launch.program !== null) {
+    const { name, args } = launch.program;
+    const known = yield* Effect.result(
+      programLaunch(name, args, launch.files, call.env.roots),
+    );
+    if (Result.isFailure(known)) return errorResult(known.failure.message);
+    return {
+      agent: { name, system: '', tools: [] },
+      files: launch.files,
+    } satisfies Child;
+  }
+  const files: ChildFiles = {
+    inputFiles: [],
+    contextFiles: [],
+    mediaFiles: launch.mediaFiles,
+    outputFiles: [],
+  };
+  if (launch.agentName != null) {
+    if (launch.system != null || launch.tools != null)
+      return errorResult(
+        '`agentName` runs an installed plugin’s agent with its own system text and tools: drop `system` and `tools`, or drop `agentName`.',
+      );
+    const named = yield* Effect.result(
+      pluginAgent(launch.agentName, call.env.roots),
+    );
+    if (Result.isFailure(named)) return errorResult(named.failure.message);
+    return { agent: named.success, files } satisfies Child;
+  }
+  if (launch.system == null)
+    return errorResult(
+      'Give the child a `system` text (and the `tools` it needs), or name an installed plugin’s agent with `agentName`.',
+    );
+  return {
+    agent: {
+      name: launch.label?.trim() || 'agent',
+      system: launch.system,
+      tools: launch.tools ?? [],
+    },
+    files,
+  } satisfies Child;
+});
+
+/** A launch's child as {@link childOf} decides it. */
+type Child = {
+  readonly agent: {
+    readonly name: string;
+    readonly system: string;
+    readonly tools: readonly string[];
+    readonly toolScope?: AgentConfig['toolScope'];
+  };
+  readonly files: ChildFiles;
+};
 
 /**
  * One request shared by a script's `agent` calls and all its attempts
@@ -313,56 +382,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const script = call.script ?? undefined;
   const { runId: parentId } = run;
   const { program } = launch;
-  // A name no plugin registers fails before anyone is asked to approve it.
-  if (program !== null) {
-    const known = yield* Effect.result(
-      programLaunch(program.name, program.args, launch.files, call.env.roots),
-    );
-    if (Result.isFailure(known)) return errorResult(known.failure.message);
-  }
-  // A chat's files are the media on its prompt; a program names its four
-  // lists.
-  const files =
-    launch.program === null
-      ? {
-          inputFiles: [],
-          contextFiles: [],
-          mediaFiles: launch.mediaFiles,
-          outputFiles: [],
-        }
-      : launch.files;
-  // A program's child is the program's own run, named for it; a chat's is
-  // what the call wrote, or an installed plugin's agent read now, so the
-  // child's config holds its system text and tools and a resume reads no
-  // file.
-  let agent: {
-    name: string;
-    system: string;
-    tools: readonly string[];
-    toolScope?: AgentConfig['toolScope'];
-  };
-  if (launch.program !== null)
-    agent = { name: launch.program.name, system: '', tools: [] };
-  else if (launch.agentName != null) {
-    if (launch.system != null || launch.tools != null)
-      return errorResult(
-        '`agentName` runs an installed plugin’s agent with its own system text and tools: drop `system` and `tools`, or drop `agentName`.',
-      );
-    const named = yield* Effect.result(
-      pluginAgent(launch.agentName, call.env.roots),
-    );
-    if (Result.isFailure(named)) return errorResult(named.failure.message);
-    agent = named.success;
-  } else if (launch.system == null)
-    return errorResult(
-      'Give the child a `system` text (and the `tools` it needs), or name an installed plugin’s agent with `agentName`.',
-    );
-  else
-    agent = {
-      name: launch.label?.trim() || 'agent',
-      system: launch.system,
-      tools: launch.tools ?? [],
-    };
+  const child = yield* childOf(call, launch);
+  if ('status' in child) return child;
+  const { agent, files }: Child = child;
   const unusable = yield* rejectUnusableWorkingDirectory(
     call.env.roots,
     launch.workingDirectory ?? undefined,
