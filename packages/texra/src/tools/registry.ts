@@ -38,7 +38,6 @@ import { hasExtension } from '@texra-ai/worldline/schemas';
 
 // Local file imports
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
-import { arxiv } from './arxiv/plugin';
 import { claudeAgent } from './agentCli/claudeAgentPlugin';
 import { codex } from './agentCli/codexPlugin';
 import {
@@ -86,7 +85,6 @@ import { OpenPdfTool } from './OpenPdfTool';
  */
 import { ProbeEnvironmentTool } from './setup/ProbeEnvironmentTool';
 import { SETUP_PROMPT } from './setup/setupPrompt';
-import { TASK_MODULES, TASK_PROGRAMS } from './tasks/programs';
 import { UnsetApiKeyTool } from './setup/UnsetApiKeyTool';
 import { InvokeCommandTool } from './setup/InvokeCommandTool';
 import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
@@ -103,7 +101,6 @@ import {
   type EditorIntegrationShape,
 } from '@texra/hosts/editorIntegration';
 import { wolfram } from './wolframPlugin';
-import { zotero } from './zotero/plugin';
 import { type WriteFilter } from '@texra-ai/worldline/builtins';
 import { Settings } from '@texra-ai/worldline/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
@@ -208,8 +205,6 @@ const core = (
   ...definePlugin<EditorHost>({
     id: 'core',
     tools: [InlineCommentTool, OpenPdfTool, AskUserQuestionTool],
-    scriptModules: TASK_MODULES,
-    programs: TASK_PROGRAMS,
     // The section writes math for a rendered reply: a run that writes a
     // document, with no tool offered, gets none of it (`$$\\begin{align}`
     // inside a .tex file does not compile).
@@ -369,7 +364,6 @@ export const texraPlugins = (host: {
       },
     },
     latexDiagnostics(editors),
-    arxiv,
     {
       ...web,
       icons: { web_search: 'globe', web_fetch: 'globe' },
@@ -401,7 +395,6 @@ export const texraPlugins = (host: {
       },
     },
     wolfram,
-    zotero,
     lean4,
     {
       ...multiAgent,

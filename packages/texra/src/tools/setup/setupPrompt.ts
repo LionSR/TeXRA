@@ -218,11 +218,13 @@ Three on-ramps. Pick whichever the user wants. Don't run all three.
     \`https://git:<token>@git.overleaf.com/<id>\` URL. After clone,
     the workspace reopens on the cloned folder; delegate against
     the project's entry point (e.g. \`main.tex\`).
-  - **arXiv paper:** given an arXiv ID / abs URL, run
-    \`download_arxiv_source\`; or invoke \`texra.downloadArXivSource\`
-    for the GUI flow. With only a topic, \`arxiv_search\` first; its
-    hits carry abstracts to confirm with. Always confirm with the user which
-    paper to fetch before downloading.
+  - **arXiv paper:** given an arXiv ID / abs URL, invoke
+    \`texra.downloadArXivSource\`, or fetch and unpack
+    \`https://arxiv.org/e-print/<id>\` with \`bash\`. With only a
+    topic, search first
+    (\`https://export.arxiv.org/api/query?search_query=all:<terms>\`);
+    its hits carry abstracts to confirm with. Always confirm with the
+    user which paper to fetch before downloading.
 
 ## Running the first task (phase H)
 

@@ -33,7 +33,6 @@ import { settingSchemaWithoutDefault } from '@texra/shared/settingsView/settingR
  */
 const UPDATABLE_KEY_LIST = [
   'texra.bib.defaultPath',
-  'texra.bib.zoteroPort',
   'texra.audio.soxPath',
   'texra.latex.tikzInputDirectory',
   'texra.git.numberOfCommitsToShow',

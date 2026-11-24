@@ -24,7 +24,7 @@ Explicitly protect macros, labels, theorem numbering, and settled sections:
 
 ### Separate content derivations from prose polishing
 
-Settle derivations, proofs, and the literature first (ask the assistant, or run the `derive`, `solve`, `search` or `prove` programs). Once the technical claims and equations are settled, ask for a polish or a proofread of the finished `.tex` file (the `edit` program).
+Settle derivations, proofs, and the literature first (ask the assistant, or run the `prove` program). Once the technical claims and equations are settled, ask for a polish or a proofread of the finished `.tex` file (the `edit` program).
 
 ## Model selection
 

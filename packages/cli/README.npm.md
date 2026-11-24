@@ -24,7 +24,7 @@ brew install texra-ai/tap/texra
 texra setup                                 # guided setup and first task
 texra chat                                  # interactive terminal chat
 texra run edit --input paper.tex            # polish a LaTeX file with diff output
-texra run review --input paper.tex --print  # audit derivations and math
+texra run annotate --input paper.tex        # mark what a referee would question
 texra history list                          # browse past tasks
 texra doctor                                # check credentials and LaTeX tools
 ```

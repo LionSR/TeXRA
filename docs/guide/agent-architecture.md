@@ -31,9 +31,8 @@ A program is started in one of two ways:
 - `texra run <program> --input …` in the terminal.
 
 The Lean programs (`prove`, `lean-simplify`, `blueprint`, `lean-search`) are
-described in [Lean 4 proofs](./lean.md#lean-programs); the task programs
-(`review`, `derive`, `fix-latex`, …) hand the job to one helper agent and
-return its report. The rest of this page is about the document programs.
+described in [Lean 4 proofs](./lean.md#lean-programs). The rest of this page
+is about the document programs.
 
 ## Basic execution flow
 

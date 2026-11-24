@@ -127,20 +127,6 @@ export const BIB_DEFAULT_PATH_SETTING = Object.freeze({
     'Default .bib file path for citation search (supports Zotero auto-export).',
 } as const satisfies SettingRow<string>);
 
-/** The port of Zotero's local endpoints: the Connector API and Better
- *  BibTeX's JSON-RPC. */
-export const ZOTERO_PORT_SETTING = Object.freeze({
-  key: 'bib.zoteroPort',
-  slot: 'config',
-  schema: decodingDefault(
-    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_535 })),
-    23119,
-  ),
-  title: 'Zotero port',
-  description:
-    'Local Zotero port for Connector API and Better BibTeX (default: 23119).',
-} as const satisfies SettingRow<number>);
-
 export const LATEXINDENT_CONFIG_SETTING = Object.freeze({
   key: 'latex.latexindentConfig',
   slot: 'config',
@@ -342,7 +328,6 @@ const TEXRA_UNSHOWN_ROWS: readonly SettingRow[] = [
   CLI_OUTPUT_FORMAT_SETTING,
   AUTO_OPEN_FINAL_SETTING,
   BIB_DEFAULT_PATH_SETTING,
-  ZOTERO_PORT_SETTING,
   LATEXINDENT_CONFIG_SETTING,
   TEXFMT_CONFIG_SETTING,
   TIKZ_INPUT_DIRECTORY_SETTING,

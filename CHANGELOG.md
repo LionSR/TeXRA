@@ -128,12 +128,18 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   no saved workflow script files. A helper agent gets the tools it is given,
   whatever its parent was offered.
 - **Removed tools.** `todo_write` (and the Todos panel), `crossref_search`,
-  `arxiv_metadata` (`arxiv_search` hits carry abstract, authors and dates),
+  `arxiv_metadata`,
   `texcount` and `wolfram` (agents run `texcount` and `wolframscript`
   through the shell), the external `inquiry` tool with its plugin and
   threads, and the LaTeX Extraction plugin's `extract_figures`,
   `extract_tikz_figures` and `extract_bib_entries` (agents use `grep`,
-  `read_file` and `bash`). `zotero_add` no longer takes a DOI. Lean:
+  `read_file` and `bash`). The arXiv tools (`arxiv_search`,
+  `download_arxiv_source`) and the Zotero plugin (`zotero_search`,
+  `zotero_add`, `zotero_export`, `zotero_collections`, with the
+  `texra.bib.zoteroPort` setting) are removed too: the bundled `arxiv` and
+  `zotero` skills tell the assistant how to reach arXiv's API and Zotero's
+  local server (port 23119) with `curl`, while **Enable skills for agents**
+  is on. Lean:
   `lean_project`'s `fetch_file_cache` is `fetch_cache`, and `lean_file`
   takes only the file.
 - **Agent teams and multi-agent presets are removed.** `texra multi-agent`,
@@ -280,10 +286,7 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   as `own:<name>` from its next step. Any run in a project can message
   another with `executions send`, and an agent reports to whoever gave it
   the work.
-- **Programs.** Besides the eight document programs, eleven task programs
-  each hand one job to a helper agent with that job's checklist (`review`,
-  `search`, `derive`, `solve`, `experiment`, `code`, `review-code`,
-  `simplify`, `test`, `fix-latex`, `latexdiff`), and the Lean plugin has
+- **Programs.** Besides the eight document programs, the Lean plugin has
   `prove` (completes the proofs in the `.lean` files you pass, checked with
   Lean's diagnostics), `lean-simplify` (brings them toward Mathlib quality
   under the same check), `blueprint` and `lean-search`. A document program takes

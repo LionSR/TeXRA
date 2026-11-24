@@ -5,7 +5,7 @@ import SearchResultsHero from '../.vitepress/components/SearchResultsHero.vue';
 import CliSearchChatHero from '../.vitepress/components/CliSearchChatHero.vue';
 </script>
 
-TeXRA's assistant connects to arXiv, Zotero, DuckDuckGo, WolframScript, and Lean 4 so you can search literature, manage BibTeX references, and check symbolic or formal math from your workspace.
+TeXRA's assistant reaches arXiv, Zotero, DuckDuckGo, WolframScript, and Lean 4 so you can search literature, manage BibTeX references, and check symbolic or formal math from your workspace.
 
 <wa-callout variant="brand">
   <wa-icon slot="icon" library="texra" name="shield"></wa-icon>
@@ -16,7 +16,7 @@ TeXRA's assistant connects to arXiv, Zotero, DuckDuckGo, WolframScript, and Lean
 
 ### <wa-icon library="texra" name="mortar-board"></wa-icon> Find papers
 
-Ask the assistant to find papers, or start the `search` program. Both search **arXiv**, the web, and your Zotero library:
+Ask the assistant to find papers. It searches **arXiv** through arXiv's public API, the web, and your Zotero library:
 
 ```
 Find recent papers on transformer architectures for document understanding.
@@ -41,7 +41,7 @@ For deeper analysis, ask to download the LaTeX source of a paper:
 Download the source files for arxiv:2401.12345 so I can see how they made their figures.
 ```
 
-This uses the `download_arxiv_source` tool and places the files in your workspace.
+The assistant fetches the source archive from arXiv with a shell command and unpacks it under `References/<paper id>/` in your workspace.
 
 ### <wa-icon library="texra" name="globe"></wa-icon> Search the web
 
@@ -55,7 +55,7 @@ The `web_search` tool queries the DuckDuckGo Instant Answers API, not a model pr
 
 ### <wa-icon library="texra" name="book"></wa-icon> Manage references with Zotero
 
-If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Keep Zotero running while you use these features; check its status and switch it on under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
+If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library. The assistant talks to the local server Zotero runs on port 23119 with shell commands, as its bundled `zotero` skill describes; keep Zotero running while you use these features, and turn skills on (below).
 
 ```
 Search my Zotero library for papers on attention mechanisms.
@@ -69,17 +69,11 @@ Export the selected Zotero items as a .bib file for my project.
 Add this arXiv paper to my Zotero library.
 ```
 
-<ToolCallPanel
-  title="zotero"
-  icon="book"
-  :calls="[
-    { state: 'done', verb: 'zotero_search', target: 'graph neural networks', effect: 'Finds matching items in your library' },
-    { state: 'done', verb: 'zotero_add', target: 'arxiv.org/abs/2401.12345', effect: 'Adds the paper to your Zotero library' },
-    { state: 'active', verb: 'zotero_export', target: 'references.bib', effect: 'Writes the selected items as BibTeX' },
-  ]"
-/>
+Each request to Zotero is a `bash` call you approve like any other shell command.
 
-<p class="hero-caption">How the assistant drives the <code>zotero_*</code> tools across one conversation (search → add → export), as the calls appear in the task.</p>
+::: tip Turn skills on
+How to query arXiv and Zotero is written down in two bundled skills, `arxiv` and `zotero`. The assistant reads them only while **Enable skills for agents** is on (**Settings → Agents → Skills**, or `texra.skills.enabled`).
+:::
 
 ::: tip Default bibliography path
 Name your project's main `.bib` file once so the assistant knows where to look up citations: it is told its path and searches it with `grep` or `read_file`. The setting key is `texra.bib.defaultPath`; configure it in your `.texra/config.json`.
@@ -87,24 +81,18 @@ Name your project's main `.bib` file once so the assistant knows where to look u
 
 ### <wa-icon library="texra" name="symbol-operator"></wa-icon> Verify math with Wolfram
 
-The assistant (and the `derive` program) runs Wolfram Language through `wolframscript` in the shell (`wolframscript -code '...'` or `wolframscript -file`) to check symbolic algebra, integrals, or limits before you commit them to the manuscript. This requires a local [Wolfram Engine](https://www.wolfram.com/engine/); its status shows on its **Wolfram Language** row under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
+The assistant runs Wolfram Language through `wolframscript` in the shell (`wolframscript -code '...'` or `wolframscript -file`) to check symbolic algebra, integrals, or limits before you commit them to the manuscript. This requires a local [Wolfram Engine](https://www.wolfram.com/engine/); its status shows on its **Wolfram Language** row under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
 
 ### <wa-icon library="texra" name="beaker"></wa-icon> Formalize proofs in Lean 4
 
 The assistant formalizes mathematical statements and proofs directly in Lean 4. It searches Mathlib lemmas using Loogle, inspects live proof states and tactic goals, reads compiler diagnostics, and iterates on tactic scripts until the theorem compiles without `sorry`. Read the [Lean 4 proofs guide](./lean.md) for full details.
 
-## Which program to use
+## Programs
 
-You can ask the assistant for any of this directly. When you want a fixed
-procedure, or a run from the terminal, start a program:
-
-| Program  | For                                                                                   |
-| :------- | :------------------------------------------------------------------------------------ |
-| `search` | Finding papers and web sources, with citations; adds to Zotero, edits no project file |
-| `derive` | An analytical derivation or symbolic computation, checked with `wolframscript`        |
-| `review` | Auditing a manuscript's derivations, notation, references and code                    |
-| `solve`  | A research-level problem: literature, small cases, counterexamples, a checkable proof |
-| `prove`  | Completing Lean proofs until Lean reports no error and no `sorry`                     |
+You ask the assistant for any of this directly: a literature search, a
+derivation checked with `wolframscript`, an audit of a manuscript, work on a
+research-level problem. For Lean, the `prove` program completes proofs until
+Lean reports no error and no `sorry`.
 
 Read [The assistant and programs](./programs.md) for the full list.
 

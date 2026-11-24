@@ -471,7 +471,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         [
           ...pages.map(followPage),
           toolsPage.followToolAvailability,
-          // The re-probe's network checks (Zotero and others) never hold the
+          // The re-probe's network checks never hold the
           // view's ready answer, so the host's tab reveal is not kept waiting.
           moved([]).pipe(Stream.runForEach(() => finish(toolsPage.refresh))),
           // A run that binds a GitHub subscription and a provider key written by any writer (the setup agent's
