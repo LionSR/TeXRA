@@ -15,7 +15,14 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Number as Num, Record, Result } from 'effect';
+import {
+  Array as Arr,
+  Effect,
+  FileSystem,
+  Number as Num,
+  Record,
+  Result,
+} from 'effect';
 
 // Local imports - shared contracts
 import {
@@ -405,11 +412,7 @@ export const readInstalledPluginLoad: (
       const enabled = (yield* readInstalled(stores)).filter(
         (record) => record.enabled,
       );
-      const loadable: LoadablePlugin[] = [];
-      const withheld: { plugin: string; reason: string }[] = [];
-      const withhold = (plugin: string, reason: string) =>
-        withheld.push({ plugin, reason });
-      if (enabled.length === 0) return { loadable, withheld };
+      if (enabled.length === 0) return { loadable: [], withheld: [] };
       const envKey = yield* envKeyOf(stores);
       // Each plugin is read and digested at once, then judged in order.
       const reads = yield* Effect.forEach(
@@ -426,18 +429,17 @@ export const readInstalledPluginLoad: (
           ),
         { concurrency: 4 },
       );
-      for (const { record, read } of reads) {
+      const [loadable, withheld] = Arr.partition(reads, ({ record, read }) => {
+        const withhold = (reason: string) =>
+          Result.fail({ plugin: record.name, reason });
         if (Result.isFailure(read)) {
-          withhold(
-            record.name,
+          return withhold(
             `Plugin ${record.name} is not loaded: ${read.failure.message}`,
           );
-          continue;
         }
         const { plugin, key } = read.success;
         if (plugin.code.length > 0) {
-          withhold(record.name, codeRefusal(record.name, plugin));
-          continue;
+          return withhold(codeRefusal(record.name, plugin));
         }
         if (!trusts(record, key)) {
           let change = 'what it ships or runs changed since you trusted it';
@@ -445,14 +447,16 @@ export const readInstalledPluginLoad: (
             change = 'it is enabled but was never trusted';
           else if (record.trust.version !== key.version)
             change = `its version changed (${record.trust.version ?? 'none'} -> ${key.version ?? 'none'}) since you trusted it`;
-          withhold(
-            record.name,
+          return withhold(
             `Plugin ${record.name} is not loaded: ${change}. Enable it again to review it.`,
           );
-          continue;
         }
-        loadable.push({ record, plugin, trust: key });
-      }
+        return Result.succeed({
+          record,
+          plugin,
+          trust: key,
+        } satisfies LoadablePlugin);
+      });
       return { loadable, withheld, envKey };
     },
     Effect.catch((error: PluginError | PluginRequestError) =>

@@ -10,6 +10,7 @@
  * density (one-liner or expanded card) is a paint-time choice; it is never
  * expressed by withholding a row.
  */
+import { Array as Arr } from 'effect';
 import {
   MESSAGE_TYPES,
   type ErrorLogData,
@@ -152,7 +153,7 @@ function errorRow(
 // ---------------------------------------------------------------------------
 
 function fileListSummary(files: readonly FileListEntry[]): string {
-  const loaded = files.filter((file) => file.ok).length;
+  const loaded = Arr.countBy(files, (file) => file.ok);
   const failed = files.length - loaded;
   const failedSuffix = failed > 0 ? `, ${failed} not found` : '';
   return `Files (${loaded}/${files.length} loaded${failedSuffix})`;

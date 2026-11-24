@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem, Result } from 'effect';
+import { Array as Arr, Effect, FileSystem, Result } from 'effect';
 
 // Local imports - common
 import { ToolContext } from '@tools/core/ToolTypes';
@@ -39,9 +39,9 @@ function findOccurrenceLineNumbers(content: string, needle: string): number[] {
   if (needle.length === 0) {
     return [];
   }
-  return content
-    .split('\n')
-    .flatMap((line, index) => (line.includes(needle) ? [index + 1] : []));
+  return Arr.filterMap(content.split('\n'), (line, index) =>
+    line.includes(needle) ? Result.succeed(index + 1) : Result.failVoid,
+  );
 }
 
 interface WritableFileTarget {

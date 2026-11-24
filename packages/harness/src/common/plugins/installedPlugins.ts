@@ -427,39 +427,45 @@ const updatePlugins = Effect.fn('updatePlugins')(function* (
       : yield* Effect.forEach(names, (name) =>
           Effect.fromResult(findInstalled(installed, name)),
         );
-  const updates: PluginUpdate[] = [];
-  for (const plugin of targets) {
-    const dir = managedDir(env, plugin.name);
-    const commit =
-      plugin.commit === undefined
-        ? undefined
-        : yield* fetchPinned(dir, plugin.source, plugin.ref);
-    const skills = yield* rereadPlugin(plugin).pipe(
-      Effect.map((resolved) =>
-        resolved.skills.map((skill) => path.join(plugin.path, skill)),
-      ),
-      Effect.tapError(() =>
+  return yield* Effect.forEach(
+    targets,
+    Effect.fnUntraced(function* (plugin) {
+      const dir = managedDir(env, plugin.name);
+      const commit =
         plugin.commit === undefined
-          ? Effect.void
-          : checkoutDetached(dir, plugin.commit).pipe(
-              // The reread failure is the one to report; a failed restore
-              // is named beside it.
-              Effect.catch((error) =>
-                Effect.logWarning(
-                  `Could not restore ${dir} to ${plugin.commit}: ${error.message}`,
+          ? undefined
+          : yield* fetchPinned(dir, plugin.source, plugin.ref);
+      const skills = yield* rereadPlugin(plugin).pipe(
+        Effect.map((resolved) =>
+          resolved.skills.map((skill) => path.join(plugin.path, skill)),
+        ),
+        Effect.tapError(() =>
+          plugin.commit === undefined
+            ? Effect.void
+            : checkoutDetached(dir, plugin.commit).pipe(
+                // The reread failure is the one to report; a failed restore
+                // is named beside it.
+                Effect.catch((error) =>
+                  Effect.logWarning(
+                    `Could not restore ${dir} to ${plugin.commit}: ${error.message}`,
+                  ),
                 ),
               ),
-            ),
-      ),
-    );
-    yield* updateInstalled(env, plugin.name, (found) => ({
-      ...found,
-      ...(commit ? { commit } : {}),
-      skills,
-    }));
-    updates.push({ name: plugin.name, from: plugin.commit, to: commit });
-  }
-  return updates;
+        ),
+      );
+      yield* updateInstalled(env, plugin.name, (found) => ({
+        ...found,
+        ...(commit ? { commit } : {}),
+        skills,
+      }));
+      const update: PluginUpdate = {
+        name: plugin.name,
+        from: plugin.commit,
+        to: commit,
+      };
+      return update;
+    }),
+  );
 });
 
 /**

@@ -9,7 +9,7 @@
 
 // Third-party imports
 import { callKey } from '@shared/session/runFacts';
-import { Effect, Result, Schema, SubscriptionRef } from 'effect';
+import { Array as Arr, Effect, Option, Schema, SubscriptionRef } from 'effect';
 
 // Local imports
 import {
@@ -132,28 +132,22 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
       (run.outcome === null || run.childIds.some(stillRunning))
     );
   };
-  const running = results
-    .flatMap((payload) => {
-      const { responseId, callId, result } = payload;
-      const launched =
-        result.status === 'executed'
-          ? Schema.decodeUnknownResult(LaunchedSchema)(result.value)
-          : undefined;
-      const goal =
-        launched !== undefined && Result.isSuccess(launched)
-          ? launched.success.runId
-          : undefined;
-      return goal !== undefined &&
-        issued[callKey(responseId, callId)]?.toolName === PLAN
-        ? [goal]
-        : [];
-    })
-    .find((goal) =>
-      runs.has(goal) ? stillRunning(goal) : live.get(goal) !== undefined,
+  const running = Arr.findFirst(results, ({ responseId, callId, result }) => {
+    if (
+      result.status !== 'executed' ||
+      issued[callKey(responseId, callId)]?.toolName !== PLAN
+    )
+      return Option.none();
+    return Schema.decodeUnknownOption(LaunchedSchema)(result.value).pipe(
+      Option.map(({ runId }) => runId),
+      Option.filter((goal) =>
+        runs.has(goal) ? stillRunning(goal) : live.get(goal) !== undefined,
+      ),
     );
-  if (running !== undefined)
+  });
+  if (Option.isSome(running))
     return executed(
-      `The plan is approved, but a goal is already running (run ${running}): it was not started again. Work on the plan in this conversation, or stop that goal first and run the plan as a goal again.`,
+      `The plan is approved, but a goal is already running (run ${running.value}): it was not started again. Work on the plan in this conversation, or stop that goal first and run the plan as a goal again.`,
       'Plan approved: a goal is already running',
     );
   const maxCostUsd = yield* Settings.get(call.env.roots, GOAL_MAX_COST_SETTING);

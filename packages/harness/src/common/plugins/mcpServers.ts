@@ -11,7 +11,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Result, Schema } from 'effect';
+import { Array as Arr, Effect, Result, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 // Local imports - shared contracts
@@ -125,28 +125,25 @@ export function parseMcpServers(
   where: string,
   servers: Readonly<Record<string, unknown>>,
 ): { servers: McpServerConfig[]; warnings: string[] } {
-  const parsed: McpServerConfig[] = [];
-  const warnings: string[] = [];
-  for (const [name, raw] of Object.entries(servers)) {
-    // The name is checked first, so a bad name is the failure reported.
-    const server = Result.all([
-      Schema.decodeUnknownResult(ServerNameSchema)(name),
-      Schema.decodeUnknownResult(McpServerEntrySchema)(raw),
-    ]);
-    if (Result.isFailure(server)) {
-      warnings.push(
-        `MCP server "${name}" in ${where} is skipped (only stdio servers with a command are supported): ${server.failure.message}`,
-      );
-      continue;
-    }
-    const [, entry] = server.success;
-    parsed.push({
-      name,
-      command: entry.command,
-      args: entry.args ?? [],
-      env: entry.env ?? {},
-    });
-  }
+  const [parsed, warnings] = Arr.partition(
+    Object.entries(servers),
+    ([name, raw]) =>
+      Result.all([
+        Schema.decodeUnknownResult(ServerNameSchema)(name),
+        Schema.decodeUnknownResult(McpServerEntrySchema)(raw),
+      ]).pipe(
+        Result.mapBoth({
+          onSuccess: ([, entry]) => ({
+            name,
+            command: entry.command,
+            args: entry.args ?? [],
+            env: entry.env ?? {},
+          }),
+          onFailure: (error) =>
+            `MCP server "${name}" in ${where} is skipped (only stdio servers with a command are supported): ${error.message}`,
+        }),
+      ),
+  );
   return { servers: parsed, warnings };
 }
 
