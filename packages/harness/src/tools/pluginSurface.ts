@@ -152,13 +152,8 @@ export {
 // the per-project settings stores, the global root's current values with
 // each family a host or plugin declares (`ValueFamily`), and the tool
 // catalog (enabled built-ins, plugin services and switches) with the
-// context it hands a plugin, and the packaged resources root a plugin's
-// bundled files ship under.
-export {
-  HostResources,
-  AppState,
-  type AppStateStore,
-} from '@platform/interfaces';
+// context it hands a plugin.
+export { AppState, type AppStateStore } from '@platform/interfaces';
 export {
   GlobalValues,
   StateStores,

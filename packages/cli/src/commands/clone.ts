@@ -33,7 +33,7 @@ import { askCliQuestion, writeTextStderr } from '../runtime/platform/logSinks';
 
 // Local imports - command helpers
 import { cliCommand } from './_helpers/cliCommand';
-import { commandResult, writeCliResult } from './_helpers/output';
+import { commandResult, writeCliResult } from '../runtime/platform/output';
 
 function buildOverleafClonePorts(
   context: CliContext,

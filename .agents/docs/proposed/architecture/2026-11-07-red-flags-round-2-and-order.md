@@ -410,7 +410,7 @@ inside one plugin).
    The extraction ladder's decision stays pure TypeScript. Done: PR 14796
    (rows I1 to I5, I7; I4's recipe half in PR 14807; J9 in PRs 14796 and
    14818); the `r<N>` grammar is `RevisionDirSchema` in
-   `packages/texra/src/shared/constants/revisionLayout.ts`. Its
+   `packages/texra/src/agent/output/revisionLayout.ts`. Its
    remainders are the 2026-11-15 rows TC-10 (I2's single-input fallback)
    and TU-10 (J9's other request cards), both landed in #14973.
 4. **LaTeX tools and arXiv: I6, I10, I8 + H10.** One latexdiff orchestrator

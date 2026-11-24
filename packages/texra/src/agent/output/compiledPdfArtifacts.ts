@@ -16,7 +16,7 @@ import { Effect, FileSystem } from 'effect';
 import {
   revisionLayout,
   stripRevisionDir,
-} from '@texra/shared/constants/revisionLayout';
+} from '@texra/agent/output/revisionLayout';
 
 interface PublishCompiledPdfOptions {
   runDirectory: string;

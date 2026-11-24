@@ -1,9 +1,9 @@
 /**
  * Edit distance between two strings where an adjacent transposition counts as
  * one edit (optimal string alignment), so `lsit` is one typo away from `list`
- * rather than two. Callers compare short tokens (command and subcommand names)
- * against a handful of candidates, so the straightforward O(n·m) matrix is the
- * whole cost.
+ * rather than two. The slash palette compares short command names against a
+ * handful of candidates, so the straightforward O(n·m) matrix is the whole
+ * cost.
  */
 export function editDistance(a: string, b: string): number {
   if (a === b) return 0;
@@ -31,8 +31,8 @@ export function editDistance(a: string, b: string): number {
 
 /**
  * Maximum edit distance at which `candidate` still counts as a plausible typo
- * of `token` — a third of the longer string, but at least 1. Shared by the
- * CLI subcommand and slash-command "did you mean" suggestions.
+ * of `token` — a third of the longer string, but at least 1: the slash
+ * command "did you mean" suggestion.
  */
 export function typoSuggestionThreshold(
   token: string,

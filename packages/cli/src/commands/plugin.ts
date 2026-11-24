@@ -29,7 +29,11 @@ import {
 } from '../runtime/platform/logSinks';
 
 import { cliCommand } from './_helpers/cliCommand';
-import { cliResult, commandResult, emitCliResult } from './_helpers/output';
+import {
+  cliResult,
+  commandResult,
+  emitCliResult,
+} from '../runtime/platform/output';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**

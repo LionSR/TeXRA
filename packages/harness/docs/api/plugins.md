@@ -999,22 +999,6 @@ class HostCapabilities extends Context.Service<
 >()('@texra-ai/worldline/agent/HostCapabilities')
 ```
 
-## HostResources
-
-What the host ships beside its code, as an Effect service the composition
-root provides once through `processLayer`.
-
-```ts
-class HostResources extends Context.Service<
-  HostResources,
-  {
-    /** The packaged resources root (templates, bundled plugin files).
-     *  Absent where none ships: an embedder with no resources. */
-    readonly resourcesRoot?: string;
-  }
->()('@texra-ai/worldline/platform/HostResources')
-```
-
 ## Hunk
 
 A hunk as its readers see it: jsdiff's, or one carried as data.

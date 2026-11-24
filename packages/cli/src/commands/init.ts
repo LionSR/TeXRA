@@ -22,7 +22,7 @@ import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 
 import { boolFlag, cliCommand } from './_helpers/cliCommand';
-import { cliResult, emitCliResult } from './_helpers/output';
+import { cliResult, emitCliResult } from '../runtime/platform/output';
 
 function defaultInitAnswers(models: readonly ModelOptionData[]): InitAnswers {
   return {

@@ -30,7 +30,7 @@ import {
   cliResult,
   emitCliResult,
   emitPagedCliResult,
-} from './_helpers/output';
+} from '../runtime/platform/output';
 import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 
 /**

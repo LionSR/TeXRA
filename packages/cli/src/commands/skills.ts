@@ -13,7 +13,7 @@ import {
 } from '../runtime/skills';
 
 import { SKILL_SOURCES_CONFIG, cliCommand } from './_helpers/cliCommand';
-import { emitCliResult } from './_helpers/output';
+import { emitCliResult } from '../runtime/platform/output';
 import type { CliContext } from '../runtime/platform/cliContext';
 
 const listSkills = Effect.fn('listSkills')(function* (

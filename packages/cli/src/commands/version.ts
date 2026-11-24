@@ -8,7 +8,7 @@ import {
 
 import { readCliGlobalArgs } from './_helpers/cliCommand';
 import { loadConfigAndWarn } from './_helpers/loadConfigAndWarn';
-import { emitCliResult } from './_helpers/output';
+import { emitCliResult } from '../runtime/platform/output';
 
 // No runtime: the version is the build's, and the output format the
 // context's, so it prints from the parse itself.

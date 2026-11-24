@@ -31,7 +31,7 @@ import {
   cliResult,
   emitCliResult,
   emitPagedCliResult,
-} from './_helpers/output';
+} from '../runtime/platform/output';
 import {
   CliUsageError,
   failUsage,

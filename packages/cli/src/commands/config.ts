@@ -15,7 +15,7 @@ import {
 import { writeErrorStderr } from '../runtime/platform/logSinks';
 
 import { cliCommand } from './_helpers/cliCommand';
-import { cliResult, emitCliResult } from './_helpers/output';
+import { cliResult, emitCliResult } from '../runtime/platform/output';
 
 function formatConfigValue(value: unknown): string {
   if (typeof value === 'string') return value;
