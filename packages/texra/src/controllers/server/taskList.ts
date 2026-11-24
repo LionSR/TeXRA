@@ -3,7 +3,7 @@
  * storage root (`Sessions.projects`: an open project's live view, any other
  * read cold from its store).
  */
-import { Effect } from 'effect';
+import { Array as Arr, Effect } from 'effect';
 
 import { Sessions } from '@texra-ai/worldline';
 import { type SessionView } from '@texra-ai/worldline/schemas';
@@ -31,7 +31,7 @@ function summaries(view: SessionView, workspace: string): TaskSummary[] {
 
 /**
  * Every project's top-level tasks, newest first. `all` returns every task;
- * otherwise the newest 200, live ones always kept.
+ * otherwise all live tasks plus the newest non-live tasks up to the limit.
  */
 export const listTasks = Effect.fn('taskList.listTasks')(function* (
   all: boolean,
@@ -41,11 +41,11 @@ export const listTasks = Effect.fn('taskList.listTasks')(function* (
     .flatMap(({ view, workspace }) => summaries(view, workspace))
     .toSorted((a, b) => b.launchedAt - a.launchedAt);
   if (all) return newest;
-  const live = newest.filter((task) => task.live);
-  // Every live task is kept past the limit; the list stays newest first.
-  const kept = new Set([
-    ...live,
-    ...newest.slice(0, Math.max(0, TASK_LIST_LIMIT - live.length)),
-  ]);
-  return newest.filter((task) => kept.has(task));
+  let remaining = TASK_LIST_LIMIT - Arr.countBy(newest, (task) => task.live);
+  return newest.filter((task) => {
+    if (task.live) return true;
+    if (remaining <= 0) return false;
+    remaining -= 1;
+    return true;
+  });
 });

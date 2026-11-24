@@ -59,31 +59,31 @@ export function bootstrapDesktopWindowLifecycle(
 export function installDesktopBeforeQuitWiring(options: {
   app: BeforeQuitApp;
   getMainWindow(): MainWindow | null;
-  /** The process's shutdown: its scope's close, run once, a later caller
-   *  joining the one in flight, so this wiring keeps no "shutdown started"
-   *  flag of its own. */
+  /** The process's shutdown, which closes the process scope. */
   shutdown: Effect.Effect<void>;
   continueAfterWindowClose(continueQuit: () => void): void;
 }): void {
-  let quitting = false;
+  let quitPhase: 'idle' | 'draining' | 'ready' = 'idle';
   options.app.on('before-quit', (event) => {
-    if (quitting) return;
+    if (quitPhase === 'ready') return;
     event.preventDefault();
+    if (quitPhase === 'draining') return;
     const window = options.getMainWindow();
     if (window && !window.isDestroyed()) {
-      options.continueAfterWindowClose(() => options.app.quit());
+      options.continueAfterWindowClose(() => {
+        if (quitPhase === 'idle') options.app.quit();
+      });
       window.close();
       return;
     }
-    // Electron's before-quit is where this host runs its shutdown drain, and
-    // the quit follows it however it ends. A before-quit arriving
-    // while the drain is in flight joins that same drain, and `quitting`
-    // arbitrates the quit the join lands on.
+    // Claim the drain before starting it. Its continuation allows Electron's
+    // reentrant before-quit event to proceed.
+    quitPhase = 'draining';
     void Effect.runPromise(
       options.shutdown.pipe(
         Effect.ensuring(
           Effect.sync(() => {
-            quitting = true;
+            quitPhase = 'ready';
             options.app.quit();
           }),
         ),
