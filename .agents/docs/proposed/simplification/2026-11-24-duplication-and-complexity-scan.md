@@ -61,8 +61,20 @@ bar on its own.
 ## Complex functions worth a dedicated decomposition
 
 Each is cohesive and well-documented but long and multi-responsibility; none
-is duplication, so each is its own extract-named-steps change, not a sweep.
-Listed in rough order of density.
+is duplication, so each is its own change, not a sweep. Listed in rough order
+of density.
+
+**Refused shape: splitting a long function into sequential single-caller
+steps.** Root `AGENTS.md` bans single-caller extractions and names temporal
+decomposition a red flag, and a note here is no authority over it. Cutting a
+function into phases (`invokeCall` → `commitOutcome` over a hand-off record,
+`stepSkills` / `stepMemory`, a `childOf` or `lowerMessages` each called
+once) was tried on 2026-11-24 and reverted in review
+(`LOOP-phase-split-long-functions` in
+`.agents/docs/refuted-candidates.json`). What does land is the duplication
+or the data shape inside the function: a fact decided in several branches
+decided once, a restated value given one helper with several callers, a
+table whose rows are the cases. Read items 1, 2, 5 and 6 that way.
 
 1. `createEditorPane` (`packages/desktop/src/renderer/editorPane.ts`, ~605
    lines): one factory holds the editor surface, the file tree listing, save +
@@ -83,13 +95,16 @@ Listed in rough order of density.
    system text holds. The non-golden replies are `cannedTurn`'s early
    returns. A golden store regenerated after the change is byte-identical
    to one generated before it on the same tree.
-4. ~~`finishCall` (`packages/harness/src/agent/runtime/loop/toolUseDispatch.ts`,
-   ~256 lines): extract "run the body and classify the outcome" and "sanitize,
-   capture and commit the result rows" into named helpers so the top reads as
-   short-circuits → invoke → commit.~~ Landed 2026-11-24 evening: `finishCall`
-   (45 lines) is the short-circuits, then `invokeCall` (hooks, chain, body,
-   classified by `resultOfExit`), then `commitOutcome`, over one `CallOutcome`
-   record; the card fields are one `cardOf` / `stagedOf`.
+4. `finishCall` (`packages/harness/src/agent/runtime/loop/toolUseDispatch.ts`,
+   ~256 lines). The proposed split into "invoke" and "commit" helpers is
+   refused (above): each would have one caller. Landed 2026-11-24 evening
+   instead, inside the function: the card a call opens and the stage it
+   opens under are `cardOf` / `stagedOf`, shared by the intent, the opening
+   and the result row (`resultRow` restated the stage spread), and the
+   result is assigned once per path, a refused check building its error
+   result where it is extracted instead of overwriting `result`. The
+   PreToolUse result type is named once (`ToolCallHooks`, which `toolGuard`
+   picks from).
 5. `configureAnsi` (`packages/cli/src/chat/tui/render/ansiMarkdown.ts`, ~285
    lines): ~10 markdown-it rule overrides share five mutable closure depth
    counters reset in two places (a leak risk on an unbalanced token stream) and
@@ -132,26 +147,28 @@ need their own careful, behavior-preserving change rather than a batch.
 
 ## The evening run (2026-11-24): the harness core
 
-Item 4 landed, and the sweep widened to the longest functions left in the
-harness core and llm (a TypeScript-AST measure of function spans, crossed
-with a month's churn). Each became its outline, behavior unchanged:
+Measured the longest functions in the harness core and llm (a
+TypeScript-AST measure of function spans, crossed with a month's churn).
+What landed is the duplication inside them, each change behavior-preserving:
 
-- `openStep` (`packages/harness/src/agent/runtime/loop/step.ts`, 282 → 189
-  lines; conjoined concerns): the skills listing and the memory section are
-  `stepSkills` and `stepMemory`, the warnings a change reports a pure
-  `changeWarnings`; the contributor filter `resolveActivations` restated is
-  one `contributedBy`.
-- `agentCall` (`packages/harness/src/agent/runtime/delegation/AgentTool.ts`,
-  246 → 199 lines; special and general code mixed): whether a launch is a
-  program's or a chat's is decided once in `childOf`, which hands the general
-  core one `Child`.
-- `invocationBody` (`packages/llm/src/api/anthropicMessages.ts`, 169 → 77
-  lines; conjoined): the history lowering is `lowerMessages`, as the
-  Responses and Interactions protocols name theirs.
+- `finishCall`: item 4.
+- `openStep` (`packages/harness/src/agent/runtime/loop/step.ts`): the
+  contributor filter it and `resolveActivations` each wrote is one
+  `contributedBy`, and the programs list it hands the description maps its
+  three sources once.
+- `agentCall` (`packages/harness/src/agent/runtime/delegation/AgentTool.ts`):
+  whether a launch is a program's or a chat's was decided in three places
+  (the program check, the file lists, the agent it runs as); one block now
+  decides the child once, and the four file lists are one `ChildFiles` type.
+- `invocationBody` (`packages/llm/src/api/anthropicMessages.ts`): the
+  thinking parameter is one expression instead of a `let` assigned down a
+  ladder.
 
-Measured and left: `modelInvokerLayer` and `openaiResponsesModel` are
-factories whose length is their inner functions, each already named;
-`runToolUse` already reads as `runTurn` and `loopBody`; `toolCatalogLayer`'s
-native-revision read (`readWith`) is the next candidate but sits on the
-plugin-trust path and wants its own change; `scriptDoor` is one ordering
-protocol over shared state.
+Tried and reverted in review: phase splits of `finishCall`, `openStep`
+(`stepSkills`, `stepMemory`, `changeWarnings`), `agentCall` (`childOf`) and
+`invocationBody` (`lowerMessages`) into single-caller steps; see the refused
+shape above. Measured and left: `modelInvokerLayer` and
+`openaiResponsesModel` are factories whose length is their inner functions,
+each already named; `runToolUse` already reads as `runTurn` and `loopBody`;
+`toolCatalogLayer`'s native-revision read (`readWith`) sits on the
+plugin-trust path; `scriptDoor` is one ordering protocol over shared state.
