@@ -106,7 +106,10 @@ session-carried, or the service forwards it and the TUI follows it.
   taken and the fallback port is used.
 - The settings view words the helper-model control itself
   (`packages/texra/src/ui/settings/components/profile/ModelSelectionList.ts`)
-  beside the row's title and description.
+  beside the row's title and description. Taken on 2026-11-24: the control
+  reads `HELPER_MODEL_SETTING`'s title and description; the description
+  drops "Leave empty to use the task's own model", which is false in any
+  app whose catalog names a default (an empty setting reads the default).
 - The harness still spells the product in two temp-file prefixes
   (`packages/harness/src/agent/runtime/run/img.ts`), the shell wrapper's
   variable names (`packages/harness/src/utils/system/execUtils.ts`) and one

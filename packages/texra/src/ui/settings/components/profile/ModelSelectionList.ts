@@ -340,20 +340,20 @@ export class ModelSelectionList extends TexraSignalElement {
     const helperOptions = selectedHelper
       ? [selectedHelper, ...enabledModels]
       : enabledModels;
+    // The control reads its setting row's words, as every setting row does.
+    const { title, description } = HELPER_MODEL_SETTING;
 
     return html`
       <div class="helper-model-row">
-        <span class="helper-model-label" aria-hidden="true">Helper model</span>
+        <span class="helper-model-label" aria-hidden="true">${title}</span>
         <wa-select
           id="helper-model-select"
           class="helper-model-select form-control-fill"
           .value=${helperModel}
           @change=${this.handleHelperModelChange}
         >
-          <span slot="label" class="visually-hidden">Helper model</span>
-          <span slot="hint" class="visually-hidden"
-            >Used for quick helper steps like task titles and LaTeX fixes.</span
-          >
+          <span slot="label" class="visually-hidden">${title}</span>
+          <span slot="hint" class="visually-hidden">${description}</span>
           ${helperOptions.map(
             (m) => html`
               <wa-option value=${m.name}>
@@ -362,9 +362,7 @@ export class ModelSelectionList extends TexraSignalElement {
             `,
           )}
         </wa-select>
-        <span class="helper-model-help" aria-hidden="true">
-          Used for quick helper steps like task titles and LaTeX fixes.
-        </span>
+        <span class="helper-model-help" aria-hidden="true">${description}</span>
       </div>
     `;
   }
