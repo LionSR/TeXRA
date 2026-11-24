@@ -30,16 +30,6 @@ export function subscriptionUsageWindowLabel(
   return `${prefix}${name.replaceAll('_', ' ')}`;
 }
 
-/** The window a plan runs out of first: the one with the most used. The CLI
- *  status bar shows it alone. */
-export function limitingSubscriptionWindow(
-  windows: readonly SubscriptionUsageWindow[],
-): SubscriptionUsageWindow | undefined {
-  return windows.toSorted(
-    (left, right) => right.percentUsed - left.percentUsed,
-  )[0];
-}
-
 /** The tone a usage window paints with, by how much is used: an error once it
  *  is used up, a caution at four fifths or more, and nothing to say below
  *  that. The CLI status bar and the settings view's meters read it. */

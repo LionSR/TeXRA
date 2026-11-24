@@ -37,7 +37,6 @@ import {
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
 import {
-  limitingSubscriptionWindow,
   subscriptionQuotaTone,
   subscriptionQuotaUsed,
 } from '@ui/copy/subscriptionUsage';
@@ -246,7 +245,10 @@ function subscriptionQuotaSegment(
   snapshot: SubscriptionUsageSnapshot | undefined,
 ): StatusBarSegment | undefined {
   if (snapshot?.state !== 'available') return undefined;
-  const limiting = limitingSubscriptionWindow(snapshot.windows);
+  // The bar shows the window the plan runs out of first: the most used.
+  const limiting = snapshot.windows.toSorted(
+    (left, right) => right.percentUsed - left.percentUsed,
+  )[0];
   if (!limiting) return undefined;
   const used = subscriptionQuotaUsed(limiting);
   const tone = subscriptionQuotaTone(limiting);

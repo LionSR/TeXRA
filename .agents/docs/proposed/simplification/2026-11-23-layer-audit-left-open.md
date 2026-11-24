@@ -47,8 +47,8 @@ and the settings view print the percent used
 "70% left" and "30%". The owner is that copy module: the limiting-window
 pick and one wording. Decision needed: used or left.
 
-Taken on 2026-11-24: percent used, everywhere. `limitingSubscriptionWindow`
-picks the window and `subscriptionQuotaUsed` words it ("30% used") for the
+Taken on 2026-11-24: percent used, everywhere. The status bar picks the
+most used window itself, and `subscriptionQuotaUsed` words it ("30% used") for the
 status bar, `/login status` and the settings meters; it takes the window, so
 no caller can pass `percentRemaining` through clamps written for the percent
 used, and `subscriptionQuotaTone` reads the same number.
