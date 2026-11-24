@@ -210,11 +210,46 @@ function restoreProtectedLatexInCell(cell: string, env: unknown): string {
 // A tag markdown-it tokenized that the terminal knows how to show. The name
 // must end at whitespace, `/` or `>`, so `<strong-x>` or `<bx>` stays text.
 const KNOWN_HTML_TAG_RE =
-  /^<(\/?)(strong|b|em|i|code|p|div|br|blockquote|h[1-6])[\s/>]/iu;
+  /^<(\/?)(strong|b|em|i|p|div|br|blockquote|h[1-6])[\s/>]/iu;
 // An attribute without a value is far likelier prose than markup
 // (`if x <p and y> 1`), so a tag takes only `name=value` attributes.
-const VALUED_ATTRIBUTES_RE =
-  /^<\/?[a-z0-9]+(?:\s+[^\s=/>]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))*\s*\/?>$/iu;
+const VALUED_ATTRIBUTE = String.raw`\s+[^\s=/>]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>\x60]+)`;
+const VALUED_ATTRIBUTES_RE = new RegExp(
+  String.raw`^<\/?[a-z0-9]+(?:${VALUED_ATTRIBUTE})*\s*\/?>$`,
+  'iu',
+);
+// A backtick code span (left as it is) or a `<code>` element, whose body is
+// source text: it becomes a code span before inline parsing reads it.
+const CODE_ELEMENT_RE = new RegExp(
+  String.raw`(?<!\x60)(\x60+)(?!\x60)[\s\S]*?(?<!\x60)\1(?!\x60)|<code(?:${VALUED_ATTRIBUTE})*\s*>([\s\S]*?)<\/code\s*>`,
+  'giu',
+);
+
+/** `body` as a backtick code span, its fence longer than any run inside. */
+function codeSpan(body: string): string {
+  if (body.trim() === '') return '';
+  const longest = Math.max(
+    0,
+    ...(body.match(/\x60+/gu) ?? []).map((run) => run.length),
+  );
+  const fence = '`'.repeat(longest + 1);
+  const pad = body.startsWith('`') || body.endsWith('`') ? ' ' : '';
+  return `${fence}${pad}${body}${pad}${fence}`;
+}
+
+/** Core rule, before `inline`: each `<code>` element in an inline's source
+ *  becomes a code span, so its body (`[label](target)`, `a\_b`) prints as
+ *  written instead of being parsed as markdown. */
+function codeElementsToSpans(state: StateCore): void {
+  for (const token of state.tokens) {
+    if (token.type !== 'inline' || !/<code/iu.test(token.content)) continue;
+    token.content = token.content.replaceAll(
+      CODE_ELEMENT_RE,
+      (match, _fence: string | undefined, body: string | undefined) =>
+        body === undefined ? match : codeSpan(body),
+    );
+  }
+}
 
 interface HtmlTag {
   readonly name: string;
@@ -232,16 +267,20 @@ function knownHtmlTag(token: Token): HtmlTag | undefined {
 const isBreakTag = (tag: HtmlTag): boolean =>
   tag.name === 'br' || tag.name === 'p' || tag.name === 'div';
 
-/** Tags that style a run (`<strong>`, `<h2>`, …) apply only between a matched
- *  pair; the result maps each paired index to its partner's. Breaks (`<br>`,
- *  `<p>`, `<div>`) need no partner. */
+const isBlockContainer = (tag: HtmlTag): boolean =>
+  tag.name === 'blockquote' || tag.name.startsWith('h');
+
+/** `<strong>`, `<em>` and their synonyms style a run only between a matched
+ *  pair in one inline; the result maps each paired index to its partner's.
+ *  Breaks (`<br>`, `<p>`, `<div>`) need no partner, and `<blockquote>` and
+ *  `<h1>`–`<h6>` pair across paragraphs (`pairBlockContainers`). */
 function pairHtmlTags(
   tags: readonly (HtmlTag | undefined)[],
 ): Map<number, number> {
   const partner = new Map<number, number>();
   const open: number[] = [];
   for (const [index, tag] of tags.entries()) {
-    if (tag === undefined || isBreakTag(tag)) continue;
+    if (tag === undefined || isBreakTag(tag) || isBlockContainer(tag)) continue;
     if (!tag.closing) {
       open.push(index);
       continue;
@@ -264,12 +303,36 @@ const HTML_INLINE_STYLE: Readonly<
   i: { type: 'em', markup: '_' },
 });
 
-/** The text a token stood for, as part of a `<code>` element's body. */
-function codeElementText(token: Token): string {
-  if (token.type === 'softbreak' || token.type === 'hardbreak') return ' ';
-  if (token.type === 'code_inline')
-    return `${token.markup}${token.content}${token.markup}`;
-  return token.content || token.markup;
+/** The `<blockquote>` and `<h1>`–`<h6>` tags that pair up across the
+ *  document's paragraphs, an opener with the next closer of its name at the
+ *  same block level, so a quote or heading whose body holds blank lines still
+ *  covers every paragraph in it. */
+function pairBlockContainers(tokens: readonly Token[]): Set<Token> {
+  const paired = new Set<Token>();
+  const open: {
+    readonly token: Token;
+    readonly name: string;
+    readonly level: number;
+  }[] = [];
+  for (const [index, token] of tokens.entries()) {
+    const before = tokens[index - 1];
+    if (token.type !== 'inline' || before?.type !== 'paragraph_open') continue;
+    for (const child of token.children ?? []) {
+      const tag = knownHtmlTag(child);
+      if (tag === undefined || !isBlockContainer(tag)) continue;
+      if (!tag.closing) {
+        open.push({ token: child, name: tag.name, level: before.level });
+        continue;
+      }
+      const at = open.findLastIndex(
+        (entry) => entry.name === tag.name && entry.level === before.level,
+      );
+      if (at < 0) continue;
+      paired.add(open[at].token).add(child);
+      open.length = at;
+    }
+  }
+  return paired;
 }
 
 /** An inline's children with each known tag replaced by the markdown token
@@ -280,32 +343,23 @@ function convertHtmlTags(
   state: StateCore,
   children: readonly Token[],
   blocks: boolean,
+  containers: ReadonlySet<Token>,
 ): (Token | HtmlTag)[] {
   const tags = children.map(knownHtmlTag);
   const partner = pairHtmlTags(tags);
   const out: (Token | HtmlTag)[] = [];
-  for (let index = 0; index < children.length; index++) {
-    const child = children[index];
+  for (const [index, child] of children.entries()) {
     const tag = tags[index];
     const close = partner.get(index);
     if (tag === undefined) {
       out.push(child);
     } else if (tag.name === 'br') {
       out.push(new state.Token('hardbreak', 'br', 0));
-    } else if (isBreakTag(tag)) {
+    } else if (isBreakTag(tag) || containers.has(child)) {
       out.push(blocks ? tag : child);
     } else if (close === undefined) {
       out.push(child);
-    } else if (tag.name === 'code') {
-      const code = new state.Token('code_inline', 'code', 0);
-      code.markup = '`';
-      code.content = children
-        .slice(index + 1, close)
-        .map(codeElementText)
-        .join('');
-      out.push(code);
-      index = close;
-    } else if (Object.hasOwn(HTML_INLINE_STYLE, tag.name)) {
+    } else {
       const style = HTML_INLINE_STYLE[tag.name];
       const token = new state.Token(
         `${style.type}_${tag.closing ? 'close' : 'open'}`,
@@ -314,8 +368,6 @@ function convertHtmlTags(
       );
       token.markup = style.markup;
       out.push(token);
-    } else {
-      out.push(blocks ? tag : child);
     }
   }
   return out;
@@ -326,16 +378,19 @@ const isBlankInline = (token: Token): boolean =>
   (token.type === 'text' && token.content.trim() === '');
 
 /** A paragraph split at its block tags into the paragraph, heading and
- *  blockquote tokens markdown would have parsed. Line breaks and spaces at
- *  the edges of each piece go, and an empty piece makes no block. */
+ *  blockquote tokens markdown would have parsed, starting inside `heading`
+ *  when an earlier paragraph opened one; the heading still open at its end
+ *  comes back with the blocks. Line breaks and spaces at the edges of each
+ *  piece go, and an empty piece makes no block. */
 function splitParagraphAtHtml(
   state: StateCore,
   items: readonly (Token | HtmlTag)[],
   hidden: boolean,
-): Token[] {
+  openHeading: string | undefined,
+): { readonly blocks: Token[]; readonly heading: string | undefined } {
   const out: Token[] = [];
   let piece: Token[] = [];
-  let heading: string | undefined;
+  let heading = openHeading;
   const flush = (): void => {
     const start = piece.findIndex((token) => !isBlankInline(token));
     const end = piece.findLastIndex((token) => !isBlankInline(token));
@@ -370,7 +425,7 @@ function splitParagraphAtHtml(
     }
   }
   flush();
-  return out;
+  return { blocks: out, heading };
 }
 
 /** Core rule: each known HTML tag becomes the markdown token it means, so the
@@ -379,25 +434,40 @@ function splitParagraphAtHtml(
 function applyHtmlTags(state: StateCore): void {
   const out: Token[] = [];
   const { tokens } = state;
+  const containers = pairBlockContainers(tokens);
+  // The heading a paired `<h2>` opened in an earlier paragraph, which every
+  // paragraph up to its `</h2>` belongs to.
+  let heading: string | undefined;
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index];
     const children = token.children ?? [];
-    if (!children.some((child) => child.type === 'html_inline')) {
+    const before = tokens[index - 1];
+    const paragraph =
+      token.type === 'inline' && before?.type === 'paragraph_open'
+        ? before
+        : undefined;
+    const hasHtml = children.some((child) => child.type === 'html_inline');
+    if (!hasHtml && (paragraph === undefined || heading === undefined)) {
       out.push(token);
       continue;
     }
-    const before = tokens[index - 1];
-    const paragraph = before?.type === 'paragraph_open' ? before : undefined;
-    const items = convertHtmlTags(state, children, paragraph !== undefined);
+    const items = hasHtml
+      ? convertHtmlTags(state, children, paragraph !== undefined, containers)
+      : children;
     const inline = items.filter((item) => item instanceof state.Token);
-    if (paragraph === undefined || inline.length === items.length) {
+    if (
+      paragraph === undefined ||
+      (heading === undefined && inline.length === items.length)
+    ) {
       token.children = inline;
       out.push(token);
       continue;
     }
     // The paragraph's open and close tokens give way to the split's blocks.
+    const split = splitParagraphAtHtml(state, items, paragraph.hidden, heading);
     out.pop();
-    out.push(...splitParagraphAtHtml(state, items, paragraph.hidden));
+    out.push(...split.blocks);
+    heading = split.heading;
     index += 1;
   }
   state.tokens = out;
@@ -410,6 +480,7 @@ function configureAnsi(
 ): void {
   md.set({ html: true });
   md.block.ruler.disable('html_block');
+  md.core.ruler.before('inline', 'terminal_code_html', codeElementsToSpans);
   md.core.ruler.push('terminal_html', applyHtmlTags);
   const r = md.renderer.rules;
   let quoteDepth = 0;

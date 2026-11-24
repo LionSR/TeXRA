@@ -67,10 +67,13 @@ policy); release dates are from `registry.npmjs.org`.
      markdown-it instance sets `html: true` with `html_block` off, and a
      core rule in `ansiMarkdown.ts` (`applyHtmlTags`) turns each known tag
      into the token its markdown equivalent produces: paired `<strong>` /
-     `<b>` / `<em>` / `<i>` into emphasis, a paired `<code>` into a code
-     span, `<br>` into a hard break, and `<p>`, `<div>` and paired
-     `<h1>`–`<h6>` / `<blockquote>` into the paragraph, heading and
-     blockquote blocks the paragraph is split into. Any other tag, and an
+     `<b>` / `<em>` / `<i>` into emphasis, `<br>` into a hard break, and
+     `<p>`, `<div>` and paired `<h1>`–`<h6>` / `<blockquote>` into the
+     paragraph, heading and blockquote blocks the paragraph is split into
+     (`<blockquote>` and `<h1>`–`<h6>` pair across paragraphs, so a quote or
+     heading with blank lines in it covers each one). A `<code>` element becomes a backtick code span
+     in the inline source before inline parsing (`codeElementsToSpans`), so
+     its body prints as written. Any other tag, and an
      unpaired one, prints as its text. Math needs no second shield: the
      render shield already sets math aside before markdown-it parses; it
      now ends a `$…$` candidate at a `<code>` element or a closing tag the
