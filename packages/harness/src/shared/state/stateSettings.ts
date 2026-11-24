@@ -413,15 +413,6 @@ export const GIT_AUTHOR_EMAIL_SETTING = {
     'Author and committer email used for agent-authored commits when commit marking is enabled.',
 } as const satisfies SettingRow<string | undefined>;
 
-export const GIT_WORKTREE_SUPPORT_SETTING = {
-  key: 'git.worktreeSupport',
-  slot: 'repoState',
-  schema: booleanWithDefault(false),
-  title: 'Agent worktrees',
-  description:
-    'Run parallel agents in isolated git worktrees so edits do not conflict.',
-} as const satisfies SettingRow<boolean>;
-
 // --- Agent coordination ---------------------------------------------
 // Both child-work policy toggles live in `globalState`: they describe how
 // *this user* wants child runs handled, not anything about a particular
@@ -524,7 +515,6 @@ const HARNESS_SETTINGS = [
   GIT_MARK_COMMITS_SETTING,
   GIT_AUTHOR_NAME_SETTING,
   GIT_AUTHOR_EMAIL_SETTING,
-  GIT_WORKTREE_SUPPORT_SETTING,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
   MEMORY_ENABLED_SETTING,
   WEBSOCKET_OPENAI_SETTING,

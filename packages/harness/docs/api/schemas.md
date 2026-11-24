@@ -956,12 +956,6 @@ const GIT_AUTHOR_NAME_SETTING: { readonly key: "git.authorName"; readonly slot: 
 const GIT_MARK_COMMITS_SETTING: { readonly key: "git.markCommits"; readonly slot: "repoState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Mark agent commits"; readonly description: "Attribute agent-authored git commits to the agent commit author so they are distinguishable from your own commits."; }
 ```
 
-## GIT_WORKTREE_SUPPORT_SETTING
-
-```ts
-const GIT_WORKTREE_SUPPORT_SETTING: { readonly key: "git.worktreeSupport"; readonly slot: "repoState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Agent worktrees"; readonly description: "Run parallel agents in isolated git worktrees so edits do not conflict."; }
-```
-
 ## GLM_CODING_PLAN_SETTING
 
 ```ts

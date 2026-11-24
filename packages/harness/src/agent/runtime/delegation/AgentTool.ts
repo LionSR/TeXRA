@@ -372,7 +372,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   }
   const { agent, files } = child;
   const unusable = yield* rejectUnusableWorkingDirectory(
-    call.env.roots,
     launch.workingDirectory ?? undefined,
   );
   if (unusable) return unusable;
