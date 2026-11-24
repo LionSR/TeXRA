@@ -19,7 +19,9 @@
  *   back from the conversation the user resumed meanwhile;
  * - the project's agent is recorded before the person speaks, is not the
  *   run their first message started, survives Start over, or names a
- *   deleted run as the conversation to open.
+ *   deleted run as the conversation to open;
+ * - a lookup that finds the recorded run deleted clears the run a newer
+ *   conversation recorded while it read.
  */
 import { computed } from '@lit-labs/signals';
 import { layer } from '@effect/vitest';
@@ -519,6 +521,46 @@ describe('createChatSessionController', { timeout: REAL_RUN_TIMEOUT }, () => {
             expect((yield* session.listRuns).map(({ id }) => id)).toStrictEqual(
               [first],
             );
+          }),
+      );
+
+      it.effect(
+        "keeps a newer project's agent when an older lookup clears its deleted run",
+        () =>
+          Effect.gen(function* () {
+            // A lookup finds the recorded run deleted, but while it reads
+            // the run's record a new conversation records its own run. The
+            // lookup's cleanup clears only the run it inspected.
+            const { session, ctrl, storage } = yield* openChat();
+            const { roots } = session;
+            const recorded = Settings.get(roots, PROJECT_AGENT_SETTING);
+            yield* ctrl.submit(typed('Start here.'));
+            const first = rootRunId.get();
+            assert(first !== undefined, 'the first message started no root');
+            yield* until(() => shown(first)?.position === 'waiting');
+            ctrl.stop();
+            yield* until(() => {
+              const run = shown(first);
+              return run?.outcome === 'cancelled' && run.holder !== 'here';
+            });
+            yield* session.deleteRuns(first);
+
+            const faults = yield* sessionStoreFaults(storage);
+            const read = yield* faults.holdNext('readRunRecord');
+            const lookup = yield* Effect.forkChild(projectAgent(session), {
+              startImmediately: true,
+            });
+            yield* read.reached;
+            startChat();
+            patchSessionMeta({ chat: entryAgent(), model: MODEL });
+            yield* ctrl.submit(typed('A new direction.'));
+            const second = rootRunId.get();
+            assert(second !== undefined, 'the new message started no root');
+            expect(yield* recorded).toBe(second);
+            yield* read.release;
+            expect(yield* Fiber.join(lookup)).toBeNull();
+
+            expect(yield* recorded).toBe(second);
           }),
       );
     });

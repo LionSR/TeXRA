@@ -55,6 +55,24 @@ const clear = (roots: WorkspaceRoots) =>
     ),
   );
 
+/** Clear the record only while it still names `runId`, in one step at the
+ *  store: a conversation that recorded its run after `runId` was inspected
+ *  keeps its record. A store that refuses is logged, as in {@link clear}. */
+const clearIfStill = (roots: WorkspaceRoots, runId: RunId) =>
+  roots.workspaceState
+    .modify([PROJECT_AGENT_SETTING.key], (stored) =>
+      Result.succeed(
+        stored[PROJECT_AGENT_SETTING.key] === runId
+          ? ([undefined, { [PROJECT_AGENT_SETTING.key]: undefined }] as const)
+          : ([undefined] as const),
+      ),
+    )
+    .pipe(
+      Effect.catch((cause) =>
+        warn("The project's agent could not be cleared.", cause),
+      ),
+    );
+
 /**
  * The run `session`'s project opens on, or null: none recorded, no folder,
  * or a recorded run that is gone (warned and cleared). A read that fails
@@ -93,7 +111,7 @@ export const projectAgent = Effect.fn('projectAgent')(function* (
       ? `The project's agent, run ${runId}, has no saved setup; the project opens without it.`
       : `The project's agent, run ${runId}, was deleted; the project opens without it.`,
   );
-  yield* clear(roots);
+  yield* clearIfStill(roots, runId);
   return null;
 });
 
