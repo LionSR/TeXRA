@@ -77,10 +77,13 @@ Listed in rough order of density.
    lines): one mock-model if-chain over ~20 unrelated conformance scenarios.
    A table of `{ marker, handler }` with each scenario its own function; the
    dispatcher finds the marker and delegates.
-4. `finishCall` (`packages/harness/src/agent/runtime/loop/toolUseDispatch.ts`,
+4. ~~`finishCall` (`packages/harness/src/agent/runtime/loop/toolUseDispatch.ts`,
    ~256 lines): extract "run the body and classify the outcome" and "sanitize,
    capture and commit the result rows" into named helpers so the top reads as
-   short-circuits → invoke → commit.
+   short-circuits → invoke → commit.~~ Landed 2026-11-24 evening: `finishCall`
+   (45 lines) is the short-circuits, then `invokeCall` (hooks, chain, body,
+   classified by `resultOfExit`), then `commitOutcome`, over one `CallOutcome`
+   record; the card fields are one `cardOf` / `stagedOf`.
 5. `configureAnsi` (`packages/cli/src/chat/tui/render/ansiMarkdown.ts`, ~285
    lines): ~10 markdown-it rule overrides share five mutable closure depth
    counters reset in two places (a leak risk on an unbalanced token stream) and
@@ -99,3 +102,29 @@ regression test, and recorded these candidates so the theme is not re-mined.
 The duplication result being a negative is the finding: there is no large
 mechanical consolidation to do, and the complex-function decompositions each
 need their own careful, behavior-preserving change rather than a batch.
+
+## 2026-11-24 evening
+
+Item 4 landed, and the sweep widened to the longest functions left in the
+harness core and llm (a TypeScript-AST measure of function spans, crossed
+with a month's churn). Each became its outline, behavior unchanged:
+
+- `openStep` (`packages/harness/src/agent/runtime/loop/step.ts`, 282 → 189
+  lines; conjoined concerns): the skills listing and the memory section are
+  `stepSkills` and `stepMemory`, the warnings a change reports a pure
+  `changeWarnings`; the contributor filter `resolveActivations` restated is
+  one `contributedBy`.
+- `agentCall` (`packages/harness/src/agent/runtime/delegation/AgentTool.ts`,
+  246 → 199 lines; special and general code mixed): whether a launch is a
+  program's or a chat's is decided once in `childOf`, which hands the general
+  core one `Child`.
+- `invocationBody` (`packages/llm/src/api/anthropicMessages.ts`, 169 → 77
+  lines; conjoined): the history lowering is `lowerMessages`, as the
+  Responses and Interactions protocols name theirs.
+
+Measured and left: `modelInvokerLayer` and `openaiResponsesModel` are
+factories whose length is their inner functions, each already named;
+`runToolUse` already reads as `runTurn` and `loopBody`; `toolCatalogLayer`'s
+native-revision read (`readWith`) is the next candidate but sits on the
+plugin-trust path and wants its own change; `scriptDoor` is one ordering
+protocol over shared state.
