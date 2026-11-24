@@ -110,3 +110,39 @@ session-carried, or the service forwards it and the TUI follows it.
   against a command to type).
 - **The dispatched-children rollup** (2026-11-22 item 1). Still needs the
   decision on whether the terminal counts a script's calls.
+
+## Re-checked 2026-11-24 (the harness and llm)
+
+A sweep of the layers inside and at the edge of `packages/harness/src` and
+`packages/llm/src`, on `main` at `dda1913b13`. Every open item of
+this note and the 2026-11-15 to 2026-11-22 layer notes that falls in the
+harness or llm still needs its decision (2026-11-23 item 2, 2026-11-22
+item 3, 2026-11-21 item 2, 2026-11-19 items 1, 2 and 4, 2026-11-15 item
+9), or sits in subscription code this sweep stayed out of.
+
+**Landed 2026-11-24:** the harness carried a process port nothing in the
+harness read, `HostResources` (the app's packaged resources root), typed
+into `PlatformServices`, built by `processLayer` from
+`AgentPlatform.resourcesRoot` and exported on `./plugins`. Only TeXRA's
+theory templates and its transcript export read it. The app serves its own
+`ResourcesRoot` reference beneath every session
+(`packages/texra/src/hosts/resourcesRoot.ts`), and the port, the platform
+field and the process option are gone. The 2026-11-07 ruling that kept
+`resourcesRoot` held because the harness then read it for the plugins'
+agent directories; those went with the agent catalog.
+
+Found and left:
+
+- **Two GitHub signals in the harness's signal table.**
+  `githubTokenInvalid` and `githubSubscriptionsChanged`
+  (`packages/harness/src/platform/appSignals.ts`) name one app plugin's
+  facts; the harness neither emits nor reads either. The table could take
+  the app's signals as data (an interface the app augments) or the plugin
+  could own its stream. Left: the choice is the owner's, and the token
+  signal's one subscriber is in `windowNotices.ts`, which open #15216
+  edits.
+- **`GlobalStorageFs` has no reader.** The process builds it
+  (`globalStorageFsLayer`) and `PlatformServices` lists it, but no program
+  in any package reads it; every reader of global storage takes the path
+  as data. Removing it from `./plugins` is the published surface, which
+  item 12 of the 2026-11-21 plugin note leaves to the owner.
