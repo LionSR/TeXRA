@@ -38,7 +38,11 @@ export function desktopSignInPresenters(
         Effect.flatMap((copy) => (copy ? copyToClipboard(copy) : Effect.void)),
       ),
     presentSubscriptionDeviceCode: Effect.fn('presentSubscriptionDeviceCode')(
-      function* (prompt: SubscriptionDeviceCodePrompt, names: SignInNames) {
+      function* (
+        prompt: SubscriptionDeviceCodePrompt,
+        names: SignInNames,
+        reason: string | undefined,
+      ) {
         const { displayName } = names;
         // Copied up front: the dialog closes on any button. A failed copy
         // still shows the code, which the dialog then does not call copied.
@@ -46,16 +50,19 @@ export function desktopSignInPresenters(
           Effect.as(true),
           Effect.catch((error) =>
             Effect.logWarning(
-              `Could not copy the ${displayName} sign-in code: ${error.message}`,
+              SIGN_IN_PROMPT.codeCopyFailed(displayName, error.message),
             ).pipe(Effect.as(false)),
           ),
+        );
+        const steps = SIGN_IN_PROMPT.deviceCodeSteps(
+          displayName,
+          prompt,
+          copied,
         );
         const verificationUrl = yield* choose(window, {
           type: 'info',
           message: `Sign in with ${displayName}`,
-          detail:
-            `${SIGN_IN_PROMPT.deviceCodeFallback(displayName)}\n\n` +
-            SIGN_IN_PROMPT.deviceCodeSteps(displayName, prompt, copied),
+          detail: reason === undefined ? steps : `${reason}\n\n${steps}`,
           choices: [
             {
               label: SIGN_IN_PROMPT.openVerificationLabel,

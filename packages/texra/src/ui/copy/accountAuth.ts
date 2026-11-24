@@ -76,6 +76,10 @@ export const SUBSCRIPTION_AUTH_COPY = Object.freeze({
  * line.
  */
 export const SIGN_IN_PROMPT = Object.freeze({
+  /** The host could not put the one-time code on the clipboard; the steps
+   *  still show it to type. */
+  codeCopyFailed: (providerDisplayName: string, reason: string): string =>
+    `Could not copy the ${providerDisplayName} sign-in code: ${reason}`,
   /** Where to enter the one-time code. `copied`: the host put the code on
    *  the clipboard. */
   deviceCodeSteps: (

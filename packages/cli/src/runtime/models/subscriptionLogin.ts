@@ -78,7 +78,7 @@ export const signInCliSubscription = Effect.fn(
   // program holds is handed to the browser launch.
   const spawner = yield* ChildProcessSpawner;
   const present: SubscriptionSignInPresenter = {
-    presentDeviceCode: (prompt) =>
+    presentDeviceCode: (prompt, reason) =>
       Effect.sync(() => {
         const steps = SIGN_IN_PROMPT.deviceCodeSteps(
           displayName,
@@ -89,8 +89,9 @@ export const signInCliSubscription = Effect.fn(
           },
           false,
         );
+        const body = reason === undefined ? steps : `${reason}\n${steps}`;
         options.writeProgress(
-          `${steps}\nWaiting for approval... (Ctrl-C cancels)`,
+          `${body}\nWaiting for approval... (Ctrl-C cancels)`,
           { copyable: true },
         );
       }),

@@ -34,7 +34,7 @@ import {
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
-import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
+import { ACCOUNT_OUTCOME, SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
 import {
   emitAppSignal,
   logFailure,
@@ -65,8 +65,17 @@ export interface SubscriptionSignInPresenter {
    * Show the one-time code and where to enter it. Runs once, on a child fiber
    * beside the poll loop: the flow does not wait for it and interrupts it when
    * the sign-in ends. A host reports its own failure, so the channel is empty.
+   *
+   * `reason` is the sentence that explains why a device code is being shown,
+   * which only the flow knows: it is set when the sign-in fell back here after
+   * the loopback browser could not be reached, and `undefined` when the host
+   * asked for a device code outright. A host shows it ahead of the steps, so
+   * the "could not open a browser" line never appears when none was tried.
    */
-  presentDeviceCode(prompt: SubscriptionDeviceCodePrompt): Effect.Effect<void>;
+  presentDeviceCode(
+    prompt: SubscriptionDeviceCodePrompt,
+    reason: string | undefined,
+  ): Effect.Effect<void>;
   /**
    * Show (and normally open) the loopback consent URL. The program runs to
    * completion before the callback wait begins, so a host may block on a
@@ -213,11 +222,12 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
   const deviceCodeLogin = (
     signIn: AccountOf<Id>['signInWithDeviceCode'],
     options: SubscriptionSignInOptions,
+    reason: string | undefined,
   ) =>
     signIn === undefined
       ? Effect.fail(
           new SubscriptionSignInFailed({
-            message: `${descriptor.displayName} sign-in has no device code: it returns to a browser on this machine (127.0.0.1). Sign in where TeXRA runs, or forward port 1455 from your browser's machine to this one.`,
+            message: `${descriptor.displayName} sign-in has no device code: it returns to a browser on the machine running TeXRA (127.0.0.1). Sign in where TeXRA runs, or forward its sign-in callback port from your browser's machine to this one.`,
           }),
         )
       : // The prompt is shown beside the poll, not before it: the poll waits
@@ -226,7 +236,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
         // the flow.
         signIn((prompt) =>
           Effect.asVoid(
-            Effect.forkChild(options.present.presentDeviceCode(prompt)),
+            Effect.forkChild(options.present.presentDeviceCode(prompt, reason)),
           ),
         );
 
@@ -246,7 +256,9 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
       // forwarded, that still completes.
       const session: Pick<SubscriptionSessionStatus, 'email' | 'accountId'> =
         options.transport === 'device' && signInWithDeviceCode !== undefined
-          ? yield* deviceCodeLogin(signInWithDeviceCode, options)
+          ? // The host asked for a device code; it is not a fallback, so no
+            // "could not open a browser" line precedes the steps.
+            yield* deviceCodeLogin(signInWithDeviceCode, options, undefined)
           : yield* subscription
               .signInWithBrowser((url) =>
                 // A browser the host could not reach is the loopback route
@@ -278,7 +290,15 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
                       `${descriptor.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}${causeMessage}`,
                     )(error).pipe(
                       Effect.andThen(
-                        deviceCodeLogin(signInWithDeviceCode, options),
+                        deviceCodeLogin(
+                          signInWithDeviceCode,
+                          options,
+                          // The browser could not be reached, so this device
+                          // code is the fallback: the host leads with why.
+                          SIGN_IN_PROMPT.deviceCodeFallback(
+                            descriptor.displayName,
+                          ),
+                        ),
                       ),
                     );
                   },
