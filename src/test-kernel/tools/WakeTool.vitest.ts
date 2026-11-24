@@ -15,7 +15,7 @@
  * - a cancelled wake fires anyway.
  */
 import { layer } from '@effect/vitest';
-import { type Context, DateTime, Effect, Option, Schema } from 'effect';
+import { type Context, DateTime, Effect, Layer, Option, Schema } from 'effect';
 import { TestClock } from 'effect/testing';
 import { assert, describe, expect } from 'vitest';
 
@@ -97,9 +97,11 @@ const notesRead = (storage: string, runId: RunId): string[] =>
   );
 
 describe('a run that arranges a wake', { timeout: REAL_RUN_TIMEOUT }, () => {
-  // The process is on the test clock: the session's waits are its own.
-  layer(SessionGraph.hosted)((it) => {
-    it.layer(validationHost('texra-wake-'), { buildPerTest: true })((it) => {
+  // Give each run a test clock. The process's global store polls in real time.
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
+    it.layer(Layer.merge(validationHost('texra-wake-'), TestClock.layer()), {
+      buildPerTest: true,
+    })((it) => {
       it.effect('reads its note in a turn of its own when the time comes', () =>
         Effect.gen(function* () {
           const { roots } = yield* FakeHost;
