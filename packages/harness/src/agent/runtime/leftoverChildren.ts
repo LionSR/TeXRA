@@ -14,7 +14,7 @@ import { endRunRows } from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runOwnership';
 import { logFailure } from '@logger/effectLog';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
-import { describeRefusal, RUN_OUTCOME } from '@shared/schemas';
+import { describeRefusal, NESTED_NOUNS, RUN_OUTCOME } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { SessionViewAccess, SessionLog } from '@shared/session/runHistory';
 
@@ -41,8 +41,7 @@ const reportInterrupted = Effect.fn('reportInterrupted')(function* (
   child: RunView,
   why: string,
 ) {
-  const noun =
-    child.identity.kind === 'process' ? 'command' : child.identity.kind;
+  const noun = NESTED_NOUNS[child.identity.kind];
   const message = `The process running this ${noun} stopped before it finished${why === 'finished' ? '' : `, and it could not be resumed (${why})`}, so its outcome is unknown. Check what it changed before running it again.`;
   const delivery = {
     family: FAMILY_OF[child.identity.kind],
