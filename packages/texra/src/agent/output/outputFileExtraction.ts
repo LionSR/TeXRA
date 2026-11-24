@@ -17,7 +17,7 @@ import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { Array as Arr, Effect, FileSystem } from 'effect';
 
 import { readNormalizedFile } from '@texra-ai/worldline/node';
-import { revisionLayout } from '@texra/shared/constants/revisionLayout';
+import { revisionLayout } from '@texra/agent/output/revisionLayout';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 import {
   OUTPUT_DOCUMENTS_TAG,

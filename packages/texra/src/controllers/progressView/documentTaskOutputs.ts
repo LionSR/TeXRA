@@ -17,7 +17,7 @@ import {
   isNotADirectoryError,
   toPosixPath,
 } from '@texra-ai/worldline/node';
-import { stripRevisionDir } from '@texra/shared/constants/revisionLayout';
+import { stripRevisionDir } from '@texra/agent/output/revisionLayout';
 import {
   finalDocumentOutput,
   type OutputFileSummary,

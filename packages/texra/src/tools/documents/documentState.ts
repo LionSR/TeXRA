@@ -35,7 +35,7 @@ import { getTeXCountStats } from '@latex/texcount';
 import {
   DOCUMENT_OUTPUT_BASENAME,
   revisionLayout,
-} from '@texra/shared/constants/revisionLayout';
+} from '@texra/agent/output/revisionLayout';
 import {
   DOCUMENTS_OUTPUT_KIND,
   type DocumentTaskSpec,

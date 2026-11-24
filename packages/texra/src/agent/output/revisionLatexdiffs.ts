@@ -28,7 +28,7 @@ import type {
 import {
   DOCUMENT_OUTPUT_BASENAME,
   revisionLayout,
-} from '@texra/shared/constants/revisionLayout';
+} from '@texra/agent/output/revisionLayout';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
