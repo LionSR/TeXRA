@@ -358,7 +358,7 @@ export interface AttemptRequests {
  *  body that got past what it asked ({@link resumedAttempt}); `answer`, the
  *  last request when a person answered it while no process held the run,
  *  which the attempt takes when it asks the same again. */
-type ResumedAttempt = AttemptRequests & {
+export type ResumedAttempt = AttemptRequests & {
   readonly attempt: number;
   readonly mayHaveRun: boolean;
   readonly answer: AttemptRequests['last'];

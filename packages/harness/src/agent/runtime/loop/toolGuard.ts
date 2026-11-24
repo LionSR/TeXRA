@@ -53,7 +53,7 @@ import { RunCall } from '../RunCall';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { SessionServices } from '../rootLaunch';
 import type { PluginToolServices } from '../ToolServices';
-import type { StepHooks } from './hooks';
+import type { ToolCallHooks } from './hooks';
 
 const DEFAULT_BASH_REJECTION_GUIDANCE =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
@@ -140,10 +140,7 @@ function commandRejectedResult(
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 
 /** A call's recorded `PreToolUse` outcomes, and how a rewrite reads. */
-type CallHooks = Pick<
-  Effect.Success<ReturnType<StepHooks['preToolUse']>>,
-  'outcomes' | 'fromHook'
->;
+type CallHooks = Pick<ToolCallHooks, 'outcomes' | 'fromHook'>;
 
 /** What a call's `PreToolUse` hooks said together, `deny` over `ask` over
  *  `allow`, and the input they rewrote it to. Two different rewrites deny:
