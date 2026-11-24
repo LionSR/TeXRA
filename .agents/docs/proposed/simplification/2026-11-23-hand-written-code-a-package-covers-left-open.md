@@ -63,6 +63,19 @@ policy); release dates are from `registry.npmjs.org`.
      webview never renders a model's HTML. The terminal would need its own
      instance or a rule over the tokens, and the golden TUI frames checked
      for every tag.
+   - Taken on 2026-11-24: the normalizer is deleted. The terminal's own
+     markdown-it instance sets `html: true` with `html_block` off, and a
+     core rule in `ansiMarkdown.ts` (`applyHtmlTags`) turns each known tag
+     into the token its markdown equivalent produces: paired `<strong>` /
+     `<b>` / `<em>` / `<i>` into emphasis, a paired `<code>` into a code
+     span, `<br>` into a hard break, and `<p>`, `<div>` and paired
+     `<h1>`–`<h6>` / `<blockquote>` into the paragraph, heading and
+     blockquote blocks the paragraph is split into. Any other tag, and an
+     unpaired one, prints as its text. Math needs no second shield: the
+     render shield already sets math aside before markdown-it parses; it
+     now ends a `$…$` candidate at a `<code>` element or a closing tag the
+     terminal styles, so `<code>$HOME</code> or <code>$PATH</code>` stays
+     two shell variables. The shared web renderer keeps `html: false`.
 
 2. **A JavaScript lexer for a program file's header**
    (`readDeclarations` in
