@@ -33,6 +33,7 @@ import {
   type RunId,
   type ToolResult,
   programGrants,
+  RUN_OUTCOME,
   AGENT_TOOL_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
@@ -210,7 +211,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
   { runId, result }: { readonly runId: RunId; readonly result: RunEnd },
   key: string | undefined,
 ) {
-  if (result.outcome === 'cancelled') {
+  if (result.outcome === RUN_OUTCOME.CANCELLED) {
     const capped = capReached(
       yield* (yield* SessionViewAccess).read([]),
       runId,
@@ -229,7 +230,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
       },
     );
   }
-  if (result.outcome !== 'completed')
+  if (result.outcome !== RUN_OUTCOME.COMPLETED)
     return errorResult(
       `The agent run ${runId} for '${agentName}' ended ${result.outcome}${result.error ? `: ${runEndErrorMessage(result.error)}` : '.'}`,
       { name: 'AgentFailed', summary: `'${agentName}' failed` },
