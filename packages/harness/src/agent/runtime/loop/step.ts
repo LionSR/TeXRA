@@ -222,6 +222,145 @@ function describedAtFreeze<T extends ResolvedTools>(
   };
 }
 
+/** Whether a catalog entry ships from a core source or from a plugin in
+ *  `contributors`: the skills a step draws on. */
+const contributedBy =
+  (contributors: ReadonlySet<string>) =>
+  ({ plugin }: Pick<SkillCatalogEntry, 'plugin'>) =>
+    plugin === null || contributors.has(plugin);
+
+/**
+ * The skills a step lists and the ones its user activated, from the catalog
+ * read over the installed plugins it accepted and shipped by a contributor
+ * of `skills`. A step held to the record (`held`) lists what the record
+ * lists, whatever the toggle says now, as its tools are; otherwise the
+ * settings toggle turns the listing off. A skill the user activated is
+ * resolved either way. The skills a step lists or its user activated are
+ * the ones its calls may read. A skill the run recorded (listed, or
+ * activated by its user) that this step does not offer, its plugin
+ * withdrawn or the skill gone, is left out and named (`notOffered`), as a
+ * recorded tool is (`heldToRecord`); `issues` are what the catalog read
+ * reported.
+ */
+const stepSkills = Effect.fn('Step.skills')(function* (
+  run: AgentRunShape,
+  state: RunState,
+  held: boolean,
+  skills: OpenStep['skills'],
+) {
+  const roots = yield* SessionRoots;
+  const names =
+    state.at === null
+      ? (run.opening?.activated ?? [])
+      : (state.input.activated ?? []);
+  const recordedSkills = held ? state.offeredWith.skills : null;
+  const listing =
+    recordedSkills === null
+      ? yield* Settings.get(roots, AGENT_SKILLS_ENABLED_SETTING)
+      : recordedSkills.length > 0;
+  const catalog =
+    listing || names.length > 0
+      ? yield* loadRuntimeSkillCatalog({
+          roots,
+          plugins: { loadable: skills.plugins, withheld: [] },
+          named: [...names, ...(recordedSkills ?? [])],
+        })
+      : { catalog: [], named: [], issues: [] };
+  const contributes = contributedBy(skills.contributors);
+  const byName = new Map(
+    catalog.named.filter(contributes).map((entry) => [entry.name, entry]),
+  );
+  const notOffered = new Set<string>();
+  const offered = (recordedNames: readonly string[]) =>
+    recordedNames.flatMap((name) => {
+      const entry = byName.get(name);
+      if (entry === undefined) notOffered.add(name);
+      return entry ?? [];
+    });
+  // Those of core sources and of the plugins it draws on, bounded after
+  // the filter, so a withdrawn plugin's skills never push a listed one out.
+  const listed = !listing
+    ? []
+    : recordedSkills === null
+      ? catalog.catalog.filter(contributes).slice(0, SKILL_CATALOG_MAX_SKILLS)
+      : offered(recordedSkills);
+  const activated = offered(names);
+  return {
+    listed,
+    activated,
+    notOffered: [...notOffered],
+    issues: catalog.issues.map(
+      ({ severity, message, path }) =>
+        `Skill import ${severity}: ${message}${path ? ` (${path})` : ''}`,
+    ),
+  };
+});
+
+/**
+ * A step's memory: its folders, roots its file tools read and write, and
+ * the section of its system text that shows their indexes as they read
+ * now, so a note one step writes is listed to the next. Null for a run
+ * that takes no injected tool (a program, a text-only run), which had no
+ * memory tool, for a step with nothing to read a note with, and while
+ * memory is off.
+ */
+const stepMemory = Effect.fn('Step.memory')(function* (
+  run: AgentRunShape,
+  state: RunState,
+  registry: ResolvedTools['registry'],
+) {
+  const roots = yield* SessionRoots;
+  const remembers =
+    run.toolInputs.injectTools &&
+    EXTERNAL_ROOT_TOOLS.some((name) => registry.has(name)) &&
+    (yield* Settings.get(roots, MEMORY_ENABLED_SETTING));
+  if (!remembers) return null;
+  const folders = memoryFolders(roots);
+  // Include folder paths directly in the memory section only when the
+  // opening `<workspace_info>` did not already list them (e.g. memory
+  // started off and was turned on mid-run).
+  const includePaths =
+    state.input.system !== undefined &&
+    !stored(state, state.input.system, Schema.String).includes(
+      ACCESSIBLE_EXTERNAL_DIRS_HEADING,
+    );
+  return { folders, section: yield* memorySection(folders, { includePaths }) };
+});
+
+/**
+ * What opening `step` reports over the step it replaced: every warning
+ * where the offer changed (`offerChanged`), otherwise only those the last
+ * step did not give (a plugin enabled that does not load changes no offer,
+ * and says why once); the tools it withholds, when they changed, which they
+ * can while the offered set does not (a plugin switched on whose tools all
+ * need approval); and each skill once, at the first step that no longer
+ * offers it.
+ */
+const changeWarnings = (
+  step: OpenStep,
+  previous: OpenStep | null,
+  offerChanged: boolean,
+): string[] => {
+  const warnings = offerChanged
+    ? [...step.warnings]
+    : step.warnings.filter(
+        (warning) => previous?.warnings.includes(warning) !== true,
+      );
+  if (
+    step.withheld.length > 0 &&
+    !equalNames(step.withheld, previous?.withheld ?? [])
+  )
+    warnings.push(
+      `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
+    );
+  for (const name of step.notOffered)
+    if (previous?.notOffered.includes(name) !== true)
+      warnings.push(
+        `Skill "${name}" was offered to this run but is no longer available; the run continues without it.`,
+      );
+  return warnings;
+};
+
 /**
  * Open the run's next step: read the switches and pin the tools they give
  * in the session's catalog (`SessionTools.pin`), release the previous
@@ -315,7 +454,9 @@ const openStep = Effect.fn('Step.open')(function* (
       state,
       run.toolInputs.tools,
       Object.keys(imported).filter((specifier) => !unlisted.has(specifier)),
-      // Only a run offered `program` can start one.
+      // Only a run offered `program` can start one: its plugins' programs,
+      // an installed plugin's while it loads (enabled, and trusted as it is
+      // now), and the agent's own that the description lists.
       resolved.registry.has(PROGRAM_TOOL_NAME)
         ? [
             ...available.flatMap(({ programs = {} }) =>
@@ -324,18 +465,11 @@ const openStep = Effect.fn('Step.open')(function* (
                 description,
               })),
             ),
-            // An installed plugin's, while it loads: enabled, and trusted
-            // as it is now.
-            ...[...pinned.installed.values()].flatMap(({ plugin }) =>
-              plugin.programs.loaded.map(({ name, description }) => ({
-                name,
-                description,
-              })),
+            ...[...pinned.installed.values()].flatMap(
+              ({ plugin }) => plugin.programs.loaded,
             ),
-            ...own.loaded.flatMap(({ name, description }) =>
-              unlisted.has(name) ? [] : [{ name, description }],
-            ),
-          ]
+            ...own.loaded.filter(({ name }) => !unlisted.has(name)),
+          ].map(({ name, description }) => ({ name, description }))
         : [],
     );
     // The plugins whose sections the step's system text renders.
@@ -349,84 +483,20 @@ const openStep = Effect.fn('Step.open')(function* (
     const services = yield* pinned.services(used);
     // The skills: the built-in plugins on and the installed ones the step
     // accepted contribute, as it accepted them, so a plugin enabled or
-    // updated since reaches this step's text. A step held to the record
-    // lists what the record lists, whatever the toggle says now, as its
-    // tools are; otherwise the settings toggle turns the listing off. A
-    // skill the user activated is resolved either way. The skills a step
-    // lists or its user activated are the ones its calls may read.
+    // updated since reaches this step's text.
     const contributors = new Set([
       ...pinned.plugins.map(({ id }) => id),
       ...pinned.installed.keys(),
     ]);
     const skills = { plugins: [...pinned.installed.values()], contributors };
-    const names =
-      state.at === null
-        ? (run.opening?.activated ?? [])
-        : (state.input.activated ?? []);
-    const recordedSkills = recorded === null ? null : state.offeredWith.skills;
-    const listing =
-      recordedSkills === null
-        ? yield* Settings.get(roots, AGENT_SKILLS_ENABLED_SETTING)
-        : recordedSkills.length > 0;
-    const catalog =
-      listing || names.length > 0
-        ? yield* loadRuntimeSkillCatalog({
-            roots,
-            plugins: { loadable: skills.plugins, withheld: [] },
-            named: [...names, ...(recordedSkills ?? [])],
-          })
-        : { catalog: [], named: [], issues: [] };
-    const contributes = ({ plugin }: SkillCatalogEntry) =>
-      plugin === null || contributors.has(plugin);
-    const byName = new Map(
-      catalog.named.filter(contributes).map((entry) => [entry.name, entry]),
+    const { listed, activated, notOffered, issues } = yield* stepSkills(
+      run,
+      state,
+      recorded !== null,
+      skills,
     );
-    // A skill the run recorded (listed, or activated by its user) that this
-    // step does not offer, its plugin withdrawn or the skill gone, is left
-    // out and named, as a recorded tool is (`heldToRecord`).
-    const notOffered = new Set<string>();
-    const offered = (recordedNames: readonly string[]) =>
-      recordedNames.flatMap((name) => {
-        const entry = byName.get(name);
-        if (entry === undefined) notOffered.add(name);
-        return entry ?? [];
-      });
-    // Those of core sources and of the plugins it draws on, bounded after
-    // the filter, so a withdrawn plugin's skills never push a listed one out.
-    const listed = !listing
-      ? []
-      : recordedSkills === null
-        ? catalog.catalog.filter(contributes).slice(0, SKILL_CATALOG_MAX_SKILLS)
-        : offered(recordedSkills);
-    const activated = offered(names);
     const hooks = stepHooks(run, pinned.installed, recordedHooks);
-    // Memory: the folders are roots this step's file tools read and write,
-    // and their indexes are in its system text as they read now, so a note
-    // one step writes is listed to the next. A run that takes no injected
-    // tool (a program, a text-only run) has none, as it had no memory
-    // tool, and neither has a step with nothing to read a note with.
-    const remembers =
-      run.toolInputs.injectTools &&
-      EXTERNAL_ROOT_TOOLS.some((name) => tools.registry.has(name)) &&
-      (yield* Settings.get(roots, MEMORY_ENABLED_SETTING));
-    const folders = remembers ? memoryFolders(roots) : [];
-    // Include folder paths directly in the dynamic memory section only when
-    // the opening `<workspace_info>` did not already list them (e.g. memory
-    // started off and was turned on mid-run).
-    const includeMemoryPaths =
-      remembers &&
-      state.input.system !== undefined &&
-      !stored(state, state.input.system, Schema.String).includes(
-        ACCESSIBLE_EXTERNAL_DIRS_HEADING,
-      );
-    const memory = remembers
-      ? {
-          folders,
-          section: yield* memorySection(folders, {
-            includePaths: includeMemoryPaths,
-          }),
-        }
-      : null;
+    const memory = yield* stepMemory(run, state, tools.registry);
     const modules = tools.registry.has(SCRIPT_TOOL_NAME) ? imported : {};
     return {
       tools: {
@@ -439,7 +509,7 @@ const openStep = Effect.fn('Step.open')(function* (
               ? []
               : [{ absolutePath: directory, label: `Skill ${name}` }],
           ),
-          ...memoryRoots(folders),
+          ...memoryRoots(memory?.folders ?? []),
         ],
         hooks,
         modules,
@@ -449,16 +519,13 @@ const openStep = Effect.fn('Step.open')(function* (
         ...own.refused,
         ...resolved.warnings,
         ...(held?.notes ?? []),
-        ...catalog.issues.map(
-          ({ severity, message, path }) =>
-            `Skill import ${severity}: ${message}${path ? ` (${path})` : ''}`,
-        ),
+        ...issues,
       ],
       withheld: resolved.withheldForApproval,
       skills,
       listed,
       memory,
-      notOffered: [...notOffered],
+      notOffered,
       holding,
       contributing: contributing.toSorted(
         (a, b) => Number(a.id > b.id) - Number(a.id < b.id),
@@ -474,32 +541,11 @@ const openStep = Effect.fn('Step.open')(function* (
   const toolsChanged = !sameSet(state.offeredTools, tools.offered);
   const skills = listed.map(({ name }) => name);
   const skillsChanged = !equalNames(skills, state.offeredWith.skills);
-  // What is withheld can change while the offered set does not (a plugin
-  // switched on whose tools all need approval): reported on its own.
-  const withheldChanged =
-    step.withheld.length > 0 &&
-    !equalNames(step.withheld, previous?.withheld ?? []);
-  // Every warning where the offer changed; otherwise only those the last
-  // step did not give (a plugin enabled that does not load changes no
-  // offer, and says why once).
-  const warnings =
-    toolsChanged || skillsChanged
-      ? [...step.warnings]
-      : step.warnings.filter(
-          (warning) => previous?.warnings.includes(warning) !== true,
-        );
-  if (withheldChanged) {
-    warnings.push(
-      `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
-    );
-  }
-  // A skill is named once, at the first step that no longer offers it.
-  for (const name of step.notOffered) {
-    if (previous?.notOffered.includes(name) === true) continue;
-    warnings.push(
-      `Skill "${name}" was offered to this run but is no longer available; the run continues without it.`,
-    );
-  }
+  const warnings = changeWarnings(
+    step,
+    previous,
+    toolsChanged || skillsChanged,
+  );
   // Reported where the change is recorded, not at every step.
   for (const message of warnings) {
     yield* Effect.logWarning(message).pipe(withLogChannel('Step'));
@@ -662,10 +708,7 @@ export const resolveActivations = Effect.fn('Step.resolveActivations')(
     });
     const resolved = new Set(
       named
-        .filter(
-          ({ plugin }) =>
-            plugin === null || open.skills.contributors.has(plugin),
-        )
+        .filter(contributedBy(open.skills.contributors))
         .map(({ name }) => name),
     );
     return names.filter((name) => resolved.has(name));
