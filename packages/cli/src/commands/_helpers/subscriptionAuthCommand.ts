@@ -16,7 +16,7 @@ import {
   type SubscriptionAccount,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
+import { ACCOUNT_OUTCOME, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 
 import { boolFlag, cliCommand } from './cliCommand';
 import { cliProgressWriter, emitCliResult } from './output';
@@ -40,10 +40,6 @@ const withCliAuthError = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 
 interface DefineSubscriptionAuthCommandOptions {
   readonly providerId: SubscriptionProviderId;
-  readonly rootDescription: string;
-  readonly loginDescription: string;
-  readonly logoutDescription: string;
-  readonly statusDescription: string;
   /**
    * Provider-specific login payload fields (Codex carries `accountId`; Grok
    * does not). Kept as explicit configuration so the difference stays visible
@@ -57,13 +53,15 @@ interface DefineSubscriptionAuthCommandOptions {
 /**
  * The shared skeleton of the `<provider> login|logout|status` command group
  * for subscription OAuth providers (ChatGPT, Grok). Each provider supplies
- * its runtime bindings and user-facing nouns; the control flow, output
- * payloads, and exit codes live here exactly once.
+ * its runtime bindings; its help text is the account copy every host shows
+ * (`SUBSCRIPTION_AUTH_COPY`), and the control flow, output payloads, and
+ * exit codes live here exactly once.
  */
 export function defineSubscriptionAuthCommand(
   options: DefineSubscriptionAuthCommandOptions,
 ) {
   const provider = subscriptionProvider(options.providerId);
+  const copy = SUBSCRIPTION_AUTH_COPY[options.providerId];
   /** Registered ndjson discriminator; the status record appends '-status'. */
   const ndjsonKind = `${options.providerId}-auth` as const;
 
@@ -102,7 +100,7 @@ export function defineSubscriptionAuthCommand(
   }
 
   const loginCommand = cliCommand('login', {
-    description: options.loginDescription,
+    description: copy.signInLabel,
     config: {
       device: boolFlag(
         'device',
@@ -117,7 +115,7 @@ export function defineSubscriptionAuthCommand(
   });
 
   const logoutCommand = cliCommand('logout', {
-    description: options.logoutDescription,
+    description: copy.signOutLabel,
     config: {},
     run: Effect.fn('subscriptionAuthCommand.run')(function* () {
       const services = yield* cliPlatform;
@@ -160,14 +158,14 @@ export function defineSubscriptionAuthCommand(
 
   // A bare `texra auth <provider>` is its `status`.
   return cliCommand(options.providerId, {
-    description: options.rootDescription,
+    description: `${copy.signInLabel} to use ${provider.modelFamily}`,
     ...status,
   }).pipe(
     Command.withSubcommands([
       loginCommand,
       logoutCommand,
       cliCommand('status', {
-        description: options.statusDescription,
+        description: `Show ${copy.subscriptionLabel} sign-in status`,
         ...status,
       }),
     ]),
