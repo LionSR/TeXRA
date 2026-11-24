@@ -408,6 +408,10 @@ function readableVersion(type: string, factKinds: FactKinds): number {
   return hasKind(type) ? ROW_KINDS[type].version : 0;
 }
 
+const decodeStoredKind = Schema.decodeUnknownSync(
+  Schema.Struct({ type: Schema.String, version: Schema.Int }),
+);
+
 /**
  * The store gate: fails on the first kind `stored_kind` names at a version
  * this build does not read. Run at open and inside every write transaction,
@@ -418,9 +422,7 @@ export const storeGate = Effect.fn('rowCodec.storeGate')(function* <E>(
   factKinds: FactKinds,
 ): Effect.fn.Return<void, E | DatabaseStoreNewer> {
   for (const input of yield* exec('SELECT type, version FROM stored_kind')) {
-    const { type, version } = Schema.decodeUnknownSync(
-      Schema.Struct({ type: Schema.String, version: Schema.Int }),
-    )(input);
+    const { type, version } = decodeStoredKind(input);
     if (version > readableVersion(type, factKinds))
       return yield* new DatabaseStoreNewer({ type, version });
   }

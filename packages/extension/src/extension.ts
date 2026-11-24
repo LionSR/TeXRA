@@ -503,7 +503,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   registerWalkthroughWorkspaceAction(context, (command) =>
     vscode.commands.executeCommand(command),
   );
-  yield* registerFileDecorations(context, session);
+  yield* registerFileDecorations(session);
 
   // Activation-lifetime listeners run in the activation scope, which ends
   // them when the extension deactivates.

@@ -11,7 +11,14 @@
 import { dirname, join } from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Schema, type PlatformError } from 'effect';
+import {
+  Array as Arr,
+  Effect,
+  FileSystem,
+  Result,
+  Schema,
+  type PlatformError,
+} from 'effect';
 
 import {
   ChildRuns,
@@ -554,13 +561,13 @@ export const DocumentDiffTool = defineTool({
       roundOf(docs.rounds, revision - 1)?.outputs ?? [],
     );
     if (yield* autoOpensPdf(docs)) yield* present(docs, artifacts);
-    const diffs = entries.flatMap((entry) =>
-      entry.status === 'ok' ? [fileLocationDisplayPath(entry.diff)] : [],
-    );
-    const failed = entries.flatMap((entry) =>
-      entry.status === 'failed'
-        ? [{ document: latexdiffDisplayName(entry), error: entry.error }]
-        : [],
+    const [diffs, failed] = Arr.partition(entries, (entry) =>
+      entry.status === 'ok'
+        ? Result.succeed(fileLocationDisplayPath(entry.diff))
+        : Result.fail({
+            document: latexdiffDisplayName(entry),
+            error: entry.error,
+          }),
     );
     const pdfs = artifacts.map(fileLocationDisplayPath);
     // What the model reads: the diffs, each failed pair with its error, and

@@ -55,10 +55,16 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
  *  both listeners are fibers of it (activation's, in the extension). */
 export const registerFileDecorations = Effect.fn('registerFileDecorations')(
   function* (
-    context: vscode.ExtensionContext,
     session: Pick<Session, 'view'>,
   ): Effect.fn.Return<void, never, Scope.Scope | AppSignals> {
-    const provider = new TeXRAFileDecorationProvider();
+    const provider = yield* Effect.acquireRelease(
+      Effect.sync(() => new TeXRAFileDecorationProvider()),
+      (provider) => Effect.sync(() => provider.dispose()),
+    );
+    yield* Effect.acquireRelease(
+      Effect.sync(() => vscode.window.registerFileDecorationProvider(provider)),
+      (registration) => Effect.sync(() => registration.dispose()),
+    );
     yield* Effect.forkScoped(
       Stream.runForEach(outputFilesProduced(session), (files) =>
         Effect.sync(() => {
@@ -91,10 +97,6 @@ export const registerFileDecorations = Effect.fn('registerFileDecorations')(
         provider.markTouched(absolutePaths);
       }),
       { startImmediately: true },
-    );
-    context.subscriptions.push(
-      vscode.window.registerFileDecorationProvider(provider),
-      provider,
     );
   },
 );

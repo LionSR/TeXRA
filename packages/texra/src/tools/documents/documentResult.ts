@@ -8,7 +8,14 @@
  */
 import path from 'node:path';
 
-import { Effect, FileSystem } from 'effect';
+import {
+  Array as Arr,
+  Effect,
+  FileSystem,
+  Iterable,
+  Predicate,
+  Result,
+} from 'effect';
 
 import {
   readNormalizedFile,
@@ -241,7 +248,7 @@ const computeAndWriteOutputDiffs = Effect.fn('documents.computeDiffs')(
       outputs,
       (o) =>
         Effect.gen(function* () {
-          if (!o.originalPath) return { kind: 'none' } as const;
+          if (!o.originalPath) return undefined;
           const [original, modified] = yield* Effect.all(
             [
               readNormalizedFile(fs, o.originalPath),
@@ -250,49 +257,40 @@ const computeAndWriteOutputDiffs = Effect.fn('documents.computeDiffs')(
             { concurrency: 2 },
           );
 
-          // Flag large changes so the orchestrator knows to also read the
-          // full output file — the diff alone may not capture everything.
-          let largeChange = false;
-          const originalLines = countLines(original);
-          if (originalLines > 0 && o.added !== null && o.removed !== null) {
-            const changedLines = o.added + o.removed;
-            largeChange = changedLines / originalLines > LARGE_CHANGE_RATIO;
-          }
-
           const diff = yield* unifiedDiffOf(original, modified);
-          if (!diff) return { kind: 'none' } as const;
+          if (!diff) return undefined;
+          // A large diff signals the reader to inspect the full output.
+          const originalLines = countLines(original);
+          const largeChange =
+            originalLines > 0 &&
+            o.added !== null &&
+            o.removed !== null &&
+            (o.added + o.removed) / originalLines > LARGE_CHANGE_RATIO;
           const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
-          const summary: ResultDiffSummary = {
-            path: o.absolutePath,
-            diffRelPath: `diffs/${outputSlotName(normalizeFilePath(o.relativePath))}.diff`,
-            largeChange,
-          };
-          return {
-            kind: 'written',
-            summary,
+          return Result.succeed({
+            summary: {
+              path: o.absolutePath,
+              diffRelPath: `diffs/${outputSlotName(normalizeFilePath(o.relativePath))}.diff`,
+              largeChange,
+            } satisfies ResultDiffSummary,
             content: truncateDiff(diff, limit),
-          } as const;
+          });
         }).pipe(
-          // A file read failure costs that file's diff, not the others', and
-          // is answered as failed so the result says the diff is missing
-          // rather than reading the file as unchanged.
-          Effect.catch((error) =>
-            Effect.logWarning(
-              `Skipping diff for ${o.absolutePath}: ${toErrorMessage(error)}`,
+          Effect.catch((error) => {
+            const reason = toErrorMessage(error);
+            return Effect.logWarning(
+              `Skipping diff for ${o.absolutePath}: ${reason}`,
             ).pipe(
               withLogChannel(CHANNEL),
-              Effect.as({
-                kind: 'failed',
-                path: o.relativePath,
-                reason: toErrorMessage(error),
-              } as const),
-            ),
-          ),
+              Effect.as(Result.fail({ path: o.relativePath, reason })),
+            );
+          }),
         ),
       { concurrency: 'unbounded' },
     );
-    const written = computed.filter((diff) => diff.kind === 'written');
-    const failed = computed.filter((diff) => diff.kind === 'failed');
+    const [written, failed] = Arr.separate(
+      Iterable.filter(computed, Predicate.isNotUndefined),
+    );
     if (written.length > 0) {
       const runDir = runDirUnder(storageRoot, runId);
       // One recursive create reaches the run directory and the runs root above

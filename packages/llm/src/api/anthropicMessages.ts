@@ -160,15 +160,17 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
         content: yield* Effect.forEach(message.content, lowerPart),
       });
     } else if (message.role === 'tool') {
-      const content: ToolResultBlockParam[] = [];
-      for (const { call, result } of message.answered) {
-        content.push({
-          type: 'tool_result',
-          tool_use_id: call.providerCallId,
-          is_error: result.status === 'error',
-          content: yield* Effect.forEach(result.content, lowerPart),
-        });
-      }
+      const content = yield* Effect.forEach(
+        message.answered,
+        Effect.fnUntraced(function* ({ call, result }) {
+          return {
+            type: 'tool_result',
+            tool_use_id: call.providerCallId,
+            is_error: result.status === 'error',
+            content: yield* Effect.forEach(result.content, lowerPart),
+          } satisfies ToolResultBlockParam;
+        }),
+      );
       messages.push({ role: 'user', content });
     } else {
       const content: ContentBlockParam[] = [];

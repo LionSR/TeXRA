@@ -102,26 +102,23 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
     runIds: readonly RunId[],
     settled: (view: SessionView) => boolean,
   ) {
-    const phases = (view: SessionView): string =>
-      runIds
-        .map((id) => {
-          const run = view.runs.get(id);
-          return run === undefined ? '' : (run.outcome ?? run.position);
-        })
-        .join(',');
-    const sent = (view: SessionView): readonly string[] =>
-      (view.runs.get(context.runId)?.queuedFollowUps ?? []).map(
-        (f) => f.followUpId,
-      );
-    const started = phases(initial);
-    const held = new Set(sent(initial));
+    const phase = (view: SessionView, id: RunId) => {
+      const run = view.runs.get(id);
+      return run?.outcome ?? run?.position;
+    };
+    const followUps = (view: SessionView) =>
+      view.runs.get(context.runId)?.queuedFollowUps ?? [];
+    const started = runIds.map((id) => phase(initial, id));
+    const held = new Set(
+      followUps(initial).map(({ followUpId }) => followUpId),
+    );
     // The stream starts with the current view, so a wait that is already
     // over, or ends with no change of phase, is seen as soon as a view says so.
     yield* (yield* SessionViewAccess).changes.pipe(
       Stream.filter(
         (view) =>
-          phases(view) !== started ||
-          sent(view).some((id) => !held.has(id)) ||
+          runIds.some((id, index) => phase(view, id) !== started[index]) ||
+          followUps(view).some(({ followUpId }) => !held.has(followUpId)) ||
           settled(view),
       ),
       Stream.runHead,
@@ -320,6 +317,11 @@ const EXECUTION_PATH_LIST = EXECUTION_ROUTES.map(
   ({ path, summary }) => `- ${path} - ${summary}`,
 ).join('\n');
 
+const EXECUTION_ROUTE_PATTERNS = EXECUTION_ROUTES.map((route) => {
+  const parts = route.path.split('/').slice(1);
+  return { route, parts, greedy: parts.at(-1) === '{path}' };
+});
+
 /**
  * Every line of logic below is one Effect program. A storage or filesystem
  * read failure stays in the error channel: nothing here recovers from one,
@@ -331,16 +333,13 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
 ) {
   const context = { runId: run.runId, runs: yield* RunRegistry };
   const segments = getPathSegments(input.path);
-  const route = EXECUTION_ROUTES.find(({ path }) => {
-    const parts = path.split('/').slice(1);
-    const greedy = parts.at(-1) === '{path}';
-    return (
+  const route = EXECUTION_ROUTE_PATTERNS.find(
+    ({ parts, greedy }) =>
       (greedy
         ? segments.length >= parts.length
         : segments.length === parts.length) &&
-      parts.every((part, i) => part.startsWith('{') || part === segments[i])
-    );
-  });
+      parts.every((part, i) => part.startsWith('{') || part === segments[i]),
+  )?.route;
   if (!route) {
     return yield* new ToolError(
       `Unknown path: ${input.path}.\nValid paths:\n${EXECUTION_PATH_LIST}`,

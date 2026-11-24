@@ -21,14 +21,13 @@ import { type PresentationEventHandlers } from '@texra-ai/worldline/host';
 import { isPathWithin } from '@texra-ai/worldline/node';
 
 import {
-  Array as Arr,
   Cause,
   Clock,
   Context,
   Effect,
   Equal,
+  Iterable,
   Layer,
-  Order,
   Queue,
   RcMap,
   Ref,
@@ -126,19 +125,17 @@ const projectOf = (session: Session): string =>
  * which read `editors`, and serves {@link HostWindows} over it.
  */
 export const makeWindowTable = () => {
-  const windows = new Set<Window>();
+  const windows = new Map<string, Window>();
 
   /** The window a call of `key`'s project goes to. */
   const target = (key: string, capability: HostCapability) => {
-    const able = [...windows].filter(
-      (window) => window.key === key && window.capabilities.has(capability),
-    );
-    return Arr.isArrayNonEmpty(able)
-      ? Arr.max(
-          able,
-          Order.mapInput(Order.Number, (window: Window) => window.focusedAt),
-        )
-      : undefined;
+    let focused: Window | undefined;
+    for (const window of windows.values()) {
+      if (window.key !== key || !window.capabilities.has(capability)) continue;
+      if (focused === undefined || window.focusedAt > focused.focusedAt)
+        focused = window;
+    }
+    return focused;
   };
   const offers = (key: string, capability: HostCapability) =>
     target(key, capability) !== undefined;
@@ -212,13 +209,23 @@ export const makeWindowTable = () => {
 
   /** The window went: its project hears once when no window of it is
    *  left. What it was asked ends as its client here closes. */
-  const detach = Effect.fn('detach')(function* (window: Window) {
-    windows.delete(window);
-    if (![...windows].some((other) => other.key === window.key))
-      yield* Effect.logWarning(
-        `No TeXRA window of ${window.project} is attached: its tasks run without diagnostics, inline criticism or PDF opening until one attaches.`,
-      );
-  });
+  const register = (window: Window) =>
+    Effect.acquireRelease(
+      Effect.sync(() => void windows.set(window.id, window)),
+      () =>
+        Effect.gen(function* () {
+          windows.delete(window.id);
+          if (
+            !Iterable.some(
+              windows.values(),
+              (other) => other.key === window.key,
+            )
+          )
+            yield* Effect.logWarning(
+              `No TeXRA window of ${window.project} is attached: its tasks run without diagnostics, inline criticism or PDF opening until one attaches.`,
+            );
+        }),
+    );
 
   const interactionsOf = (session: Session): SessionHost => {
     const key = session.roots.storage;
@@ -276,20 +283,20 @@ export const makeWindowTable = () => {
   /** A window's reply to a call of its client here. */
   const answer = (attachment: string, message: RpcMessage.FromServerEncoded) =>
     Effect.suspend(() => {
-      for (const window of windows)
-        if (window.id === attachment) return window.reply(message);
-      return Effect.logWarning(
-        `A TeXRA window answered a host call after its attachment ${attachment} ended`,
-      );
+      const window = windows.get(attachment);
+      return window
+        ? window.reply(message)
+        : Effect.logWarning(
+            `A TeXRA window answered a host call after its attachment ${attachment} ended`,
+          );
     });
   const focus = (attachment: string) =>
     Effect.map(Clock.currentTimeMillis, (now) => {
-      for (const window of windows)
-        if (window.id === attachment) window.focusedAt = now;
+      const window = windows.get(attachment);
+      if (window) window.focusedAt = now;
     });
   return {
-    windows,
-    detach,
+    register,
     interactionsOf,
     answer,
     focus,
@@ -299,7 +306,7 @@ export const makeWindowTable = () => {
      *  follow the service's tasks. */
     filesWritten: (absolutePaths: readonly string[]) =>
       Effect.forEach(
-        [...windows].filter(
+        [...windows.values()].filter(
           (window) =>
             window.capabilities.has('filesWritten') &&
             absolutePaths.some((path) => isPathWithin(window.project, path)),
@@ -317,7 +324,7 @@ export const makeWindowTable = () => {
 type WindowTable = ReturnType<typeof makeWindowTable>;
 
 const make = Effect.fn('make')(function* (table: WindowTable) {
-  const { windows, detach, interactionsOf, answer, focus } = table;
+  const { register, interactionsOf, answer, focus } = table;
   // Each session's presentation surface, held while a window of it is
   // attached. A session is a key by identity: a project reopened after an
   // idle close is a new session, given its own.
@@ -351,8 +358,7 @@ const make = Effect.fn('make')(function* (table: WindowTable) {
           calls,
           reply: receive,
         };
-        windows.add(window);
-        yield* Effect.addFinalizer(() => detach(window));
+        yield* register(window);
         // After the window is listed, so what the session queued while it
         // had none reaches this one.
         yield* RcMap.get(surfaces, Equal.byReferenceUnsafe(session));

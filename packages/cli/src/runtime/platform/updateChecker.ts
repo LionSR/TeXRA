@@ -277,11 +277,9 @@ export function notifyCliUpdate(
       [UPDATE_CHECK_SKIP_ENV]: cliEnvValue(UPDATE_CHECK_SKIP_ENV),
     };
     if (yield* envFlag(UPDATE_CHECK_SKIP_ENV, skip)) return;
-    let confirmed = false;
-    // Best-effort by policy: any failure leaves `latest` unset and the check
-    // exits. A typed failure (offline, registry down) or an interruption does
-    // so silently; a defect is a bug in the check, so it is logged.
-    const latest = yield* runDailyUpdateCheck<
+    // A typed failure or interruption leaves the update decision unset.
+    // A defect is logged before the check exits.
+    const decision = yield* runDailyUpdateCheck<
       ChildProcessSpawner | HttpClient.HttpClient
     >({
       currentVersion: context.version,
@@ -299,6 +297,7 @@ export function notifyCliUpdate(
       Effect.flatMap(
         Effect.fnUntraced(function* (found) {
           if (found === undefined) return undefined;
+          let confirmed = false;
           // Asked at each daily check, not once per release.
           if (found.latest !== undefined) {
             writeTextStderr(
@@ -316,7 +315,9 @@ export function notifyCliUpdate(
             log: 'Warn',
             message: 'The update check time was not saved',
           }).pipe(withLogChannel('updateCheck'));
-          return found.latest;
+          return found.latest
+            ? { version: found.latest, confirmed }
+            : undefined;
         }),
       ),
       Effect.catchCause((cause) =>
@@ -328,7 +329,8 @@ export function notifyCliUpdate(
           : Effect.undefined,
       ),
     );
-    if (!latest) return;
+    if (!decision) return;
+    const { confirmed, version: latest } = decision;
     if (!confirmed) {
       writeTextStderr(
         style.muted('Skipped. Update later with: ') + style.command(updateCmd),

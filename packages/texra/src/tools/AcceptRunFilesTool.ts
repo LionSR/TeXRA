@@ -284,8 +284,8 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
       }
 
       return {
-        path: mapping.path,
-        original: dest.relativePath,
+        outputPath: mapping.path,
+        originalPath: dest.relativePath,
         destAbsolutePath: dest.absolutePath,
         proposedContent,
         originalContent,
@@ -298,24 +298,22 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
 
   // Phase 2: Request approval and write each file
   const results: string[] = [];
-  const edits: EditRecord[] = [];
   const acceptedEntries: {
-    outputPath: string;
-    originalPath: string;
-    destAbsolutePath: string;
+    file: (typeof prepared)[number];
+    edit: EditRecord;
   }[] = [];
   let unchanged = 0;
   const rejections: RecordedRejection[] = [];
 
-  let totalStripped = 0;
+  for (const file of prepared) {
+    const target =
+      file.outputPath === file.originalPath
+        ? file.originalPath
+        : `${file.originalPath} (from ${file.outputPath})`;
 
-  for (const entry of prepared) {
-    const mappingNote =
-      entry.path !== entry.original ? ` (from ${entry.path})` : '';
-
-    if (entry.originalContent === entry.proposedContent) {
+    if (file.originalContent === file.proposedContent) {
       unchanged++;
-      results.push(`unchanged: ${entry.original}${mappingNote}`);
+      results.push(`unchanged: ${target}`);
       continue;
     }
 
@@ -324,45 +322,42 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     // a resume between the proposal and the approval cannot swap in a
     // fresh read of the destination.
     const approval = yield* requestToolEditApproval({
-      path: entry.original,
-      originalContent: entry.destExists ? entry.originalContent : null,
-      proposedContent: entry.proposedContent,
+      path: file.originalPath,
+      originalContent: file.destExists ? file.originalContent : null,
+      proposedContent: file.proposedContent,
       sourceTool: 'accept_run_files',
     });
 
     if (approval.action !== 'apply') {
-      rejections.push({ path: entry.original, decision: approval });
-      results.push(`rejected: ${entry.original}${mappingNote}`);
+      rejections.push({ path: file.originalPath, decision: approval });
+      results.push(`rejected: ${target}`);
       continue;
     }
 
     // A conflict is this file's outcome; the rest are still offered.
     const conflict = yield* approvedWriteConflict(
-      entry.original,
+      file.originalPath,
       approval.originalContent,
       approval.appliedContent,
     );
     if (conflict !== undefined) {
-      results.push(`conflict: ${entry.original}${mappingNote}`);
+      results.push(`conflict: ${target}`);
       continue;
     }
 
-    const action = entry.destExists ? 'replaced' : 'created';
+    const action = file.destExists ? 'replaced' : 'created';
     const strippedNote =
-      entry.strippedCount > 0
-        ? ` (stripped ${entry.strippedCount} \\criticize)`
+      file.strippedCount > 0
+        ? ` (stripped ${file.strippedCount} \\criticize)`
         : '';
-    totalStripped += entry.strippedCount;
-    results.push(`${action}: ${entry.original}${mappingNote}${strippedNote}`);
-    edits.push({
-      path: entry.original,
-      lineChanges: approval.lineChanges,
-      startLine: approval.startLine,
-    });
+    results.push(`${action}: ${target}${strippedNote}`);
     acceptedEntries.push({
-      outputPath: entry.path,
-      originalPath: entry.original,
-      destAbsolutePath: entry.destAbsolutePath,
+      file,
+      edit: {
+        path: file.originalPath,
+        lineChanges: approval.lineChanges,
+        startLine: approval.startLine,
+      },
     });
   }
 
@@ -376,7 +371,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
       status: 'executed',
       summary,
       output: detailedOutput(summary),
-      edits,
+      edits: [],
     };
   }
 
@@ -388,12 +383,18 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   }
 
   // Phase 3: Clean up diff files from workspace for accepted files
-  const cleaned = yield* cleanupAcceptedWorkspaceDiffFiles(acceptedEntries);
+  const cleaned = yield* cleanupAcceptedWorkspaceDiffFiles(
+    acceptedEntries.map(({ file }) => file),
+  );
   for (const f of cleaned) {
     results.push(`cleaned: ${f}`);
   }
 
   const accepted = acceptedEntries.length;
+  const totalStripped = acceptedEntries.reduce(
+    (total, { file }) => total + file.strippedCount,
+    0,
+  );
   const strippedSuffix =
     totalStripped > 0
       ? ` (stripped ${formatResultCount(totalStripped, '\\criticize annotation')})`
@@ -405,14 +406,14 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     status: 'executed',
     summary,
     output: detailedOutput(summary),
-    edits,
+    edits: acceptedEntries.map(({ edit }) => edit),
     // The files it wrote, as a fact on this run, committed as the call
     // finishes: every process that applies the run (a window over a service
     // task among them) badges and refreshes them.
     ...(accepted > 0 && {
       facts: [
         documentsAcceptedFact(
-          acceptedEntries.map((e) => e.destAbsolutePath),
+          acceptedEntries.map(({ file }) => file.destAbsolutePath),
           yield* Clock.currentTimeMillis,
         ),
       ],

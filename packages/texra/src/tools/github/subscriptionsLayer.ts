@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { Effect, Exit, FiberMap, FiberSet, Layer, Option, Scope } from 'effect';
+import { Effect, Exit, FiberMap, FiberSet, Layer, Scope } from 'effect';
 import * as RateLimiter from 'effect/persistence/RateLimiter';
 
 // Local imports
@@ -104,15 +104,14 @@ export const gitHubSubscriptionsLayer: Layer.Layer<
     const drainDeliveries = Scope.close(pollScope, Exit.void).pipe(
       Effect.andThen(
         FiberSet.awaitEmpty(deliveries).pipe(
-          Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+          Effect.timeoutOrElse({
+            duration: SESSION_CLOSE_DEADLINE_MS,
+            orElse: () =>
+              Effect.logWarning(
+                'GitHub deliveries did not finish within the close budget; interrupting them',
+              ),
+          }),
         ),
-      ),
-      Effect.flatMap((drained) =>
-        Option.isSome(drained)
-          ? Effect.void
-          : Effect.logWarning(
-              'GitHub deliveries did not finish within the close budget; interrupting them',
-            ),
       ),
       Effect.ensuring(Scope.close(deliveryScope, Exit.void)),
     );

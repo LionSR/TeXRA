@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Iterable, Result } from 'effect';
 
 // Local imports - log
 import {
@@ -119,18 +119,20 @@ export const compileTikzPictures = Effect.fn('tikzPictures.compile')(function* (
   yield* fs.makeDirectory(buildDir, { recursive: true });
 
   const template = yield* Settings.get(stores, TIKZ_TEMPLATE_SETTING);
-  const compiledFiles: FileLocation[] = [];
-
-  for (const [label, tikzPictures] of labeledTikzPictures) {
-    const hasMultiple = tikzPictures.length > 1;
-
-    for (const [i, tikzpictures] of tikzPictures.entries()) {
+  const jobs = Iterable.flatMap(labeledTikzPictures, ([label, pictures]) =>
+    Iterable.map(pictures, (picture, index) => ({
+      label,
+      picture,
       // Disambiguate multiple pictures under one label with a/b/c… suffixes.
-      const suffix = hasMultiple ? String.fromCharCode(97 + i) : undefined;
-
+      suffix: pictures.length > 1 ? String.fromCharCode(97 + index) : undefined,
+    })),
+  );
+  return yield* Effect.filterMapEffect(
+    jobs,
+    Effect.fnUntraced(function* ({ label, picture, suffix }) {
       const texLocation = yield* createStandalone(
         template,
-        tikzpictures,
+        picture,
         label,
         buildDir,
         workspaceRoot,
@@ -151,14 +153,12 @@ export const compileTikzPictures = Effect.fn('tikzPictures.compile')(function* (
           }),
           withLogChannel(CHANNEL),
         );
-        continue;
+        return Result.failVoid;
       }
-      compiledFiles.push(pathToLocationIn(workspaceRoot, compiled.pdfPath));
       yield* Effect.logDebug(`Successfully compiled: ${compiled.pdfPath}`).pipe(
         withLogChannel(CHANNEL),
       );
-    }
-  }
-
-  return compiledFiles;
+      return Result.succeed(pathToLocationIn(workspaceRoot, compiled.pdfPath));
+    }),
+  );
 });

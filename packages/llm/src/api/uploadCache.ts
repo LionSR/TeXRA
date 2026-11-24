@@ -181,21 +181,23 @@ export const filesApiUploads = Effect.fn('llm.uploads')(function* (
   const uploadFile = Effect.fn('llm.uploads.uploadFile')(function* (
     file: FileUpload,
   ) {
-    const parsed = Schema.decodeUnknownResult(FileUploadSchema)(file);
-    if (!Result.isSuccess(parsed))
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: 'The file to upload is invalid.',
-        cause: parsed.failure,
-      });
-    const digest = digestOf(parsed.success.base64);
+    const upload = yield* Effect.mapError(
+      Schema.decodeUnknownEffect(FileUploadSchema)(file),
+      (cause) =>
+        new ModelError({
+          kind: 'invalid-request',
+          message: 'The file to upload is invalid.',
+          cause,
+        }),
+    );
+    const digest = digestOf(upload.base64);
     // Only the request is interruptible: once it answers, the id has one
     // owner at every instant: the cache, or this fiber after scope close.
     yield* Effect.uninterruptibleMask((restore) => {
       if (released || uploads.has(digest)) return Effect.void;
       uploads.set(digest, 'uploading');
       return Effect.gen(function* () {
-        const uploaded = yield* restore(send(parsed.success));
+        const uploaded = yield* restore(send(upload));
         if (!released) {
           uploads.set(digest, uploaded);
           return;

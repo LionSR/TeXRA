@@ -351,9 +351,20 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   );
   yield* Effect.forkScoped(
     options.input.pipe(
+      Stream.concat(Stream.succeed(null)),
       Stream.mapAccumEffect(
         (): PendingInput => ({ chunks: [], size: 0, frameEnd: 0 }),
-        (input, chunk) => takeFrames(input, chunk),
+        (input, chunk) => {
+          if (chunk !== null) return takeFrames(input, chunk);
+          // The final marker is reached only after normal end of input.
+          return input.size === 0
+            ? Effect.succeed([input, []] as const)
+            : Effect.fail(
+                new JsonRpcFrameError({
+                  message: 'JSON-RPC input ended in the middle of a frame.',
+                }),
+              );
+        },
       ),
       Stream.runForEach(dispatch),
       Effect.catch(

@@ -44,6 +44,7 @@ import {
   type RunId,
   type SubagentProgressUpdate,
   type ToolResult,
+  type ToolResultPayload,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -318,32 +319,30 @@ export const reusable = Effect.fn('agent.reusable')(function* (
   if (claimed !== undefined && claimed !== callId) return duplicate;
   siblings.set(key, callId);
   const log = yield* SessionLog;
-  const results = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
+  const results = yield* Effect.forEach(yield* reuseScope(call), (runId) =>
     log.runRows(runId, 'results'),
-  )).flatMap((run) => run.results);
-  const found = results.flatMap((payload) =>
-    payload.result.status === 'executed' && payload.result.reuseKey === key
-      ? [{ ...payload, result: payload.result }]
-      : [],
   );
   const mine = `${script.callId}/`;
-  // A sibling a resume handed back from its row never ran here to claim.
-  if (
-    found.some(
-      (row) =>
-        row.responseId === call.responseId &&
-        row.callId.startsWith(mine) &&
-        row.callId !== callId,
+  let origin: ToolResultPayload | undefined;
+  for (const row of Iterable.flatMap(results, (run) => run.results)) {
+    if (row.result.status !== 'executed' || row.result.reuseKey !== key)
+      continue;
+    // A sibling a resume handed back from its row never ran here to claim.
+    if (
+      row.responseId === call.responseId &&
+      row.callId.startsWith(mine) &&
+      row.callId !== callId
     )
-  )
-    return duplicate;
-  const origin = found.at(-1);
-  if (origin === undefined) return null;
-  const from = origin.result.reusedFrom ?? origin.callId;
-  const { value } = origin.result;
+      return duplicate;
+    origin = row;
+  }
+  if (origin?.result.status !== 'executed') return null;
+  const { result } = origin;
+  const from = result.reusedFrom ?? origin.callId;
+  const { value } = result;
   return {
-    ...origin.result,
-    output: `Reused the result of call ${from}: nothing ran again.\n\n${origin.result.output ?? ''}`,
+    ...result,
+    output: `Reused the result of call ${from}: nothing ran again.\n\n${result.output ?? ''}`,
     reusedFrom: from,
     // What this run has spent is read now, not where the result was made.
     ...(typeof value === 'object' &&

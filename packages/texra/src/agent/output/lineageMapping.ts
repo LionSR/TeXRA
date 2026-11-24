@@ -10,6 +10,7 @@
  */
 
 import * as path from 'node:path';
+import { Iterable } from 'effect';
 import {
   normalizeFilePath,
   fileLocationDisplayPath,
@@ -155,9 +156,9 @@ export function baseOf(
   ];
 
   for (const fits of readings) {
-    const matched = entries.filter(fits);
-    if (matched.length > 0)
-      return matched.length === 1 ? matched[0]?.loc : undefined;
+    const [first, second] = Iterable.filter(entries, fits);
+    if (first !== undefined)
+      return second === undefined ? first.loc : undefined;
   }
   return undefined;
 }

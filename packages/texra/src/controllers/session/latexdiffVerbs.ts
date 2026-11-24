@@ -12,7 +12,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Array as Arr, Effect, Result } from 'effect';
 
 // Local imports
 import { type Session, type WorkspaceRoots } from '@texra-ai/worldline';
@@ -162,32 +162,28 @@ export function latexdiffVerbs(parts: {
     // A round whose recorded diffs all succeeded under the markup set now
     // opens them; a round that recorded none, a failed one, or one made
     // under another markup is diffed again.
-    const reusable = rounds.map(
-      ({ latexdiffs }) =>
-        latexdiffs.length > 0 &&
-        latexdiffs.every(
-          (entry) => entry.status === 'ok' && entry.mathMarkup === mathMarkup,
-        ),
-    );
-    const recorded = rounds.flatMap((round, i) =>
-      reusable[i] ? round.latexdiffs : [],
-    );
-    const unrecorded = rounds.filter(
-      (round, i) => !reusable[i] && round.outputs.length > 0,
-    );
+    const [recorded, unresolved] = Arr.partition(rounds, (round) => {
+      const { latexdiffs } = round;
+      return latexdiffs.length > 0 &&
+        latexdiffs.every((entry) => entry.status === 'ok') &&
+        latexdiffs.every((entry) => entry.mathMarkup === mathMarkup)
+        ? Result.succeed(latexdiffs.map((entry) => entry.diff.absolutePath))
+        : Result.fail(round);
+    });
+    const diffPaths = recorded.flat();
+    const unrecorded = unresolved.filter(({ outputs }) => outputs.length > 0);
     const betweenRounds =
       unrecorded.length > 0 &&
       (yield* setting(LATEXDIFF_BETWEEN_ROUNDS_SETTING));
+    const earlierOutputs = betweenRounds
+      ? new Map(
+          rounds.toReversed().map(({ round, outputs }) => [round, outputs]),
+        )
+      : undefined;
     const pairs = unrecorded.flatMap(({ round, outputs }) =>
-      latexdiffPairs(
-        outputs,
-        betweenRounds
-          ? (rounds.find((earlier) => earlier.round === round - 1)?.outputs ??
-              [])
-          : [],
-      ),
+      latexdiffPairs(outputs, earlierOutputs?.get(round - 1) ?? []),
     );
-    const total = recorded.length + pairs.length;
+    const total = diffPaths.length + pairs.length;
     if (total === 0) {
       yield* notify('info', 'No latexdiff operations available for this task.');
       return;
@@ -224,12 +220,7 @@ export function latexdiffVerbs(parts: {
       pairs.length === 0
         ? []
         : yield* host.withProgress('Running latexdiff', diffPairs);
-    const diffPaths = [
-      ...recorded.flatMap((entry) =>
-        entry.status === 'ok' ? [entry.diff.absolutePath] : [],
-      ),
-      ...fresh.flat(),
-    ];
+    for (const path of fresh.flat()) diffPaths.push(path);
 
     if (diffPaths.length === 0) {
       return yield* new Rejected({

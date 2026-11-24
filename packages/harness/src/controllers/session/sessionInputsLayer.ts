@@ -60,17 +60,25 @@ import { DEBUG_MODE_SETTING } from '@shared/state/stateSettings';
  * delay rather than the session's view; one that persists ends the view's
  * updates, which fails every reader of the view's changes at that boundary.
  */
+const logReplayRetry = logFailure(
+  'sessionInputs',
+  'Session view read failed; retrying',
+);
+const replayRetry = Schedule.exponential('50 millis').pipe(
+  Schedule.upTo({ times: 5 }),
+  Schedule.tap(({ input }) => logReplayRetry(input)),
+);
 const requiredRead = <A>(
   read: Effect.Effect<A, DatabaseReadFailed>,
 ): Effect.Effect<A> =>
   read.pipe(
+    Effect.retry(replayRetry),
     Effect.tapError(
-      logFailure('sessionInputs', 'Session view read failed; retrying'),
+      logFailure(
+        'sessionInputs',
+        'Session view read failed after five retries',
+      ),
     ),
-    Effect.retry({
-      schedule: Schedule.exponential('50 millis'),
-      times: 5,
-    }),
     Effect.orDie,
   );
 

@@ -167,7 +167,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     options: { includeFullConversation?: boolean } = {},
   ) {
     const records = session.records(id);
-    const [
+    const {
       config,
       view,
       result,
@@ -176,17 +176,17 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       workspaceFiles,
       rowsContinue,
       generatedFiles,
-    ] = yield* Effect.all(
-      [
-        records.readConfig,
-        session.view.read([id]),
-        records.readResult,
-        records.readReport,
-        records.readConversation,
-        records.readWorkspaceFiles,
-        records.readContinues,
-        listRunGeneratedFiles(id, storage),
-      ],
+    } = yield* Effect.all(
+      {
+        config: records.readConfig,
+        view: session.view.read([id]),
+        result: records.readResult,
+        report: records.readReport,
+        conversation: records.readConversation,
+        workspaceFiles: records.readWorkspaceFiles,
+        rowsContinue: records.readContinues,
+        generatedFiles: listRunGeneratedFiles(id, storage),
+      },
       { concurrency: 8 },
     );
     const run = view.runs.get(id);

@@ -236,25 +236,29 @@ export const toolCatalogLayer = (
                 ? failed.message
                 : `${failed.message}; revision ${shortPluginId(stand.revision)} stays in use until the plugin is fixed or disabled.`,
             );
-          const fresh = new Set<NativePlugin>();
-          const candidates = (yield* Effect.forEach(
+          const loaded = yield* Effect.forEach(
             found.plugins,
             ({ id, source }) =>
               Effect.gen(function* () {
-                if (source.plugin.native === null) return undefined;
+                if (source.plugin.native === null) return {};
                 if (!load && Option.isNone(yield* loader.imported(source)))
-                  return inUse.get(id);
+                  return { native: inUse.get(id) };
                 const result = yield* Effect.result(loader.load(source));
-                if (Result.isSuccess(result)) {
-                  fresh.add(result.success);
-                  return result.success;
-                }
-                const stand = standInFor(id);
-                say(result.failure, stand);
-                return stand;
+                if (Result.isSuccess(result))
+                  return { native: result.success, fresh: true };
+                return { native: standInFor(id), warning: result.failure };
               }),
             { concurrency: 'unbounded' },
-          )).filter((native) => native !== undefined);
+          );
+          const fresh = new Set<NativePlugin>();
+          const candidates: NativePlugin[] = [];
+          for (const entry of loaded) {
+            if (entry.warning !== undefined) say(entry.warning, entry.native);
+            if (entry.native !== undefined) {
+              candidates.push(entry.native);
+              if (entry.fresh) fresh.add(entry.native);
+            }
+          }
           // A new revision the table refuses leaves the one before it in
           // use, judged again with the rest.
           const first = withNatives(table, candidates);
@@ -283,11 +287,12 @@ export const toolCatalogLayer = (
             if (held !== undefined && held.revision !== native.revision)
               previous.set(native.plugin.id, held);
           }
-          if (
-            revisions(composed.table) !==
-            revisions(yield* SubscriptionRef.get(live))
-          )
-            yield* SubscriptionRef.set(live, composed.table);
+          const nextRevisions = revisions(composed.table);
+          yield* SubscriptionRef.updateSome(live, (current) =>
+            revisions(current) === nextRevisions
+              ? Option.none()
+              : Option.some(composed.table),
+          );
           return {
             installed: found,
             table: composed.table,

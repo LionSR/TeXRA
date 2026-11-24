@@ -332,14 +332,19 @@ const mcpServersOf = Effect.fn('mcpServersOf')(function* (
       servers: Result.getOrElse(inner, () => json),
     });
   }
-  const servers: McpServerConfig[] = [];
+  const servers = new Map<string, McpServerConfig>();
   const warnings: string[] = [];
   for (const { where, servers: map } of maps) {
     const parsed = parseMcpServers(where, map);
     warnings.push(...parsed.warnings);
     for (const server of parsed.servers) {
-      servers.push({
-        name: `plugin_${name}_${server.name}`,
+      const serverName = `plugin_${name}_${server.name}`;
+      if (servers.has(serverName))
+        return yield* failPlugin(
+          `Plugin ${name} declares ${serverName} twice.`,
+        );
+      servers.set(serverName, {
+        name: serverName,
         command: expandRoot(dir, server.command),
         args: server.args.map((arg) => expandRoot(dir, arg)),
         env: EffectRecord.map(server.env, (value) => expandRoot(dir, value)),
@@ -347,11 +352,7 @@ const mcpServersOf = Effect.fn('mcpServersOf')(function* (
       });
     }
   }
-  const names = servers.map((server) => server.name);
-  const clash = names.find((server, index) => names.indexOf(server) !== index);
-  if (clash !== undefined)
-    return yield* failPlugin(`Plugin ${name} declares ${clash} twice.`);
-  return { servers, warnings };
+  return { servers: [...servers.values()], warnings };
 });
 
 /** The conventional hooks file, read when present. */
@@ -530,9 +531,8 @@ export const readPlugin = Effect.fn('readPlugin')(function* (
     { concurrency: 'unbounded', mode: 'result' },
   );
   const skills = new Set<string>();
-  for (const root of yield* Effect.forEach(
-    yield* Effect.fromResult(parts.skills),
-    Effect.fromResult,
+  for (const root of yield* Effect.fromResult(
+    Result.flatMap(parts.skills, Result.all),
   ))
     if (root !== undefined) skills.add(path.relative(dir, root) || '.');
   const mcp = yield* Effect.fromResult(parts.mcp);

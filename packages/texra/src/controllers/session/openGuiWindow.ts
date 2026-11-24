@@ -15,7 +15,7 @@
  */
 import * as path from 'node:path';
 
-import { Effect, Exit, Layer, Scope, Stream, SubscriptionRef } from 'effect';
+import { Effect, Exit, Layer, Scope, Stream } from 'effect';
 
 import type {
   Session,
@@ -318,10 +318,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   });
   const draftRequests = yield* ports.draftRequests.attach(roots);
   yield* Effect.forkScoped(
-    Stream.runForEach(
-      SubscriptionRef.changes(ports.draftRequests.recording),
-      snapshot.setRecording,
-    ),
+    Stream.runForEach(ports.draftRequests.recording, snapshot.setRecording),
   );
   const bridge = yield* SessionBridge.make({
     session,

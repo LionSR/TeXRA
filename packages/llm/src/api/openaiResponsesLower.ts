@@ -62,6 +62,8 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   const namespace = config.toolNamespace;
   const content = (part: Parameters<typeof responsesContent>[0]) =>
     responsesContent(part, documents);
+  const invalidRequest = (message: string) =>
+    new ModelError({ kind: 'invalid-request', message });
   const input: OpenAI.Responses.ResponseInput = [];
   for (const message of yield* replayableHistory(turn.messages, turn, from)) {
     if (message.role === 'tool') {
@@ -106,19 +108,17 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
     }
     for (const part of message.content) {
       if (part.evidence != null && !sameModelOrigin(message.origin, turn)) {
-        return yield* new ModelError({
-          kind: 'invalid-request',
-          message: 'Provider content evidence belongs to another model origin.',
-        });
+        return yield* invalidRequest(
+          'Provider content evidence belongs to another model origin.',
+        );
       }
       switch (part.kind) {
         case 'message': {
           if (part.evidence) {
             if (part.evidence.kind !== 'openai-responses-message') {
-              return yield* new ModelError({
-                kind: 'invalid-request',
-                message: 'Responses cannot replay foreign message evidence.',
-              });
+              return yield* invalidRequest(
+                'Responses cannot replay foreign message evidence.',
+              );
             }
             input.push({
               type: 'message',
@@ -135,28 +135,22 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
               ),
             });
           } else {
-            const text: string[] = [];
-            for (const child of part.content) {
-              if (child.kind !== 'text') {
-                return yield* new ModelError({
-                  kind: 'invalid-request',
-                  message:
-                    'Responses refusal history requires its original message evidence.',
-                });
-              }
-              text.push(child.text);
-            }
-            input.push({ role: 'assistant', content: text.join('') });
+            if (part.content.some((child) => child.kind !== 'text'))
+              return yield* invalidRequest(
+                'Responses refusal history requires its original message evidence.',
+              );
+            input.push({
+              role: 'assistant',
+              content: part.content.map((child) => child.text).join(''),
+            });
           }
           break;
         }
         case 'reasoning': {
           if (part.evidence?.kind !== 'openai-responses-reasoning') {
-            return yield* new ModelError({
-              kind: 'invalid-request',
-              message:
-                'Responses reasoning requires its original provider evidence.',
-            });
+            return yield* invalidRequest(
+              'Responses reasoning requires its original provider evidence.',
+            );
           }
           input.push({
             type: 'reasoning',
@@ -187,11 +181,9 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
             part.evidence !== undefined &&
             part.evidence.kind !== 'openai-responses-function-call'
           ) {
-            return yield* new ModelError({
-              kind: 'invalid-request',
-              message:
-                'Responses tool history requires local calls without foreign evidence.',
-            });
+            return yield* invalidRequest(
+              'Responses tool history requires local calls without foreign evidence.',
+            );
           }
           input.push({
             type: 'function_call',

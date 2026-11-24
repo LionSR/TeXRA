@@ -35,6 +35,7 @@
 import {
   Context,
   Effect,
+  Equivalence,
   type FileSystem,
   Record,
   Schema,
@@ -164,6 +165,9 @@ const sameSet = (
   b: readonly OfferedTool[],
 ): boolean => a !== null && stableStringify(a) === stableStringify(b);
 
+const equalNames = Equivalence.Array(Equivalence.String);
+const RecordedDescription = Schema.Struct({ description: Schema.String });
+
 /**
  * The offered tools with each that renders its description from the run's
  * declared tools, the modules its scripts may import and the programs they
@@ -195,33 +199,19 @@ function describedAtFreeze<T extends ResolvedTools>(
       lane: tools.registry.get(definition.name)?.lane,
     }));
   const offered = tools.definitions.map(({ name }) => name);
-  const recorded = (name: string) => {
-    const shown =
-      state.offeredContext === null
-        ? undefined
-        : state.offeredTools?.find((tool) => tool.name === name)?.shown;
-    return shown === undefined
-      ? undefined
-      : stored(state, shown, Schema.Struct({ description: Schema.String }))
-          .description;
-  };
+  const recorded = state.offeredContext === null ? null : state.offeredTools;
+  const shown = new Map<string, OfferedTool['shown']>();
   const definitions = tools.definitions.map((definition) => {
     const describe = tools.registry.get(definition.name)?.describe;
-    return describe === undefined
-      ? definition
-      : {
-          ...definition,
-          description:
-            recorded(definition.name) ??
-            describe(declared, modules, programs, offered),
-        };
+    if (describe === undefined) return definition;
+    const previous = recorded?.find((tool) => tool.name === definition.name);
+    const description = previous
+      ? stored(state, previous.shown, RecordedDescription).description
+      : describe(declared, modules, programs, offered);
+    const described = { ...definition, description };
+    shown.set(definition.name, toolDigests({ definition: described }).shown);
+    return described;
   });
-  const shown = new Map(
-    definitions.map((definition) => [
-      definition.name,
-      toolDigests({ definition }).shown,
-    ]),
-  );
   return {
     ...tools,
     definitions,
@@ -483,13 +473,12 @@ const openStep = Effect.fn('Step.open')(function* (
   const { listed, tools } = step;
   const toolsChanged = !sameSet(state.offeredTools, tools.offered);
   const skills = listed.map(({ name }) => name);
-  const skillsChanged =
-    skills.join('\0') !== state.offeredWith.skills.join('\0');
+  const skillsChanged = !equalNames(skills, state.offeredWith.skills);
   // What is withheld can change while the offered set does not (a plugin
   // switched on whose tools all need approval): reported on its own.
   const withheldChanged =
     step.withheld.length > 0 &&
-    step.withheld.join('\0') !== (previous?.withheld ?? []).join('\0');
+    !equalNames(step.withheld, previous?.withheld ?? []);
   // Every warning where the offer changed; otherwise only those the last
   // step did not give (a plugin enabled that does not load changes no
   // offer, and says why once).
@@ -613,7 +602,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
     step.changed ||
     stableStringify(modules) !== stableStringify(state.offeredWith.modules) ||
     state.offeredContext !== sha256(context) ||
-    tools.hooks.identities.join('\0') !== state.offeredWith.hooks.join('\0');
+    !equalNames(tools.hooks.identities, state.offeredWith.hooks);
   return {
     tools,
     base,

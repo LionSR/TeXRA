@@ -26,15 +26,16 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
     const rows = new Map(
       modelOptionsFrom(options).map((row) => [row.value, row]),
     );
-    const runnable = models.flatMap((model) => {
+    const isRunnable = (model: string): boolean => {
       const row = rows.get(model);
-      return row !== undefined && isModelOptionAvailable(row)
-        ? [{ row, paidByPlan: byModel.get(model)?.usageRoute !== undefined }]
-        : [];
-    });
-    const pick = (runnable.find(({ paidByPlan }) => paidByPlan) ?? runnable[0])
-      ?.row;
-    if (pick) return pick.value;
+      return row !== undefined && isModelOptionAvailable(row);
+    };
+    const pick =
+      models.find(
+        (model) =>
+          byModel.get(model)?.usageRoute !== undefined && isRunnable(model),
+      ) ?? models.find(isRunnable);
+    if (pick !== undefined) return pick;
     // A key that could not be read is neither a credential nor its absence:
     // with nothing runnable, the answer is unknown, not "none".
     const unreadable = Object.entries(SETUP_MODEL_BY_PROVIDER).find(

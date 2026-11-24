@@ -293,28 +293,33 @@ const hostRun = (
     },
     call: (input) =>
       withinDeadline(
-        Effect.suspend(() => tool.call(input)).pipe(
-          Effect.map((result) =>
-            result.status === 'error'
+        Effect.gen(function* () {
+          const exit = yield* Effect.exit(
+            Effect.suspend(() => tool.call(input)),
+          );
+          if (Exit.isSuccess(exit)) {
+            const result = exit.value;
+            return result.status === 'error'
               ? { ...result, ...failed(result.error) }
-              : result,
-          ),
-          Effect.catch((error) =>
-            findStorageRefusal(Cause.fail(error)) === undefined
-              ? Effect.succeed(failed(error.message))
-              : Effect.fail(error),
-          ),
-          Effect.catchDefect((defect) =>
-            findStorageRefusal(Cause.die(defect)) === undefined
-              ? Effect.as(
-                  Effect.logWarning(
-                    `${what} crashed: ${ensureError(defect).message}`,
-                  ).pipe(withLogChannel('plugins')),
-                  failed(ensureError(defect).message),
-                )
-              : Effect.die(defect),
-          ),
-        ),
+              : result;
+          }
+          const { cause } = exit;
+          if (
+            Exit.hasInterrupts(exit) ||
+            findStorageRefusal(cause) !== undefined
+          )
+            return yield* exit;
+          const error = Result.getOrUndefined(Cause.findError(cause));
+          const defect = Cause.findDefect(cause);
+          if (Result.isFailure(defect))
+            return error === undefined ? yield* exit : failed(error.message);
+
+          const message = ensureError(defect.success).message;
+          yield* Effect.logWarning(`${what} crashed: ${message}`).pipe(
+            withLogChannel('plugins'),
+          );
+          return failed(error?.message ?? message);
+        }),
         what,
       ),
   };
@@ -355,8 +360,8 @@ const checked = (
     );
   const contributed = new Set(contributions(plugin));
   const declared = new Set(provides);
-  const undeclared = [...contributed].filter((item) => !declared.has(item));
-  const absent = [...declared].filter((item) => !contributed.has(item));
+  const undeclared = Arr.filter(contributed, (item) => !declared.has(item));
+  const absent = Arr.filter(declared, (item) => !contributed.has(item));
   if (undeclared.length > 0 || absent.length > 0)
     return Result.fail(
       [

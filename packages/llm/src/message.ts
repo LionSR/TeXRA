@@ -361,18 +361,20 @@ export const replayableHistory = Effect.fn('llm.replayableHistory')(function* (
               part.kind === 'local-call' ? [part] : [],
             )
           : [];
-      const answered: AnsweredCall[] = [];
-      for (const result of message.results) {
-        const call =
-          result.callOrdinal < 0 ? undefined : calls.at(result.callOrdinal);
-        if (call === undefined)
-          return yield* new ModelError({
-            kind: 'invalid-request',
-            message:
-              'A tool result answers no local call of the assistant message before it.',
-          });
-        answered.push({ call, result });
-      }
+      const answered = yield* Effect.forEach(
+        message.results,
+        Effect.fnUntraced(function* (result) {
+          const call =
+            result.callOrdinal < 0 ? undefined : calls.at(result.callOrdinal);
+          if (call === undefined)
+            return yield* new ModelError({
+              kind: 'invalid-request',
+              message:
+                'A tool result answers no local call of the assistant message before it.',
+            });
+          return { call, result } satisfies AnsweredCall;
+        }),
+      );
       next = { role: 'tool', answered };
     } else if (
       message.role === 'assistant' &&

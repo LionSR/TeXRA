@@ -17,7 +17,6 @@ import {
   Duration,
   Effect,
   Predicate,
-  Result,
   Schema,
   SchemaGetter,
 } from 'effect';
@@ -300,23 +299,24 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
       result: Schema.optional(resultSchema),
       error: Schema.optional(JsonRpcErrorSchema),
     });
-    const parsed = Schema.decodeUnknownResult(responseSchema)(raw);
-    if (!Result.isSuccess(parsed)) {
+    const response = yield* Effect.mapError(
+      Schema.decodeUnknownEffect(responseSchema)(raw),
+      (failure) =>
+        new ToolError(
+          `Better BibTeX returned an unexpected response for ${method}: ${failure.message}`,
+        ),
+    );
+    if (response.error) {
       return yield* new ToolError(
-        `Better BibTeX returned an unexpected response for ${method}: ${parsed.failure.message}`,
+        `Better BibTeX API error: ${response.error.message}`,
       );
     }
-    if (parsed.success.error) {
-      return yield* new ToolError(
-        `Better BibTeX API error: ${parsed.success.error.message}`,
-      );
-    }
-    if (parsed.success.result === undefined) {
+    if (response.result === undefined) {
       return yield* new ToolError(
         `Better BibTeX returned an empty response for ${method}.`,
       );
     }
-    return parsed.success.result;
+    return response.result;
   },
 );
 

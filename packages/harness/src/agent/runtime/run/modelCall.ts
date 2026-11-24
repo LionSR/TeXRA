@@ -88,12 +88,9 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* (
     gate.withRoutes(bound.routes)(attempt(bound)),
   ).pipe(
     Effect.retry(
-      Schedule.forever.pipe(
+      Schedule.recurs(retries).pipe(
         Schedule.while(
-          ({ input, attempt }) =>
-            input instanceof ModelError &&
-            input.retryable &&
-            attempt <= retries,
+          ({ input }) => input instanceof ModelError && input.retryable,
         ),
         // Only a failure the check above resends reaches the wait, so the
         // line is never said for a call that ends.
