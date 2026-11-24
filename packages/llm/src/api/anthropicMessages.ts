@@ -116,24 +116,29 @@ const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
   });
 });
 
-/**
- * The turn's messages as Anthropic message params: a system update native
- * where the model and the API take it, else a user text; tool results as
- * the user turn that answers the calls; and an assistant turn's text, calls
- * and same-origin reasoning with the exact evidence the API requires,
- * anything foreign refused.
- */
-const lowerMessages = Effect.fn('llm.anthropic.lowerMessages')(function* (
-  turnMessages: ResolvedTurn['messages'],
-  origin: ModelOrigin,
+const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
+  input: ResolvedTurn,
+  origin: ModelOrigin & { readonly protocol: 'anthropic-messages' },
   config: AnthropicMessagesConfiguration,
   uploads: UploadCache,
 ) {
+  const turn = yield* boundTurn(input, origin, 'foreground');
+  const controls = turn.controls;
+  if (
+    controls.thinking.mode === 'enabled' &&
+    controls.thinking.budgetTokens >= controls.maxOutputTokens
+  ) {
+    return yield* new ModelError({
+      kind: 'invalid-request',
+      message:
+        'Anthropic manual thinking requires a budget below the output limit.',
+    });
+  }
   const nowMs = yield* Clock.currentTimeMillis;
   const lowerPart = (part: Parameters<typeof inputPart>[0]) =>
     inputPart(part, (base64) => uploads.fileIdFor(base64, nowMs));
   const messages: MessageParam[] = [];
-  const history = yield* replayableHistory(turnMessages, origin);
+  const history = yield* replayableHistory(turn.messages, origin);
   for (const [index, message] of history.entries()) {
     if (message.role === 'system') {
       // Native where the model takes it and the API accepts it: after a user
@@ -222,28 +227,6 @@ const lowerMessages = Effect.fn('llm.anthropic.lowerMessages')(function* (
       messages.push({ role: 'assistant', content });
     }
   }
-  return messages;
-});
-
-const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
-  input: ResolvedTurn,
-  origin: ModelOrigin & { readonly protocol: 'anthropic-messages' },
-  config: AnthropicMessagesConfiguration,
-  uploads: UploadCache,
-) {
-  const turn = yield* boundTurn(input, origin, 'foreground');
-  const controls = turn.controls;
-  if (
-    controls.thinking.mode === 'enabled' &&
-    controls.thinking.budgetTokens >= controls.maxOutputTokens
-  ) {
-    return yield* new ModelError({
-      kind: 'invalid-request',
-      message:
-        'Anthropic manual thinking requires a budget below the output limit.',
-    });
-  }
-  const messages = yield* lowerMessages(turn.messages, origin, config, uploads);
   const tools: NonNullable<MessageCreateParamsStreaming['tools']> =
     yield* Effect.forEach(
       turn.tools,
@@ -260,17 +243,17 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
         };
       }),
     );
-  const { thinking } = controls;
-  const wireThinking: MessageCreateParamsStreaming['thinking'] =
-    thinking.mode === 'disabled'
-      ? { type: 'disabled' }
-      : thinking.mode === 'adaptive'
-        ? { type: 'adaptive', display: thinking.display }
-        : {
-            type: 'enabled',
-            display: thinking.display,
-            budget_tokens: thinking.budgetTokens,
-          };
+  const thinking = controls.thinking;
+  let wireThinking: MessageCreateParamsStreaming['thinking'];
+  if (thinking.mode === 'disabled') wireThinking = { type: 'disabled' };
+  else if (thinking.mode === 'adaptive')
+    wireThinking = { type: 'adaptive', display: thinking.display };
+  else
+    wireThinking = {
+      type: 'enabled',
+      display: thinking.display,
+      budget_tokens: thinking.budgetTokens,
+    };
   const body: MessageCreateParamsStreaming = {
     model: turn.requestedModel,
     max_tokens: controls.maxOutputTokens,

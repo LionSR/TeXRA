@@ -63,7 +63,6 @@ import {
   FinishedToolResultSchema,
   toJsonValue,
   type DispatchFacts,
-  type RunId,
   type ScriptCallPayload,
   type StoredMediaPart,
   type ToolResult,
@@ -81,7 +80,6 @@ import {
   endsTurn,
   resultsEndTurn,
   resumedAttempt,
-  type ResumedAttempt,
   type ToolCallResult,
   type CallStatus,
 } from '@shared/session/inFlight';
@@ -110,7 +108,6 @@ import {
 } from '../run/tools';
 import { decideRequest } from '../requests';
 import { callRequests, guardedToolCall } from './toolGuard';
-import type { ToolCallHooks } from './hooks';
 import { appendRow } from './rows';
 import type { AgentRunServices } from '../runRegistry';
 import type { StepTools } from './step';
@@ -330,69 +327,63 @@ const skipCall = (
   );
 };
 
-/** What running a call came to: the result its body returned, or the error
- *  result standing for it; the PreToolUse hooks it ran under, none when its
- *  tool is not in the run; and whether this attempt's intent is committed,
- *  which opened its card. */
-interface CallOutcome {
-  readonly result: ToolResult;
-  readonly hooks: ToolCallHooks | undefined;
-  readonly bodyStarted: boolean;
-}
-
-/** The result a call's exit stands for. A tool that failed answers with an
- *  error result the model reads; an interrupt and a write the store refused
- *  are not the call's to answer and fail it, so no result is written. */
-const resultOfExit = Effect.fn('toolUse.resultOfExit')(function* <E>(
-  runId: RunId,
-  toolName: string,
-  invoked: Exit.Exit<ToolResult, E>,
-) {
-  if (Exit.isSuccess(invoked)) return invoked.value;
-  const failed = readCause(runId, invoked.cause);
-  if (failed.kind === 'interrupted')
-    // Keep a finalizer failure from the cancelled write beside the
-    // interrupt.
-    return yield* Effect.failCause(
-      Cause.fromReasons<never>(
-        invoked.cause.reasons.map((reason) =>
-          Cause.isFailReason(reason)
-            ? Cause.makeDieReason(reason.error)
-            : reason,
-        ),
-      ),
-    );
-  if (failed.kind === 'refused') return yield* failed.refusal;
-  const message = normalizeToolCallError(
-    toolName,
-    failed.kind === 'error' ? failed.error : failed.defect,
-  );
-  const result: ToolResult = {
-    status: 'error',
-    error: message.trim() || 'Tool run failed.',
-  };
-  return result;
-});
-
 /**
- * Run the call at `entered`'s attempt under `place`: its step's PreToolUse
- * hooks, recorded before the chain decides, then the chain and the body
- * under the step's roots and plugin services. The body's start commits the
- * call's intent, which opens its card, unless this attempt's body already
- * started (a re-entry); a call the chain stops ends with an error result
- * before the body runs. A tool the run does not offer for this call answers
- * with an error result and runs no hook.
+ * Finish one call from where its rows left it, under `place`: the script
+ * that issued it, or the door a `script` call issues its own through. A
+ * finished call keeps its result; a duplicate derives its primary, effects
+ * stripped; a call after a group that `ended` the turn, one untouched in a
+ * recovered response, and a started body that may have run and may not be
+ * replayed are skipped, closing their cards; any other runs at the attempt
+ * `resumedAttempt` names, asking again whatever it asked. A throwing tool
+ * is an error result; interruption leaves none.
  */
-const invokeCall = Effect.fn('toolUse.invokeCall')(function* (
+const finishCall = Effect.fn('toolUse.finishCall')(function* (
   call: Call,
   place: Pick<RunCallShape, 'script' | 'scriptCalls'>,
-  status: Exclude<CallStatus, { kind: 'finished' }>,
-  entered: ResumedAttempt,
-): Effect.fn.Return<CallOutcome, InvokeError, AgentRunServices> {
+  ended = false,
+): Effect.fn.Return<void, InvokeError, AgentRunServices> {
   const { dispatch, fact, input } = call;
   const { run, cell, step, responseId, session } = dispatch;
-  const { attempt } = entered;
+  const { runId, logger } = run;
+  const log = yield* SessionLog;
+  const roots = yield* SessionRoots;
   const script = scriptOf(fact);
+  const state = yield* cell.current;
+  const status: CallStatus = recordOf(dispatch, state, fact.callId)?.status ?? {
+    kind: 'issued',
+  };
+  if (status.kind === 'finished') return;
+  if ('duplicateOf' in fact && fact.duplicateOf !== null) {
+    const primary = finishedCall(dispatch, state, fact.duplicateOf);
+    if (primary !== null)
+      yield* commitResult(call, Math.max(1, attemptOf(status)), {
+        disposition: 'duplicate',
+        duplicateOf: fact.duplicateOf,
+        result: withoutEffects(primary.result),
+        attachments: [],
+      });
+    return;
+  }
+  if (ended) {
+    yield* skipCall(call, status, SKIPPED_AFTER_END_TURN);
+    return;
+  }
+  const at = { responseId, callId: fact.callId };
+  const entered = resumedAttempt(state, at, status);
+  // Untouched in a recovered response: reported, not run; a script's calls run.
+  const untouched = status.kind === 'issued' && entered.raised === 0;
+  if (untouched && dispatch.recovered && script === null) {
+    yield* skipCall(call, status, SKIPPED_NOT_STARTED);
+    return;
+  }
+  if (
+    entered.mayHaveRun &&
+    !(yield* replayable(fact, step.registry, input, logger))
+  ) {
+    yield* skipCall(call, status, SKIPPED_OUTCOME_UNKNOWN);
+    return;
+  }
+  const { attempt } = entered;
   // Whether this attempt's intent is committed: one that runs again at the
   // attempt it started (it was waiting on a person) has it.
   let bodyStarted = status.kind === 'started' && status.attempt === attempt;
@@ -403,29 +394,8 @@ const invokeCall = Effect.fn('toolUse.invokeCall')(function* (
     script === null &&
     step.offered.some((t) => t.name === fact.toolName && !t.sent);
   const tool = unsent ? undefined : step.registry.get(fact.toolName);
-  if (tool === undefined)
-    return {
-      result: {
-        status: 'error',
-        error: unsent
-          ? `tool_unavailable: "${fact.toolName}" is not a direct call in this run; call it from a script as tools.${fact.toolName}(...).`
-          : `tool_unavailable: the tool "${fact.toolName}" is not available in this run. Continue with the tools you were offered.`,
-      },
-      hooks: undefined,
-      bodyStarted,
-    };
-  const log = yield* SessionLog;
-  const roots = yield* SessionRoots;
-  const hooks = yield* step.hooks.preToolUse(
-    cell,
-    fact,
-    responseId,
-    input,
-    tool.definition.schema,
-  );
-  if (hooks.rows.length > 0) yield* commit(call, hooks.rows);
-  // What the tool prints is transient text on its card, capped, never a
-  // row, refused once the call returned.
+  // The call's card opens as its body starts; what the tool prints is
+  // transient text on it, capped, never a row, refused once the call returned.
   let accepting = false;
   let streamed = 0;
   const onToolOutput = (chunk: string): void => {
@@ -434,89 +404,119 @@ const invokeCall = Effect.fn('toolUse.invokeCall')(function* (
       : '';
     if (text.length === 0) return;
     streamed += text.length;
-    log.publish(run.runId, { type: 'stream.chunk', id: fact.logId, text });
+    const { logId: id } = fact;
+    log.publish(runId, { type: 'stream.chunk', id, text });
   };
-  // From here the call may have run.
-  const bodyStarts = Effect.fn('bodyStarts')(function* (on: unknown) {
-    if (!bodyStarted)
-      yield* commit(call, [
-        {
-          type: 'tool.intent',
-          aggregateId: run.runId,
-          ...stagedOf(call),
-          payload: {
-            origin:
-              script === null
-                ? { kind: 'response', responseId }
-                : { kind: 'script', scriptCallId: script.scriptCallId },
-            callId: fact.callId,
-            attempt,
-            ...cardOf(call, on),
-          },
-        },
-      ]);
-    bodyStarted = true;
-    accepting = true;
-    yield* hooks.bodyStarts;
-  });
-  // This call's place in its run, and the child door over exactly it.
-  const runCall: RunCallShape = {
+  const requests = callRequests({
     run,
-    responseId,
-    instruction: dispatch.instruction,
-    attempt,
-    logId: fact.logId,
-    state: cell.current,
-    ...place,
-  };
-  const invoked = yield* Effect.exit(
-    Effect.scoped(
-      guardedToolCall(tool, input, hooks, bodyStarts).pipe(
-        Effect.provideService(ToolContext, {
-          callId: fact.callId,
-          env: {
-            roots,
-            workingDirectory: run.workingDirectory,
-            stepRoots: step.stepRoots,
-            run,
+    session,
+    commit: (rows) => commit(call, rows),
+    at,
+    entered,
+  });
+  // Its step's PreToolUse hooks, recorded before the chain decides.
+  const pre =
+    tool &&
+    (yield* step.hooks.preToolUse(
+      cell,
+      fact,
+      responseId,
+      input,
+      tool.definition.schema,
+    ));
+  if (pre && pre.rows.length > 0) yield* commit(call, pre.rows);
+  let result: ToolResult;
+  if (!tool || !pre) {
+    result = {
+      status: 'error',
+      error: unsent
+        ? `tool_unavailable: "${fact.toolName}" is not a direct call in this run; call it from a script as tools.${fact.toolName}(...).`
+        : `tool_unavailable: the tool "${fact.toolName}" is not available in this run. Continue with the tools you were offered.`,
+    };
+  } else {
+    // From here the call may have run: its intent commits now, which opens
+    // its card, unless this attempt's body already started (a re-entry).
+    const bodyStarts = Effect.fn('bodyStarts')(function* (on: unknown) {
+      if (!bodyStarted)
+        yield* commit(call, [
+          {
+            type: 'tool.intent',
+            aggregateId: runId,
+            ...stagedOf(call),
+            payload: {
+              origin:
+                script === null
+                  ? { kind: 'response', responseId }
+                  : { kind: 'script', scriptCallId: script.scriptCallId },
+              callId: fact.callId,
+              attempt,
+              ...cardOf(call, on),
+            },
           },
-          requests: callRequests({
-            run,
-            session,
-            commit: (rows) => commit(call, rows),
-            at: { responseId, callId: fact.callId },
-            entered,
+        ]);
+      bodyStarted = true;
+      accepting = true;
+      yield* pre.bodyStarts;
+    });
+    // This call's place in its run, and the child door over exactly it.
+    const runCall: RunCallShape = {
+      run,
+      responseId,
+      instruction: dispatch.instruction,
+      attempt,
+      logId: fact.logId,
+      state: cell.current,
+      ...place,
+    };
+    // The chain first, under the step's roots and plugin services: a call
+    // it stops ends with an error result before the body runs.
+    const invoked = yield* Effect.exit(
+      Effect.scoped(
+        guardedToolCall(tool, input, pre, bodyStarts).pipe(
+          Effect.provideService(ToolContext, {
+            callId: fact.callId,
+            env: {
+              roots,
+              workingDirectory: run.workingDirectory,
+              stepRoots: step.stepRoots,
+              run: runCall.run,
+            },
+            requests,
+            emit: onToolOutput,
           }),
-          emit: onToolOutput,
-        }),
-        Effect.provideService(ChildRuns, childRuns(runCall, session)),
-        Effect.provideService(RunCall, runCall),
-        Effect.provide(step.services),
+          Effect.provideService(ChildRuns, childRuns(runCall, session)),
+          Effect.provideService(RunCall, runCall),
+          Effect.provide(step.services),
+        ),
       ),
-    ),
-  );
-  accepting = false;
-  const result = yield* resultOfExit(run.runId, fact.toolName, invoked);
-  return { result, hooks, bodyStarted };
-});
-
-/**
- * Commit what running the call at `attempt` came to, in one batch: the
- * card's opening when no intent opened it (a call denied, or its tool not in
- * the run), the result row that closes it, the PostToolUse rows of an
- * executed call and the follow-ups its result answers, with its facts about
- * the run beside them. The result is checked first: one the schema or its
- * plugin's facts refuse becomes an error result the model can read (the
- * projection of an error result cannot itself fail); then its attachments'
- * bytes are captured.
- */
-const commitOutcome = Effect.fn('toolUse.commitOutcome')(function* (
-  call: Call,
-  attempt: number,
-  { result, hooks, bodyStarted }: CallOutcome,
-): Effect.fn.Return<void, InvokeError, AgentRunServices> {
-  const { dispatch, fact, input } = call;
-  const { runId } = dispatch.run;
+    );
+    accepting = false;
+    if (Exit.isSuccess(invoked)) {
+      result = invoked.value;
+    } else {
+      const failed = readCause(runId, invoked.cause);
+      if (failed.kind === 'interrupted')
+        // Keep a finalizer failure from the cancelled write beside the
+        // interrupt.
+        return yield* Effect.failCause(
+          Cause.fromReasons<never>(
+            invoked.cause.reasons.map((reason) =>
+              Cause.isFailReason(reason)
+                ? Cause.makeDieReason(reason.error)
+                : reason,
+            ),
+          ),
+        );
+      if (failed.kind === 'refused') return yield* failed.refusal;
+      const message = normalizeToolCallError(
+        fact.toolName,
+        failed.kind === 'error' ? failed.error : failed.defect,
+      );
+      result = { status: 'error', error: message.trim() || 'Tool run failed.' };
+    }
+  }
+  // A result the schema refuses becomes an error result the model can read;
+  // the projection of an error result cannot itself fail.
   // A tool no loaded plugin offers states no fact: the check names it.
   const pluginId = dispatch.pluginOf.get(fact.toolName);
   const plugin =
@@ -538,9 +538,12 @@ const commitOutcome = Effect.fn('toolUse.commitOutcome')(function* (
       });
   const { attachments, blobs } = yield* captureAttachments(
     extracted.attachments,
-    (yield* SessionRoots).workspace,
+    roots.workspace,
   );
   const sanitized = extracted.sanitizedResult;
+  // A call that ends before its body starts (denied, or its tool not in
+  // this run) has no intent to open its card: the card's `tool.start`
+  // commits here, before the result that closes it.
   const opening: RunHistoryDraft[] = bodyStarted
     ? []
     : [
@@ -552,7 +555,9 @@ const commitOutcome = Effect.fn('toolUse.commitOutcome')(function* (
           ...(attempt > 1 ? { attempt } : {}),
         },
       ];
-  const post = hooks ? yield* hooks.after(sanitized) : [];
+  // An executed call's PostToolUse rows, the follow-ups its result answers
+  // and its facts about the run commit too.
+  const post = pre ? yield* pre.after(sanitized) : [];
   const answered =
     sanitized.status === 'executed' ? (sanitized.consumedFollowUps ?? []) : [];
   yield* commit(
@@ -576,62 +581,6 @@ const commitOutcome = Effect.fn('toolUse.commitOutcome')(function* (
     ],
     Effect.succeed(factRows(extracted.facts, runId)),
   );
-});
-
-/**
- * Finish one call from where its rows left it, under `place`: the script
- * that issued it, or the door a `script` call issues its own through. A
- * finished call keeps its result; a duplicate derives its primary, effects
- * stripped; a call after a group that `ended` the turn, one untouched in a
- * recovered response, and a started body that may have run and may not be
- * replayed are skipped, closing their cards; any other runs at the attempt
- * `resumedAttempt` names, asking again whatever it asked, and commits what
- * it came to. A throwing tool is an error result; interruption leaves none.
- */
-const finishCall = Effect.fn('toolUse.finishCall')(function* (
-  call: Call,
-  place: Pick<RunCallShape, 'script' | 'scriptCalls'>,
-  ended = false,
-): Effect.fn.Return<void, InvokeError, AgentRunServices> {
-  const { dispatch, fact, input } = call;
-  const state = yield* dispatch.cell.current;
-  const status: CallStatus = recordOf(dispatch, state, fact.callId)?.status ?? {
-    kind: 'issued',
-  };
-  if (status.kind === 'finished') return;
-  if ('duplicateOf' in fact && fact.duplicateOf !== null) {
-    const primary = finishedCall(dispatch, state, fact.duplicateOf);
-    if (primary !== null)
-      yield* commitResult(call, Math.max(1, attemptOf(status)), {
-        disposition: 'duplicate',
-        duplicateOf: fact.duplicateOf,
-        result: withoutEffects(primary.result),
-        attachments: [],
-      });
-    return;
-  }
-  if (ended) {
-    yield* skipCall(call, status, SKIPPED_AFTER_END_TURN);
-    return;
-  }
-  const at = { responseId: dispatch.responseId, callId: fact.callId };
-  const entered = resumedAttempt(state, at, status);
-  // Untouched in a recovered response: reported, not run; a script's calls run.
-  const untouched = status.kind === 'issued' && entered.raised === 0;
-  if (untouched && dispatch.recovered && scriptOf(fact) === null) {
-    yield* skipCall(call, status, SKIPPED_NOT_STARTED);
-    return;
-  }
-  const { registry } = dispatch.step;
-  if (
-    entered.mayHaveRun &&
-    !(yield* replayable(fact, registry, input, dispatch.run.logger))
-  ) {
-    yield* skipCall(call, status, SKIPPED_OUTCOME_UNKNOWN);
-    return;
-  }
-  const outcome = yield* invokeCall(call, place, status, entered);
-  yield* commitOutcome(call, entered.attempt, outcome);
 });
 
 /**
