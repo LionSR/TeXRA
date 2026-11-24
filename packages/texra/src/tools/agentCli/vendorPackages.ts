@@ -25,7 +25,9 @@ import {
   Context,
   Effect,
   FileSystem,
+  Option,
   Predicate,
+  Result,
   Schema,
   Semaphore,
 } from 'effect';
@@ -205,16 +207,21 @@ const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
   // from inside app.asar.
   const resourcesPath = packagedElectronResourcesPath();
   if (resourcesPath != null) {
-    for (const pkg of config.platformPackages) {
-      const platformPkgDir = path.join(
-        resourcesPath,
-        'app.asar.unpacked',
-        'node_modules',
-        ...pkg.split('/'),
-      );
-      const binary = yield* config.binaryInPlatformPackage(platformPkgDir);
-      if (binary) return binary;
-    }
+    const found = yield* Effect.findFirstFilter(
+      config.platformPackages,
+      (pkg) =>
+        config
+          .binaryInPlatformPackage(
+            path.join(
+              resourcesPath,
+              'app.asar.unpacked',
+              'node_modules',
+              ...pkg.split('/'),
+            ),
+          )
+          .pipe(Effect.map(Result.fromNullishOr(() => undefined))),
+    );
+    if (Option.isSome(found)) return found.value;
   }
 
   // Strategy 2: resolve from local project's node_modules
@@ -239,10 +246,14 @@ const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
   });
   const prefix = prefixResult.success ? prefixResult.stdout : undefined;
   if (prefix) {
-    for (const root of config.globalPrefixRoots(prefix)) {
-      const result = yield* resolveBinaryFromBase(root, config);
-      if (result) return result;
-    }
+    const found = yield* Effect.findFirstFilter(
+      config.globalPrefixRoots(prefix),
+      (root) =>
+        resolveBinaryFromBase(root, config).pipe(
+          Effect.map(Result.fromNullishOr(() => undefined)),
+        ),
+    );
+    if (Option.isSome(found)) return found.value;
   }
 
   // Strategy 4: PATH lookup (native installer, Homebrew, manual install)
@@ -351,13 +362,16 @@ const resolveBinaryFromBase = Effect.fn('vendorPackages.resolveBinaryFromBase')(
     baseDir: string,
     config: ResolveBinaryConfig,
   ): Effect.fn.Return<string | undefined, never, FileSystem.FileSystem> {
-    for (const pkg of config.platformPackages) {
-      const platformPkgDir = yield* resolvePackageDir(baseDir, pkg);
-      if (platformPkgDir === undefined) continue;
-      const binary = yield* config.binaryInPlatformPackage(platformPkgDir);
-      if (binary) return binary;
-    }
-    return undefined;
+    const found = yield* Effect.findFirstFilter(
+      config.platformPackages,
+      Effect.fnUntraced(function* (pkg) {
+        const platformPkgDir = yield* resolvePackageDir(baseDir, pkg);
+        if (platformPkgDir === undefined) return Result.failVoid;
+        const binary = yield* config.binaryInPlatformPackage(platformPkgDir);
+        return binary ? Result.succeed(binary) : Result.failVoid;
+      }),
+    );
+    return Option.getOrUndefined(found);
   },
 );
 

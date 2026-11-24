@@ -97,18 +97,18 @@ export const chooseLaunchModel = Effect.fn('chooseLaunchModel')(function* (
   ];
   const reads = yield* Effect.forEach(
     unlisted,
-    (id) => Effect.result(loadModelOptions(stores, [id])),
+    (id) =>
+      loadModelOptions(stores, [id]).pipe(
+        Effect.match({
+          onSuccess: Result.succeed,
+          onFailure: (failure) => Result.fail([id, failure] as const),
+        }),
+      ),
     { concurrency: 'unbounded' },
   );
-  const rows: ModelOptionData[] = [...listed];
-  const failed = new Map<
-    string,
-    Effect.Error<ReturnType<typeof loadModelOptions>>
-  >();
-  for (const [id, read] of Arr.zip(unlisted, reads)) {
-    if (Result.isFailure(read)) failed.set(id, read.failure);
-    else rows.push(...read.success);
-  }
+  const [readable, failures] = Arr.separate(reads);
+  const rows: ModelOptionData[] = [...listed, ...readable.flat()];
+  const failed = new Map(failures);
   const choice = decideLaunchModel(rows, candidates);
   const { decision } = choice;
   // The candidate the decision could not run: why is in its row, so a row

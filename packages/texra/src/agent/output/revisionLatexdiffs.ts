@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
-import { Effect, FileSystem, Predicate } from 'effect';
+import { Effect, FileSystem, Iterable, Predicate } from 'effect';
 
 import { meansAbsent, entryTypeIn } from '@texra-ai/worldline/node';
 import {
@@ -171,7 +171,7 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
     // agent whose declared output files are created by the run) has
     // nothing to diff against: that pair is skipped, the rest still run.
     const fs = yield* FileSystem.FileSystem;
-    const baseExists = yield* Effect.forEach(
+    const pairs = yield* Effect.filter(
       candidatePairs,
       (pair) =>
         pair.baseRound !== null
@@ -182,7 +182,6 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
             ),
       { concurrency: 'unbounded' },
     );
-    const pairs = candidatePairs.filter((_, i) => baseExists[i]);
     if (pairs.length < candidatePairs.length) {
       logger.debug(
         `Skipping ${formatResultCount(candidatePairs.length - pairs.length, 'latexdiff base pair')}: base file not present`,
@@ -200,14 +199,16 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
       },
     );
 
-    const entries: LatexdiffEntry[] = [];
-    const artifacts: RunStorageFileLocation[] = [];
-    for (const pair of pairs) {
-      const outcome = yield* diffPair(docs, pair, layout.diffDir, mathMarkup);
-      entries.push(outcome.entry);
-      if (outcome.artifact) artifacts.push(outcome.artifact);
-    }
-    return { artifacts, entries, notRun: null };
+    const outcomes = yield* Effect.forEach(pairs, (pair) =>
+      diffPair(docs, pair, layout.diffDir, mathMarkup),
+    );
+    return {
+      artifacts: [
+        ...Iterable.flatMapNullishOr(outcomes, ({ artifact }) => artifact),
+      ],
+      entries: outcomes.map(({ entry }) => entry),
+      notRun: null,
+    };
   },
   (effect, { run: { logger } }) =>
     // A failed pass is an error on the transcript, and the round records

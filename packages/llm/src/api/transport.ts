@@ -4,7 +4,6 @@ import {
   Effect,
   Exit,
   Predicate,
-  Result,
   Schema,
   type Scope,
   Stream,
@@ -36,22 +35,15 @@ type PullResult<A> =
 /**
  * A stream over a pull source — a `ReadableStreamDefaultReader` or an async
  * iterator — that ends when the source reports `done`.
- *
- * Every streaming adapter reaches its provider through one of those two, and
- * each had spelled out the same `Stream.fromPull` / `tryPromise` / `done`
- * ladder. Only the source and the failure classifier ever differed, so those
- * are the parameters.
  */
 export const pullStream = <R extends PullResult<PullValue<R>>, E>(
   pull: () => PromiseLike<R>,
   onError: (cause: unknown) => E,
 ): Stream.Stream<PullValue<R>, E> =>
-  Stream.fromPull(
-    Effect.succeed(
-      Effect.tryPromise({ try: () => pull(), catch: onError }).pipe(
-        Effect.flatMap((next) =>
-          next.done ? Cause.done() : Effect.succeed([next.value] as const),
-        ),
+  Stream.fromEffectRepeat(
+    Effect.tryPromise({ try: () => pull(), catch: onError }).pipe(
+      Effect.flatMap((next) =>
+        next.done ? Cause.done() : Effect.succeed(next.value),
       ),
     ),
   );
@@ -186,18 +178,17 @@ export const decodeWireOrFail = <A>(
   schema: Schema.Codec<A, unknown>,
   message: string,
   raw: unknown,
-): Effect.Effect<A, ModelError> => {
-  const decoded = Schema.decodeUnknownResult(schema)(raw);
-  return Result.isSuccess(decoded)
-    ? Effect.succeed(decoded.success)
-    : Effect.fail(
+): Effect.Effect<A, ModelError> =>
+  Schema.decodeUnknownEffect(schema)(raw).pipe(
+    Effect.mapError(
+      (cause) =>
         new ModelError({
           kind: 'provider-rejection',
           message,
-          cause: decoded.failure,
+          cause,
         }),
-      );
-};
+    ),
+  );
 
 /**
  * Waits out `pending` at scope close. A rejection is dropped only when it

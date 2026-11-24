@@ -148,7 +148,7 @@ function withMissingExpected(
         : `All ${expected.length} expected outputs written in round ${currRound}`,
       { data: lacking },
     );
-  return [...new Set(Arr.difference(missing, expected)), ...lacking];
+  return [...Arr.dedupe(Arr.difference(missing, expected)), ...lacking];
 }
 
 /**

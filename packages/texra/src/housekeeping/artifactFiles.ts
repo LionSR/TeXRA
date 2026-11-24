@@ -7,7 +7,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Clock, Effect, FileSystem, type PlatformError } from 'effect';
+import { Clock, Effect, FileSystem, Option, type PlatformError } from 'effect';
 
 // Local imports
 import {
@@ -161,11 +161,12 @@ export const collectFilesFromPatterns = Effect.fn(
       if (!ext.endsWith('*')) {
         // Exact extensions prefer the input directory; `build/` is only the
         // fallback when the corresponding root-level artifact is absent.
-        for (const dir of searchDirs) {
-          const match = path.join(dir, pattern + ext);
-          if (yield* isFile(match)) return [match];
-        }
-        return [];
+        return Option.toArray(
+          yield* Effect.findFirst(
+            searchDirs.map((dir) => path.join(dir, pattern + ext)),
+            isFile,
+          ),
+        );
       }
       const wanted = foldCase(pattern + ext.slice(0, -1));
       const candidates = searchDirs.flatMap((dir) =>
@@ -173,13 +174,10 @@ export const collectFilesFromPatterns = Effect.fn(
           .filter((name) => foldCase(name).startsWith(wanted))
           .map((name) => path.join(dir, name)),
       );
-      const found = yield* Effect.forEach(candidates, isFile, {
-        concurrency: 16,
-      });
-      return candidates.filter((_, i) => found[i]);
+      return yield* Effect.filter(candidates, isFile, { concurrency: 16 });
     }),
     { concurrency: 8 },
   );
-  for (const match of matches.flat()) yield* record(match);
+  yield* Effect.forEach(matches.flat(), record, { discard: true });
   return files;
 });

@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect, Option, Schema } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/worldline/plugins';
@@ -113,10 +113,11 @@ export const probeTool = Effect.fn('toolChecks.probeTool')(function* (
 ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
   const { versionArgs = ['--version'], alternates = [] } =
     LATEX_TOOL_ENTRIES[tool];
-  for (const command of [tool, ...alternates]) {
-    if (yield* probeCommand(command, versionArgs)) return true;
-  }
-  return false;
+  return Option.isSome(
+    yield* Effect.findFirst([tool, ...alternates], (command) =>
+      probeCommand(command, versionArgs),
+    ),
+  );
 });
 
 /**
@@ -172,10 +173,7 @@ export function detectPackageManager(
     ? [first, ...SYSTEM_PACKAGE_MANAGERS.filter((name) => name !== first)]
     : SYSTEM_PACKAGE_MANAGERS;
 
-  for (const name of managers) {
-    if (hasPackageManager(name, appDirs)) return name;
-  }
-  return null;
+  return managers.find((name) => hasPackageManager(name, appDirs)) ?? null;
 }
 
 /**

@@ -4,7 +4,7 @@ import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect, Option, Schema } from 'effect';
 
 // Local imports
 import {
@@ -95,12 +95,11 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
     );
     if (credentialFileExists) return true;
 
-    if (process.platform === 'darwin') {
-      const defaultConfigDir = yield* resolveClaudeConfigDir(undefined);
-      for (const probe of claudeKeychainCredentialProbes(
-        configDir,
-        defaultConfigDir,
-      )) {
+    if (process.platform !== 'darwin') return false;
+    const defaultConfigDir = yield* resolveClaudeConfigDir(undefined);
+    const found = yield* Effect.findFirst(
+      claudeKeychainCredentialProbes(configDir, defaultConfigDir),
+      Effect.fnUntraced(function* (probe) {
         const { end, success } = yield* executeCommand(['security', ...probe], {
           cwd: process.cwd(),
           timeout: 1000,
@@ -113,11 +112,10 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
             'The macOS `security` tool could not start; the keychain credential probe reads as not found.',
           ).pipe(withLogChannel(CHANNEL));
         }
-        if (success) return true;
-      }
-    }
-
-    return false;
+        return success;
+      }),
+    );
+    return Option.isSome(found);
   },
 );
 

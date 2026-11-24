@@ -10,7 +10,7 @@
  */
 
 // Third-party imports
-import { Effect, Predicate, Schema } from 'effect';
+import { Effect, Iterable, Schema } from 'effect';
 
 // Local imports - core
 import { executed, defineTool } from '@texra-ai/worldline/plugins';
@@ -125,9 +125,9 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
 
   function visit(node: CollectionNode): CollectionNode | null {
     const nameMatches = node.name.toLowerCase().includes(lowerQuery);
-    const filteredChildren = node.children
-      .map((child) => visit(child))
-      .filter(Predicate.isNotNull);
+    const filteredChildren = [
+      ...Iterable.flatMapNullishOr(node.children, visit),
+    ];
 
     if (nameMatches) matchCount++;
 
@@ -137,8 +137,7 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
     return null;
   }
 
-  const tree = nodes.map((n) => visit(n)).filter(Predicate.isNotNull);
-
+  const tree = [...Iterable.flatMapNullishOr(nodes, visit)];
   return { tree, matchCount };
 }
 

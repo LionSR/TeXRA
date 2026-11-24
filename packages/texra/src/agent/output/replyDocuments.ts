@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { entryTypeIn, readNormalizedFile } from '@texra-ai/worldline/node';
 import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 
 import {
   toErrorMessage,
@@ -321,7 +321,6 @@ const writeDocuments = Effect.fn('replyDocuments.write')(function* (
   outputLocation: FileLocation,
   round: number,
 ): Effect.fn.Return<OutputFileInfo[], Error, FileSystem.FileSystem> {
-  const outputFiles: OutputFileInfo[] = [];
   // For workspace/runStorage outputs use the workspace-relative round dir
   // so fileService.createLocation can route through its storage layer.
   // For external outputs, work in absolute paths directly — an absolute
@@ -330,41 +329,42 @@ const writeDocuments = Effect.fn('replyDocuments.write')(function* (
   const isExternal = outputLocation.kind === 'external';
   const roundDir = path.dirname(fileLocationDisplayPath(outputLocation));
 
-  for (const doc of latexDocuments) {
-    if (!doc.name || doc.name === 'unknown' || !doc.content) {
-      logger.debug(`Skipping document with empty name or content`);
-      continue;
-    }
+  return yield* Effect.filterMapEffect(
+    latexDocuments,
+    Effect.fnUntraced(function* (doc) {
+      if (!doc.name || doc.name === 'unknown' || !doc.content) {
+        logger.debug(`Skipping document with empty name or content`);
+        return Result.failVoid;
+      }
 
-    const source = doc.name.trim();
-    if (!source) {
-      logger.debug(`Skipping document with empty source name after trimming`);
-      continue;
-    }
+      const source = doc.name.trim();
+      if (!source) {
+        logger.debug(`Skipping document with empty source name after trimming`);
+        return Result.failVoid;
+      }
 
-    const texFile = getExtractedDocOutputFileName(source, roundDir);
-    const texLocation: FileLocation = isExternal
-      ? { kind: 'external', absolutePath: texFile }
-      : fileService.createLocation(texFile);
-    const cleanedContent = cleanExtractedDocumentContent(
-      logger,
-      doc.content.trim(),
-      texFile,
-    );
-    yield* writeRoundOutput(texLocation.absolutePath, cleanedContent);
-    outputFiles.push({
-      source,
-      round,
-      location: texLocation,
-      lineage: null,
-      diff: null,
-    });
-    logger.debug('XML source written to TeX file', {
-      data: { source, texFile },
-    });
-  }
-
-  return outputFiles;
+      const texFile = getExtractedDocOutputFileName(source, roundDir);
+      const texLocation: FileLocation = isExternal
+        ? { kind: 'external', absolutePath: texFile }
+        : fileService.createLocation(texFile);
+      const cleanedContent = cleanExtractedDocumentContent(
+        logger,
+        doc.content.trim(),
+        texFile,
+      );
+      yield* writeRoundOutput(texLocation.absolutePath, cleanedContent);
+      logger.debug('XML source written to TeX file', {
+        data: { source, texFile },
+      });
+      return Result.succeed<OutputFileInfo>({
+        source,
+        round,
+        location: texLocation,
+        lineage: null,
+        diff: null,
+      });
+    }),
+  );
 });
 
 /** Apply the session's XML-content replacements to the reply kept at

@@ -225,19 +225,22 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       messages.push({ role: 'assistant', content });
     }
   }
-  const tools: NonNullable<MessageCreateParamsStreaming['tools']> = [];
-  for (const tool of turn.tools) {
-    if (tool.parameters.type !== 'object')
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: `Tool "${tool.name}": Anthropic local tools require JSON object parameter schemas.`,
-      });
-    tools.push({
-      name: tool.name,
-      description: tool.description,
-      input_schema: { ...tool.parameters, type: 'object' },
-    });
-  }
+  const tools: NonNullable<MessageCreateParamsStreaming['tools']> =
+    yield* Effect.forEach(
+      turn.tools,
+      Effect.fnUntraced(function* (tool) {
+        if (tool.parameters.type !== 'object')
+          return yield* new ModelError({
+            kind: 'invalid-request',
+            message: `Tool "${tool.name}": Anthropic local tools require JSON object parameter schemas.`,
+          });
+        return {
+          name: tool.name,
+          description: tool.description,
+          input_schema: { ...tool.parameters, type: 'object' as const },
+        };
+      }),
+    );
   const thinking = controls.thinking;
   let wireThinking: MessageCreateParamsStreaming['thinking'];
   if (thinking.mode === 'disabled') wireThinking = { type: 'disabled' };

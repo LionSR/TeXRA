@@ -2,7 +2,14 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Predicate } from 'effect';
+import {
+  Array as Arr,
+  Effect,
+  Iterable,
+  Option,
+  Predicate,
+  Result,
+} from 'effect';
 
 import type { FileLocation } from '@texra-ai/worldline/schemas';
 
@@ -44,14 +51,16 @@ const resolveFigurePath = Effect.fn('latex.resolveFigurePath')(function* (
   searchPaths: readonly string[],
 ) {
   const extensions = figPath.includes('.') ? [''] : FIGURE_EXTENSIONS;
-  for (const basePath of searchPaths) {
+  const candidates = Iterable.flatMap(searchPaths, (basePath) => {
     const joined = path.normalize(path.join(basePath, figPath));
-    for (const ext of extensions) {
-      const hit = yield* existingExternalPath(`${joined}${ext}`);
-      if (hit !== null) return hit;
-    }
-  }
-  return null;
+    return extensions.map((ext) => `${joined}${ext}`);
+  });
+  const found = yield* Effect.findFirstFilter(candidates, (candidate) =>
+    existingExternalPath(candidate).pipe(
+      Effect.map(Result.fromNullishOr(() => undefined)),
+    ),
+  );
+  return Option.getOrNull(found);
 });
 
 /**
@@ -96,5 +105,5 @@ export const extractFigurePathsFromLatex = Effect.fn(
     { concurrency: LATEX_PROBE_CONCURRENCY },
   );
 
-  return [...new Set(resolved.filter(Predicate.isNotNull))];
+  return Arr.dedupe(resolved.filter(Predicate.isNotNull));
 });

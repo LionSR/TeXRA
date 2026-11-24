@@ -14,6 +14,7 @@
 // Third-party imports
 import {
   Array as Arr,
+  Cause,
   Clock,
   Duration,
   Effect,
@@ -101,14 +102,14 @@ export const pollTarget = Effect.fn('github.pollTarget')(function* <S, R>(
 ) {
   const path = targetPath(target);
   const halt = (detail: string) =>
-    finish([formatSubscriptionHalted(target, detail)]).pipe(Effect.as(false));
+    finish([formatSubscriptionHalted(target, detail)]).pipe(Effect.as(null));
   const health = yield* Ref.make<PollHealth<S>>({
     state: undefined,
     lastSuccessAt: yield* Clock.currentTimeMillis,
     consecutiveFailures: 0,
   });
 
-  /** One poll; whether polling continues. */
+  /** One poll. A duration postpones the next cadence step, and null ends it. */
   const round = Effect.gen(function* () {
     const prior = yield* Ref.get(health);
     /** No poll has succeeded for a day: the target halts. */
@@ -142,8 +143,7 @@ export const pollTarget = Effect.fn('github.pollTarget')(function* <S, R>(
           retryInSec: Math.round(delayMs / 1000),
           error,
         });
-        yield* Effect.sleep(Duration.millis(delayMs));
-        return true;
+        return Duration.millis(delayMs);
       });
 
     return yield* poll(prior.state).pipe(
@@ -156,10 +156,10 @@ export const pollTarget = Effect.fn('github.pollTarget')(function* <S, R>(
           });
           if (result.ended === true) {
             yield* finish(result.events);
-            return false;
+            return null;
           }
           yield* publish(result.events);
-          return true;
+          return undefined;
         }),
       ),
       Effect.catchTags({
@@ -194,8 +194,7 @@ export const pollTarget = Effect.fn('github.pollTarget')(function* <S, R>(
             yield* logWarning(
               `Rate limited polling ${path}; backing off until ${new Date(resetAtMs).toISOString()}.`,
             );
-            yield* Effect.sleep(Duration.millis(Math.max(0, resetAtMs - now)));
-            return true;
+            return Duration.millis(Math.max(0, resetAtMs - now));
           }),
         GitHubTransientError: (err) => retryLater(err),
         SecretsFailed: (err) => retryLater(err),
@@ -203,10 +202,25 @@ export const pollTarget = Effect.fn('github.pollTarget')(function* <S, R>(
     );
   });
 
-  yield* Effect.repeat(round, {
-    schedule: Schedule.fixed(Duration.millis(GITHUB_POLL_INTERVAL_MS)),
-    while: (keepPolling) => keepPolling,
-  }).pipe(
+  const cadence = Schedule.fixed(Duration.millis(GITHUB_POLL_INTERVAL_MS));
+  const schedule = Schedule.fromStep(
+    Schedule.toStep(cadence).pipe(
+      Effect.map(
+        (fixedStep) =>
+          (now: number, delay: Duration.Duration | null | undefined) => {
+            if (delay === null) return Cause.done(0);
+            if (delay === undefined) return fixedStep(now, undefined);
+            // The fixed cadence sees the actual time after the backoff, including
+            // any overrun of a cadence boundary.
+            return Effect.sleep(delay).pipe(
+              Effect.andThen(Clock.currentTimeMillis),
+              Effect.flatMap((resumedAt) => fixedStep(resumedAt, undefined)),
+            );
+          },
+      ),
+    ),
+  );
+  yield* Effect.repeat(round, schedule).pipe(
     // A bug in one target's poll ends that target's subscription, said to
     // its runs, instead of retrying the same bug every interval.
     Effect.catchDefect((defect) =>

@@ -7,9 +7,11 @@
  * `SyntaxError` a malformed body).
  */
 import {
+  Array as Arr,
   Duration,
   Effect,
   Number as Num,
+  Option,
   Predicate,
   Redacted,
   Result,
@@ -222,11 +224,10 @@ function pickField<Value>(
   object: JsonObject | undefined,
   keys: readonly string[],
 ): Value | undefined {
-  for (const key of keys) {
-    const result = Schema.decodeUnknownResult(schema)(object?.[key]);
-    if (Result.isSuccess(result)) return result.success;
-  }
-  return undefined;
+  const decode = Schema.decodeUnknownOption(schema);
+  return Option.getOrUndefined(
+    Arr.findFirst(keys, (key) => decode(object?.[key])),
+  );
 }
 
 function stringField(

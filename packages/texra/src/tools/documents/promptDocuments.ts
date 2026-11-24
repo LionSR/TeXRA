@@ -5,7 +5,7 @@
  */
 import { basename, isAbsolute, join } from 'node:path';
 
-import { Effect, FileSystem, Predicate } from 'effect';
+import { Array as Arr, Effect, FileSystem, Result } from 'effect';
 
 import { pathToLocationIn } from '@texra-ai/worldline/plugins';
 import { readNormalizedFile } from '@texra-ai/worldline/node';
@@ -73,7 +73,7 @@ export const readFilesAsPromptXml = Effect.fn(
   workspaceRoot: string | undefined,
   files: readonly string[],
 ): Effect.fn.Return<PromptFilesRead, never, FileSystem.FileSystem> {
-  const named = [...new Set(files.filter((file) => file.trim() !== ''))];
+  const named = Arr.dedupe(files.filter((file) => file.trim() !== ''));
   if (named.length === 0) return { xml: null, readable: [], skipped: [] };
 
   const fs = yield* FileSystem.FileSystem;
@@ -88,31 +88,28 @@ export const readFilesAsPromptXml = Effect.fn(
           ? join(workspaceRoot, file)
           : undefined;
       if (absolute === undefined)
-        return Effect.succeed({
-          document: null,
-          skipped: { file, reason: 'Error: Workspace path is not available.' },
-        });
-      return readNormalizedFile(fs, absolute).pipe(
-        Effect.map((content) => ({
-          document: {
+        return Effect.succeed(
+          Result.fail({
             file,
-            name: getPromptFileName(workspaceRoot, file),
-            content,
-          },
-          skipped: null,
-        })),
-        Effect.orElseSucceed((err) => ({
-          document: null,
-          skipped: { file, reason: String(err) },
-        })),
+            reason: 'Error: Workspace path is not available.',
+          }),
+        );
+      return readNormalizedFile(fs, absolute).pipe(
+        Effect.match({
+          onSuccess: (content) =>
+            Result.succeed({
+              file,
+              name: getPromptFileName(workspaceRoot, file),
+              content,
+            }),
+          onFailure: (error) => Result.fail({ file, reason: String(error) }),
+        }),
       );
     },
     { concurrency: 'unbounded' },
   );
 
-  const readable = reads
-    .map((read) => read.document)
-    .filter(Predicate.isNotNull);
+  const [readable, skipped] = Arr.separate(reads);
   return {
     xml:
       readable.length > 0
@@ -121,6 +118,6 @@ export const readFilesAsPromptXml = Effect.fn(
             .join('\n')
         : null,
     readable,
-    skipped: reads.map((read) => read.skipped).filter(Predicate.isNotNull),
+    skipped,
   };
 });
