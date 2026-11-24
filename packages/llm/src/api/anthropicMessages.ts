@@ -243,17 +243,17 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
         };
       }),
     );
-  const thinking = controls.thinking;
-  let wireThinking: MessageCreateParamsStreaming['thinking'];
-  if (thinking.mode === 'disabled') wireThinking = { type: 'disabled' };
-  else if (thinking.mode === 'adaptive')
-    wireThinking = { type: 'adaptive', display: thinking.display };
-  else
-    wireThinking = {
-      type: 'enabled',
-      display: thinking.display,
-      budget_tokens: thinking.budgetTokens,
-    };
+  const { thinking } = controls;
+  const wireThinking: MessageCreateParamsStreaming['thinking'] =
+    thinking.mode === 'disabled'
+      ? { type: 'disabled' }
+      : thinking.mode === 'adaptive'
+        ? { type: 'adaptive', display: thinking.display }
+        : {
+            type: 'enabled',
+            display: thinking.display,
+            budget_tokens: thinking.budgetTokens,
+          };
   const body: MessageCreateParamsStreaming = {
     model: turn.requestedModel,
     max_tokens: controls.maxOutputTokens,
