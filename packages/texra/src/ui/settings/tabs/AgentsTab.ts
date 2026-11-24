@@ -13,7 +13,6 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
-  GIT_WORKTREE_SUPPORT_SETTING,
 } from '@texra-ai/worldline/schemas';
 import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
 import { TexraSignalElement } from '@ui/litBase';
@@ -73,7 +72,6 @@ export class AgentsTab extends TexraSignalElement {
           revertOnEmpty: false,
         })}
         ${renderStateSettingToggleRow(ALLOW_ORCHESTRATOR_KILL_SETTING)}
-        ${renderStateSettingToggleRow(GIT_WORKTREE_SUPPORT_SETTING)}
         ${renderStateSettingNumberRow(CHILD_RUN_CONCURRENCY_BUDGET_SETTING, {
           step: 1,
         })}
