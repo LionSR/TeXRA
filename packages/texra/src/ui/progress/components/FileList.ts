@@ -207,15 +207,17 @@ export class FileList extends TexraElement {
         ${
           replyToCheck
             ? html`<li class="file-item">
-                ${waIcon('file-code')}
+                ${alertIcon(ROUND_ALERT.replyKept)}
+                ${ROUND_ALERT.replyKept.text}
                 <span
                   class="file-path clickable-link"
                   data-file=${replyToCheck.absolutePath}
                   role="button"
                   tabindex="0"
-                  >Open the reply</span
+                  ><bdi dir="auto"
+                    >${fileLocationDisplayPath(replyToCheck)}</bdi
+                  ></span
                 >
-                to inspect the generated output
               </li>`
             : nothing
         }

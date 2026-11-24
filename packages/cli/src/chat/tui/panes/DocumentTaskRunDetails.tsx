@@ -154,7 +154,7 @@ function documentTaskRunDetailGroups(
       alert(`reply:${round}`, ROUND_ALERT.noDocuments.tone, [
         noDocuments && ROUND_ALERT.noDocuments.text,
         replyToCheck &&
-          `Reply kept at ${safeTerminalText(replyToCheck.absolutePath)}`,
+          `${ROUND_ALERT.replyKept.text} ${safeTerminalText(replyToCheck.absolutePath)}`,
       ]);
     for (const [index, path] of missing.entries()) {
       alert(

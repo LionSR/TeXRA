@@ -89,7 +89,10 @@ session-carried, or the service forwards it and the TUI follows it.
   at <path>" in the warning tone in the terminal
   (`packages/cli/src/chat/tui/panes/DocumentTaskRunDetails.tsx`).
   `ROUND_ALERT` (`packages/texra/src/ui/copy/documentOutputs.ts`) has no
-  entry for it. Decision needed: its tone.
+  entry for it. Decision needed: its tone. Taken on 2026-11-24:
+  `ROUND_ALERT.replyKept` ("Reply kept at", warning, since a kept reply
+  means the round produced no document or missed one); the web shows the
+  path as the link that opens it, the terminal prints the path.
 - The TUI's key-save tip names Kimi K3 by hand
   (`packages/cli/src/chat/tui/commands/handlers/modelAccessCommands.ts`);
   it belongs with item 2 of the 2026-11-21 layer note.
