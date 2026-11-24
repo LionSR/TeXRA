@@ -28,7 +28,7 @@ import {
 } from '@texra-ai/worldline/schemas';
 import type { ConfirmQuestion } from '@texra/hosts/uiHosts';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
-import { revisionLayout } from '@texra/shared/constants/revisionLayout';
+import { revisionLayout } from '@texra/agent/output/revisionLayout';
 import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { HostRunActions } from '../session/hostRunActions';
 import {

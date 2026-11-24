@@ -13,9 +13,6 @@ import type { WorkspaceRoots } from './workspaceRoots';
  * embedder supplying its own names its workspace roots beside them.
  */
 export interface AgentPlatform {
-  /** The packaged resources root this process's `HostResources` service
-   *  serves; absent for an embedder that ships none. */
-  readonly resourcesRoot?: string;
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;

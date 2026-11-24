@@ -24,7 +24,7 @@ import {
   formatHunkLines,
   normalizeFilePath,
 } from '@texra-ai/worldline/schemas';
-import { stripRevisionDir } from '@texra/shared/constants/revisionLayout';
+import { stripRevisionDir } from '@texra/agent/output/revisionLayout';
 import { outputSlotName } from '@texra/agent/output/compileCheck';
 import {
   type DocumentDiffs,

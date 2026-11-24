@@ -43,7 +43,7 @@ import { attachTask } from '../runtime/headless/taskAttach';
 import { runOutcomeExitCode } from '../runtime/headless/terminalStatus';
 
 import { cliCommand, modelFlag } from './_helpers/cliCommand';
-import { cliResult, emitCliResult } from './_helpers/output';
+import { cliResult, emitCliResult } from '../runtime/platform/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import type { RuntimeCommand } from '@texra-ai/worldline/schemas';
 

@@ -45,7 +45,7 @@ import { extractFilesFromXml } from '@texra/agent/output/outputFileExtraction';
 import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
 import { revisionLatexdiffs } from '@texra/agent/output/revisionLatexdiffs';
 import { normalizeReplyXml } from '@texra/agent/output/replyDocuments';
-import { revisionLayout } from '@texra/shared/constants/revisionLayout';
+import { revisionLayout } from '@texra/agent/output/revisionLayout';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 import {
   keepReply,

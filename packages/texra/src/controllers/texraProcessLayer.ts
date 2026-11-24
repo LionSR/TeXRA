@@ -16,11 +16,7 @@ import { Effect, FileSystem, Layer, Schema, type LogLevel } from 'effect';
 
 // Local imports
 import { processLayer, type ProcessServices } from '@texra-ai/worldline/host';
-import {
-  emitAppSignal,
-  Secrets,
-  HostResources,
-} from '@texra-ai/worldline/plugins';
+import { emitAppSignal, Secrets } from '@texra-ai/worldline/plugins';
 import {
   CommandDirs,
   FileSecrets,
@@ -36,6 +32,7 @@ import {
   HostWindows,
   makeWindowTable,
 } from '@texra/controllers/server/hostWindows';
+import { ResourcesRoot } from '@texra/hosts/resourcesRoot';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
@@ -130,10 +127,6 @@ export const texraProcessLayer = ({
       (announce) => new FileSecrets(secretsDirectory(storageRoot), announce),
       TEXRA_CLIENT,
     ),
-    // The templates and bundled plugin files ship in the host's bundle.
-    hostResources: Layer.succeed(HostResources)({
-      resourcesRoot: resourcesPath,
-    }),
     usageLog: usageLogLayer(usageLog),
     minimumLogLevel,
     workspace,
@@ -149,6 +142,9 @@ export const texraProcessLayer = ({
         return () => dirs;
       }),
     ),
+    // The templates, export assets and bundled plugin files ship in the
+    // host's bundle; beneath every session, so a run's tools read it too.
+    Layer.provideMerge(Layer.succeed(ResourcesRoot)(resourcesPath)),
     // The Node filesystem, path and supervised spawner, once per process.
     Layer.provide(nodePlatformServices),
   );

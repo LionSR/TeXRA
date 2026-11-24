@@ -29,9 +29,10 @@ skills })` (`packages/harness/src/effect/processLayer.ts`; the shape is
 
 - **`platform`**, an `AgentPlatform`: the `WorkspaceRoots` of the folder the
   runs work in (its storage path, config, project state and the
-  process-wide global state), the secret store provider keys are read from,
-  and optionally a `resourcesRoot` (the files the host ships beside its code,
-  served to plugins as `HostResources`). `nodePlatform({ storageDir,
+  process-wide global state) and the secret store provider keys are read
+  from. Where an embedder's own files ship is its own fact: TeXRA serves its
+  resources root to its plugins itself (`ResourcesRoot`,
+  `packages/texra/src/hosts/resourcesRoot.ts`). `nodePlatform({ storageDir,
   workspaceDir, settings })` from `@texra-ai/worldline/node` builds one:
   process-local config and state, the storage layout under `storageDir`
   (required; nothing falls back to a per-user directory), and secrets read
@@ -223,8 +224,6 @@ options (`ProcessLayerOptions`, over `ProcessServicesOptions` in
 - `secrets`, the credential store and the subscription accounts over it
   (`Secrets.layer`, or `Secrets.announcing` for a store that announces its
   writes);
-- `hostResources`, a `HostResources` layer naming the resources root, if
-  any;
 - `appState`, the global store; absent, the one under the storage root,
   seeded with the first-install tool switches (`seedDisabledToolDefaults` in
   `packages/harness/src/tools/toolAvailability.ts`). A store handed in is
@@ -264,7 +263,7 @@ extension (`packages/extension/src/extension.ts`) all build one
 `processLayer`: its settings catalog, `texraPlugins(...)` (the six built-ins
 with TeXRA's write filter, plus TeXRA's own), skill sources over the bundled
 resources and `.texra/`, one `FileSecrets` store under the storage root, the
-resources root as `HostResources`, the usage log, and the window table the
+resources root (`ResourcesRoot`, beneath every session), the usage log, and the window table the
 editor tools read (`HostWindows`). A host checks its resources path first
 (`checkResourcesPath`, which refuses one with no bundled `plugins/`
 directory).
@@ -291,8 +290,6 @@ is the one place it listens for a signal.
   Given sources, the bundled tier reads the resources tree's `skills/` and
   each listed plugin's `plugins/<id>/skills`, a missing directory reading as
   none (`packages/harness/src/skills/skillSources.ts`).
-- **No `resourcesRoot`:** a plugin that reads `HostResources` gets none; the
-  harness's built-ins read nothing from it.
 - **An `appState` handed to `processLayer`:** no first-install switches are
   written, so a plugin whose switch starts off is on. More tools, not fewer.
 - **Lean without `lake`:** the `lean4` probe reports the plugin as needing

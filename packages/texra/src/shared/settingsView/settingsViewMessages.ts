@@ -42,12 +42,15 @@ import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { SettingsTargetSchema } from './settingsTarget';
 import { ProfilePageSchema } from './profileViewMessages';
 import { OpenMemoryFolderMessageSchema } from './memoryViewMessages';
-import { commandOnly } from './messageFactories';
 import {
   PluginActionMessageSchema,
   PluginListItemSchema,
 } from './pluginMessages';
 import { OsPlatformSchema } from '@texra/shared/osPlatform';
+
+/** An inbound message with only a `command` literal (no payload). */
+const commandOnly = <T extends string>(command: T) =>
+  Schema.Struct({ command: Schema.Literal(command) });
 
 /** An absolute URL the host may open. */
 const UrlSchema = Schema.String.check(

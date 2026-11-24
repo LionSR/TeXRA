@@ -16,10 +16,10 @@ import {
   StorageFs,
   WorkspaceFs,
   pathToLocationIn,
-  HostResources,
 } from '@texra-ai/worldline/plugins';
 import { toErrorMessage, Rejected } from '@texra-ai/worldline/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
+import { ResourcesRoot } from '@texra/hosts/resourcesRoot';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
 import { formatChatAsLatex } from '@texra/agent/export/chatExport/latexSpec';
 import { generateExportFilename } from '@texra/agent/export/chatExport/filenames';
@@ -67,7 +67,7 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
 ) {
   // The packaged resources hold the trace-viewer bundle and the LaTeX
   // export's preamble.
-  const { resourcesRoot } = yield* HostResources;
+  const resourcesRoot = yield* ResourcesRoot;
   if (resourcesRoot === undefined) {
     const cause = new Error(
       'Export assets are missing in this build, so this conversation cannot be exported.',

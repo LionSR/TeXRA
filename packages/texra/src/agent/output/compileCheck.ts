@@ -17,7 +17,7 @@ import { compileLatex2Pdf } from '@latex/texTools';
 import {
   revisionLayout,
   stripRevisionDir,
-} from '@texra/shared/constants/revisionLayout';
+} from '@texra/agent/output/revisionLayout';
 import {
   type CompileFailure,
   outputDisplayName,
