@@ -1,10 +1,5 @@
 import { Box } from 'ink';
 
-import {
-  documentRoundsOf,
-  isDocumentTaskRun,
-} from '@texra/shared/plugins/documents';
-
 import { selectedRunId as selectedRunIdSignal } from '../state/cliState';
 import { sessionView, runViewOf } from '../state/sessionView';
 import {
@@ -15,21 +10,13 @@ import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { LiveTranscriptEntry } from './TranscriptEntry';
 import { pendingTranscriptEntries } from './transcriptEntries';
-import {
-  estimateLiveTranscriptEntryRows,
-  selectTranscriptEntriesForViewport,
-} from './transcriptViewport';
-import {
-  selectDocumentTaskRunDetailLines,
-  DocumentTaskRunDetails,
-} from './DocumentTaskRunDetails';
+import { selectTranscriptEntriesForViewport } from './transcriptViewport';
 import { isWorking } from '@texra-ai/worldline/schemas';
 
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 
 interface ConversationPaneProps {
   readonly width?: number;
-  readonly availableWidth?: number;
   readonly maxRows?: number;
 }
 
@@ -51,42 +38,13 @@ export function ConversationPane(
     stream != null && isWorking(stream),
   );
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
-  const metadataWidth =
-    props.availableWidth !== undefined && props.width !== undefined
-      ? Math.min(props.availableWidth, props.width)
-      : (props.availableWidth ?? props.width);
-  const newestPendingEntry = displayEntries.at(-1);
-  const pendingRowReserve = newestPendingEntry
-    ? Math.min(
-        Math.max(0, maxRows),
-        estimateLiveTranscriptEntryRows(newestPendingEntry, props.width),
-      )
-    : 0;
-  const detailCapacity = Math.max(0, maxRows - pendingRowReserve);
-  const documentTaskFacts =
-    stream && isDocumentTaskRun(stream)
-      ? {
-          stages: stream.transcript.stages,
-          run: stream,
-          rounds: documentRoundsOf(stream),
-        }
-      : undefined;
-  const visibleDocumentTaskDetails = selectDocumentTaskRunDetailLines(
-    documentTaskFacts,
-    detailCapacity,
-  );
-  const detailRows = visibleDocumentTaskDetails.length;
   const visibleEntries = selectTranscriptEntriesForViewport(
     displayEntries,
-    Math.max(0, maxRows - detailRows),
+    Math.max(0, maxRows),
     props.width,
   );
   return (
     <Box flexDirection="column" maxHeight={maxRows} overflowY="hidden">
-      <DocumentTaskRunDetails
-        lines={visibleDocumentTaskDetails}
-        width={metadataWidth}
-      />
       {visibleEntries.entries.map((entry) => (
         <EntryErrorBoundary key={entry.id} label={entry.kind}>
           <LiveTranscriptEntry

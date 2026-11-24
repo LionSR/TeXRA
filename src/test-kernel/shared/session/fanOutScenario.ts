@@ -23,7 +23,6 @@ import {
   makeSessionViewUpdater,
   type SessionViewUpdater,
 } from '@shared/session/sessionViewUpdate';
-import { DOCUMENTS_OUTPUT_KIND } from '@texra/shared/plugins/documents';
 import type { SessionViewInput } from '@texra-ai/worldline/transcript';
 
 export const ROOT = Schema.decodeUnknownSync(RunIdSchema)('aaaaaaaaaaaa');
@@ -46,7 +45,6 @@ export const T = {
   proposal: BOARD_NOW - min(3) + sec(30),
   childApproval: BOARD_NOW - min(2) - sec(30),
   grandchild: BOARD_NOW - min(2),
-  grandchildFiles: BOARD_NOW - min(2) + sec(10),
   grandchildDone: BOARD_NOW - min(1),
   process: BOARD_NOW - sec(30),
   approvalResolved: BOARD_NOW - sec(20),
@@ -296,30 +294,6 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.position',
     payload: { at: 'turn.begin', turn: 1 },
-  });
-  log.emit(GRANDCHILD, T.grandchildFiles, {
-    type: 'plugin.fact',
-    plugin: DOCUMENTS_OUTPUT_KIND.plugin,
-    kind: DOCUMENTS_OUTPUT_KIND.kind,
-    version: DOCUMENTS_OUTPUT_KIND.version,
-    value: {
-      task: {
-        intro: '',
-        requests: ['Revise.', 'Review.'],
-        templates: [],
-        creates: false,
-      },
-      rounds: [
-        {
-          round: 1,
-          outputs: [],
-          compile: null,
-          missingOutputs: [],
-          latexdiffs: [],
-          reply: null,
-        },
-      ],
-    },
   });
   log.emit(GRANDCHILD, T.grandchildDone, {
     type: 'run.end',

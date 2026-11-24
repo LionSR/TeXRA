@@ -309,15 +309,10 @@ export function createChatSessionController(
   // a task resumed beside the chat joins the agent list).
   const runActions = untilShutdown.sync(
     createHostRunActions({
-      roots: runSession.roots,
       session: runSession,
       present: notices,
       revealProgress: () => Effect.void,
       launched: () => Effect.void,
-      openFinalOutput: (absolutePath) =>
-        Effect.sync(() => appendLocalNotice(`Final output: ${absolutePath}`)),
-      notify: (_level, message) =>
-        Effect.sync(() => appendLocalNotice(message)),
     }),
   );
   const resumeTask: ChatSessionController['resumeTask'] = (id) =>

@@ -173,7 +173,6 @@ export function ConversationRegion({
         <Box flexDirection="column" overflowY="hidden">
           {conversationRows > 0 ? (
             <ConversationPane
-              availableWidth={columns}
               width={transcriptWidth}
               maxRows={conversationRows}
             />

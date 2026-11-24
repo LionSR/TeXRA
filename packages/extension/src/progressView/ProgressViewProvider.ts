@@ -29,7 +29,6 @@ import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { eventStream } from '@frontend/vscode/vscodeEvents';
-import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import { sectionCountLabel } from '@ui/copy/runStatus';
 import {
   fromHost,
@@ -97,25 +96,6 @@ const showInSidebar: Effect.Effect<void, HostFailed> = executeVscodeCommand(
   Effect.asVoid,
   Effect.mapError((cause) => hostFailed('showInSidebar', cause)),
 );
-
-/**
- * After a run this window started completes, preview its final revised
- * output (which one is `selectAutoOpenFinalOutput`'s, in the shared run
- * actions) so the file does not seem to vanish into run storage, with a
- * status-bar hint that workflow mode is slow by design. A failure reaches
- * the run actions, which warn-log it.
- */
-const previewFinalOutput = (absolutePath: string) =>
-  fromHost('showTextDocument', async () => {
-    await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), {
-      preview: true,
-      preserveFocus: false,
-    });
-    vscode.window.setStatusBarMessage(
-      'Revised file opened in preview. Review or accept it in the Tasks panel.',
-      8000,
-    );
-  });
 
 /** One surface: a VS Code webview attached to the bridge as a port. */
 interface Surface<View extends vscode.WebviewView | vscode.WebviewPanel> {
@@ -273,37 +253,33 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             : focusChanged,
         ),
         draftRequests,
-        host: createExtensionHostRequests({
-          roots,
-          showBuilt,
-          extensionPath: context.extensionPath,
-          extensionId: context.extension.id,
-          ...settings,
-          popOutToEditor: () => onView((view) => view.popOutToEditor()),
-          showInSidebar: () => showInSidebar,
-        }).pipe(
-          Effect.map((requests) => ({
-            ...requests,
-            // The open-and-build program takes this window's file services
-            // from the runtime's context, which the session that forks it
-            // does not carry.
-            openFile: (payload) =>
-              withProcessServices(
-                runtime,
-                showBuilt([payload.location], {
-                  preserveFocus: payload.preserveFocus,
-                }),
-              ),
-            window: editor,
-            runs: {
-              openFinalOutput: previewFinalOutput,
-              showRunView: () => onView((view) => view.showProgressView()),
-              // Or name the run in a toast when the list cannot be shown.
-              revealProgress: (config: AgentConfig) =>
-                onView((view) => view.revealProgress(config)),
-            },
-          })),
-        ),
+        host: Effect.sync(() => ({
+          ...createExtensionHostRequests({
+            roots,
+            extensionPath: context.extensionPath,
+            extensionId: context.extension.id,
+            ...settings,
+            popOutToEditor: () => onView((view) => view.popOutToEditor()),
+            showInSidebar: () => showInSidebar,
+          }),
+          // The open-and-build program takes this window's file services
+          // from the runtime's context, which the session that forks it
+          // does not carry.
+          openFile: (payload) =>
+            withProcessServices(
+              runtime,
+              showBuilt([payload.location], {
+                preserveFocus: payload.preserveFocus,
+              }),
+            ),
+          window: editor,
+          runs: {
+            showRunView: () => onView((view) => view.showProgressView()),
+            // Or name the run in a toast when the list cannot be shown.
+            revealProgress: (config: AgentConfig) =>
+              onView((view) => view.revealProgress(config)),
+          },
+        })),
       });
       const view = new ProgressViewProvider({
         window: gui,
@@ -540,18 +516,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return undefined;
   }
 
-  /** The completion chime plays once per process, in the surface the user is
-   *  looking at. With none showing it still plays in a retained sidebar (or
-   *  a hidden tab), which is the case a chime is for: a run the user walked
-   *  away from. No port means no renderer to play it. */
-  private chime(): void {
-    const port =
-      this.visibleSurface() ??
-      this.surfaces.sidebar?.attached ??
-      this.surfaces.editor?.attached;
-    port?.surfaceAction({ kind: 'chime' });
-  }
-
   /** `texra.execute` with no configuration (Cmd+Alt+E): the composer's
    *  Send in the view the user is in, which is the visible surface and its
    *  own draft. With none showing, the sidebar, shown first so the action
@@ -590,9 +554,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Follow the session for the view's lifetime: the sidebar's badge counts
-   *  the requests this window can answer, a new one brings its run on
-   *  screen without taking focus, and a document task that completes, here
-   *  or in the service, plays the chime. The card stays the one place to
+   *  the requests this window can answer, and a new one brings its run on
+   *  screen without taking focus. The card stays the one place to
    *  answer; nothing here decides a request. */
   private followAttention(): Effect.Effect<void> {
     // Unseeded: the first view is what was already pending when the window
@@ -600,19 +563,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return Stream.runForEach(
       Stream.zipWithPrevious(this.runSession.view.changes),
       ([previous, view]) => {
-        const { requests, arrived, finished } = attentionOf(
+        const { requests, arrived } = attentionOf(
           view,
           Option.getOrUndefined(previous),
         );
         this.setBadge(requests.length);
-        // A failed or stopped task is no chime.
-        if (
-          finished.some(
-            (run) =>
-              isDocumentTaskRun(run) && run.outcome === RUN_OUTCOME.COMPLETED,
-          )
-        )
-          this.chime();
         const [first] = arrived;
         return first ? this.bringForward(first.runId) : Effect.void;
       },

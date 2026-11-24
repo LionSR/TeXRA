@@ -35,7 +35,6 @@ const UPDATABLE_KEY_LIST = [
   'texra.bib.defaultPath',
   'texra.audio.soxPath',
   'texra.latex.tikzInputDirectory',
-  'texra.git.numberOfCommitsToShow',
   'texra.maxImageDimension',
 ] as const;
 

@@ -24,7 +24,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { createFakeHost } from '@test/support/fakeHost';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { asDocumentTask } from '@test/support/documentTasks';
+import { asProgramRun } from '@test/support/programRuns';
 import { seedEditedFiles, seedRunRecord } from '@test/support/runRecordSeeds';
 import {
   FakeHost,
@@ -34,7 +34,7 @@ import {
 } from '@test/support/testKernel';
 
 const config = Schema.decodeUnknownSync(AgentConfigSchema)(
-  asDocumentTask({
+  asProgramRun({
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Polish the introduction.',
     inputFiles: ['chapters/intro.tex'],

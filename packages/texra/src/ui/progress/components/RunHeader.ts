@@ -10,7 +10,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { resolveBypass, joinFacts } from '@texra-ai/worldline/schemas';
+import { resolveBypass } from '@texra-ai/worldline/schemas';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
@@ -40,7 +40,6 @@ import {
   runMenuActions,
   type RunMenuTarget,
 } from '../constants';
-import { progressBadgeLabel } from '../formatters/progressBadgeFormatter';
 import { renderRunGrantChips, runGrantStyles } from './runGrantChips';
 import type {
   SessionView,
@@ -176,15 +175,10 @@ export class RunHeader extends TexraElement {
       :dir(rtl) .ancestor-separator {
         transform: scaleX(-1);
       }
-      wa-tag.progress-badge {
-        font-variant-numeric: tabular-nums;
-      }
-
-      /* Keep the status word visible; secondary provenance and pass labels
-         remain available from the menu when the pane is narrow. */
+      /* Keep the status word visible; secondary provenance remains
+         available from the menu when the pane is narrow. */
       @container (max-width: 640px) {
-        .forked-from,
-        wa-tag.progress-badge {
+        .forked-from {
           display: none;
         }
       }
@@ -195,11 +189,9 @@ export class RunHeader extends TexraElement {
   @property({ attribute: false }) run: RunView | null = null;
   /** For the per-run policy snapshot behind the grant chips. */
   @property({ attribute: false }) view: SessionView | null = null;
-  /** The shell's window items (pop out, LaTeXDiffs), after the run's
+  /** The shell's window items (pop out or back), after the run's
    *  actions in its menu. */
   @property({ attribute: false }) menuItems: readonly ActionMenuItem[] = [];
-  /** A document task's planned pass count, from the agent catalog. */
-  @property({ attribute: false }) plannedPasses: number | undefined;
 
   /** The title is a field while the user renames the run. */
   @state() private renaming = false;
@@ -285,7 +277,6 @@ export class RunHeader extends TexraElement {
     // The header offers exactly what the session view's `actions` licenses.
     const canStop = run.actions.includes('stop');
     const canGrant = run.actions.includes('grant');
-    const passLabel = progressBadgeLabel(run, this.plannedPasses);
 
     return html`
       <div class="log-header">
@@ -305,7 +296,7 @@ export class RunHeader extends TexraElement {
           ${runNoticeText(run) ?? status.word}
         </wa-tooltip>
         <span class="status-label" aria-hidden="true">${status.word}</span>
-        ${this.renderRunElapsed(run)} ${this.renderPassBadge(passLabel)}
+        ${this.renderRunElapsed(run)}
         <span class="header-spacer"></span>
         ${
           canGrant
@@ -334,16 +325,12 @@ export class RunHeader extends TexraElement {
             : nothing
         }
         <slot name="end"></slot>
-        ${this.renderMenu(run, status.word, passLabel)}
+        ${this.renderMenu(run, status.word)}
       </div>
     `;
   }
 
-  private renderMenu(
-    run: RunView,
-    statusLabel: string,
-    passLabel: string | undefined,
-  ): TemplateResult {
+  private renderMenu(run: RunView, statusLabel: string): TemplateResult {
     // An agent run's menu lists a task's actions (the file entries only
     // for a document task) or a conversation's, a process's or a workflow
     // container's the neutral ones, each shown only while the run's
@@ -419,7 +406,7 @@ export class RunHeader extends TexraElement {
     return html`
       <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
         ${more.button}
-        <div class="menu-status">${joinFacts([statusLabel, passLabel])}</div>
+        <div class="menu-status">${statusLabel}</div>
         ${menu.items}
       </wa-dropdown>
       ${more.tooltip}
@@ -431,19 +418,6 @@ export class RunHeader extends TexraElement {
     // otherwise.
     if (run.runStartedAt === null) return nothing;
     return html`<tool-timer .startTime=${run.runStartedAt}></tool-timer>`;
-  }
-
-  private renderPassBadge(
-    label: string | undefined,
-  ): TemplateResult | typeof nothing {
-    if (label === undefined) return nothing;
-    return html`<wa-tag
-      id=${ELEMENT_IDS.PROGRESS_BADGE}
-      class="progress-badge"
-      variant="neutral"
-      size="s"
-      ><bdi dir="auto">${label}</bdi></wa-tag
-    >`;
   }
 
   /** The full ancestors path, root first, each segment a link to that

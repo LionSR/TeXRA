@@ -109,15 +109,6 @@ export const CLI_OUTPUT_FORMAT_SETTING = Object.freeze({
     'Default CLI output format: text, json, or ndjson. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
 } as const satisfies SettingRow<typeof CliOutputFormatSchema.Type>);
 
-export const AUTO_OPEN_FINAL_SETTING = Object.freeze({
-  key: 'agentOutputs.autoOpenFinal',
-  slot: 'config',
-  schema: decodingDefault(Schema.Boolean, true),
-  title: 'Open the final revision',
-  description:
-    'Automatically preview the final revised file when a document task finishes.',
-} as const satisfies SettingRow<boolean>);
-
 export const BIB_DEFAULT_PATH_SETTING = Object.freeze({
   key: 'bib.defaultPath',
   slot: 'config',
@@ -298,18 +289,6 @@ export const INLINE_CRITICISM_SETTING = Object.freeze({
 } as const satisfies TexraSettingRow<boolean>);
 
 /** TeXRA's rows no TeXRA UI shows, in catalog order. */
-/** How many recent commits the launcher's commit picker lists. */
-export const GIT_COMMITS_TO_SHOW_SETTING = Object.freeze({
-  key: 'git.numberOfCommitsToShow',
-  slot: 'config',
-  schema: decodingDefault(
-    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
-    20,
-  ),
-  title: 'Commits to show',
-  description: 'Number of recent commits shown in the commit picker.',
-} as const satisfies SettingRow<number>);
-
 /** The audio tools' SoX binary, when automatic detection should not decide. */
 export const SOX_PATH_SETTING = Object.freeze({
   key: 'audio.soxPath',
@@ -320,13 +299,11 @@ export const SOX_PATH_SETTING = Object.freeze({
 } as const satisfies SettingRow<string>);
 
 const TEXRA_UNSHOWN_ROWS: readonly SettingRow[] = [
-  GIT_COMMITS_TO_SHOW_SETTING,
   SOX_PATH_SETTING,
   CLI_MODEL_SETTING,
   CLI_CHAT_SETTING,
   CLI_RUN_SETTING,
   CLI_OUTPUT_FORMAT_SETTING,
-  AUTO_OPEN_FINAL_SETTING,
   BIB_DEFAULT_PATH_SETTING,
   LATEXINDENT_CONFIG_SETTING,
   TEXFMT_CONFIG_SETTING,

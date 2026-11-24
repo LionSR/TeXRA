@@ -694,7 +694,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     output: {
       response: turnResponse(at),
       files: [...at.edited],
-      // A program's return value, which its registration reads (`Program.result`).
+      // A script's return value, or the answer a schema asked for.
       ...(at.structured?.value !== undefined && {
         structured: at.structured.value,
       }),

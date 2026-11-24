@@ -17,11 +17,9 @@ export {
   ToolRegistry,
   type NativePlugin,
   type Program,
-  type ProgramResult,
   type PluginLayerServices,
   type ProcessPluginLayer,
   type PromptSection,
-  type ProgramChange,
   type SessionPluginLayer,
   type ToolTable,
 } from '@tools/toolTable';

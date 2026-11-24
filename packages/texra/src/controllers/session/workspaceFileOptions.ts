@@ -1,8 +1,6 @@
 /**
- * The workspace file listings both GUI hosts share: the launcher's file
- * catalogs of one workspace (`HostSnapshot.fileOptions`), the base
- * candidates from the input rules and the edited candidates from the edited
- * rules, and the label search over the input and context files. Each is
+ * The workspace file listings both GUI hosts share: the input files of one
+ * workspace, and the label search over the input and context files. Each is
  * listed by one shared walk (`listWorkspaceFiles`), so both hosts list the
  * same files for the same folder.
  */
@@ -49,19 +47,15 @@ export const findLabelInWorkspace = Effect.fn(
   );
 });
 
-/** The single-slot catalogs: base candidates are the input list; edited
- *  candidates are every file the edited rules allow, and the sheet narrows
- *  them to the chosen base. */
-export const workspaceFileOptions = Effect.fn(
-  'workspaceFileOptions.workspaceFileOptions',
+/** The files of the workspace a program can take as input. */
+export const workspaceInputFiles = Effect.fn(
+  'workspaceFileOptions.workspaceInputFiles',
 )(function* (workspaceRoot: string | undefined) {
-  if (!workspaceRoot) {
-    return { baseFile: [], editedFile: [], commit: ['HEAD'] };
-  }
-  const [base, edited] = yield* listWorkspaceFiles({
+  if (!workspaceRoot) return [];
+  const [inputs] = yield* listWorkspaceFiles({
     root: workspaceRoot,
-    configs: [getFileListConfig('input'), getFileListConfig('edited')],
+    configs: [getFileListConfig('input')],
     links: 'follow',
   });
-  return { baseFile: base.files, editedFile: edited.files, commit: ['HEAD'] };
+  return inputs.files;
 });
