@@ -158,34 +158,486 @@ return 'trimmed'`;
 /** What an agent's replacement opens with in its view. */
 const REPLACED_MARKER = '[Context you replaced]';
 
+/** A reply's content. */
+type Reply = TurnResult['content'];
+
 /** A reply of `value` alone. */
-const text = (value: string): TurnResult['content'] => [
+const text = (value: string): Reply => [
   { kind: 'message', content: [{ kind: 'text', text: value }] },
 ];
 
 /** What the golden chat's goal round reports, and its result carries. */
 const ANSWERED = 'The golden chat is answered.';
 
+/** A golden turn as its scenario reads it. */
+interface GoldenTurn {
+  readonly turn: ResolvedTurn;
+  readonly system: string;
+  /** The conversation as JSON, which a scenario searches for its cues. */
+  readonly said: string;
+  /** The tool results so far: a scenario's step is their count. */
+  readonly results: ReadonlyArray<
+    Extract<ResolvedTurn['messages'][number], { readonly role: 'tool' }>
+  >;
+  readonly call: (name: string, input: unknown) => Reply[number];
+  /** Waits until the release file `name` exists. */
+  readonly gate: (name: string) => Effect.Effect<void>;
+}
+
+/** The reply at the step the tool results count to, then `done`. */
+const stepped = (
+  { results }: GoldenTurn,
+  steps: ReadonlyArray<() => Reply>,
+  done: Reply,
+): Reply => steps[results.length]?.() ?? done;
+
+/** A call awaiting approval: the tool after the marker, and its command,
+ *  or its whole input when a JSON object follows the tool. */
+function approval({ system, results, call }: GoldenTurn) {
+  const [, asked = 'bash', command = 'echo approved >> approved.txt'] =
+    /GOLDEN-APPROVAL(?: (\w+))?(?: (.+))?/.exec(system) ?? [];
+  const input: unknown = command.startsWith('{')
+    ? JSON.parse(command)
+    : { command };
+  return Effect.succeed(
+    results.length ? text('The approved command ran.') : [call(asked, input)],
+  );
+}
+
+/** A diagnostics read the service forwards to an attached window. */
+const diagnostics = ({ results, call }: GoldenTurn) =>
+  Effect.succeed(
+    results.length === 0
+      ? [call('diagnostics', { command: 'list', path: 'main.tex' })]
+      : text('The diagnostics read came back.'),
+  );
+
+/** A service task accepting a file from the run its instruction names. */
+function accept({ said, results, call }: GoldenTurn) {
+  const source = /\b([0-9a-f]{12})\b/.exec(said)?.[1];
+  const files = [{ path: 'draft.tex', original: 'accepted.tex' }];
+  return Effect.succeed(
+    results.length > 0 || source === undefined
+      ? text('Accepted.')
+      : [call('accept_run_files', { execution_id: source, files })],
+  );
+}
+
+/** The golden parent's child: it looks its parent up and messages it. */
+function child({ said, results, call }: GoldenTurn) {
+  // Messaging its waiting headless parent is refused (it never reads).
+  if (!said.includes('Answer the delegated child task'))
+    return Effect.succeed(text('Child result.'));
+  if (results.length === 0)
+    return Effect.succeed([
+      call('executions', {
+        path: '/executions',
+        action: 'query',
+        sql: "SELECT id FROM runs WHERE name = 'golden_parent'",
+      }),
+    ]);
+  const page = results[0]?.results
+    .flatMap((result) => result.content)
+    .map((part) => (part.kind === 'text' ? part.text : ''))
+    .join('\n');
+  const parent = /^([0-9a-f]{12})$/m.exec(page ?? '')?.[1];
+  return Effect.succeed(
+    results.length === 1 && parent !== undefined
+      ? [
+          call('executions', {
+            path: `/executions/${parent}`,
+            action: 'send',
+            message: 'The delegated child has a note for its parent.',
+          }),
+        ]
+      : text('Child result.'),
+  );
+}
+
+/** The interactive chat: a plan run as a goal, its round and result, and
+ *  replies after a `/model` and a `/compact`, told apart by what they say. */
+function chat({ turn, said, results, call, gate }: GoldenTurn) {
+  // A Codex child held until a stop; what is typed behind stays queued.
+  if (said.includes('Hold this turn.'))
+    return results.length === 0
+      ? Effect.succeed([call('codex', { prompt: 'Answer the Codex task.' })])
+      : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
+  if (said.includes('The golden chat so far.'))
+    return Effect.succeed(text('Answered after the compaction.'));
+  // The judge of the round's `done` (a fresh `self()`): its claims.
+  if (said.includes('<goal_judge>'))
+    return Effect.succeed([
+      call('submit_output', {
+        claims: [
+          {
+            requirement: 'The golden chat is answered.',
+            status: 'verified',
+            check: 'Read the round report.',
+            observed: ANSWERED,
+          },
+        ],
+      }),
+    ]);
+  // The goal's round (`self()`): a command its grant approves, a verdict.
+  // Its first call is held, so the chat that started the goal finishes
+  // its turn before the round goes on.
+  const round = turn.tools.some(({ name }) => name === 'submit_output');
+  const step = round
+    ? [
+        call('bash', { command: 'echo goal round', description: 'Goal' }),
+        call('submit_output', { status: 'done', report: ANSWERED }),
+      ]
+    : [call('plan', { objective: 'Answer the golden chat, then stop.' })];
+  const next = step.slice(results.length, results.length + 1);
+  if (round && results.length === 0)
+    return gate('golden-round.release').pipe(Effect.as(next));
+  if (round || results.length === 0) return Effect.succeed(next);
+  if (said.includes('After the model switch.'))
+    return Effect.succeed(text('Answered after the model switch.'));
+  return Effect.succeed(
+    text(
+      said.includes(ANSWERED)
+        ? 'Golden chat goal complete.'
+        : 'The plan runs as a goal.',
+    ),
+  );
+}
+
+/** The golden script run, and its background command. */
+function script({ turn, said, results, call }: GoldenTurn) {
+  // A background command waiting for its release file; its result wakes
+  // the task once more. The wait is Node's, not a shell loop: the bash
+  // tool runs a command in cmd.exe on Windows, which has no `until`.
+  if (said.includes('Run in the background.')) {
+    const last = turn.messages.at(-1);
+    if (last?.role === 'tool')
+      return Effect.succeed(text('Sent to the background.'));
+    return Effect.succeed(
+      JSON.stringify(last).includes('Run in the background.')
+        ? [
+            call('bash', {
+              command: `node -e "const wait = setInterval(() => { if (require('fs').existsSync('../bash.release')) { clearInterval(wait); console.log('released'); } }, 50)"`,
+              description: 'Wait for the release',
+              run_in_background: true,
+            }),
+          ]
+        : text('The background command finished.'),
+    );
+  }
+  return Effect.succeed(
+    results.length === 0
+      ? [
+          call('script', {
+            title: 'Gather the notes',
+            code: GOLDEN_SCRIPT_SOURCE,
+          }),
+        ]
+      : text('Script done.'),
+  );
+}
+
+/** The fork: each reply names its view's user messages by their last
+ *  lines, so the store records what the edit left. */
+function fork({ turn }: GoldenTurn) {
+  const users = turn.messages.flatMap((message) =>
+    message.role === 'user'
+      ? message.content.flatMap((part) =>
+          part.kind === 'text' ? [part.text.trim().split('\n').at(-1)] : [],
+        )
+      : [],
+  );
+  return Effect.succeed(text(`Saw: ${users.join(' | ')}`));
+}
+
+/** The crash suite's delivery run: three children, each reporting back. */
+const delivery = ({ results, call }: GoldenTurn) =>
+  Effect.succeed(
+    results.length === 0
+      ? [
+          call('agent', {
+            ...GOLDEN_CHILD,
+            prompt: 'Delivery child: answer.',
+            background: true,
+          }),
+          call('script', {
+            title: 'Deliver',
+            code: GOLDEN_BACKGROUND_SOURCE,
+            run_in_background: true,
+          }),
+          call('bash', {
+            command: 'echo delivered',
+            description: 'Deliver',
+            run_in_background: true,
+          }),
+        ]
+      : text('Noted.'),
+  );
+
+/** The crash-point run: two calls, an edit of the file they read, a script,
+ *  a script that replaces the edit's call and result in its view, the
+ *  echo's text. A step a crash cut off unstarted is asked for again; a
+ *  view an edit replaced no longer holds the task (or holds the run's own
+ *  replacement), and the echo shows the view the edit left. */
+function crash({ said, results, call }: GoldenTurn) {
+  const done = results.filter(
+    (message) =>
+      !message.results.some((result) =>
+        result.content.some(
+          (part) =>
+            part.kind === 'text' && part.text.includes(SKIPPED_NOT_STARTED),
+        ),
+      ),
+  ).length;
+  const step = [
+    () => [
+      call('read_file', { path: 'notes.tex' }),
+      call('bash', {
+        command: 'echo batch >> effects.log',
+        description: 'Record the batch effect',
+      }),
+    ],
+    // The file the first step read, edited in the next response: a process
+    // resumed between the two answers the edit's read gate from the rows.
+    () => [
+      call('edit_file', {
+        path: 'notes.tex',
+        old_str: 'reads this file',
+        new_str: 'edits this file',
+      }),
+    ],
+    () => [call('script', { title: 'Gather', code: GOLDEN_CRASH_SOURCE })],
+    () => [call('script', { title: 'Trim', code: GOLDEN_CRASH_TRIM_SOURCE })],
+  ][done];
+  return Effect.succeed(
+    step === undefined ||
+      !said.includes('Work through the crash task.') ||
+      said.includes(REPLACED_MARKER)
+      ? null
+      : step(),
+  );
+}
+
+/** The limits run: its script's `self()` children, told apart by their
+ *  tasks. One spends (a priced reply that calls a tool) and then is never
+ *  answered, so only its call's cap ends it; the other answers at once. */
+function limits({ said, results, call }: GoldenTurn) {
+  if (!said.includes('started this run of you with self()'))
+    return Effect.succeed(
+      results.length === 0
+        ? [call('script', { title: 'Limits', code: GOLDEN_LIMITS_SOURCE })]
+        : text('Limits done.'),
+    );
+  if (!said.includes('Spend past the cap, then hold.'))
+    return Effect.succeed(text('Named model answered.'));
+  return results.length === 0
+    ? Effect.succeed([call('executions', { path: '/executions' })])
+    : Effect.never;
+}
+
+/** The own-program run: it writes itself a program into the project
+ *  memory folder its system text names, then its next step's script starts
+ *  that program by name. */
+function ownProgram(t: GoldenTurn) {
+  const { system, call } = t;
+  const folder = /^\s*(.+): Project memory: .*\(writable\)$/m.exec(system)?.[1];
+  return Effect.succeed(
+    stepped(
+      t,
+      [
+        () => [
+          call('write_file', {
+            path: `${folder}/programs/greet.js`,
+            content: GOLDEN_OWN_PROGRAM,
+          }),
+        ],
+        () => [
+          call('script', {
+            title: 'Start the program',
+            code: "return (await program('own:greet')).response",
+          }),
+        ],
+      ],
+      text('Own program done.'),
+    ),
+  );
+}
+
+/** The wake run: it arranges to be continued in an hour and, when its
+ *  task says so, cancels that by the id the call answered. Every reply
+ *  counts the notes to itself the conversation holds by then. */
+function wake(t: GoldenTurn) {
+  const { said, call } = t;
+  const id = /Its id is ([0-9a-f-]{36})/.exec(said)?.[1];
+  return Effect.succeed(
+    stepped(
+      t,
+      [
+        () => [call('wake', { afterSeconds: 3600, note: 'Check the build.' })],
+        ...(said.includes('then cancel it') && id !== undefined
+          ? [() => [call('wake', { command: 'cancel', id })]]
+          : []),
+      ],
+      text(`Notes read: ${said.split('<wake-note ').length - 1}`),
+    ),
+  );
+}
+
+/** The native plugin run: it installs and enables the plugin its task
+ *  names, calls the tools its task names in turn, then calls its
+ *  `native_echo` once, or two or three times with all but the last
+ *  waiting for their release (three times with a listing of the plugins
+ *  after the first). A step that does not offer `native_echo` says so,
+ *  with what it does offer. */
+function nativePlugin(t: GoldenTurn) {
+  const { turn, said, results, call } = t;
+  const offered = turn.tools.map(({ name }) => name);
+  const source = /Install the plugin at (\S+?)\. /.exec(said)?.[1];
+  const echo = (input: object) => () =>
+    offered.includes('native_echo')
+      ? [call('native_echo', input)]
+      : text(`native_echo is not offered; offered: ${offered.join(', ')}`);
+  // A plugin a person trusted and then disabled, enabled again.
+  if (said.includes('Enable echoes again.'))
+    return Effect.succeed(
+      results.length === 0
+        ? [call('plugin_manager', { command: 'enable', name: 'echoes' })]
+        : text('Enabled again.'),
+    );
+  // `Call native_a, native_b in turn.`: each named tool once, offered or
+  // not, then the echo.
+  const named =
+    /Call (native_\w+(?:, native_\w+)*) in turn\./.exec(said)?.[1] ?? null;
+  return Effect.succeed(
+    stepped(
+      t,
+      [
+        () =>
+          offered.includes('native_echo')
+            ? [call('native_echo', {})]
+            : [call('plugin_manager', { command: 'install', source })],
+        () => [call('plugin_manager', { command: 'enable', name: 'echoes' })],
+        ...(named === null
+          ? []
+          : named.split(', ').map((name) => () => [call(name, {})])),
+        ...(said.includes('Echo, then echo waiting, in one reply.')
+          ? [
+              // Two calls of one tool in one reply, each its own id.
+              () =>
+                [
+                  call('native_echo', {}),
+                  call('native_echo', { wait: '1' }),
+                ].map((each, n) =>
+                  each.kind === 'local-call'
+                    ? { ...each, providerCallId: `${each.providerCallId}-${n}` }
+                    : each,
+                ),
+              echo({}),
+            ]
+          : said.includes('Echo twice, the first waiting.')
+            ? [echo({ wait: '1' }), echo({})]
+            : said.includes('Echo three times, the first two waiting.')
+              ? [
+                  echo({ wait: '1' }),
+                  () => [call('plugin_manager', { command: 'list' })],
+                  echo({ wait: '2' }),
+                  echo({}),
+                ]
+              : [echo({})]),
+      ],
+      text('Echoed.'),
+    ),
+  );
+}
+
+/** The resources run: its script reads the run's resources, then those of
+ *  a `self()` child held to a spend cap, which reads them directly and
+ *  answers with the cap line they named. */
+function resources({ said, results, call }: GoldenTurn) {
+  if (said.includes('started this run of you with self()'))
+    return Effect.succeed(
+      results.length === 0
+        ? [call('resources', {})]
+        : text(/Spend cap: [^"\\]+/.exec(said)?.[0] ?? 'No cap named.'),
+    );
+  return Effect.succeed(
+    results.length === 0
+      ? [
+          call('script', {
+            title: 'Resources',
+            code: GOLDEN_RESOURCES_SOURCE,
+          }),
+        ]
+      : text('Resources read.'),
+  );
+}
+
+/** The golden parent: a read, a plan, then a child. */
+const parent = (t: GoldenTurn) =>
+  Effect.succeed(
+    stepped(
+      t,
+      [
+        () => [t.call('read_file', { path: 'notes.tex' })],
+        () => [
+          t.call('plan', { objective: 'Read the notes and ask a child.' }),
+        ],
+        () => [
+          t.call('agent', {
+            ...GOLDEN_CHILD,
+            prompt: 'Answer the delegated child task.',
+          }),
+        ],
+      ],
+      text('Parent done.'),
+    ),
+  );
+
+/** The golden scenarios by the marker their system text carries. The first
+ *  marker the system text holds picks the scenario, so a system text naming
+ *  two plays the one listed first. */
+const GOLDEN_SCENARIOS: ReadonlyArray<{
+  readonly marker: string;
+  readonly play: (turn: GoldenTurn) => Effect.Effect<Reply | null>;
+}> = [
+  { marker: 'GOLDEN-APPROVAL', play: approval },
+  { marker: 'GOLDEN-DIAGNOSTICS', play: diagnostics },
+  { marker: 'GOLDEN-ACCEPT', play: accept },
+  { marker: 'GOLDEN-CHILD', play: child },
+  { marker: 'GOLDEN-CHAT', play: chat },
+  { marker: 'GOLDEN-SCRIPT', play: script },
+  { marker: 'GOLDEN-FORK', play: fork },
+  { marker: 'GOLDEN-DELIVERY', play: delivery },
+  { marker: 'GOLDEN-CRASH', play: crash },
+  { marker: 'GOLDEN-LIMITS', play: limits },
+  { marker: 'GOLDEN-OWN', play: ownProgram },
+  { marker: 'GOLDEN-WAKE', play: wake },
+  { marker: 'GOLDEN-NATIVE', play: nativePlugin },
+  { marker: 'GOLDEN-RESOURCES', play: resources },
+  { marker: 'GOLDEN-PARENT', play: parent },
+];
+
 /**
  * The golden 1.0 store's scripted conversation (`generate-golden-store.mjs`):
- * a system prompt names its part, a step is its count of tool results, and a
- * held call waits for its `*.release` file in `releases`.
+ * a system prompt names its scenario (`GOLDEN_SCENARIOS`), a step is its
+ * count of tool results, and a held call waits for its `*.release` file in
+ * `releases`. Null when no scenario answers the turn.
  */
 function goldenTurn(
   turn: ResolvedTurn,
   releases: string,
-  call: (name: string, input: unknown) => TurnResult['content'][number],
-): Effect.Effect<TurnResult['content'] | null> {
-  const gate = (name: string) => {
-    const file = path.join(releases, name);
-    return Effect.sync(() => existsSync(file)).pipe(
-      Effect.repeat({ until: Boolean, schedule: Schedule.spaced('20 millis') }),
-      Effect.asVoid,
-    );
-  };
+  call: GoldenTurn['call'],
+): Effect.Effect<Reply | null, ModelError> {
   const system = turn.system ?? '';
-  const results = turn.messages.filter((m) => m.role === 'tool');
   const said = JSON.stringify(turn.messages);
+  // A turn the provider refuses as too long for the model.
+  if (system.includes('GOLDEN-OVERFLOW'))
+    return Effect.fail(
+      new ModelError({
+        kind: 'context-overflow',
+        message: 'The request exceeds the context window.',
+        status: 400,
+      }),
+    );
   // The golden chat's `/compact`: its summary replaces the history.
   if (system.startsWith(COMPACTION_SYSTEM_PROMPT_START))
     return Effect.succeed(text('The golden chat so far.'));
@@ -195,373 +647,22 @@ function goldenTurn(
     said.includes('<agent>golden_parent</agent>')
   )
     return Effect.succeed(text('Working through the golden parent task'));
+  const gate = (name: string) => {
+    const file = path.join(releases, name);
+    return Effect.sync(() => existsSync(file)).pipe(
+      Effect.repeat({ until: Boolean, schedule: Schedule.spaced('20 millis') }),
+      Effect.asVoid,
+    );
+  };
   // A call naming GOLDEN-PARK (a label's too) waits for its release file.
   if ((system + said).includes('GOLDEN-PARK'))
     return Effect.as(gate('golden-park.release'), text('Parked run released.'));
-  // A call awaiting approval: the tool after the marker, and its command,
-  // or its whole input when a JSON object follows the tool.
-  const [marker, asked = 'bash', command = 'echo approved >> approved.txt'] =
-    /GOLDEN-APPROVAL(?: (\w+))?(?: (.+))?/.exec(system) ?? [];
-  if (marker !== undefined) {
-    const input: unknown = command.startsWith('{')
-      ? JSON.parse(command)
-      : { command };
-    return Effect.succeed(
-      results.length ? text('The approved command ran.') : [call(asked, input)],
-    );
-  }
-  // A diagnostics read the service forwards to an attached window.
-  if (system.includes('GOLDEN-DIAGNOSTICS'))
-    return Effect.succeed(
-      results.length === 0
-        ? [call('diagnostics', { command: 'list', path: 'main.tex' })]
-        : text('The diagnostics read came back.'),
-    );
-  // A service task accepting a file from the run its instruction names.
-  if (system.includes('GOLDEN-ACCEPT')) {
-    const source = /\b([0-9a-f]{12})\b/.exec(said)?.[1];
-    const files = [{ path: 'draft.tex', original: 'accepted.tex' }];
-    return Effect.succeed(
-      results.length > 0 || source === undefined
-        ? text('Accepted.')
-        : [call('accept_run_files', { execution_id: source, files })],
-    );
-  }
-  if (system.includes('GOLDEN-CHILD')) {
-    // Messaging its waiting headless parent is refused (it never reads).
-    if (!said.includes('Answer the delegated child task'))
-      return Effect.succeed(text('Child result.'));
-    if (results.length === 0)
-      return Effect.succeed([
-        call('executions', {
-          path: '/executions',
-          action: 'query',
-          sql: "SELECT id FROM runs WHERE name = 'golden_parent'",
-        }),
-      ]);
-    const page = results[0]?.results
-      .flatMap((result) => result.content)
-      .map((part) => (part.kind === 'text' ? part.text : ''))
-      .join('\n');
-    const parent = /^([0-9a-f]{12})$/m.exec(page ?? '')?.[1];
-    return Effect.succeed(
-      results.length === 1 && parent !== undefined
-        ? [
-            call('executions', {
-              path: `/executions/${parent}`,
-              action: 'send',
-              message: 'The delegated child has a note for its parent.',
-            }),
-          ]
-        : text('Child result.'),
-    );
-  }
-  // The interactive chat: a plan run as a goal, its round and result, and
-  // replies after a `/model` and a `/compact`, told apart by what they say.
-  if (system.includes('GOLDEN-CHAT')) {
-    // A Codex child held until a stop; what is typed behind stays queued.
-    if (said.includes('Hold this turn.'))
-      return results.length === 0
-        ? Effect.succeed([call('codex', { prompt: 'Answer the Codex task.' })])
-        : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
-    if (said.includes('The golden chat so far.'))
-      return Effect.succeed(text('Answered after the compaction.'));
-    // The judge of the round's `done` (a fresh `self()`): its claims.
-    if (said.includes('<goal_judge>'))
-      return Effect.succeed([
-        call('submit_output', {
-          claims: [
-            {
-              requirement: 'The golden chat is answered.',
-              status: 'verified',
-              check: 'Read the round report.',
-              observed: ANSWERED,
-            },
-          ],
-        }),
-      ]);
-    // The goal's round (`self()`): a command its grant approves, a verdict.
-    // Its first call is held, so the chat that started the goal finishes
-    // its turn before the round goes on.
-    const round = turn.tools.some(({ name }) => name === 'submit_output');
-    const step = round
-      ? [
-          call('bash', { command: 'echo goal round', description: 'Goal' }),
-          call('submit_output', { status: 'done', report: ANSWERED }),
-        ]
-      : [call('plan', { objective: 'Answer the golden chat, then stop.' })];
-    const next = step.slice(results.length, results.length + 1);
-    if (round && results.length === 0)
-      return gate('golden-round.release').pipe(Effect.as(next));
-    if (round || results.length === 0) return Effect.succeed(next);
-    if (said.includes('After the model switch.'))
-      return Effect.succeed(text('Answered after the model switch.'));
-    return Effect.succeed(
-      text(
-        said.includes(ANSWERED)
-          ? 'Golden chat goal complete.'
-          : 'The plan runs as a goal.',
-      ),
-    );
-  }
-  if (system.includes('GOLDEN-SCRIPT')) {
-    // A background command waiting for its release file; its result wakes
-    // the task once more. The wait is Node's, not a shell loop: the bash
-    // tool runs a command in cmd.exe on Windows, which has no `until`.
-    if (said.includes('Run in the background.')) {
-      const last = turn.messages.at(-1);
-      if (last?.role === 'tool')
-        return Effect.succeed(text('Sent to the background.'));
-      return Effect.succeed(
-        JSON.stringify(last).includes('Run in the background.')
-          ? [
-              call('bash', {
-                command: `node -e "const wait = setInterval(() => { if (require('fs').existsSync('../bash.release')) { clearInterval(wait); console.log('released'); } }, 50)"`,
-                description: 'Wait for the release',
-                run_in_background: true,
-              }),
-            ]
-          : text('The background command finished.'),
-      );
-    }
-    return Effect.succeed(
-      results.length === 0
-        ? [
-            call('script', {
-              title: 'Gather the notes',
-              code: GOLDEN_SCRIPT_SOURCE,
-            }),
-          ]
-        : text('Script done.'),
-    );
-  }
-  // The fork: each reply names its view's user messages by their last
-  // lines, so the store records what the edit left.
-  if (system.includes('GOLDEN-FORK')) {
-    const users = turn.messages.flatMap((message) =>
-      message.role === 'user'
-        ? message.content.flatMap((part) =>
-            part.kind === 'text' ? [part.text.trim().split('\n').at(-1)] : [],
-          )
-        : [],
-    );
-    return Effect.succeed(text(`Saw: ${users.join(' | ')}`));
-  }
-  // The crash suite's delivery run: three children, each reporting back.
-  if (system.includes('GOLDEN-DELIVERY'))
-    return Effect.succeed(
-      results.length === 0
-        ? [
-            call('agent', {
-              ...GOLDEN_CHILD,
-              prompt: 'Delivery child: answer.',
-              background: true,
-            }),
-            call('script', {
-              title: 'Deliver',
-              code: GOLDEN_BACKGROUND_SOURCE,
-              run_in_background: true,
-            }),
-            call('bash', {
-              command: 'echo delivered',
-              description: 'Deliver',
-              run_in_background: true,
-            }),
-          ]
-        : text('Noted.'),
-    );
-  // The crash-point run: two calls, an edit of the file they read, a script,
-  // a script that replaces the edit's call and result in its view, the
-  // echo's text. A step a crash cut off unstarted is asked for again; a
-  // view an edit replaced no longer holds the task (or holds the run's own
-  // replacement), and the echo shows the view the edit left.
-  if (system.includes('GOLDEN-CRASH')) {
-    const done = results.filter(
-      (message) =>
-        !message.results.some((result) =>
-          result.content.some(
-            (part) =>
-              part.kind === 'text' && part.text.includes(SKIPPED_NOT_STARTED),
-          ),
-        ),
-    ).length;
-    const step = [
-      () => [
-        call('read_file', { path: 'notes.tex' }),
-        call('bash', {
-          command: 'echo batch >> effects.log',
-          description: 'Record the batch effect',
-        }),
-      ],
-      // The file the first step read, edited in the next response: a process
-      // resumed between the two answers the edit's read gate from the rows.
-      () => [
-        call('edit_file', {
-          path: 'notes.tex',
-          old_str: 'reads this file',
-          new_str: 'edits this file',
-        }),
-      ],
-      () => [call('script', { title: 'Gather', code: GOLDEN_CRASH_SOURCE })],
-      () => [call('script', { title: 'Trim', code: GOLDEN_CRASH_TRIM_SOURCE })],
-    ][done];
-    return Effect.succeed(
-      step === undefined ||
-        !said.includes('Work through the crash task.') ||
-        said.includes(REPLACED_MARKER)
-        ? null
-        : step(),
-    );
-  }
-  // The limits run: its script's `self()` children, told apart by their
-  // tasks. One spends (a priced reply that calls a tool) and then is never
-  // answered, so only its call's cap ends it; the other answers at once.
-  if (system.includes('GOLDEN-LIMITS')) {
-    if (!said.includes('started this run of you with self()'))
-      return Effect.succeed(
-        results.length === 0
-          ? [call('script', { title: 'Limits', code: GOLDEN_LIMITS_SOURCE })]
-          : text('Limits done.'),
-      );
-    if (!said.includes('Spend past the cap, then hold.'))
-      return Effect.succeed(text('Named model answered.'));
-    return results.length === 0
-      ? Effect.succeed([call('executions', { path: '/executions' })])
-      : Effect.never;
-  }
-  // The own-program run: it writes itself a program into the project
-  // memory folder its system text names, then its next step's script starts
-  // that program by name.
-  if (system.includes('GOLDEN-OWN')) {
-    const folder = /^\s*(.+): Project memory: .*\(writable\)$/m.exec(
-      system,
-    )?.[1];
-    const step = [
-      () =>
-        call('write_file', {
-          path: `${folder}/programs/greet.js`,
-          content: GOLDEN_OWN_PROGRAM,
-        }),
-      () =>
-        call('script', {
-          title: 'Start the program',
-          code: "return (await program('own:greet')).response",
-        }),
-    ][results.length];
-    return Effect.succeed(
-      step === undefined ? text('Own program done.') : [step()],
-    );
-  }
-  // The wake run: it arranges to be continued in an hour and, when its
-  // task says so, cancels that by the id the call answered. Every reply
-  // counts the notes to itself the conversation holds by then.
-  if (system.includes('GOLDEN-WAKE')) {
-    const id = /Its id is ([0-9a-f-]{36})/.exec(said)?.[1];
-    const steps = [
-      () => call('wake', { afterSeconds: 3600, note: 'Check the build.' }),
-      ...(said.includes('then cancel it') && id !== undefined
-        ? [() => call('wake', { command: 'cancel', id })]
-        : []),
-    ];
-    const step = steps[results.length];
-    return Effect.succeed(
-      step === undefined
-        ? text(`Notes read: ${said.split('<wake-note ').length - 1}`)
-        : [step()],
-    );
-  }
-  // The native plugin run: it installs and enables the plugin its task
-  // names, calls the tools its task names in turn, then calls its
-  // `native_echo` once, or two or three times with all but the last
-  // waiting for their release (three times with a listing of the plugins
-  // after the first). A step that does not
-  // offer `native_echo` says so, with what it does offer.
-  if (system.includes('GOLDEN-NATIVE')) {
-    const offered = turn.tools.map(({ name }) => name);
-    const source = /Install the plugin at (\S+?)\. /.exec(said)?.[1];
-    const echo = (input: object) => () =>
-      offered.includes('native_echo')
-        ? [call('native_echo', input)]
-        : text(`native_echo is not offered; offered: ${offered.join(', ')}`);
-    // A plugin a person trusted and then disabled, enabled again.
-    if (said.includes('Enable echoes again.'))
-      return Effect.succeed(
-        results.length === 0
-          ? [call('plugin_manager', { command: 'enable', name: 'echoes' })]
-          : text('Enabled again.'),
-      );
-    // `Call native_a, native_b in turn.`: each named tool once, offered or
-    // not, then the echo.
-    const named =
-      /Call (native_\w+(?:, native_\w+)*) in turn\./.exec(said)?.[1] ?? null;
-    const steps = [
-      () =>
-        offered.includes('native_echo')
-          ? [call('native_echo', {})]
-          : [call('plugin_manager', { command: 'install', source })],
-      () => [call('plugin_manager', { command: 'enable', name: 'echoes' })],
-      ...(named === null
-        ? []
-        : named.split(', ').map((name) => () => [call(name, {})])),
-      ...(said.includes('Echo, then echo waiting, in one reply.')
-        ? [
-            // Two calls of one tool in one reply, each its own id.
-            () =>
-              [call('native_echo', {}), call('native_echo', { wait: '1' })].map(
-                (each, n) =>
-                  each.kind === 'local-call'
-                    ? { ...each, providerCallId: `${each.providerCallId}-${n}` }
-                    : each,
-              ),
-            echo({}),
-          ]
-        : said.includes('Echo twice, the first waiting.')
-          ? [echo({ wait: '1' }), echo({})]
-          : said.includes('Echo three times, the first two waiting.')
-            ? [
-                echo({ wait: '1' }),
-                () => [call('plugin_manager', { command: 'list' })],
-                echo({ wait: '2' }),
-                echo({}),
-              ]
-            : [echo({})]),
-    ];
-    const step = steps[results.length];
-    return Effect.succeed(step === undefined ? text('Echoed.') : step());
-  }
-  // The resources run: its script reads the run's resources, then those of
-  // a `self()` child held to a spend cap, which reads them directly and
-  // answers with the cap line they named.
-  if (system.includes('GOLDEN-RESOURCES')) {
-    if (said.includes('started this run of you with self()'))
-      return Effect.succeed(
-        results.length === 0
-          ? [call('resources', {})]
-          : text(/Spend cap: [^"\\]+/.exec(said)?.[0] ?? 'No cap named.'),
-      );
-    return Effect.succeed(
-      results.length === 0
-        ? [
-            call('script', {
-              title: 'Resources',
-              code: GOLDEN_RESOURCES_SOURCE,
-            }),
-          ]
-        : text('Resources read.'),
-    );
-  }
-  if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
-  const steps = [
-    () => call('read_file', { path: 'notes.tex' }),
-    () => call('plan', { objective: 'Read the notes and ask a child.' }),
-    () =>
-      call('agent', {
-        ...GOLDEN_CHILD,
-        prompt: 'Answer the delegated child task.',
-      }),
-  ];
-  const step = steps[results.length];
-  return Effect.succeed(step === undefined ? text('Parent done.') : [step()]);
+  const scenario = GOLDEN_SCENARIOS.find(({ marker }) =>
+    system.includes(marker),
+  );
+  if (scenario === undefined) return Effect.succeed(null);
+  const results = turn.messages.filter((m) => m.role === 'tool');
+  return scenario.play({ turn, system, said, results, call, gate });
 }
 
 function mathematicalValidationOutput(prompt: string): {
@@ -594,6 +695,67 @@ function mathematicalValidationOutput(prompt: string): {
     check:
       'Substitution satisfies every state equation and uses absorbing values 1 after HHT and 0 after THH.',
   };
+}
+
+/** A turn no golden scenario answers: the echo, the script fan-out, the
+ *  history query, or else the canned document. */
+function cannedTurn(
+  turn: ResolvedTurn,
+  { scriptFanout, historyQuery, echo }: ValidationScenario,
+  call: GoldenTurn['call'],
+): Reply {
+  const toolNames = new Set(turn.tools.map((tool) => tool.name));
+  const hasToolResult = turn.messages.some(
+    (message) => message.role === 'tool',
+  );
+  if (echo && turn.system?.startsWith(COMPACTION_SYSTEM_PROMPT_START))
+    return text('Earlier turns, summarized.');
+  if (echo) {
+    // The user messages the request carries, in order, each by its last
+    // 60 characters: what a fork or a compaction left of the model's view.
+    const seen = turn.messages.flatMap((message) =>
+      message.role === 'user'
+        ? message.content.flatMap((part) =>
+            part.kind === 'text' ? [part.text.slice(-60)] : [],
+          )
+        : [],
+    );
+    return text(`Model saw: ${seen.join(' | ')}`);
+  }
+  if (scriptFanout && toolNames.has('submit_output'))
+    return [
+      call(
+        'submit_output',
+        mathematicalValidationOutput(JSON.stringify(turn.messages)),
+      ),
+    ];
+  if (scriptFanout && !hasToolResult && toolNames.has('script'))
+    return [
+      call('script', {
+        title: 'Solve the validation problems',
+        code: SCRIPT_FANOUT_VALIDATION_SOURCE,
+      }),
+    ];
+  if (historyQuery && !hasToolResult && toolNames.has('executions'))
+    return [
+      call('executions', {
+        path: '/executions',
+        action: 'query',
+        sql: 'SELECT name, kind, status FROM runs ORDER BY started_at',
+      }),
+    ];
+  if ((scriptFanout && toolNames.has('script')) || historyQuery) {
+    // Hand the result back verbatim, so the run's report shows what the
+    // script's children answered or what the query returned.
+    const results = turn.messages.flatMap((message) =>
+      message.role === 'tool' ? message.results : [],
+    );
+    const what = scriptFanout ? 'Script' : 'History query';
+    return text(`${what} result: ${JSON.stringify(results)}`);
+  }
+  return text(
+    `<documents><document name="paper.polished.tex">${VALIDATION_OUTPUT}</document></documents>`,
+  );
 }
 
 /**
@@ -672,97 +834,6 @@ export const validationModel =
         name,
         argumentsText: JSON.stringify(input),
       }) as const;
-    const complete = (
-      turn: ResolvedTurn,
-      scriptFanout: boolean,
-      historyQuery: boolean,
-      echo: boolean,
-      golden: TurnResult['content'] | null,
-    ): TurnResult => {
-      const toolNames = new Set(turn.tools.map((tool) => tool.name));
-      const hasToolResult = turn.messages.some(
-        (message) => message.role === 'tool',
-      );
-      let content: TurnResult['content'];
-      if (golden !== null) {
-        content = golden;
-      } else if (
-        echo &&
-        turn.system?.startsWith(COMPACTION_SYSTEM_PROMPT_START)
-      ) {
-        content = text('Earlier turns, summarized.');
-      } else if (echo) {
-        // The user messages the request carries, in order, each by its last
-        // 60 characters: what a fork or a compaction left of the model's view.
-        const seen = turn.messages.flatMap((message) =>
-          message.role === 'user'
-            ? message.content.flatMap((part) =>
-                part.kind === 'text' ? [part.text.slice(-60)] : [],
-              )
-            : [],
-        );
-        content = text(`Model saw: ${seen.join(' | ')}`);
-      } else if (scriptFanout && toolNames.has('submit_output')) {
-        content = [
-          call(
-            'submit_output',
-            mathematicalValidationOutput(JSON.stringify(turn.messages)),
-          ),
-        ];
-      } else if (scriptFanout && !hasToolResult && toolNames.has('script')) {
-        content = [
-          call('script', {
-            title: 'Solve the validation problems',
-            code: SCRIPT_FANOUT_VALIDATION_SOURCE,
-          }),
-        ];
-      } else if (
-        historyQuery &&
-        !hasToolResult &&
-        toolNames.has('executions')
-      ) {
-        content = [
-          call('executions', {
-            path: '/executions',
-            action: 'query',
-            sql: 'SELECT name, kind, status FROM runs ORDER BY started_at',
-          }),
-        ];
-      } else if ((scriptFanout && toolNames.has('script')) || historyQuery) {
-        // Hand the result back verbatim, so the run's report shows what the
-        // script's children answered or what the query returned.
-        const results = turn.messages.flatMap((message) =>
-          message.role === 'tool' ? message.results : [],
-        );
-        const what = scriptFanout ? 'Script' : 'History query';
-        content = text(`${what} result: ${JSON.stringify(results)}`);
-      } else {
-        content = text(
-          `<documents><document name="paper.polished.tex">${VALIDATION_OUTPUT}</document></documents>`,
-        );
-      }
-      const calls = content.some((part) => part.kind === 'local-call');
-      // About four characters a token, so compaction can be crossed.
-      const inputTokens = echo
-        ? Math.ceil(JSON.stringify(turn.messages).length / 4)
-        : 1;
-      return {
-        providerResponseId: `validation-response-${responses}`,
-        requestedOrigin: origin,
-        returnedModel: config.id,
-        content,
-        finishReason: calls ? 'tool-calls' : 'stop',
-        usage: {
-          inputTokens,
-          outputTokens: 1,
-          totalTokens: inputTokens + 1,
-          cachedInputTokens: null,
-          cacheWriteTokens: null,
-          reasoningTokens: null,
-          toolUsePromptTokens: null,
-        },
-      };
-    };
     const prepareTurn: Model['prepareTurn'] = (request) =>
       Effect.succeed({
         ...origin,
@@ -786,21 +857,33 @@ export const validationModel =
       Stream.fromEffect(
         Effect.gen(function* () {
           responses += 1;
-          const { scriptFanout, historyQuery, echo, golden } = yield* scenario;
-          // A golden turn the provider refuses as too long for the model.
-          if (golden !== null && turn.system?.includes('GOLDEN-OVERFLOW'))
-            return yield* new ModelError({
-              kind: 'context-overflow',
-              message: 'The request exceeds the context window.',
-              status: 400,
-            });
-          return complete(
-            turn,
-            scriptFanout,
-            historyQuery,
-            echo,
-            golden === null ? null : yield* goldenTurn(turn, golden, call),
-          );
+          const played = yield* scenario;
+          const content =
+            (played.golden === null
+              ? null
+              : yield* goldenTurn(turn, played.golden, call)) ??
+            cannedTurn(turn, played, call);
+          const calls = content.some((part) => part.kind === 'local-call');
+          // About four characters a token, so compaction can be crossed.
+          const inputTokens = played.echo
+            ? Math.ceil(JSON.stringify(turn.messages).length / 4)
+            : 1;
+          return {
+            providerResponseId: `validation-response-${responses}`,
+            requestedOrigin: origin,
+            returnedModel: config.id,
+            content,
+            finishReason: calls ? 'tool-calls' : 'stop',
+            usage: {
+              inputTokens,
+              outputTokens: 1,
+              totalTokens: inputTokens + 1,
+              cachedInputTokens: null,
+              cacheWriteTokens: null,
+              reasoningTokens: null,
+              toolUsePromptTokens: null,
+            },
+          } satisfies TurnResult;
         }),
       ).pipe(
         Stream.map((result): TurnEvent => ({ kind: 'completed', result })),
