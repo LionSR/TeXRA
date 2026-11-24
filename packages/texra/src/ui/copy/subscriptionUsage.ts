@@ -30,22 +30,41 @@ export function subscriptionUsageWindowLabel(
   return `${prefix}${name.replaceAll('_', ' ')}`;
 }
 
-/** The tone a usage window paints with, by what it has left: an error once
- *  it is used up, a caution at a fifth or less, and nothing to say above
+/** The window a plan runs out of first: the one with the most used. The CLI
+ *  status bar shows it alone. */
+export function limitingSubscriptionWindow(
+  windows: readonly SubscriptionUsageWindow[],
+): SubscriptionUsageWindow | undefined {
+  return windows.toSorted(
+    (left, right) => right.percentUsed - left.percentUsed,
+  )[0];
+}
+
+/** The tone a usage window paints with, by how much is used: an error once it
+ *  is used up, a caution at four fifths or more, and nothing to say below
  *  that. The CLI status bar and the settings view's meters read it. */
 export function subscriptionQuotaTone(
-  window: Pick<SubscriptionUsageWindow, 'percentRemaining'>,
+  window: Pick<SubscriptionUsageWindow, 'percentUsed'>,
 ): Extract<RunTone, 'warning' | 'danger'> | undefined {
-  if (window.percentRemaining <= 0) return 'danger';
-  if (window.percentRemaining <= 20) return 'warning';
+  if (window.percentUsed >= 100) return 'danger';
+  if (window.percentUsed >= 80) return 'warning';
   return undefined;
 }
 
-export function formatSubscriptionUsagePercent(percentUsed: number): string {
+/** A window's usage as every host words it, the percent used: "30% used".
+ *  A window that has started reads at least 0.1%, and one not yet used up
+ *  at most 99.9%, so rounding never says "0%" or "100%" when it is not. */
+export function subscriptionQuotaUsed(
+  window: Pick<SubscriptionUsageWindow, 'percentUsed'>,
+): string {
+  const { percentUsed } = window;
   let rounded = Math.round(percentUsed * 10) / 10;
   if (percentUsed > 0 && rounded === 0) rounded = 0.1;
   if (percentUsed < 100 && rounded === 100) rounded = 99.9;
-  return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
+  const percent = Number.isInteger(rounded)
+    ? `${rounded}%`
+    : `${rounded.toFixed(1)}%`;
+  return `${percent} used`;
 }
 
 export function formatSubscriptionUsageReset(
@@ -81,7 +100,7 @@ export function formatSubscriptionUsageSummary(
     .map((window) => {
       const reset = formatSubscriptionUsageReset(window.resetAt, now);
       return joinFacts([
-        `${subscriptionUsageWindowLabel(window)}: ${formatSubscriptionUsagePercent(window.percentUsed)}`,
+        `${subscriptionUsageWindowLabel(window)}: ${subscriptionQuotaUsed(window)}`,
         reset,
       ]);
     })

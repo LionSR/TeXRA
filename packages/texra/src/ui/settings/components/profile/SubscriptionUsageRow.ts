@@ -6,10 +6,10 @@ import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import {
-  formatSubscriptionUsagePercent,
   formatSubscriptionUsageReset,
   formatSubscriptionUsageUpdated,
   subscriptionQuotaTone,
+  subscriptionQuotaUsed,
   subscriptionUsageWindowLabel,
 } from '@ui/copy/subscriptionUsage';
 import { TexraElement } from '@ui/litBase';
@@ -159,9 +159,7 @@ export class SubscriptionUsageRow extends TexraElement {
             >
             ${snapshot.windows.map((window) => {
               const label = subscriptionUsageWindowLabel(window);
-              const percent = formatSubscriptionUsagePercent(
-                window.percentUsed,
-              );
+              const percent = subscriptionQuotaUsed(window);
               const reset = formatSubscriptionUsageReset(
                 window.resetAt,
                 this.now,
