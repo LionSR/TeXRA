@@ -222,6 +222,14 @@ function describedAtFreeze<T extends ResolvedTools>(
   };
 }
 
+/** Whether a catalog entry ships from a core source or from a plugin in
+ *  `contributors`: the skills a step draws on, and the activations it
+ *  resolves. */
+const contributedBy =
+  (contributors: ReadonlySet<string>) =>
+  ({ plugin }: Pick<SkillCatalogEntry, 'plugin'>) =>
+    plugin === null || contributors.has(plugin);
+
 /**
  * Open the run's next step: read the switches and pin the tools they give
  * in the session's catalog (`SessionTools.pin`), release the previous
@@ -315,7 +323,9 @@ const openStep = Effect.fn('Step.open')(function* (
       state,
       run.toolInputs.tools,
       Object.keys(imported).filter((specifier) => !unlisted.has(specifier)),
-      // Only a run offered `program` can start one.
+      // Only a run offered `program` can start one: its plugins' programs,
+      // an installed plugin's while it loads (enabled, and trusted as it is
+      // now), and the agent's own that the description lists.
       resolved.registry.has(PROGRAM_TOOL_NAME)
         ? [
             ...available.flatMap(({ programs = {} }) =>
@@ -324,18 +334,11 @@ const openStep = Effect.fn('Step.open')(function* (
                 description,
               })),
             ),
-            // An installed plugin's, while it loads: enabled, and trusted
-            // as it is now.
-            ...[...pinned.installed.values()].flatMap(({ plugin }) =>
-              plugin.programs.loaded.map(({ name, description }) => ({
-                name,
-                description,
-              })),
+            ...[...pinned.installed.values()].flatMap(
+              ({ plugin }) => plugin.programs.loaded,
             ),
-            ...own.loaded.flatMap(({ name, description }) =>
-              unlisted.has(name) ? [] : [{ name, description }],
-            ),
-          ]
+            ...own.loaded.filter(({ name }) => !unlisted.has(name)),
+          ].map(({ name, description }) => ({ name, description }))
         : [],
     );
     // The plugins whose sections the step's system text renders.
@@ -376,8 +379,7 @@ const openStep = Effect.fn('Step.open')(function* (
             named: [...names, ...(recordedSkills ?? [])],
           })
         : { catalog: [], named: [], issues: [] };
-    const contributes = ({ plugin }: SkillCatalogEntry) =>
-      plugin === null || contributors.has(plugin);
+    const contributes = contributedBy(contributors);
     const byName = new Map(
       catalog.named.filter(contributes).map((entry) => [entry.name, entry]),
     );
@@ -662,10 +664,7 @@ export const resolveActivations = Effect.fn('Step.resolveActivations')(
     });
     const resolved = new Set(
       named
-        .filter(
-          ({ plugin }) =>
-            plugin === null || open.skills.contributors.has(plugin),
-        )
+        .filter(contributedBy(open.skills.contributors))
         .map(({ name }) => name),
     );
     return names.filter((name) => resolved.has(name));
