@@ -132,10 +132,7 @@ export const sessionOwnersLayer = (
       const { roots } = open;
       // The readers' scope, closed last so the teardown publishes and
       // finishes while the tails and the view live.
-      const consumers = yield* Effect.acquireRelease(
-        Scope.make(),
-        (scope, exit) => Scope.close(scope, exit),
-      );
+      const consumers = yield* Scope.fork(yield* Scope.Scope);
       // The store: the session's one publisher, and its doors past the log.
       const store = yield* makeSessionStore(roots.storage);
       const deletions = yield* deletionCollector(

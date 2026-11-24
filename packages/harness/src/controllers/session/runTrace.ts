@@ -336,7 +336,7 @@ export function replayTrace<E>(
       Stream.map((next) => ({ events: take(next), last: done() })),
       Stream.takeUntil((read) => read.last),
       Stream.flatMap((read) => Stream.fromIterable(read.events)),
-      Stream.concat(Stream.drain(Stream.fromEffect(result))),
+      Stream.onEnd(result),
     );
   });
 }

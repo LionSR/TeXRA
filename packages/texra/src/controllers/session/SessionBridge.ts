@@ -318,8 +318,8 @@ const endLogged =
       Stream.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Stream.failCause(cause)
-          : Stream.fromEffect(
+          : Stream.fromEffectDrain(
               Effect.logError(message, cause).pipe(withLogChannel(CHANNEL)),
-            ).pipe(Stream.drain),
+            ),
       ),
     );

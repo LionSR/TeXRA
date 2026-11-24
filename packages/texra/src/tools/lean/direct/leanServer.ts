@@ -501,8 +501,7 @@ const make = ({
     ) => {
       const elaborated = SubscriptionRef.changes(file).pipe(
         Stream.filter((state) => state.progress === 'elaborated'),
-        Stream.take(1),
-        Stream.runDrain,
+        Stream.runHead,
         Effect.as(true),
       );
       const quiet = SubscriptionRef.changes(file).pipe(
@@ -511,8 +510,7 @@ const make = ({
           (state) =>
             state.progress === 'unreported' && state.diagnostics !== undefined,
         ),
-        Stream.take(1),
-        Stream.runDrain,
+        Stream.runHead,
         Effect.as(false),
       );
       return Effect.race(elaborated, quiet).pipe(
