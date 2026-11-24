@@ -24,6 +24,7 @@ import {
 } from 'effect';
 
 import type { FollowUpBatch } from '@agent/followUp/FollowUpReader';
+import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import {
   claudeToolCall,
   matchesHook,
@@ -367,8 +368,11 @@ export function stepHooks(
         ['startup'],
       );
       // The prompt is what the user asked; the launch's request text wraps it.
-      const asked =
-        run.config.displayInstruction || run.config.instruction || text;
+      // `getDisplayedInstruction` is the one owner of that choice (the display
+      // override when it carries content, else the instruction, both trimmed),
+      // so the SessionStart prompt cannot diverge from the stream tab and
+      // session description over a blank or padded override.
+      const asked = getDisplayedInstruction(run.config) || text;
       const submit = yield* prompt(state, 'open', asked);
       return {
         rows: [...start.rows, ...submit.rows],
