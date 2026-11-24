@@ -19,9 +19,8 @@ This guide explains how to use TeXRA's `latexdiff` tools to compare file version
 The **latexdiff** sheet buttons below belong to the VS Code
 extension. Automatic post-run diffs are generated in every TeXRA app, including
 `texra run edit` in the CLI, where the TUI lists each one
-as a `"latexdiff:"` line under its revision. To diff two arbitrary files from the terminal, run the
-[`latexdiff` program](./programs.md#task-programs):
-`texra run latexdiff --input old.tex --input new.tex`.
+as a `"latexdiff:"` line under its revision. To diff two arbitrary files from the terminal, ask the
+assistant in `texra chat`: it runs `latexdiff` and compiles the result.
 :::
 
 ### Controlling between-revision diffs

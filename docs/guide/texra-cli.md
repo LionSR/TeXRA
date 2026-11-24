@@ -59,9 +59,7 @@ texra clone <project> ./project
 `texra run <program>` runs one of the [programs](./programs.md) over `--input`
 files, without a chat. The document programs (`edit`, `annotate`, `enhance`,
 `apply`, `transcribe`, `slides`, `poster`) revise or create
-documents; the task programs (`review`, `search`, `derive`, `code`,
-`review-code`, `simplify`, `test`, `experiment`, `solve`, `fix-latex`,
-`latexdiff`) answer with a report; the Lean programs `prove`,
+documents; the Lean programs `prove`,
 `lean-simplify` and `blueprint` work on a Lean project's files in place, and
 `lean-search` reports what Mathlib and the project already have. Every program needs at least one
 `--input`. Run one from a project directory:
@@ -82,8 +80,7 @@ texra run edit --input paper.tex --instruction "Polish the prose" --output paper
 <p class="hero-caption">Command in, revisions stream as progress, and the printed path is the success signal: the copied <code>--output</code> destination, or the generated file in run storage when no copy was requested.</p>
 
 The instruction says what the program should do: how far `edit` goes (with no
-instruction it proofreads), which point of view `annotate` reads from, what
-`review` should check. Pass it with `--instruction <text>` or
+instruction it proofreads), which point of view `annotate` reads from. Pass it with `--instruction <text>` or
 `--instruction-file <file>`. When both are set, the file contents are passed
 first:
 
@@ -127,7 +124,7 @@ Programs always write generated files into the run's run-storage
 directory first. In text mode, TeXRA prints a filesystem path: the copied path
 when `--output` or `--output-dir` is used, otherwise the final generated file in
 run storage. A program that generates no document, such as `prove`, prints its
-final reply instead, as does a task program such as `review`.
+final reply instead.
 
 With `--output`, TeXRA also copies the final artifact to the requested
 filesystem destination. JSON and NDJSON output keep `output.documents.outputs[]` as the

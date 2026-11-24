@@ -14,7 +14,7 @@ works on Lean 4 proofs, and compiles your documents. For a larger job it does
 one of two things:
 
 - **Starts a program**: a packaged job with a fixed procedure, such as a
-  whole-document polish or a manuscript audit. The programs are listed below.
+  whole-document polish. The programs are listed below.
 - **Hands part of the work to a helper agent** that it sets up for that job,
   with only the tools the job needs, and reads the result before relying on
   it. Several helpers can run in parallel; read
@@ -29,7 +29,7 @@ You can also start any program yourself, by name, from the terminal.
 ## Starting a program
 
 - **In a chat**: ask in plain words, for example "polish section 2 of
-  main.tex", or name the program: "run the review program on main.tex". The
+  main.tex", or name the program: "run the annotate program on main.tex". The
   assistant proposes the run. The proposal card shows the program, the
   instruction and the files; approve it, or select **Edit** to change them
   first.
@@ -38,7 +38,7 @@ You can also start any program yourself, by name, from the terminal.
 
   ```bash
   texra run edit --input paper.tex --instruction "Polish the introduction"
-  texra run review --input paper.tex --instruction "Check every derivation in Section 3"
+  texra run annotate --input paper.tex --instruction "Flag every unclear step in Section 3"
   ```
 
   Every program needs at least one `--input` file. A name that is not a
@@ -173,40 +173,15 @@ writes `poster.tex`.
 A 20-minute seminar talk for non-specialists: spend more slides on motivation and state the main theorem without its proof.
 ```
 
-## Task programs
+## Everything else: ask
 
-Each of these hands the job to one helper agent, told the checklist for that
-job and given the tools it needs, and answers with that agent's report. File
-edits it makes are approved like any other edit. The instruction says what to
-work on; `--input` names the files.
-
-| Program       | What it does                                                                                                                                                             | Edits files     |
-| :------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------- |
-| `review`      | Audits a manuscript: reproduces key derivations, checks limiting cases and dimensions, notation, references, figures, and that code matches the text.                    | Only if asked   |
-| `search`      | Finds and synthesizes literature and web sources, citing each with its URL, DOI or arXiv ID; it can add papers to Zotero and download arXiv sources.                     | No              |
-| `derive`      | Carries out an analytical derivation or symbolic computation, with Wolfram Language through `wolframscript` where it helps, and verifies the result.                     | Yes             |
-| `solve`       | Attacks a research-level or open problem: surveys what is known, computes small cases, hunts for counterexamples, and writes a proof, disproof or scoped partial result. | Yes             |
-| `experiment`  | Designs, runs and validates a numerical experiment (a simulation, a convergence study, a reproduction of a figure) and reports what it shows.                            | Yes             |
-| `code`        | Implements a feature, makes a targeted edit or fixes a bug in the project's code, then runs its build and tests.                                                         | Yes             |
-| `review-code` | Reviews a diff or the named files for correctness, clarity and security, and answers with prioritized findings.                                                          | No              |
-| `simplify`    | Simplifies working code or LaTeX without changing what it does, then confirms the tests or the build still pass.                                                         | Yes             |
-| `test`        | Writes or repairs tests with the project's own framework and runs them.                                                                                                  | Yes             |
-| `fix-latex`   | Diagnoses and fixes compilation errors, broken references and citations, warnings and bad boxes so the document builds.                                                  | Yes, in place   |
-| `latexdiff`   | Produces a compiled visual diff of two versions of a LaTeX document with `latexdiff`; the old and new files are the inputs.                                              | Writes the diff |
-
-Examples:
-
-```bash
-texra run review --input paper.tex --instruction "Confirm every goal the abstract states is delivered"
-texra run solve --input problem.tex --instruction "Check the problem's status in the literature first"
-texra run experiment --input solver.py --instruction "Sweep the step size and report the observed order of accuracy"
-texra run fix-latex --input main.tex
-texra run latexdiff --input v1/main.tex --input main.tex
-```
-
-In a chat you rarely need to name them: "audit this manuscript" or "find
-recent papers on tensor-network contraction" is enough, and the assistant
-decides whether to do the work itself or start the program.
+There is no program for auditing a manuscript, searching the literature,
+deriving a result, running a numerical experiment, writing or reviewing code,
+fixing a LaTeX build or diffing two versions with `latexdiff`. Ask the
+assistant in plain words ("audit this manuscript and reproduce every key
+derivation", "find recent papers on tensor-network contraction"). It does the
+work itself, or sets up a helper agent for it with the instructions and tools
+that job needs; read [Multi-agent workflows](./multi-agent-workflows.md).
 
 ## Lean programs
 
@@ -227,13 +202,12 @@ program for itself that it reuses in later conversations. Read
 
 ::: info If you used 0.40
 There is no agent menu any more, and no `--agent` flag. Ask the assistant
-for what an agent used to do, or start the matching program: `review`,
-`search`, `solve` (was `prover`), `derive` (was `research`), `experiment`
-(was `numerics`), `code` (was `coder` and `engineer`), `review-code`,
-`simplify`, `test`, `fix-latex` (was `latexFixer`) and `latexdiff`. Slide
-decks and posters are the `slides` and `poster` programs; the Lean agents'
-jobs are `prove`, `lean-simplify` (was `leanSimplifier`), `lean-search` (was
-`leanSearch`) and `blueprint`. Custom agent files are not read; see
+for what an agent used to do: reviewing, searching, proving, deriving,
+numerics, coding, simplifying, testing, fixing LaTeX and `latexdiff` are
+requests in plain words, not programs. Slide decks and posters are the
+`slides` and `poster` programs; the Lean agents' jobs are `prove`,
+`lean-simplify` (was `leanSimplifier`), `lean-search` (was `leanSearch`) and
+`blueprint`. Custom agent files are not read; see
 [Tailoring TeXRA](./customizing.md).
 :::
 

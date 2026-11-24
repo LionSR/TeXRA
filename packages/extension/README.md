@@ -52,11 +52,10 @@ helper agents, and runs autonomous multi-round goals verified by an independent
 judge. Interrupted tasks resume from SQLite without repeating finished work, and
 any task or message can be forked.
 
-| Family       | Programs                                                                                                                 | What it returns                                               |
-| :----------- | :----------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------ |
-| **Document** | `edit`, `annotate`, `enhance`, `apply`, `transcribe`, `slides`, `poster`                                                 | Compiled LaTeX and `latexdiff` PDFs                           |
-| **Task**     | `review`, `search`, `derive`, `solve`, `experiment`, `code`, `review-code`, `simplify`, `test`, `fix-latex`, `latexdiff` | Research report or verified project edits                     |
-| **Lean 4**   | `prove`, `lean-simplify`, `blueprint`, `lean-search`                                                                     | Proofs verified with zero errors, zero `sorry`, no new axioms |
+| Family       | Programs                                                                 | What it returns                                               |
+| :----------- | :----------------------------------------------------------------------- | :------------------------------------------------------------ |
+| **Document** | `edit`, `annotate`, `enhance`, `apply`, `transcribe`, `slides`, `poster` | Compiled LaTeX and `latexdiff` PDFs                           |
+| **Lean 4**   | `prove`, `lean-simplify`, `blueprint`, `lean-search`                     | Proofs verified with zero errors, zero `sorry`, no new axioms |
 
 Tailor TeXRA with `AGENTS.md`, Markdown memory, `SKILL.md` skills, Claude Code /
 Codex plugins, MCP servers, and per-project approval controls

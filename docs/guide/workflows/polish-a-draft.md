@@ -33,8 +33,7 @@ Polish when technical content and mathematical arguments are settled, but the pr
 - Enforce consistent terminology across sections.
 
 To add content or change the mathematics, say so in the instruction, or ask
-the assistant in a chat (or start the [`derive` program](../programs.md#task-programs)),
-which can compute and check as it goes.
+the assistant in a chat, which can compute and check as it goes.
 
 ## Run it from the CLI
 

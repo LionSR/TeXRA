@@ -2,8 +2,8 @@
 // Frameless figure for the two ways TeXRA works that guide/index.md
 // explains: a document program (a structured pipeline that writes
 // versioned, diffable output files) vs the assistant's chat
-// (conversational, read/edit + search/compile with tools), which also
-// starts the task programs. Each program becomes a labelled pill.
+// (conversational, read/edit + search/compile with tools). Each program,
+// and each kind of job the assistant is asked for, becomes a labelled pill.
 //
 // Frameless and .mockup-scoped, so it inherits --mk-* and flips with the theme.
 // Composes StatusPill for the program lists — no bespoke pill CSS.
@@ -25,10 +25,9 @@ const toolUse = [
   'solve',
   'experiment',
   'code',
-  'review-code',
   'simplify',
   'test',
-  'fix-latex',
+  'fix LaTeX',
   'latexdiff',
 ];
 const tools = ['arXiv', 'Lean', 'Wolfram', 'compile', 'files', 'shell'];
@@ -57,7 +56,7 @@ const tools = ['arXiv', 'Lean', 'Wolfram', 'compile', 'files', 'shell'];
       </footer>
     </section>
 
-    <!-- The assistant and the task programs it starts -->
+    <!-- The assistant and the jobs it is asked for -->
     <section class="ac-col">
       <header class="ac-head ac-head--tooluse">
         <wa-icon
@@ -69,7 +68,7 @@ const tools = ['arXiv', 'Lean', 'Wolfram', 'compile', 'files', 'shell'];
       </header>
       <p class="ac-sub">
         Works conversationally → read &amp; edit files, search, compile,
-        iterate, or start a task program.
+        iterate.
       </p>
       <div class="ac-badges">
         <StatusPill v-for="a in toolUse" :key="a" variant="info">{{
