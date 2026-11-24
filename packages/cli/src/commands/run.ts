@@ -22,10 +22,6 @@ import {
   writeTextStderr,
 } from '../runtime/platform/logSinks';
 import { selectCliRunModel } from '../runtime/models/launchDefaults';
-import {
-  RUN_TARGET_NAME_DESCRIPTION,
-  missingRunTargetMessage,
-} from '../runtime/runTarget';
 import { cliEntryAgent } from '../runtime/cliEntryAgent';
 import {
   cliPlatform,
@@ -132,7 +128,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
       return yield* failUsage(
         // A program read from a file may be one that does not load now.
         [
-          missingRunTargetMessage(init.target, [...programs.keys()]),
+          `Unknown program: ${init.target}. Available: ${[...programs.keys()].toSorted().join(', ')}. Use \`${CHAT_TARGET}\` for a single-turn answer.`,
           ...(programOrigin(init.target) === 'listed' ? [] : withheld),
         ].join(' '),
       );
@@ -439,7 +435,9 @@ export const headlessRunCommand = cliCommand('run', {
   config: {
     ...SKILL_SOURCES_CONFIG,
     target: Argument.String('target').pipe(
-      Argument.withDescription(RUN_TARGET_NAME_DESCRIPTION),
+      Argument.withDescription(
+        `Program name, or \`${CHAT_TARGET}\` for a single-turn answer`,
+      ),
     ),
     input: fileFlag(
       'input',
