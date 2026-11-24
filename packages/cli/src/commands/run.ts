@@ -34,7 +34,7 @@ import {
   modelFlag,
   SKILL_SOURCES_CONFIG,
 } from './_helpers/cliCommand';
-import { emitCliResult } from './_helpers/output';
+import { emitCliResult } from '../runtime/platform/output';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
   executeCliConfig,

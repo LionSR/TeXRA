@@ -5,6 +5,7 @@ import { CliInvocation } from '@cli/runtime/platform/cliContext';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { cliPlatform } from '@cli/runtime/platform/initPlatform';
 import { writeErrorStderr } from '@cli/runtime/platform/logSinks';
+import { cliProgressWriter, emitCliResult } from '@cli/runtime/platform/output';
 import {
   shouldUseSubscriptionDeviceCode,
   signInCliSubscription,
@@ -19,7 +20,6 @@ import {
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 
 import { boolFlag, cliCommand } from './cliCommand';
-import { cliProgressWriter, emitCliResult } from './output';
 
 /**
  * Turn one network/auth call into a result the caller narrows with one

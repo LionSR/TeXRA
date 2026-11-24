@@ -37,7 +37,7 @@ import {
 
 // Local file imports
 import { CliExitCode } from './platform/exitCodes';
-import { writeCliResult } from '../commands/_helpers/output';
+import { writeCliResult } from './platform/output';
 import { cliErrorMessage, writeTextStderr } from './platform/logSinks';
 import { createCliStyle } from './terminal/style';
 import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminal/terminalRequirements';
