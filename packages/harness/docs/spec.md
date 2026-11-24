@@ -994,7 +994,7 @@ its title.
   `#'reopens at the committed ordinal and never reuses one'`,
   `#'stores a large string once, compressed, and reads it exact'`
 - **2.3 publisher**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#'publishes complete replay and finite live batches in order'`;
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#'shows complete history before the live updates'`;
   `src/test-kernel/support/crashConformance.ts#'a crash between two appends of one job leaves neither'`
 - **2.4 versions and gate**:
   `src/test-kernel/schemas/rowVersions.vitest.ts#'names every stored kind once'`,

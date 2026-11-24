@@ -160,8 +160,8 @@ export const attachCliSessionProgressProjection = Effect.fn(
   const detach = Effect.gen(function* () {
     stopAt = session.view.head();
     yield* SubscriptionRef.changes(drainedTo).pipe(
-      Stream.takeUntil((to) => to >= stopAt),
-      Stream.runDrain,
+      Stream.filter((to) => to >= stopAt),
+      Stream.runHead,
     );
     // `stopAt` is the store's head, which no view level can be past, so the
     // child list gate is open here and the last one goes out with the drain.

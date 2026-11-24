@@ -213,7 +213,7 @@ export function makeInlineCriticism(): InlineCriticism {
       Stream.filter(Predicate.isNotUndefined),
       Stream.changes,
       Stream.switchMap((on) =>
-        on ? Stream.fromEffect(showDiagnostics(session)) : Stream.empty,
+        on ? Stream.fromEffectDrain(showDiagnostics(session)) : Stream.empty,
       ),
       Stream.runDrain,
       withLogChannel(CHANNEL),

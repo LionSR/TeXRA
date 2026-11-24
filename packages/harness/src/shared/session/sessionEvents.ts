@@ -173,7 +173,7 @@ export class SessionEvents extends Context.Service<
      *  rest is the publisher's batches. */
     readonly batches: (
       fromCommit: CommitOrdinal,
-    ) => Stream.Stream<CommittedBatch, DatabaseReadFailed>;
+    ) => Stream.Stream<Omit<CommittedBatch, 'from'>, DatabaseReadFailed>;
     /** Every event with commit above `fromCommit`, in commit order across
      *  aggregates, then the tail, which ends when the session closes: the
      *  rows of {@link batches}. Transcript rows of unsubscribed

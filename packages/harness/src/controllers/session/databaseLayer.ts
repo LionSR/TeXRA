@@ -500,40 +500,41 @@ export const databaseLayer = (
         movedAside,
         currentCommit: query(currentCommit),
         displayRows: (rows) => rows.flatMap(shown),
-        readDisplay: (fromCommit) => {
-          // Pages are separate snapshots: a deletion marker seen stays in view.
-          const removals = new Map<number, SessionRow>();
-          return Stream.paginate(fromCommit, (from) =>
-            snapshot(
-              Effect.gen(function* () {
-                const top = yield* currentCommit;
-                const end = yield* top - from > DISPLAY_PAGE_ROWS
-                  ? execOne(DISPLAY_PAGE_END, [from])
-                  : Effect.undefined;
-                const through = Math.min(top, Number(end?.through ?? top));
-                const rows = yield* decodedRows(display, [
-                  DISPLAY_READ_TYPES,
-                  from,
-                  through,
-                ]);
-                if (through < top)
-                  for (const row of yield* decodedRows(pendingDeletions, []))
-                    removals.set(row.commit, row);
-                const read = new Set(rows.map((row) => row.commit));
-                const kept = [...removals.values()].filter(
-                  ({ commit }) =>
-                    commit > from && commit <= through && !read.has(commit),
-                );
-                return [
-                  [...rows, ...kept]
-                    .toSorted((x, y) => x.commit - y.commit)
-                    .flatMap(shown),
-                  through < top ? Option.some(through) : Option.none(),
-                ] as const;
-              }),
-            ),
-          );
-        },
+        readDisplay: (fromCommit) =>
+          Stream.suspend(() => {
+            // A reader keeps deletion markers across its page snapshots.
+            const removals = new Map<number, SessionRow>();
+            return Stream.paginate(fromCommit, (from) =>
+              snapshot(
+                Effect.gen(function* () {
+                  const top = yield* currentCommit;
+                  const end = yield* top - from > DISPLAY_PAGE_ROWS
+                    ? execOne(DISPLAY_PAGE_END, [from])
+                    : Effect.undefined;
+                  const through = Math.min(top, Number(end?.through ?? top));
+                  const rows = yield* decodedRows(display, [
+                    DISPLAY_READ_TYPES,
+                    from,
+                    through,
+                  ]);
+                  if (through < top)
+                    for (const row of yield* decodedRows(pendingDeletions, []))
+                      removals.set(row.commit, row);
+                  const read = new Set(rows.map((row) => row.commit));
+                  const kept = [...removals.values()].filter(
+                    ({ commit }) =>
+                      commit > from && commit <= through && !read.has(commit),
+                  );
+                  return [
+                    [...rows, ...kept]
+                      .toSorted((x, y) => x.commit - y.commit)
+                      .flatMap(shown),
+                    through < top ? Option.some(through) : Option.none(),
+                  ] as const;
+                }),
+              ),
+            );
+          }),
         readListing: () =>
           query(
             Effect.map(decodedRows(READ_LISTING, []), (rows) =>
