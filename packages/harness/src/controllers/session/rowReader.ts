@@ -192,12 +192,11 @@ export function rowReader(
       unopenable.set(runId, earlier ? 'earlierBuild' : 'damaged');
   };
   const warnOnce = (key: string, message: string) =>
-    warned.has(key)
-      ? Effect.void
-      : Effect.sync(() => warned.add(key)).pipe(
-          Effect.andThen(Effect.logWarning(message)),
-          withLogChannel('sessionDatabase'),
-        );
+    Effect.suspend(() => {
+      if (warned.has(key)) return Effect.void;
+      warned.add(key);
+      return Effect.logWarning(message).pipe(withLogChannel('sessionDatabase'));
+    });
   const markEarlier = (runId: RunId, row: DatabaseRowEarlier) => {
     mark(runId, true);
     if (!earlier.has(runId)) earlier.set(runId, row);
@@ -282,13 +281,14 @@ export function rowReader(
   ) {
     if (whole) {
       yield* scan;
-      const [refusal] = rows.flatMap((row) => {
+      // Malformed SQL rows still fail validation after the first refusal.
+      let refusal: DatabaseRowEarlier | undefined;
+      for (const row of rows) {
         const { kind, logicalId } = Schema.decodeUnknownSync(RowSchema)(row);
-        return kind === 'run'
-          ? (earlier.get(Schema.decodeUnknownSync(RunIdSchema)(logicalId)) ??
-              [])
-          : [];
-      });
+        if (kind !== 'run') continue;
+        const runId = Schema.decodeUnknownSync(RunIdSchema)(logicalId);
+        refusal ??= earlier.get(runId);
+      }
       if (refusal !== undefined) return yield* refusal;
     }
     // The batch's blobs in one statement: a row carries addresses only. A

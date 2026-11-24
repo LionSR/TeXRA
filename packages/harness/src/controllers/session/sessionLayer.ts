@@ -12,6 +12,7 @@ import {
   Equal,
   FileSystem,
   Hash,
+  Iterable,
   Layer,
   LayerMap,
   type LogLevel,
@@ -230,8 +231,9 @@ const unopenedEntry =
 const heldSession = Effect.fn('heldSession')(function* (root: string) {
   const sessions = yield* SessionMap;
   const keys = yield* RcMap.keys(sessions.rcMap);
-  const key = [...keys].find((candidate) => candidate.storage === root);
-  if (key === undefined) return undefined;
+  const found = Iterable.findFirst(keys, (key) => key.storage === root);
+  if (Option.isNone(found)) return undefined;
+  const key = found.value;
   const held = yield* sessions
     .contextEffectOption(key)
     .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));

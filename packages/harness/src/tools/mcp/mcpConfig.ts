@@ -34,6 +34,7 @@ import {
   Option,
   RcMap,
   Schema,
+  Semaphore,
   type Scope,
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -286,24 +287,35 @@ export const projectServers = Effect.fnUntraced(function* (
   // Servers that did not start stay failed until the next root run starts
   // (`hold`): no step, and no subagent of the task, waits on a dead start
   // twice.
-  const failed = new Set<ServerKey>();
+  const failed = new Map<string, ServerKey>();
+  const eviction = yield* Semaphore.make(1);
   const holdServer: ProjectServers['holdServer'] = (plugin, load = '') =>
     Effect.gen(function* () {
       const key = new ServerKey(plugin, yield* ProjectEnvironment, load);
       const { tools, failure } = yield* RcMap.get(servers, key);
-      if (failure !== undefined) failed.add(key);
+      if (failure !== undefined) failed.set(key.id, key);
       return { failure, tools, revision: plugin.revision };
     });
   const hold: ProjectServers['hold'] = Effect.fn('ToolCatalog.hold')(
     function* (declared, root) {
-      for (const key of root ? failed : []) {
-        // Only a key whose entry still holds that failure: one started
-        // healthily since is left running.
-        const entry = yield* Effect.scoped(RcMap.getOption(servers, key));
-        if (Option.isSome(entry) && entry.value.failure !== undefined)
-          yield* RcMap.invalidate(servers, key);
-        failed.delete(key);
-      }
+      if (root)
+        yield* eviction.withPermit(
+          Effect.gen(function* () {
+            for (const key of [...failed.values()]) {
+              // Keep the checked generation held until it is invalidated.
+              // A concurrent root cannot evict a healthy replacement.
+              yield* Effect.scoped(
+                Effect.gen(function* () {
+                  const entry = yield* RcMap.getOption(servers, key);
+                  if (Option.isSome(entry) && entry.value.failure !== undefined)
+                    yield* RcMap.invalidate(servers, key);
+                }),
+              );
+              // A concurrent holder can have reported another failure.
+              if (failed.get(key.id) === key) failed.delete(key.id);
+            }
+          }),
+        );
       const read = yield* loader(declared);
       const held = yield* Effect.forEach(
         read.plugins,

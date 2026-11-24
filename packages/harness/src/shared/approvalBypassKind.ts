@@ -126,10 +126,16 @@ function policyLimit(
   for (const grants of ancestry(source, runId)) {
     const own = grants?.limit;
     // Block is the strictest limit; any other is Ask.
-    if (own !== undefined && limit !== 'never') limit = own;
+    limit = stricterLimit(limit, own);
   }
   return limit;
 }
+
+const stricterLimit = (
+  current: ApprovalPolicyLimit | undefined,
+  next: ApprovalPolicyLimit | undefined,
+): ApprovalPolicyLimit | undefined =>
+  next === 'never' ? next : (current ?? next);
 
 /** The grants of a run and each ancestor while its edges stand, the run
  *  first; a cycle in the edges ends the walk. */
@@ -207,16 +213,22 @@ export function inheritedGrants(
   source: ApprovalGrantSource,
   runId: RunId,
 ): ApprovalGrants {
-  const own: Partial<Record<ApprovalBypassKind, OwnGrant>> = {};
-  for (const kind of APPROVAL_BYPASS_KINDS) {
-    for (const grants of ancestry(source, runId)) {
-      const value = grants?.own[kind];
-      if (value === undefined || value === 'parent') continue;
-      own[kind] = value;
-      break;
+  const nearest: Partial<Record<ApprovalBypassKind, OwnGrant>> = {};
+  let limit: ApprovalPolicyLimit | undefined;
+  for (const grants of ancestry(source, runId)) {
+    if (grants === undefined) continue;
+    limit = stricterLimit(limit, grants.limit);
+    for (const kind of APPROVAL_BYPASS_KINDS) {
+      const value = grants.own[kind];
+      if (value !== undefined && value !== 'parent') nearest[kind] ??= value;
     }
   }
-  const limit = policyLimit(source, runId);
+  const own = Object.fromEntries(
+    APPROVAL_BYPASS_KINDS.flatMap((kind) => {
+      const value = nearest[kind];
+      return value === undefined ? [] : [[kind, value] as const];
+    }),
+  );
   return { own, goal: [], ...(limit !== undefined && { limit }) };
 }
 

@@ -8,7 +8,7 @@
  * through `resumeRun`, and a child's launch through `startChildRun`
  * (`delegation/childLaunch.ts`).
  */
-import { Clock, ConfigProvider, Effect, Layer, Record } from 'effect';
+import { Clock, ConfigProvider, Effect, Iterable, Layer, Record } from 'effect';
 
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import type { ITool } from '@tools/core/ToolTypes';
@@ -118,10 +118,15 @@ const enterRun = Effect.fn('enterRun')(function* (
       message: `Run ${runId} already exists; resume it.`,
     });
   let held: AgentEvent[] | null = [];
-  const logger = new TraceEmitter((event) =>
-    held === null ? log.publish(runId, event) : held.push(event),
+  const logger = yield* Effect.acquireRelease(
+    Effect.sync(
+      () =>
+        new TraceEmitter((event) =>
+          held === null ? log.publish(runId, event) : held.push(event),
+        ),
+    ),
+    (trace) => Effect.sync(() => trace.close()),
   );
-  yield* Effect.addFinalizer(() => Effect.sync(() => logger.close()));
   const enter: RunLaunch['entry']['enter'] = (commit) => {
     // How many held events the batch took, counted as its job reads them.
     let carried = 0;
@@ -129,9 +134,11 @@ const enterRun = Effect.fn('enterRun')(function* (
       const events = held ?? [];
       carried = events.findIndex((e) => e.type.startsWith('stream.'));
       if (carried < 0) carried = events.length;
-      return events
-        .slice(0, carried)
-        .flatMap((e) => runEventDraft(runId, e) ?? []);
+      return Array.from(
+        Iterable.flatMapNullishOr(Iterable.take(events, carried), (event) =>
+          runEventDraft(runId, event),
+        ),
+      );
     });
     return commit(alongside).pipe(
       Effect.tap(() =>

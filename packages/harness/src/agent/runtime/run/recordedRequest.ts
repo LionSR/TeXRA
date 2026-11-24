@@ -87,11 +87,12 @@ export function blobRows(
   state: RunState,
   values: readonly unknown[],
 ): RunHistoryDraft[] {
-  const stored = new Set(Object.keys(state.contents));
+  const included = new Set<string>();
   return values.flatMap((value) => {
     const digest = sha256(value);
-    if (stored.has(digest)) return [];
-    stored.add(digest);
+    if (Object.hasOwn(state.contents, digest) || included.has(digest))
+      return [];
+    included.add(digest);
     return [
       {
         type: 'context.blob',

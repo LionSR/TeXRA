@@ -15,6 +15,7 @@ import {
   type PlatformError,
   Schema,
   type Scope,
+  Stream,
 } from 'effect';
 
 import { RunLive, type RunRegistry } from '@agent/runtime/runRegistry';
@@ -158,8 +159,9 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
     // Bounded: a marker the queue refuses stays pending in the store, and
     // the next open's `pending` pass collects it.
     const markers = yield* Queue.dropping<RemovalMarker>(256);
-    yield* Effect.forkScoped(
-      Effect.forever(Effect.flatMap(Queue.take(markers), collect)),
+    yield* Stream.fromEffectRepeat(Queue.take(markers)).pipe(
+      Stream.runForEach(collect),
+      Effect.forkScoped,
     );
     const pending = Effect.gen(function* () {
       for (const marker of yield* database.deletions.pending())

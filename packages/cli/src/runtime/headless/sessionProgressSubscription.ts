@@ -1,4 +1,4 @@
-import { Effect, Fiber, LogLevel, Stream, SubscriptionRef } from 'effect';
+import { Effect, LogLevel, Stream, SubscriptionRef } from 'effect';
 
 import {
   type RunView,
@@ -75,13 +75,11 @@ export function writeProgressRow(
  * from the drained view. The drain waits on the tail's own coordinate
  * (`view.events`'s `drained`), not on the events: a transcript row the
  * store no longer holds emits nothing, and the ordinal captured at detach may
- * be exactly that row's. A second detach waits on the first.
+ * be exactly that row's.
  *
- * The tail, its coordinate and the child list are child fibers of the fiber that
- * attaches: the projection lives for the length of one headless run, so the
- * launch owns them, and they start before attach returns so the first commit
- * after it is already being read. The returned Effect is the detach; the
- * launch fiber's exit is the backstop that interrupts them when no detach ran.
+ * The tail and child-list listeners start before attach returns so the first
+ * subsequent commit is read. Their scope drains the projection before
+ * interrupting the listeners.
  */
 export const attachCliSessionProgressProjection = Effect.fn(
   'attachCliSessionProgressProjection',
@@ -130,28 +128,26 @@ export const attachCliSessionProgressProjection = Effect.fn(
   // later level: the store's head bounds the session view, so this writes nothing.
   emitChildren(session.view.current(), attachedAt);
 
-  const fork = Effect.forkChild({ startImmediately: true });
-  const fibers = [
-    yield* fork(
-      Stream.runForEach(session.view.events(attachedAt, drainedTo), (event) =>
-        Effect.sync(() => {
-          if (event.commit > stopAt) return;
-          writeProgressRow(event, includeDebugLogs);
-        }),
-      ),
+  const fork = Effect.forkScoped({ startImmediately: true });
+  yield* fork(
+    Stream.runForEach(session.view.events(attachedAt, drainedTo), (event) =>
+      Effect.sync(() => {
+        if (event.commit > stopAt) return;
+        writeProgressRow(event, includeDebugLogs);
+      }),
     ),
-    // The child list's source: every view level, against the tail's
-    // coordinate, so a level ahead of the tail waits for its lines.
-    yield* fork(
-      Stream.runForEach(
-        Stream.zipLatest(
-          session.view.changes,
-          SubscriptionRef.changes(drainedTo),
-        ),
-        ([view, to]) => Effect.sync(() => emitChildren(view, to)),
+  );
+  // The child list's source: every view level, against the tail's
+  // coordinate, so a level ahead of the tail waits for its lines.
+  yield* fork(
+    Stream.runForEach(
+      Stream.zipLatest(
+        session.view.changes,
+        SubscriptionRef.changes(drainedTo),
       ),
+      ([view, to]) => Effect.sync(() => emitChildren(view, to)),
     ),
-  ];
+  );
 
   // The detach: cut at the store's head, wait for the tail's coordinate to
   // reach it (at once when it already has), derive the child list once more
@@ -166,7 +162,6 @@ export const attachCliSessionProgressProjection = Effect.fn(
     // `stopAt` is the store's head, which no view level can be past, so the
     // child list gate is open here and the last one goes out with the drain.
     emitChildren(session.view.current(), stopAt);
-    yield* Fiber.interruptAll(fibers);
   });
-  return yield* Effect.cached(detach);
+  yield* Effect.addFinalizer(() => detach);
 });

@@ -8,7 +8,14 @@
  */
 import path from 'node:path';
 
-import { Effect, FileSystem } from 'effect';
+import {
+  Array as Arr,
+  Effect,
+  FileSystem,
+  Iterable,
+  Predicate,
+  Result,
+} from 'effect';
 
 import {
   readNormalizedFile,
@@ -241,7 +248,7 @@ const computeAndWriteOutputDiffs = Effect.fn('documents.computeDiffs')(
       outputs,
       (o) =>
         Effect.gen(function* () {
-          if (!o.originalPath) return { kind: 'none' } as const;
+          if (!o.originalPath) return undefined;
           const [original, modified] = yield* Effect.all(
             [
               readNormalizedFile(fs, o.originalPath),
@@ -260,18 +267,17 @@ const computeAndWriteOutputDiffs = Effect.fn('documents.computeDiffs')(
           }
 
           const diff = yield* unifiedDiffOf(original, modified);
-          if (!diff) return { kind: 'none' } as const;
+          if (!diff) return undefined;
           const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
           const summary: ResultDiffSummary = {
             path: o.absolutePath,
             diffRelPath: `diffs/${outputSlotName(normalizeFilePath(o.relativePath))}.diff`,
             largeChange,
           };
-          return {
-            kind: 'written',
+          return Result.succeed({
             summary,
             content: truncateDiff(diff, limit),
-          } as const;
+          });
         }).pipe(
           // A file read failure costs that file's diff, not the others', and
           // is answered as failed so the result says the diff is missing
@@ -281,18 +287,20 @@ const computeAndWriteOutputDiffs = Effect.fn('documents.computeDiffs')(
               `Skipping diff for ${o.absolutePath}: ${toErrorMessage(error)}`,
             ).pipe(
               withLogChannel(CHANNEL),
-              Effect.as({
-                kind: 'failed',
-                path: o.relativePath,
-                reason: toErrorMessage(error),
-              } as const),
+              Effect.as(
+                Result.fail({
+                  path: o.relativePath,
+                  reason: toErrorMessage(error),
+                }),
+              ),
             ),
           ),
         ),
       { concurrency: 'unbounded' },
     );
-    const written = computed.filter((diff) => diff.kind === 'written');
-    const failed = computed.filter((diff) => diff.kind === 'failed');
+    const [written, failed] = Arr.separate(
+      Iterable.filter(computed, Predicate.isNotUndefined),
+    );
     if (written.length > 0) {
       const runDir = runDirUnder(storageRoot, runId);
       // One recursive create reaches the run directory and the runs root above

@@ -23,7 +23,15 @@
  * instead of asked of its model; `RunState.handedDown` ends the turn.
  */
 
-import { Context, Effect, Exit, type Scope, ScopedRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Exit,
+  Iterable,
+  Option,
+  type Scope,
+  ScopedRef,
+} from 'effect';
 
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
@@ -129,18 +137,22 @@ const foreignProtocol = (
   bound: Pick<BoundModel, 'backend' | 'origin'>,
 ): RunHistoryRefused | null => {
   const { pendingResponse, continuation } = state;
-  const recorded = [
-    ...[
-      ...state.messages,
-      ...(pendingResponse === null ? [] : [pendingResponse.assistant]),
-    ].flatMap((message) =>
-      message.role === 'assistant' && message.origin !== null
-        ? [message.origin.protocol]
-        : [],
+  const messages =
+    pendingResponse === null
+      ? state.messages
+      : Iterable.append(state.messages, pendingResponse.assistant);
+  const protocol = bound.origin.protocol;
+  const recorded = Option.getOrElse(
+    Iterable.findFirst(messages, (message) =>
+      message.role === 'assistant' &&
+      message.origin !== null &&
+      message.origin.protocol !== protocol
+        ? Option.some(message.origin.protocol)
+        : Option.none(),
     ),
-    ...(continuation === null ? [] : [continuation.origin.protocol]),
-  ].find((protocol) => protocol !== bound.origin.protocol);
-  if (recorded === undefined) return null;
+    () => continuation?.origin.protocol,
+  );
+  if (recorded === undefined || recorded === protocol) return null;
   return new RunHistoryRefused({
     reason: 'foreign-protocol',
     runId,
@@ -282,7 +294,10 @@ const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
   const { runId, finalToolName } = yield* AgentRun;
   if (
     !text.trim() &&
-    at.messages.slice(0, -1).findLast((m) => m.role !== 'user')?.role === 'tool'
+    at.messages.findLast(
+      (message, index) =>
+        index < at.messages.length - 1 && message.role !== 'user',
+    )?.role === 'tool'
   ) {
     const row = appendRow(runId, [nudge(BLANK_TOOL_RESULT_CONTINUATION)], {
       reason: 'blank-continuation',

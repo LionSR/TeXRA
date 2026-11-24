@@ -44,49 +44,48 @@ function promptForApiKey(
   displayName: string,
   keyUrl: string | undefined,
 ): Effect.Effect<string | undefined> {
-  const ib = vscode.window.createInputBox();
-  ib.title = PROVIDER_KEY_COPY.set(displayName);
-  ib.prompt = PROVIDER_KEY_COPY.enter(displayName);
-  ib.password = true;
-  ib.placeholder = '************************************';
-  ib.ignoreFocusOut = true;
-  const getKeyButton: vscode.QuickInputButton = {
-    iconPath: new vscode.ThemeIcon('link-external'),
-    tooltip: `Get ${displayName} API key`,
-    location: vscode.QuickInputButtonLocation?.Input,
-  };
-  ib.buttons = [getKeyButton];
-  // The portal opens beside the prompt, for as long as it is open; a
-  // browser that will not open is logged, and the prompt stays.
-  const openKeyPortal = eventStream(ib.onDidTriggerButton).pipe(
-    Stream.filter((button) => button === getKeyButton),
-    Stream.runForEach(() =>
-      keyUrl === undefined
-        ? Effect.void
-        : vscodeOpener
-            .openExternal(keyUrl)
-            .pipe(
-              Effect.catch((error) =>
-                Effect.logWarning(error.message).pipe(withLogChannel(CHANNEL)),
-              ),
-            ),
-    ),
-  );
-  // Disposing the input hides it, so an accepted value is followed by a
-  // second `accept(undefined)`; `Effect.callback` ignores every `resume`
-  // after the first, and `dispose` is idempotent.
-  const answer = Effect.callback<string | undefined>((resume) => {
-    const accept = (value: string | undefined): void => {
-      resume(Effect.succeed(value));
-      ib.dispose();
-    };
-    ib.onDidAccept(() => accept(ib.value));
-    ib.onDidHide(() => accept(undefined));
-    ib.show();
-    return Effect.sync(() => ib.dispose());
-  });
   return Effect.scoped(
-    Effect.forkScoped(openKeyPortal).pipe(Effect.andThen(answer)),
+    Effect.gen(function* () {
+      const ib = yield* Effect.acquireRelease(
+        Effect.sync(() => vscode.window.createInputBox()),
+        (input) => Effect.sync(() => input.dispose()),
+      );
+      ib.title = PROVIDER_KEY_COPY.set(displayName);
+      ib.prompt = PROVIDER_KEY_COPY.enter(displayName);
+      ib.password = true;
+      ib.placeholder = '************************************';
+      ib.ignoreFocusOut = true;
+      const getKeyButton: vscode.QuickInputButton = {
+        iconPath: new vscode.ThemeIcon('link-external'),
+        tooltip: `Get ${displayName} API key`,
+        location: vscode.QuickInputButtonLocation?.Input,
+      };
+      ib.buttons = [getKeyButton];
+      // The portal opens beside the prompt, for as long as it is open; a
+      // browser that will not open is logged, and the prompt stays.
+      const openKeyPortal = eventStream(ib.onDidTriggerButton).pipe(
+        Stream.filter((button) => button === getKeyButton),
+        Stream.runForEach(() =>
+          keyUrl === undefined
+            ? Effect.void
+            : vscodeOpener
+                .openExternal(keyUrl)
+                .pipe(
+                  Effect.catch((error) =>
+                    Effect.logWarning(error.message).pipe(
+                      withLogChannel(CHANNEL),
+                    ),
+                  ),
+                ),
+        ),
+      );
+      yield* Effect.forkScoped(openKeyPortal, { startImmediately: true });
+      return yield* Effect.callback<string | undefined>((resume) => {
+        ib.onDidAccept(() => resume(Effect.succeed(ib.value)));
+        ib.onDidHide(() => resume(Effect.succeed(undefined)));
+        ib.show();
+      });
+    }),
   );
 }
 

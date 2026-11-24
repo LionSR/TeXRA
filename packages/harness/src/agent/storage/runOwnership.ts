@@ -2,7 +2,7 @@
  *  its terminal fact, its parent edge and the children its calls own, and
  *  the child loop's turn bookkeeping: database reads of committed rows. */
 
-import { Effect, Result, Schema } from 'effect';
+import { Effect, Iterable, Result, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 import { runHistoryRows } from '@agent/runtime/providerMessages';
@@ -184,37 +184,32 @@ const runEndOf = Effect.fn('runEndOf')(function* (
   // by this end, whatever a later resume of it spent.
   const children =
     held.config && programOf(held.config) !== null
-      ? yield* Effect.forEach(
+      ? yield* Effect.filterMapEffect(
           // The view rebuilt from the log at this call, not the current
           // one, which trails it.
           (yield* (yield* SessionViewAccess).read([])).runs.get(runId)
             ?.childIds ?? [],
-          (child) =>
-            Effect.flatMap(
-              SessionLog.use((log) => log.facts(child)),
-              (facts) => {
-                if (facts === null || !during(facts.start?.commit ?? -1))
-                  return Effect.succeed(null);
-                const asOf = (row: SessionRow) => row.commit <= end.commit;
-                return Effect.flatMap(rowsOf(child), (rows) =>
-                  runEndOf(
-                    child,
-                    facts,
-                    rows.lifecycles.filter(asOf),
-                    rows.history.filter(asOf),
-                  ),
-                );
-              },
-            ),
+          Effect.fnUntraced(function* (child) {
+            const facts = yield* SessionLog.use((log) => log.facts(child));
+            if (facts === null || !during(facts.start?.commit ?? -1))
+              return Result.failVoid;
+            const asOf = (row: SessionRow) => row.commit <= end.commit;
+            const rows = yield* rowsOf(child);
+            const ended = yield* runEndOf(
+              child,
+              facts,
+              rows.lifecycles.filter(asOf),
+              rows.history.filter(asOf),
+            );
+            return Result.fromNullishOr(ended?.usage, () => undefined);
+          }),
         )
       : null;
   const usage =
     children === null
       ? own
       : sumUsageStats(
-          [own, ...children.map((child) => child?.usage)].filter(
-            (u) => u !== undefined,
-          ),
+          own === undefined ? children : Iterable.prepend(children, own),
         );
   const { outcome, error, output } = end;
   return {

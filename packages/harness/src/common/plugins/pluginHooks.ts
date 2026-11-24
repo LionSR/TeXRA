@@ -344,16 +344,24 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
       ),
     );
     // A reader that failed or outlasted the grace leaves the output cut.
-    const drained = yield* Fiber.join(readers).pipe(
-      Effect.timeoutOption(STDIO_GRACE),
+    const incomplete = yield* Fiber.join(readers).pipe(
+      Effect.as(false),
+      Effect.timeoutOrElse({
+        duration: STDIO_GRACE,
+        orElse: () => Effect.succeed(true),
+      }),
       Effect.catch((error) =>
         Effect.logWarning(
           `A hook's output could not be read: ${toErrorMessage(error)}`,
-        ).pipe(Effect.as(Option.none())),
+        ).pipe(Effect.as(true)),
       ),
     );
-    if (Option.isNone(drained)) cut = true;
-    return { kind: 'exited' as const, exitCode, ...out, cut };
+    return {
+      kind: 'exited' as const,
+      exitCode,
+      ...out,
+      cut: cut || incomplete,
+    };
   }).pipe(
     Effect.scoped,
     Effect.timeoutOrElse({

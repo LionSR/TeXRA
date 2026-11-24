@@ -167,12 +167,6 @@ const listDirectory = Effect.fn('workspaceFileRequest.listDirectory')(
     // (warn-logged) rather than failing the tree.
     const entries = yield* readDirectoryTypedTolerant(absoluteDirectory);
     return entries
-      .toSorted(([left], [right]) =>
-        left.localeCompare(right, undefined, {
-          numeric: true,
-          sensitivity: 'base',
-        }),
-      )
       .flatMap(([name, type]) => {
         if (type === 'SymbolicLink') return [];
         const path = normalizeFilePath(
@@ -180,13 +174,20 @@ const listDirectory = Effect.fn('workspaceFileRequest.listDirectory')(
         );
         if (type === 'Directory') {
           return shouldVisitDirectory(path, filters)
-            ? [{ path, isDirectory: true }]
+            ? [{ name, path, isDirectory: true }]
             : [];
         }
         return type === 'File' && passesFileFilters(path, filters)
-          ? [{ path, isDirectory: false }]
+          ? [{ name, path, isDirectory: false }]
           : [];
-      });
+      })
+      .sort((left, right) =>
+        left.name.localeCompare(right.name, undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        }),
+      )
+      .map(({ path, isDirectory }) => ({ path, isDirectory }));
   },
 );
 

@@ -133,16 +133,26 @@ export const requestToolEditApproval = (
               decision.action !== 'approve'
                 ? Effect.succeed(decision)
                 : readToolEditContent(log.blobs, payload.data.content).pipe(
-                    Effect.flatMap((reviewed) =>
+                    Effect.flatMap((reviewed) => {
                       // A host's edited bytes may be CRLF. The base and proposal
                       // are the request's stored ones, including after a resume.
-                      finalizeApprovalResult(
-                        (
-                          decision.edit?.content ?? reviewed.proposedContent
-                        ).replaceAll('\r\n', '\n'),
-                        reviewed,
-                      ),
-                    ),
+                      const applied = (
+                        decision.edit?.content ?? reviewed.proposedContent
+                      ).replaceAll('\r\n', '\n');
+                      return applied === reviewed.proposedContent
+                        ? Effect.succeed(
+                            approvedEdit(
+                              applied,
+                              reviewed,
+                              {
+                                added: payload.data.addedLines,
+                                removed: payload.data.removedLines,
+                              },
+                              reviewed.firstChangedLine,
+                            ),
+                          )
+                        : finalizeApprovalResult(applied, reviewed);
+                    }),
                   ),
           ),
         );
@@ -159,19 +169,32 @@ function finalizeApprovalResult(
     appliedContent,
   );
 
-  // Compute startLine once here (convert 0-based to 1-based; null → line 1).
-  const startLine = (firstChangedLine(hunks, appliedContent) ?? 0) + 1;
-
   return reportDiffTimeout(timeout).pipe(
-    Effect.as({
-      action: 'apply' as const,
-      appliedContent,
-      originalContent: request.originalContent,
-      proposedContent: request.proposedContent,
-      lineChanges: countLineChanges(hunks),
-      startLine,
-    }),
+    Effect.as(
+      approvedEdit(
+        appliedContent,
+        request,
+        countLineChanges(hunks),
+        firstChangedLine(hunks, appliedContent),
+      ),
+    ),
   );
+}
+
+function approvedEdit(
+  appliedContent: string,
+  request: Pick<ToolEditProposal, 'originalContent' | 'proposedContent'>,
+  lineChanges: { readonly added: number; readonly removed: number },
+  firstLine: number | null,
+): ToolEditApprovalResult {
+  return {
+    action: 'apply',
+    appliedContent,
+    originalContent: request.originalContent,
+    proposedContent: request.proposedContent,
+    lineChanges,
+    startLine: (firstLine ?? 0) + 1,
+  };
 }
 
 /**

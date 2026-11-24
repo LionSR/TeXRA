@@ -35,8 +35,6 @@ import {
   Settings,
   type SettingsStores,
   AppState,
-  type PerKeyLane,
-  withPerKeyLane,
 } from '@texra-ai/worldline/plugins';
 import { INLINE_CRITICISM_SETTING } from '@texra/shared/settings/texraSettings';
 
@@ -94,7 +92,6 @@ interface InlineCriticism {
 export function makeInlineCriticism(): InlineCriticism {
   /** The diagnostics while the setting is on. */
   let collection: vscode.DiagnosticCollection | undefined;
-  const fileLanes = new Map<string, PerKeyLane>();
 
   const refreshFileDiagnostics = Effect.fnUntraced(function* (
     file: OutputFileInfo,
@@ -170,15 +167,11 @@ export function makeInlineCriticism(): InlineCriticism {
       Effect.andThen(
         Stream.runForEach(outputFilesProduced(session), (files) =>
           Effect.forEach(
-            files,
-            // One refresh per path at a time, in arrival order: two rounds
-            // writing the same output file fork two reads, and without the
-            // lane the older read can land last and set stale squiggles over
-            // the newer ones.
-            (file) =>
-              refreshFileDiagnostics(file).pipe(
-                withPerKeyLane(fileLanes, file.location.absolutePath),
-              ),
+            Map.groupBy(files, (file) => file.location.absolutePath).values(),
+            // Finish this batch before taking the next one. Within it,
+            // serialize refreshes that target the same path.
+            (group) =>
+              Effect.forEach(group, refreshFileDiagnostics, { discard: true }),
             { concurrency: 8, discard: true },
           ).pipe(
             Effect.catchCause((cause) =>
@@ -186,7 +179,6 @@ export function makeInlineCriticism(): InlineCriticism {
                 `Failed to refresh criticism diagnostics: ${toErrorMessage(cause)}`,
               ),
             ),
-            Effect.forkChild,
           ),
         ),
       ),

@@ -245,13 +245,13 @@ const tableOf = (
       byName.set(name, tool);
     }
   }
-  const [missing] = plugins.flatMap(({ id, requires }) =>
-    (requires ?? []).flatMap((needed) =>
-      entries.has(needed) ? [] : [`plugin ${id} runs on plugin ${needed}`],
-    ),
-  );
-  if (missing !== undefined)
-    return Result.fail(`${missing}, which is not listed.`);
+  for (const { id, requires } of plugins) {
+    const missing = requires?.find((needed) => !entries.has(needed));
+    if (missing !== undefined)
+      return Result.fail(
+        `plugin ${id} runs on plugin ${missing}, which is not listed.`,
+      );
+  }
   const modules = plugins.flatMap(({ scriptModules = {} }) =>
     Object.keys(scriptModules),
   );

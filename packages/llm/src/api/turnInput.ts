@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Result, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Local imports - canonical model contract
 import {
@@ -30,14 +30,18 @@ export const resolveTurn = Effect.fn('llm.resolveTurn')(function* (
   ) => Effect.Effect<{ readonly controls: object }, ModelError>,
   lower: (turn: ResolvedTurn) => Effect.Effect<unknown, ModelError>,
 ) {
-  const decoded = Schema.decodeUnknownResult(TurnRequestSchema)(request);
-  if (!Result.isSuccess(decoded))
-    return yield* new ModelError({
-      kind: 'invalid-request',
-      message: 'The turn request is invalid.',
-      cause: decoded.failure,
-    });
-  const input = decoded.success;
+  const input = yield* Schema.decodeUnknownEffect(TurnRequestSchema)(
+    request,
+  ).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ModelError({
+          kind: 'invalid-request',
+          message: 'The turn request is invalid.',
+          cause,
+        }),
+    ),
+  );
   if (
     input.continuation !== undefined &&
     input.continuation.origin.protocol !== origin.protocol
@@ -60,7 +64,7 @@ export const resolveTurn = Effect.fn('llm.resolveTurn')(function* (
     });
   const { controls } = yield* resolve(input);
   // A protocol without continuations drops the field as undeclared.
-  const turn = Schema.decodeUnknownResult(ResolvedTurnSchema)({
+  const turn = yield* Schema.decodeUnknownEffect(ResolvedTurnSchema)({
     ...origin,
     mode: input.mode ?? 'foreground',
     system: input.system,
@@ -68,15 +72,18 @@ export const resolveTurn = Effect.fn('llm.resolveTurn')(function* (
     tools,
     continuation: input.continuation,
     controls: { toolChoice, ...controls },
-  });
-  if (!Result.isSuccess(turn))
-    return yield* new ModelError({
-      kind: 'invalid-request',
-      message: 'The request resolves to no supported turn.',
-      cause: turn.failure,
-    });
-  yield* lower(turn.success);
-  return turn.success;
+  }).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ModelError({
+          kind: 'invalid-request',
+          message: 'The request resolves to no supported turn.',
+          cause,
+        }),
+    ),
+  );
+  yield* lower(turn);
+  return turn;
 });
 
 /**

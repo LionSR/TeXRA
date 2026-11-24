@@ -17,7 +17,7 @@
  * - `owner/repo/pulls/N` and `owner/repo/issues/N` are nuanced (worker-friendly).
  */
 
-import { Duration, Effect, Result, Schema } from 'effect';
+import { Duration, Effect, Schema } from 'effect';
 
 import { ToolContext } from '@texra-ai/worldline/plugins';
 import {
@@ -166,16 +166,15 @@ const requireToken = Effect.fn('githubSubscriptionTool.requireToken')(
 const PATH_FORMS =
   '"owner/repo", "owner/repo/pulls/N", or "owner/repo/issues/N"';
 
-const decodeTargetPath = Schema.decodeUnknownResult(SubscriptionTargetPath);
+const decodeTargetPath = Schema.decodeUnknownEffect(SubscriptionTargetPath);
 
 /** The target `raw` names; the input's union already requires a path. */
 function parsePath(raw: string): Effect.Effect<SubscriptionTarget, ToolError> {
-  const target = decodeTargetPath(raw.trim());
-  return Result.isSuccess(target)
-    ? Effect.succeed(target.success)
-    : Effect.fail(
-        new ToolError(`Invalid path "${raw}". Expected ${PATH_FORMS}.`),
-      );
+  return decodeTargetPath(raw.trim()).pipe(
+    Effect.mapError(
+      () => new ToolError(`Invalid path "${raw}". Expected ${PATH_FORMS}.`),
+    ),
+  );
 }
 
 /** Shared body sentence describing what a PR subscription delivers. */

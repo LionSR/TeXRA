@@ -13,12 +13,10 @@
 
 // Third-party imports
 import {
-  Array as Arr,
   Cause,
   Clock,
   Duration,
   Effect,
-  Order,
   Random,
   Ref,
   Schedule,
@@ -275,12 +273,10 @@ function getNewestTimestamp(
     updated_at?: string | null;
   }>,
 ): string | undefined {
-  const stamps = items
-    .flatMap((it) => it.updated_at ?? it.created_at ?? [])
-    .filter((stamp) => stamp !== '');
-  return Arr.isArrayNonEmpty(stamps)
-    ? Arr.max(stamps, Order.String)
-    : undefined;
+  return items.reduce<string | undefined>((newest, item) => {
+    const stamp = item.updated_at ?? item.created_at;
+    return stamp && (newest === undefined || stamp > newest) ? stamp : newest;
+  }, undefined);
 }
 
 /** A copy of `cache` with the same capacity, entries and recency order. */

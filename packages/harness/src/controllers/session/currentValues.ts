@@ -33,12 +33,17 @@ ON CONFLICT(family, key) DO UPDATE SET
   value = excluded.value, at = excluded.at
 `;
 
+const MATCHED_KEYS = `FROM current_value
+  WHERE family = ? AND key IN (SELECT value FROM json_each(?))`;
+
 /** The keys' rows in key order as one JSON text: equal exactly when no
  *  value changed. */
 const SNAPSHOT = `SELECT json_group_array(json_array(key, value) ORDER BY key)
-    AS snapshot
-  FROM current_value
-  WHERE family = ? AND key IN (SELECT value FROM json_each(?))`;
+    AS snapshot ${MATCHED_KEYS}`;
+
+/** Use the same UTF-8 strings SQLite would see as individual bound keys. */
+const requestedKeys = (keys: readonly string[]) =>
+  JSON.stringify(keys.map((key) => key.toWellFormed()));
 
 /** What a value write records for the store gate: this build's version. */
 const VALUE_KIND = JSON.stringify([
@@ -47,14 +52,13 @@ const VALUE_KIND = JSON.stringify([
 
 /** A failed change read's backoff: 250 ms doubling, at most 30 s, eight
  *  times, so it ends after about a minute. */
-const READ_RETRY = {
-  schedule: Schedule.exponential('250 millis').pipe(
-    Schedule.modifyDelay(({ duration }) =>
-      Effect.succeed(Duration.min(duration, Duration.seconds(30))),
-    ),
+const READ_RETRIES = 8;
+const READ_RETRY = Schedule.exponential('250 millis').pipe(
+  Schedule.modifyDelay(({ duration }) =>
+    Effect.succeed(Duration.min(duration, Duration.seconds(30))),
   ),
-  times: 8,
-};
+  Schedule.upTo({ times: READ_RETRIES }),
+);
 
 /**
  * A read that tells whether something changed (this module's feed, and the
@@ -70,12 +74,17 @@ export const changeRead = <E>(
   failed: string,
 ): Effect.Effect<unknown> =>
   read.pipe(
-    Effect.tapError(logFailure('sessionDatabase', `${failed}; retrying.`)),
-    Effect.retry(READ_RETRY),
+    Effect.retry(
+      READ_RETRY.pipe(
+        Schedule.tap(({ input }) =>
+          logFailure('sessionDatabase', `${failed}; retrying.`)(input),
+        ),
+      ),
+    ),
     Effect.catch((error) =>
       logFailure(
         'sessionDatabase',
-        `${failed} after ${READ_RETRY.times} retries; reporting a change.`,
+        `${failed} after ${READ_RETRIES} retries; reporting a change.`,
       )(error).pipe(Effect.as(Symbol('unread'))),
     ),
   );
@@ -149,12 +158,20 @@ export function currentValues(
     ) =>
       transact(
         Effect.gen(function* () {
-          const rows = new Map<string, SqlRow>();
+          const selected =
+            keys.length === 0
+              ? []
+              : yield* exec(`SELECT key, value ${MATCHED_KEYS}`, [
+                  family.name,
+                  requestedKeys(keys),
+                ]);
+          const rows = new Map(
+            selected.map((row) => [decodeString(row.key), row]),
+          );
           const current: Partial<Record<K, T>> = {};
           for (const key of keys) {
-            const row = yield* valueRow(family.name, key);
+            const row = rows.get(key.toWellFormed());
             if (row === undefined) continue;
-            rows.set(key, row);
             current[key] = yield* decodeValue(family, row);
           }
           // cast: every key with a row was set above; the others read absent.
@@ -165,7 +182,7 @@ export function currentValues(
           let deleted = false;
           let upserted = false;
           for (const key of keys) {
-            const row = rows.get(key);
+            const row = rows.get(key.toWellFormed());
             const nextValue = next[key];
             if (nextValue === undefined) {
               if (row === undefined) continue;
@@ -216,7 +233,7 @@ export function currentValues(
       SubscriptionRef.changes(written).pipe(
         Stream.mapEffect(() =>
           changeRead(
-            execOne(SNAPSHOT, [family.name, JSON.stringify(keys)]).pipe(
+            execOne(SNAPSHOT, [family.name, requestedKeys(keys)]).pipe(
               Effect.map((row) => row?.snapshot),
             ),
             `Could not read whether ${keys.join(', ')} changed`,

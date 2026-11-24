@@ -191,6 +191,21 @@ export const containedPath = Effect.fn('containedPath')(function* (
 const toList = (paths: string | readonly string[] | undefined) =>
   paths === undefined ? [] : [paths].flat();
 
+/** Resolve a declared file and read each normalized path only once. */
+const unreadDeclaredPath = Effect.fnUntraced(function* (
+  dir: string,
+  file: string,
+  read: Set<string>,
+  missing: string | undefined,
+) {
+  const resolved = yield* containedPath(dir, file);
+  if (resolved === undefined)
+    return missing === undefined ? undefined : yield* failPlugin(missing);
+  if (read.has(resolved)) return undefined;
+  read.add(resolved);
+  return resolved;
+});
+
 /** What stands in for a missing manifest: a name and skill paths. */
 type PluginFallback = Pick<
   PluginManifest,
@@ -318,13 +333,13 @@ const mcpServersOf = Effect.fn('mcpServersOf')(function* (
   // Both manifests may name the same file: it is read once.
   const read = new Set<string>();
   for (const file of files) {
-    const resolved = yield* containedPath(dir, file);
-    if (resolved === undefined)
-      return yield* failPlugin(
-        `Plugin ${name} declares MCP servers in "${file}", which does not exist.`,
-      );
-    if (read.has(resolved)) continue;
-    read.add(resolved);
+    const resolved = yield* unreadDeclaredPath(
+      dir,
+      file,
+      read,
+      `Plugin ${name} declares MCP servers in "${file}", which does not exist.`,
+    );
+    if (resolved === undefined) continue;
     const json = (yield* readJsonFile(resolved, McpFileSchema)) ?? {};
     const inner = Schema.decodeUnknownResult(McpFileSchema)(json.mcpServers);
     maps.push({
@@ -347,10 +362,12 @@ const mcpServersOf = Effect.fn('mcpServersOf')(function* (
       });
     }
   }
-  const names = servers.map((server) => server.name);
-  const clash = names.find((server, index) => names.indexOf(server) !== index);
-  if (clash !== undefined)
-    return yield* failPlugin(`Plugin ${name} declares ${clash} twice.`);
+  const names = new Set<string>();
+  for (const server of servers) {
+    if (names.has(server.name))
+      return yield* failPlugin(`Plugin ${name} declares ${server.name} twice.`);
+    names.add(server.name);
+  }
   return { servers, warnings };
 });
 
@@ -394,15 +411,15 @@ const hooksOf = Effect.fn('hooksOf')(function* (
   ];
   const read = new Set<string>();
   for (const [index, file] of files.entries()) {
-    const resolved = yield* containedPath(dir, file);
-    if (resolved === undefined) {
-      if (index === 0) continue;
-      return yield* failPlugin(
-        `Plugin ${name} declares hooks in "${file}", which does not exist.`,
-      );
-    }
-    if (read.has(resolved)) continue;
-    read.add(resolved);
+    const resolved = yield* unreadDeclaredPath(
+      dir,
+      file,
+      read,
+      index === 0
+        ? undefined
+        : `Plugin ${name} declares hooks in "${file}", which does not exist.`,
+    );
+    if (resolved === undefined) continue;
     const config = yield* readJsonFile(resolved, HooksConfigSchema);
     if (config !== undefined) add(path.relative(dir, resolved), config);
   }
@@ -530,9 +547,8 @@ export const readPlugin = Effect.fn('readPlugin')(function* (
     { concurrency: 'unbounded', mode: 'result' },
   );
   const skills = new Set<string>();
-  for (const root of yield* Effect.forEach(
-    yield* Effect.fromResult(parts.skills),
-    Effect.fromResult,
+  for (const root of yield* Effect.fromResult(
+    Result.flatMap(parts.skills, Result.all),
   ))
     if (root !== undefined) skills.add(path.relative(dir, root) || '.');
   const mcp = yield* Effect.fromResult(parts.mcp);

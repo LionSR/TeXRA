@@ -168,6 +168,15 @@ export function getArxivPaperDirName(input: string): string {
   return id ? id.replaceAll('/', '_') : input;
 }
 
+const retryableDownloadFailure = (cause: Cause.Cause<ArxivSourceError>) => {
+  const reason = cause.reasons[0];
+  return cause.reasons.length === 1 &&
+    reason?._tag === 'Fail' &&
+    reason.error._tag === 'ArxivSourceTransientError'
+    ? reason.error
+    : undefined;
+};
+
 /**
  * Download `url` to disk, retrying transient failures — network errors,
  * the per-attempt deadline, or 408/429/5xx (see
@@ -188,16 +197,11 @@ function downloadFile(
       Effect.fnUntraced(function* (cause) {
         // A permanent failure ends the retry unobserved, since it never had
         // retries left to report.
-        const reason = cause.reasons[0];
-        if (
-          cause.reasons.length !== 1 ||
-          reason._tag !== 'Fail' ||
-          reason.error._tag !== 'ArxivSourceTransientError'
-        )
-          return;
+        const error = retryableDownloadFailure(cause);
+        if (error === undefined) return;
         const { attempt } = yield* Schedule.CurrentMetadata;
         yield* Effect.logDebug(
-          `Download attempt failed (${DOWNLOAD_RETRIES - attempt} retries left): ${reason.error.message}`,
+          `Download attempt failed (${DOWNLOAD_RETRIES - attempt} retries left): ${error.message}`,
         );
       }),
     ),
@@ -207,10 +211,7 @@ function downloadFile(
       // p-retry's `minTimeout: 1000, randomize: true`.
       schedule: randomizedExponentialBackoff(Duration.seconds(1)),
       times: DOWNLOAD_RETRIES,
-      while: (cause) =>
-        cause.reasons.length === 1 &&
-        cause.reasons[0]?._tag === 'Fail' &&
-        cause.reasons[0].error._tag === 'ArxivSourceTransientError',
+      while: (cause) => retryableDownloadFailure(cause) !== undefined,
     }),
     Effect.catch((cause) => Effect.failCause(cause)),
     withLogChannel(ARXIV_CHANNEL),
@@ -296,8 +297,7 @@ function downloadFileOnce(
       destPath = destBasePath + getExtensionFromContentType(contentType);
     }
 
-    const file = yield* fs.open(destPath, { flag: 'w' });
-    yield* Stream.runForEach(response.stream, (chunk) => file.writeAll(chunk));
+    yield* Stream.run(response.stream, fs.sink(destPath));
     return destPath;
   }).pipe(
     // One deadline spans the headers and the body. Closing the scope closes
@@ -591,21 +591,17 @@ const downloadAndPlaceSource = Effect.fn(
   // the id would be shared by two downloads of the same paper, which
   // would then stream into one archive file and remove each other's
   // staging. The prefix keeps it clear of a user's `download/` folder.
-  const downloadDirFull = yield* permanentFs(
-    fs.makeTempDirectory({
-      directory: paperDirFull,
-      prefix: `.arxiv-download-${id.replaceAll('/', '_')}-`,
-    }),
-  );
-  // The staging directory belongs to this scope, so removing it is a scope
-  // finalizer rather than a step on the happy path, so no exit leaves
-  // `.arxiv-download-<id>/` behind in the paper directory: not a download
-  // that ran out of retries, a PDF-only submission detected from the content
-  // type, a failed extraction, or interruption.
-  yield* Effect.addFinalizer(() =>
-    removeBestEffort(fs, [downloadDirFull], 'staging download dir', {
-      recursive: true,
-    }).pipe(withLogChannel(ARXIV_CHANNEL)),
+  const downloadDirFull = yield* Effect.acquireRelease(
+    permanentFs(
+      fs.makeTempDirectory({
+        directory: paperDirFull,
+        prefix: `.arxiv-download-${id.replaceAll('/', '_')}-`,
+      }),
+    ),
+    (directory) =>
+      removeBestEffort(fs, [directory], 'staging download dir', {
+        recursive: true,
+      }).pipe(withLogChannel(ARXIV_CHANNEL)),
   );
   const downloadBasePath = path.join(downloadDirFull, 'source');
 

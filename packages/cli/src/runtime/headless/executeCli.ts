@@ -179,12 +179,14 @@ export const executeCliConfig: (
       projectApprovalPolicy(session.roots.config),
     );
     if (refused !== undefined) writeTextStderr(refused);
-    const presentationHost = createCliRuntimeHost(runContext);
     // Everything the run attaches to the session for its output: closed once,
     // after the last result read, so the last line is on the wire before the
-    // result record. Finalizers run last-attached first.
-    const presentationScope = yield* Scope.make();
-    yield* Scope.addFinalizer(presentationScope, presentationHost.close());
+    // result record. The caller's scope also closes it on partial startup.
+    const presentationScope = yield* Scope.fork(yield* Effect.scope);
+    const presentationHost = yield* Effect.acquireRelease(
+      Effect.sync(() => createCliRuntimeHost(runContext)),
+      (host) => host.close(),
+    ).pipe(Scope.provide(presentationScope));
     let failurePresented = false;
     const renderPlainProgress =
       runContext.outputFormat === 'text' && shouldRenderRunProgress(runContext);
@@ -223,9 +225,8 @@ export const executeCliConfig: (
       Effect.forkIn(presentationScope),
     );
     if (runContext.outputFormat === 'ndjson') {
-      yield* Scope.addFinalizer(
-        presentationScope,
-        yield* attachCliSessionProgressProjection(session),
+      yield* attachCliSessionProgressProjection(session).pipe(
+        Scope.provide(presentationScope),
       );
     }
     if (renderPlainProgress) {
@@ -316,10 +317,6 @@ export const executeCliConfig: (
       | { readonly ok: false } = { ok: false };
     let primaryRunFailure: { readonly error: unknown } | undefined;
     let refusal: CliUsageError | undefined;
-    // Closing a closed scope is a no-op: the early close below is taken only
-    // on a path that then throws or returns before the success tail that
-    // `ensuring`s it.
-    const detachPresentation = Scope.close(presentationScope, Exit.void);
     const exit = yield* Fiber.await(launched);
     // An interrupts-only exit after a shutdown is the process's own
     // interruption of the wait (exit 130): the run has no end.
@@ -388,9 +385,7 @@ export const executeCliConfig: (
     // step the close below runs finds nothing left to do.
     yield* Deferred.succeed(finalized, undefined);
     yield* Scope.close(shutdownStatusScope, Exit.void);
-    if (!runResult.ok || Result.isFailure(finalization)) {
-      yield* detachPresentation;
-    }
+    yield* Scope.close(presentationScope, Exit.void);
     if (Result.isFailure(finalization)) {
       return yield* Effect.die(
         primaryRunFailure
@@ -412,11 +407,11 @@ export const executeCliConfig: (
       };
     }
 
-    yield* detachPresentation;
     return {
       ...runResult,
       exitCode: runOutcomeExitCode(runResult.result.outcome),
     };
   },
+  Effect.scoped,
   Effect.catchCause((cause) => Effect.fail(ensureError(cause))),
 );

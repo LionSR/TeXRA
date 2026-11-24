@@ -35,8 +35,11 @@
 import {
   Context,
   Effect,
+  Equivalence,
   type FileSystem,
+  Iterable,
   Record,
+  Result,
   Schema,
   ScopedRef,
 } from 'effect';
@@ -164,6 +167,9 @@ const sameSet = (
   b: readonly OfferedTool[],
 ): boolean => a !== null && stableStringify(a) === stableStringify(b);
 
+const equalNames = Equivalence.Array(Equivalence.String);
+const RecordedDescription = Schema.Struct({ description: Schema.String });
+
 /**
  * The offered tools with each that renders its description from the run's
  * declared tools, the modules its scripts may import and the programs they
@@ -195,26 +201,23 @@ function describedAtFreeze<T extends ResolvedTools>(
       lane: tools.registry.get(definition.name)?.lane,
     }));
   const offered = tools.definitions.map(({ name }) => name);
-  const recorded = (name: string) => {
-    const shown =
-      state.offeredContext === null
-        ? undefined
-        : state.offeredTools?.find((tool) => tool.name === name)?.shown;
-    return shown === undefined
-      ? undefined
-      : stored(state, shown, Schema.Struct({ description: Schema.String }))
-          .description;
-  };
+  const recorded = new Map<string, OfferedTool['shown']>();
+  if (state.offeredContext !== null) {
+    for (const { name, shown } of state.offeredTools ?? []) {
+      if (!recorded.has(name)) recorded.set(name, shown);
+    }
+  }
   const definitions = tools.definitions.map((definition) => {
     const describe = tools.registry.get(definition.name)?.describe;
-    return describe === undefined
-      ? definition
-      : {
-          ...definition,
-          description:
-            recorded(definition.name) ??
-            describe(declared, modules, programs, offered),
-        };
+    if (describe === undefined) return definition;
+    const shown = recorded.get(definition.name);
+    return {
+      ...definition,
+      description:
+        shown === undefined
+          ? describe(declared, modules, programs, offered)
+          : stored(state, shown, RecordedDescription).description,
+    };
   });
   const shown = new Map(
     definitions.map((definition) => [
@@ -389,7 +392,11 @@ const openStep = Effect.fn('Step.open')(function* (
     const contributes = ({ plugin }: SkillCatalogEntry) =>
       plugin === null || contributors.has(plugin);
     const byName = new Map(
-      catalog.named.filter(contributes).map((entry) => [entry.name, entry]),
+      Iterable.filterMap(catalog.named, (entry) =>
+        contributes(entry)
+          ? Result.succeed([entry.name, entry] as const)
+          : Result.failVoid,
+      ),
     );
     // A skill the run recorded (listed, or activated by its user) that this
     // step does not offer, its plugin withdrawn or the skill gone, is left
@@ -406,7 +413,12 @@ const openStep = Effect.fn('Step.open')(function* (
     const listed = !listing
       ? []
       : recordedSkills === null
-        ? catalog.catalog.filter(contributes).slice(0, SKILL_CATALOG_MAX_SKILLS)
+        ? Array.from(
+            Iterable.take(
+              Iterable.filter(catalog.catalog, contributes),
+              SKILL_CATALOG_MAX_SKILLS,
+            ),
+          )
         : offered(recordedSkills);
     const activated = offered(names);
     const hooks = stepHooks(run, pinned.installed, recordedHooks);
@@ -483,13 +495,12 @@ const openStep = Effect.fn('Step.open')(function* (
   const { listed, tools } = step;
   const toolsChanged = !sameSet(state.offeredTools, tools.offered);
   const skills = listed.map(({ name }) => name);
-  const skillsChanged =
-    skills.join('\0') !== state.offeredWith.skills.join('\0');
+  const skillsChanged = !equalNames(skills, state.offeredWith.skills);
   // What is withheld can change while the offered set does not (a plugin
   // switched on whose tools all need approval): reported on its own.
   const withheldChanged =
     step.withheld.length > 0 &&
-    step.withheld.join('\0') !== (previous?.withheld ?? []).join('\0');
+    !equalNames(step.withheld, previous?.withheld ?? []);
   // Every warning where the offer changed; otherwise only those the last
   // step did not give (a plugin enabled that does not load changes no
   // offer, and says why once).
@@ -613,7 +624,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
     step.changed ||
     stableStringify(modules) !== stableStringify(state.offeredWith.modules) ||
     state.offeredContext !== sha256(context) ||
-    tools.hooks.identities.join('\0') !== state.offeredWith.hooks.join('\0');
+    !equalNames(tools.hooks.identities, state.offeredWith.hooks);
   return {
     tools,
     base,

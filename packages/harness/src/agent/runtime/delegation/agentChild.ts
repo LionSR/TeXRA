@@ -318,26 +318,25 @@ export const reusable = Effect.fn('agent.reusable')(function* (
   if (claimed !== undefined && claimed !== callId) return duplicate;
   siblings.set(key, callId);
   const log = yield* SessionLog;
-  const results = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
+  const results = yield* Effect.forEach(yield* reuseScope(call), (runId) =>
     log.runRows(runId, 'results'),
-  )).flatMap((run) => run.results);
-  const found = results.flatMap((payload) =>
-    payload.result.status === 'executed' && payload.result.reuseKey === key
-      ? [{ ...payload, result: payload.result }]
-      : [],
   );
   const mine = `${script.callId}/`;
-  // A sibling a resume handed back from its row never ran here to claim.
-  if (
-    found.some(
-      (row) =>
-        row.responseId === call.responseId &&
-        row.callId.startsWith(mine) &&
-        row.callId !== callId,
+  let origin:
+    | { callId: string; result: Extract<ToolResult, { status: 'executed' }> }
+    | undefined;
+  for (const row of Iterable.flatMap(results, (run) => run.results)) {
+    if (row.result.status !== 'executed' || row.result.reuseKey !== key)
+      continue;
+    // A sibling a resume handed back from its row never ran here to claim.
+    if (
+      row.responseId === call.responseId &&
+      row.callId.startsWith(mine) &&
+      row.callId !== callId
     )
-  )
-    return duplicate;
-  const origin = found.at(-1);
+      return duplicate;
+    origin = { callId: row.callId, result: row.result };
+  }
   if (origin === undefined) return null;
   const from = origin.result.reusedFrom ?? origin.callId;
   const { value } = origin.result;

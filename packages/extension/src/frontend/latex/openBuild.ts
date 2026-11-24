@@ -12,7 +12,6 @@ import {
   Effect,
   Exit,
   FileSystem,
-  Option,
   Schedule,
   type Path,
   type PlatformError,
@@ -291,18 +290,20 @@ const PDF_POLL_INTERVAL = Duration.millis(250);
 const openViewer = Effect.fn('openBuild.openViewer')(
   function* (pdfPath: string) {
     const fs = yield* FileSystem.FileSystem;
-    const written = yield* fs.exists(pdfPath).pipe(
+    yield* fs.exists(pdfPath).pipe(
       Effect.repeat({
         schedule: Schedule.spaced(PDF_POLL_INTERVAL),
         until: (exists) => exists,
       }),
-      Effect.timeoutOption(PDF_WRITE_BUDGET),
+      Effect.asVoid,
+      Effect.timeoutOrElse({
+        duration: PDF_WRITE_BUDGET,
+        orElse: () =>
+          Effect.logWarning(
+            `The build had not written ${pdfPath} after ${Duration.format(PDF_WRITE_BUDGET)}; opening the PDF viewer anyway`,
+          ).pipe(withLogChannel(CHANNEL)),
+      }),
     );
-    if (Option.isNone(written)) {
-      yield* Effect.logWarning(
-        `The build had not written ${pdfPath} after ${Duration.format(PDF_WRITE_BUDGET)}; opening the PDF viewer anyway`,
-      ).pipe(withLogChannel(CHANNEL));
-    }
     yield* executeVscodeCommand('latex-workshop.view');
     yield* executeVscodeCommand('latex-workshop.refresh-viewer');
   },

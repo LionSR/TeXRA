@@ -4,7 +4,7 @@
  * The verdict (`verdict.ts`) is decided over this reading.
  */
 // Third-party imports
-import { Option, Predicate, Schema } from 'effect';
+import { Iterable, Option, Predicate, Schema } from 'effect';
 
 // Local imports
 import { sortedJson } from './continuation.js';
@@ -88,12 +88,18 @@ const STATUS_BY_ERROR_TYPE: ReadonlyMap<string, number> = new Map([
 
 /** Anthropic's envelope types itself `error`, so the nested type is read first. */
 const statusFromBody = (body: unknown): number | undefined =>
-  envelopes(body)
-    .reverse()
-    .flatMap((candidate) => [candidate.type, candidate.code])
-    .filter(Predicate.isString)
-    .map((value) => STATUS_BY_ERROR_TYPE.get(value))
-    .find(Predicate.isNotUndefined);
+  Option.getOrUndefined(
+    Iterable.findFirst(
+      Iterable.flatMap(envelopes(body).reverse(), (candidate) => [
+        candidate.type,
+        candidate.code,
+      ]),
+      (value) =>
+        typeof value === 'string'
+          ? Option.fromUndefinedOr(STATUS_BY_ERROR_TYPE.get(value))
+          : Option.none(),
+    ),
+  );
 
 /** Whether `text` is the body serialized, whole or as its embedded JSON. */
 function serializes(text: string, body: unknown): boolean {

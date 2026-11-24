@@ -227,18 +227,12 @@ const writeText = Effect.fn('taskFiles.writeText')(function* (
   root: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  // Not makeTempDirectoryScoped: its release omits `force` and dies on a
-  // directory that is already gone.
-  const directory = yield* Effect.acquireRelease(
-    fs.makeTempDirectory({
-      directory: root,
-      // LaTeX derives auxiliary names from the input's; a job name with a
-      // leading dot can be refused by TeX's file-open policy.
-      prefix: `texra-${path.parse(name).name}-${process.pid}-`,
-    }),
-    (created) =>
-      fs.remove(created, { recursive: true, force: true }).pipe(Effect.orDie),
-  );
+  const directory = yield* fs.makeTempDirectoryScoped({
+    directory: root,
+    // LaTeX derives auxiliary names from the input's; a job name with a
+    // leading dot can be refused by TeX's file-open policy.
+    prefix: `texra-${path.parse(name).name}-${process.pid}-`,
+  });
   const file = path.join(directory, name);
   // The process's file system finishes a write it started before an
   // interruption lands, so the scope never removes the directory under it.
@@ -264,27 +258,38 @@ export const resolveTaskFiles = Effect.fn('resolveTaskFiles')(function* (
   TaskFilesFailure,
   Scope.Scope | FileSystem.FileSystem
 > {
-  const expanded = yield* Effect.forEach(
-    sources,
-    (source) =>
-      Effect.result(
+  type ResolvedSource =
+    | { readonly role: TaskFileRole; readonly paths: readonly string[] }
+    | Extract<TaskFileSource, { text: unknown }>;
+  const expanded = yield* Effect.all(
+    sources.map(
+      (
+        source,
+      ): Effect.Effect<
+        ResolvedSource,
+        TaskFilesFailure,
+        FileSystem.FileSystem
+      > =>
         'spec' in source
-          ? expandSpec(source.spec, source.role, root, task)
-          : Effect.succeed(null),
-      ),
-    { concurrency: 8 },
+          ? Effect.map(
+              expandSpec(source.spec, source.role, root, task),
+              (paths) => ({ role: source.role, paths }),
+            )
+          : Effect.succeed(source),
+    ),
+    { concurrency: 8, mode: 'result' },
   );
-  const paths = yield* Effect.fromResult(Result.all(expanded));
+  const resolved = yield* Effect.fromResult(Result.all(expanded));
 
   const writtenFiles: string[] = [];
   const filesOf = Effect.fn('taskFiles.filesOf')(function* (
     role: TaskFileRole,
   ) {
     const files: string[] = [];
-    for (const [index, source] of sources.entries()) {
+    for (const source of resolved) {
       if (source.role !== role) continue;
-      if ('spec' in source) {
-        files.push(...(paths[index] ?? []));
+      if ('paths' in source) {
+        for (const path of source.paths) files.push(path);
         continue;
       }
       // No resource exists while the host is still reading, so an

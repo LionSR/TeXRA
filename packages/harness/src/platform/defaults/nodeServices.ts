@@ -78,7 +78,6 @@ import {
   Fiber,
   type FileSystem,
   Layer,
-  Option,
   type Path,
   Predicate,
   Record as EffectRecord,
@@ -271,21 +270,25 @@ const supervisedSpawner = Layer.effect(
               ),
               Effect.forkDetach,
             );
-            const closed = yield* Fiber.join(closing).pipe(
-              Effect.timeoutOption(budgetMs),
-            );
-            if (Option.isSome(closed)) return;
-            yield* stopWaiting(handle, command, budgetMs, 'scope close');
-            yield* Fiber.await(closing).pipe(
-              Effect.flatMap((late) =>
-                Exit.isFailure(late) && !Cause.hasInterruptsOnly(late.cause)
-                  ? Effect.logWarning(
-                      `Late teardown of child process ${handle?.pid ?? lastStage(command).command} failed: ${Cause.pretty(late.cause)}`,
-                    )
-                  : Effect.void,
-              ),
-              withLogChannel(CHANNEL),
-              Effect.forkDetach,
+            yield* Fiber.join(closing).pipe(
+              Effect.timeoutOrElse({
+                duration: budgetMs,
+                orElse: Effect.fnUntraced(function* () {
+                  yield* stopWaiting(handle, command, budgetMs, 'scope close');
+                  yield* Fiber.await(closing).pipe(
+                    Effect.flatMap((late) =>
+                      Exit.isFailure(late) &&
+                      !Cause.hasInterruptsOnly(late.cause)
+                        ? Effect.logWarning(
+                            `Late teardown of child process ${handle?.pid ?? lastStage(command).command} failed: ${Cause.pretty(late.cause)}`,
+                          )
+                        : Effect.void,
+                    ),
+                    withLogChannel(CHANNEL),
+                    Effect.forkDetach,
+                  );
+                }),
+              }),
             );
           });
           // A failed or interrupted spawn closes its child scope at once, so

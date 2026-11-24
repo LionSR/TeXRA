@@ -16,7 +16,15 @@
  * batches the publisher committed by then. A webview receives the resulting ordered inputs directly, without
  * constructing another copy of the accumulated text.
  */
-import { Context, Effect, Layer, type Scope, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Equivalence,
+  Layer,
+  Option,
+  type Scope,
+  SubscriptionRef,
+} from 'effect';
 
 import type { TranscriptInterest } from '@shared/session/sessionViewAccess';
 
@@ -106,6 +114,9 @@ export class TranscriptSubscriptions extends Context.Service<
       const ref = yield* SubscriptionRef.make<
         readonly TranscriptSubscription[]
       >([]);
+      const sameInterest = Equivalence.Array<TranscriptSubscription>(
+        (left, right) => left.id === right.id && left.fromSeq === right.fromSeq,
+      );
       // One entry per subscriber, keyed by the token its scope holds.
       const ports = new Map<object, readonly TranscriptSubscription[]>();
       const union = (): TranscriptSubscription[] => {
@@ -125,12 +136,15 @@ export class TranscriptSubscriptions extends Context.Service<
         key: object,
         set: readonly TranscriptSubscription[] | null,
       ) =>
-        Effect.suspend(() => {
+        SubscriptionRef.updateSome(ref, (current) => {
           if (set === null) ports.delete(key);
           else ports.set(key, set);
-          // Computed under the ref's own permit, so two subscribers changing
-          // at once cannot publish an older union after a newer one.
-          return SubscriptionRef.update(ref, union);
+          const next = union();
+          // Mutating a port and publishing its union share the same permit.
+          // Unchanged interest does not restart the underlying read.
+          return sameInterest(current, next)
+            ? Option.none()
+            : Option.some(next);
         });
       return {
         ref,

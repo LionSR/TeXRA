@@ -19,14 +19,14 @@ export const ancestorIds = Effect.fnUntraced(function* <E>(
   parentOf: (runId: RunId) => Effect.Effect<RunId | null, E>,
   runId: RunId,
 ): Effect.fn.Return<RunId[], E> {
-  const line: RunId[] = [];
+  const line = new Set<RunId>();
   for (
     let id = yield* parentOf(runId);
-    id !== null && !line.includes(id);
+    id !== null && !line.has(id);
     id = yield* parentOf(id)
   )
-    line.push(id);
-  return line;
+    line.add(id);
+  return [...line];
 });
 
 /**

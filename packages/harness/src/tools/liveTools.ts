@@ -229,32 +229,38 @@ export const toolCatalogLayer = (
                 native.revision !== revision &&
                 !loader.rejected(native),
             );
-          const notes: string[] = [];
-          const say = (failed: NativePluginFailed, stand?: NativePlugin) =>
-            notes.push(
-              stand === undefined
-                ? failed.message
-                : `${failed.message}; revision ${shortPluginId(stand.revision)} stays in use until the plugin is fixed or disabled.`,
-            );
-          const fresh = new Set<NativePlugin>();
-          const candidates = (yield* Effect.forEach(
+          const noteFor = (failed: NativePluginFailed, stand?: NativePlugin) =>
+            stand === undefined
+              ? failed.message
+              : `${failed.message}; revision ${shortPluginId(stand.revision)} stays in use until the plugin is fixed or disabled.`;
+          const loaded = yield* Effect.forEach(
             found.plugins,
             ({ id, source }) =>
               Effect.gen(function* () {
-                if (source.plugin.native === null) return undefined;
+                if (source.plugin.native === null) return {};
                 if (!load && Option.isNone(yield* loader.imported(source)))
-                  return inUse.get(id);
+                  return { native: inUse.get(id) };
                 const result = yield* Effect.result(loader.load(source));
-                if (Result.isSuccess(result)) {
-                  fresh.add(result.success);
-                  return result.success;
-                }
+                if (Result.isSuccess(result))
+                  return { native: result.success, fresh: true };
                 const stand = standInFor(id);
-                say(result.failure, stand);
-                return stand;
+                return {
+                  native: stand,
+                  warning: noteFor(result.failure, stand),
+                };
               }),
             { concurrency: 'unbounded' },
-          )).filter((native) => native !== undefined);
+          );
+          const fresh = new Set<NativePlugin>();
+          const notes: string[] = [];
+          const candidates: NativePlugin[] = [];
+          for (const entry of loaded) {
+            if (entry.warning !== undefined) notes.push(entry.warning);
+            if (entry.native !== undefined) {
+              candidates.push(entry.native);
+              if (entry.fresh) fresh.add(entry.native);
+            }
+          }
           // A new revision the table refuses leaves the one before it in
           // use, judged again with the rest.
           const first = withNatives(table, candidates);
@@ -265,7 +271,9 @@ export const toolCatalogLayer = (
                 ? standInFor(plugin.id, revision)
                 : undefined;
               if (stand === undefined) return [];
-              say(notLoaded(plugin.id, revision, reason), stand);
+              notes.push(
+                noteFor(notLoaded(plugin.id, revision, reason), stand),
+              );
               return [[native, stand]];
             }),
           );
@@ -277,17 +285,20 @@ export const toolCatalogLayer = (
                   candidates.map((native) => replaced.get(native) ?? native),
                 );
           for (const { native, reason } of composed.withheld)
-            say(notLoaded(native.plugin.id, native.revision, reason));
+            notes.push(
+              noteFor(notLoaded(native.plugin.id, native.revision, reason)),
+            );
           for (const native of composed.table.natives) {
             const held = inUse.get(native.plugin.id);
             if (held !== undefined && held.revision !== native.revision)
               previous.set(native.plugin.id, held);
           }
-          if (
-            revisions(composed.table) !==
-            revisions(yield* SubscriptionRef.get(live))
-          )
-            yield* SubscriptionRef.set(live, composed.table);
+          const nextRevisions = revisions(composed.table);
+          yield* SubscriptionRef.updateSome(live, (current) =>
+            revisions(current) === nextRevisions
+              ? Option.none()
+              : Option.some(composed.table),
+          );
           return {
             installed: found,
             table: composed.table,

@@ -7,6 +7,8 @@
  * first response, and after a compaction replaced the history, it is that
  * estimate alone.
  */
+import { Iterable } from 'effect';
+
 import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { RunState } from '@shared/session/runState';
 import type { BoundModel } from '../modelAccess/ModelAccess';
@@ -46,7 +48,7 @@ export function estimateMessageTokens(
         const parts =
           message.role === 'user'
             ? message.content
-            : message.results.flatMap(({ content }) => content);
+            : Iterable.flatMap(message.results, ({ content }) => content);
         for (const part of parts) {
           if (part.kind === 'text') chars += part.text.length;
           else media += 1;

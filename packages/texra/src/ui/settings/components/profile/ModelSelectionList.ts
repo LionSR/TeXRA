@@ -188,11 +188,11 @@ export class ModelSelectionList extends TexraSignalElement {
     return waIcon(iconName, { className, label: title, title });
   }
 
-  private renderModelRow(model: ModelSelectionItem): TemplateResult {
-    // The backend never reports a retired model as enabled.
-    const isLastEnabledModel =
-      model.enabled &&
-      this.models.filter((candidate) => candidate.enabled).length === 1;
+  private renderModelRow(
+    model: ModelSelectionItem,
+    lastEnabledModel: ModelSelectionItem | undefined,
+  ): TemplateResult {
+    const isLastEnabledModel = model === lastEnabledModel;
 
     return html`
       <div class="model-row">
@@ -245,7 +245,10 @@ export class ModelSelectionList extends TexraSignalElement {
     `;
   }
 
-  private renderProviderGroup(group: ProviderGroup): TemplateResult {
+  private renderProviderGroup(
+    group: ProviderGroup,
+    lastEnabledModel: ModelSelectionItem | undefined,
+  ): TemplateResult {
     const isExpanded = this.expandedProvider === group.provider;
     const enabledCount = group.current.filter((m) => m.enabled).length;
     const totalCount = group.current.length;
@@ -285,12 +288,15 @@ export class ModelSelectionList extends TexraSignalElement {
                 <div class="provider-group-content settings-disclosure-content">
                   <ul class="model-list">
                     ${group.current.map(
-                      (model) => html`<li>${this.renderModelRow(model)}</li>`,
+                      (model) =>
+                        html`<li>
+                          ${this.renderModelRow(model, lastEnabledModel)}
+                        </li>`,
                     )}
                   </ul>
                   ${
                     group.deprecated.length > 0
-                      ? this.renderDeprecatedToggle(group)
+                      ? this.renderDeprecatedToggle(group, lastEnabledModel)
                       : nothing
                   }
                 </div>
@@ -301,7 +307,10 @@ export class ModelSelectionList extends TexraSignalElement {
     `;
   }
 
-  private renderDeprecatedToggle(group: ProviderGroup): TemplateResult {
+  private renderDeprecatedToggle(
+    group: ProviderGroup,
+    lastEnabledModel: ModelSelectionItem | undefined,
+  ): TemplateResult {
     const isOpen = this.expandedDeprecated.has(group.provider);
 
     return html`
@@ -317,7 +326,10 @@ export class ModelSelectionList extends TexraSignalElement {
         isOpen
           ? html`<ul class="model-list deprecated-models">
               ${group.deprecated.map(
-                (model) => html`<li>${this.renderModelRow(model)}</li>`,
+                (model) =>
+                  html`<li>
+                    ${this.renderModelRow(model, lastEnabledModel)}
+                  </li>`,
               )}
             </ul>`
           : nothing
@@ -325,9 +337,10 @@ export class ModelSelectionList extends TexraSignalElement {
     `;
   }
 
-  private renderHelperModelDropdown(): TemplateResult {
+  private renderHelperModelDropdown(
+    enabledModels: readonly ModelSelectionItem[],
+  ): TemplateResult {
     const helperModel = settingSignal(HELPER_MODEL_SETTING).get();
-    const enabledModels = this.models.filter((m) => m.enabled);
     // TeXRA's default helper model is valid even when it is
     // not an enabled picker row. Keep it selectable so wa-select is not blank.
     const selectedHelper =
@@ -369,6 +382,9 @@ export class ModelSelectionList extends TexraSignalElement {
 
   override render(): TemplateResult {
     const groups = this.getProviderGroups();
+    const enabledModels = this.models.filter((model) => model.enabled);
+    const lastEnabledModel =
+      enabledModels.length === 1 ? enabledModels[0] : undefined;
 
     return html`
       <div class="model-selection-section">
@@ -378,9 +394,9 @@ export class ModelSelectionList extends TexraSignalElement {
             'Choose which models agents can use and the model used for quick helper steps.',
           icon: 'server',
         })}
-        ${this.renderHelperModelDropdown()}
+        ${this.renderHelperModelDropdown(enabledModels)}
         <div class="settings-disclosure-list">
-          ${groups.map((g) => this.renderProviderGroup(g))}
+          ${groups.map((group) => this.renderProviderGroup(group, lastEnabledModel))}
         </div>
       </div>
     `;

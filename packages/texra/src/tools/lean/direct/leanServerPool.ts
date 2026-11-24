@@ -277,18 +277,15 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
         }
         // Every root gets its restart attempt: a failing respawn must not
         // interrupt a sibling's. The first failure is reported once all finish.
-        const restarts = yield* Effect.forEach(
-          live,
-          (held) =>
-            Effect.result(
-              stop(held).pipe(
-                Effect.andThen(Effect.scoped(lease(held.root, owner))),
-              ),
+        const restarts = yield* Effect.all(
+          live.map((held) =>
+            stop(held).pipe(
+              Effect.andThen(Effect.scoped(lease(held.root, owner))),
             ),
-          { concurrency: 'unbounded' },
+          ),
+          { concurrency: 'unbounded', mode: 'result' },
         );
-        const failed = restarts.find(Result.isFailure);
-        if (failed) return yield* Effect.fail(failed.failure);
+        yield* Effect.fromResult(Result.all(restarts));
         return;
       }
       case 'stop_server':

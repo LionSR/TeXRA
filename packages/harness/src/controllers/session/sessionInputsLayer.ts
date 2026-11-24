@@ -10,11 +10,13 @@ import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
 import {
+  Array as Arr,
   type Context,
   Effect,
   Exit,
   Layer,
   PubSub,
+  Result,
   Schedule,
   Stream,
   SubscriptionRef,
@@ -64,13 +66,23 @@ const requiredRead = <A>(
   read: Effect.Effect<A, DatabaseReadFailed>,
 ): Effect.Effect<A> =>
   read.pipe(
-    Effect.tapError(
-      logFailure('sessionInputs', 'Session view read failed; retrying'),
+    Effect.retry(
+      Schedule.exponential('50 millis').pipe(
+        Schedule.upTo({ times: 5 }),
+        Schedule.tap(({ input }) =>
+          logFailure(
+            'sessionInputs',
+            'Session view read failed; retrying',
+          )(input),
+        ),
+      ),
     ),
-    Effect.retry({
-      schedule: Schedule.exponential('50 millis'),
-      times: 5,
-    }),
+    Effect.tapError(
+      logFailure(
+        'sessionInputs',
+        'Session view read failed after five retries',
+      ),
+    ),
     Effect.orDie,
   );
 
@@ -308,9 +320,9 @@ function reconcileExistence(
 ): ExistenceReconciliation {
   return {
     checkedAggregateIds: [...checkedAggregateIds],
-    present: read.state
-      .filter((state) => !state.closed)
-      .map(({ aggregateId }) => aggregateId),
+    present: Arr.filterMap(read.state, ({ closed, aggregateId }) =>
+      closed ? Result.failVoid : Result.succeed(aggregateId),
+    ),
     unreadable: [...read.damaged],
   };
 }

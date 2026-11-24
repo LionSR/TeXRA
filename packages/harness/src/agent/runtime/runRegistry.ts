@@ -341,7 +341,9 @@ export class SessionRunRegistry implements RunsShape {
   /** Whether the runs held here are still exactly `held`. */
   private heldSince(held: readonly RunId[]): boolean {
     const now = this.heldIds();
-    return now.length === held.length && now.every((id) => held.includes(id));
+    if (now.length !== held.length) return false;
+    const previous = new Set(held);
+    return now.every((id) => previous.has(id));
   }
 
   /** The run's attached parent, as the store holds it at this call (the

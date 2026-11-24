@@ -121,10 +121,10 @@ function collectionPath(chain: BbtCollectionChain): string {
   const parts: string[] = [];
   let current: BbtCollectionChain | false | undefined = chain;
   while (current) {
-    parts.unshift(current.name);
+    parts.push(current.name);
     current = current.parentCollection;
   }
-  return parts.join(' / ');
+  return parts.reverse().join(' / ');
 }
 
 const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* ({

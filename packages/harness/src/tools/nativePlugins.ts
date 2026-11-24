@@ -294,26 +294,37 @@ const hostRun = (
     call: (input) =>
       withinDeadline(
         Effect.suspend(() => tool.call(input)).pipe(
-          Effect.map((result) =>
-            result.status === 'error'
-              ? { ...result, ...failed(result.error) }
-              : result,
-          ),
-          Effect.catch((error) =>
-            findStorageRefusal(Cause.fail(error)) === undefined
-              ? Effect.succeed(failed(error.message))
-              : Effect.fail(error),
-          ),
-          Effect.catchDefect((defect) =>
-            findStorageRefusal(Cause.die(defect)) === undefined
-              ? Effect.as(
-                  Effect.logWarning(
-                    `${what} crashed: ${ensureError(defect).message}`,
-                  ).pipe(withLogChannel('plugins')),
-                  failed(ensureError(defect).message),
-                )
-              : Effect.die(defect),
-          ),
+          Effect.exit,
+          Effect.flatMap((exit) => {
+            if (Exit.isSuccess(exit)) {
+              const result = exit.value;
+              return result.status === 'error'
+                ? Effect.succeed({ ...result, ...failed(result.error) })
+                : exit;
+            }
+            const { cause } = exit;
+            if (
+              Exit.hasInterrupts(exit) ||
+              findStorageRefusal(cause) !== undefined
+            )
+              return exit;
+            const defect = Cause.findDefect(cause);
+            const error = Cause.findError(cause);
+            if (Result.isSuccess(defect)) {
+              const message = ensureError(defect.success).message;
+              return Effect.logWarning(`${what} crashed: ${message}`).pipe(
+                withLogChannel('plugins'),
+                Effect.as(
+                  failed(
+                    Result.isSuccess(error) ? error.success.message : message,
+                  ),
+                ),
+              );
+            }
+            return Result.isSuccess(error)
+              ? Effect.succeed(failed(error.success.message))
+              : exit;
+          }),
         ),
         what,
       ),
@@ -355,8 +366,8 @@ const checked = (
     );
   const contributed = new Set(contributions(plugin));
   const declared = new Set(provides);
-  const undeclared = [...contributed].filter((item) => !declared.has(item));
-  const absent = [...declared].filter((item) => !contributed.has(item));
+  const undeclared = Arr.filter(contributed, (item) => !declared.has(item));
+  const absent = Arr.filter(declared, (item) => !contributed.has(item));
   if (undeclared.length > 0 || absent.length > 0)
     return Result.fail(
       [
