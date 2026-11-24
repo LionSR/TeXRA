@@ -512,6 +512,10 @@ export function stepHooks(
 /** What a step's hooks run at each of the loop's points. */
 export type StepHooks = ReturnType<typeof stepHooks>;
 
+/** What one call's `PreToolUse` hooks recorded, and what its body's start
+ *  and its result then run of them. */
+export type ToolCallHooks = Effect.Success<ReturnType<StepHooks['preToolUse']>>;
+
 /** The hooks of `run`'s current step; none before its first step opens. */
 export const hooksOf = (run: AgentRunShape) =>
   Effect.map(

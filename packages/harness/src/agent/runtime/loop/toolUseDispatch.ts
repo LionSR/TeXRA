@@ -256,23 +256,41 @@ const commit = (
       : rows;
   }, alongside);
 
+/** The card a call opens over input `on`: its tool's own card for that
+ *  input, in the section of the script that issued it. */
+const cardOf = ({ dispatch, fact }: Call, on: unknown) => {
+  const script = scriptOf(fact);
+  return {
+    logId: fact.logId,
+    toolName: fact.toolName,
+    input: toJsonValue(on),
+    card: dispatch.step.registry.get(fact.toolName)?.definition.card?.(on),
+    ...(script?.section != null ? { section: script.section } : {}),
+  };
+};
+
+/** The stage a call's card rows open under: a script's call's, the
+ *  script's own card; none for a response's call. */
+const stagedOf = ({ stage }: Call) =>
+  stage === null ? {} : { stageId: stage };
+
 /** The call's result row at `attempt`, which closes the call's card when it
  *  has one (`card`); `blobs` are the bytes it links. */
 const resultRow = (
-  { dispatch, fact, stage }: Call,
+  call: Call,
   attempt: number,
   result: Omit<ToolCallResult, 'attempt'>,
   card: boolean,
   blobs: readonly DraftBlob[] = [],
 ): RunHistoryDraft => ({
   type: 'tool.result',
-  aggregateId: dispatch.run.runId,
-  ...(card && stage !== null && { stageId: stage }),
+  aggregateId: call.dispatch.run.runId,
+  ...(card && stagedOf(call)),
   payload: {
-    responseId: dispatch.responseId,
-    callId: fact.callId,
+    responseId: call.dispatch.responseId,
+    callId: call.fact.callId,
     attempt,
-    logId: card ? fact.logId : null,
+    logId: card ? call.fact.logId : null,
     ...result,
   },
   ...(blobs.length > 0 && { blobs }),
@@ -408,15 +426,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     ));
   if (pre && pre.rows.length > 0) yield* commit(call, pre.rows);
   let result: ToolResult;
-  /** The card the call opens over `on`, with the stage it opens under. */
-  const cardOver = (on: unknown) => ({
-    logId: fact.logId,
-    toolName: fact.toolName,
-    input: toJsonValue(on),
-    card: step.registry.get(fact.toolName)?.definition.card?.(on),
-    ...(script?.section != null ? { section: script.section } : {}),
-  });
-  const staged = call.stage === null ? {} : { stageId: call.stage };
   if (!tool || !pre) {
     result = {
       status: 'error',
@@ -432,8 +441,8 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
         yield* commit(call, [
           {
             type: 'tool.intent',
-            aggregateId: dispatch.run.runId,
-            ...staged,
+            aggregateId: runId,
+            ...stagedOf(call),
             payload: {
               origin:
                 script === null
@@ -441,7 +450,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
                   : { kind: 'script', scriptCallId: script.scriptCallId },
               callId: fact.callId,
               attempt,
-              ...cardOver(on),
+              ...cardOf(call, on),
             },
           },
         ]);
@@ -521,14 +530,12 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
       ),
     catch: toErrorMessage,
   });
-  if (Result.isFailure(checked))
-    result = {
-      status: 'error',
-      error: `${fact.toolName}: Tool returned an invalid result (${checked.failure})`,
-    };
   const extracted = Result.isSuccess(checked)
     ? checked.success
-    : extractToolAttachments(result);
+    : extractToolAttachments({
+        status: 'error',
+        error: `${fact.toolName}: Tool returned an invalid result (${checked.failure})`,
+      });
   const { attachments, blobs } = yield* captureAttachments(
     extracted.attachments,
     roots.workspace,
@@ -542,9 +549,9 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     : [
         {
           type: 'tool.start',
-          aggregateId: dispatch.run.runId,
-          ...staged,
-          ...cardOver(input),
+          aggregateId: runId,
+          ...stagedOf(call),
+          ...cardOf(call, input),
           ...(attempt > 1 ? { attempt } : {}),
         },
       ];
@@ -553,7 +560,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   const post = pre ? yield* pre.after(sanitized) : [];
   const answered =
     sanitized.status === 'executed' ? (sanitized.consumedFollowUps ?? []) : [];
-  const facts = Effect.succeed(factRows(extracted.facts, runId));
   yield* commit(
     call,
     [
@@ -573,7 +579,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
       ...post,
       ...answered.map((id) => consumedRow(runId, id, { kind: 'answered' })),
     ],
-    facts,
+    Effect.succeed(factRows(extracted.facts, runId)),
   );
 });
 

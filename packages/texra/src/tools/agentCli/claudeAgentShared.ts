@@ -221,66 +221,57 @@ export function buildClaudeToolUseLog(params: {
       };
 }
 
+type ToolInput = { readonly [x: PropertyKey]: unknown };
+type ToolSummary = (input: ToolInput, toolName: string) => string | undefined;
+
+/** The input's string field `field` after `label` (the tool's name). */
+const fieldSummary =
+  (field: string, label?: string): ToolSummary =>
+  (input, toolName) => {
+    const value = input[field];
+    return typeof value === 'string'
+      ? `${label ?? toolName} ${value}`
+      : undefined;
+  };
+
+/** A summary line for each supported built-in tool, undefined when its
+ *  input lacks the field the line names. */
+const TOOL_SUMMARIES = new Map<string, ToolSummary>([
+  [
+    'Bash',
+    ({ command }) => (typeof command === 'string' ? command : undefined),
+  ],
+  ['Read', fieldSummary('file_path')],
+  ['Edit', fieldSummary('file_path')],
+  ['Write', fieldSummary('file_path')],
+  ['NotebookEdit', fieldSummary('file_path')],
+  ['Glob', fieldSummary('pattern')],
+  ['Grep', fieldSummary('pattern')],
+  ['WebFetch', fieldSummary('url')],
+  ['WebSearch', fieldSummary('query')],
+  ['Agent', fieldSummary('description')],
+  ['TaskCreate', fieldSummary('subject', 'Create task:')],
+  ['TaskGet', fieldSummary('taskId', 'Get task:')],
+  ['TaskList', () => 'List tasks'],
+  [
+    'TaskUpdate',
+    ({ subject, taskId, status }) => {
+      const task = [subject, taskId].find(
+        (value): value is string => typeof value === 'string',
+      );
+      if (!task) return undefined;
+      return typeof status === 'string'
+        ? `Update task: ${task} → ${status}`
+        : `Update task: ${task}`;
+    },
+  ],
+]);
+
 /**
  * Produce a short summary line for the supported built-in tools. Falls back
  * to the tool name when the input shape isn't recognized.
  */
 function describeToolInput(toolName: string, input: unknown): string {
   if (!Predicate.isObject(input)) return toolName;
-  const record = input;
-
-  switch (toolName) {
-    case 'Bash':
-      if (typeof record.command === 'string') return record.command;
-      break;
-    case 'Read':
-    case 'Edit':
-    case 'Write':
-    case 'NotebookEdit':
-      if (typeof record.file_path === 'string') {
-        return `${toolName} ${record.file_path}`;
-      }
-      break;
-    case 'Glob':
-    case 'Grep':
-      if (typeof record.pattern === 'string') {
-        return `${toolName} ${record.pattern}`;
-      }
-      break;
-    case 'WebFetch':
-      if (typeof record.url === 'string') return `WebFetch ${record.url}`;
-      break;
-    case 'WebSearch':
-      if (typeof record.query === 'string') return `WebSearch ${record.query}`;
-      break;
-    case 'TaskCreate':
-      if (typeof record.subject === 'string') {
-        return `Create task: ${record.subject}`;
-      }
-      break;
-    case 'TaskUpdate': {
-      const task = [record.subject, record.taskId].find(
-        (value): value is string => typeof value === 'string',
-      );
-      if (task) {
-        return typeof record.status === 'string'
-          ? `Update task: ${task} → ${record.status}`
-          : `Update task: ${task}`;
-      }
-      break;
-    }
-    case 'TaskGet':
-      if (typeof record.taskId === 'string') {
-        return `Get task: ${record.taskId}`;
-      }
-      break;
-    case 'TaskList':
-      return 'List tasks';
-    case 'Agent':
-      if (typeof record.description === 'string') {
-        return `Agent ${record.description}`;
-      }
-      break;
-  }
-  return toolName;
+  return TOOL_SUMMARIES.get(toolName)?.(input, toolName) ?? toolName;
 }

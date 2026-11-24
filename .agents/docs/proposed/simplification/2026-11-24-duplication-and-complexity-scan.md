@@ -61,8 +61,20 @@ bar on its own.
 ## Complex functions worth a dedicated decomposition
 
 Each is cohesive and well-documented but long and multi-responsibility; none
-is duplication, so each is its own extract-named-steps change, not a sweep.
-Listed in rough order of density.
+is duplication, so each is its own change, not a sweep. Listed in rough order
+of density.
+
+**Refused shape: splitting a long function into sequential single-caller
+steps.** Root `AGENTS.md` bans single-caller extractions and names temporal
+decomposition a red flag, and a note here is no authority over it. Cutting a
+function into phases (`invokeCall` → `commitOutcome` over a hand-off record,
+`stepSkills` / `stepMemory`, a `childOf` or `lowerMessages` each called
+once) was tried on 2026-11-24 and reverted in review
+(`LOOP-phase-split-long-functions` in
+`.agents/docs/refuted-candidates.json`). What does land is the duplication
+or the data shape inside the function: a fact decided in several branches
+decided once, a restated value given one helper with several callers, a
+table whose rows are the cases. Read items 1, 2, 5 and 6 that way.
 
 1. `createEditorPane` (`packages/desktop/src/renderer/editorPane.ts`, ~605
    lines): one factory holds the editor surface, the file tree listing, save +
@@ -73,14 +85,26 @@ Listed in rough order of density.
    switch inside a composition root): move the switch to a handler map and lift
    the three multi-step cases (`useCurrentFile`, `fork`, `launch`) into named
    functions, leaving the root to wire controllers.
-3. `goldenTurn` (`packages/cli/src/runtime/models/validationModel.ts`, ~390
-   lines): one mock-model if-chain over ~20 unrelated conformance scenarios.
-   A table of `{ marker, handler }` with each scenario its own function; the
-   dispatcher finds the marker and delegates.
+3. **Landed 2026-11-24 (evening).** `goldenTurn`
+   (`packages/cli/src/runtime/models/validationModel.ts`, ~390 lines): one
+   mock-model if-chain over ~20 unrelated conformance scenarios. Each
+   scenario is now its own function in `GOLDEN_SCENARIOS`, a table of
+   `{ marker, play }` in the old chain's order; `goldenTurn` answers the
+   harness's own requests, the parked call and the overflow refusal (moved
+   in from `streamTurn`), then plays the first scenario whose marker the
+   system text holds. The non-golden replies are `cannedTurn`'s early
+   returns. A golden store regenerated after the change is byte-identical
+   to one generated before it on the same tree.
 4. `finishCall` (`packages/harness/src/agent/runtime/loop/toolUseDispatch.ts`,
-   ~256 lines): extract "run the body and classify the outcome" and "sanitize,
-   capture and commit the result rows" into named helpers so the top reads as
-   short-circuits → invoke → commit.
+   ~256 lines). The proposed split into "invoke" and "commit" helpers is
+   refused (above): each would have one caller. Landed 2026-11-24 evening
+   instead, inside the function: the card a call opens and the stage it
+   opens under are `cardOf` / `stagedOf`, shared by the intent, the opening
+   and the result row (`resultRow` restated the stage spread), and the
+   result is assigned once per path, a refused check building its error
+   result where it is extracted instead of overwriting `result`. The
+   PreToolUse result type is named once (`ToolCallHooks`, which `toolGuard`
+   picks from).
 5. `configureAnsi` (`packages/cli/src/chat/tui/render/ansiMarkdown.ts`, ~285
    lines): ~10 markdown-it rule overrides share five mutable closure depth
    counters reset in two places (a leak risk on an unbalanced token stream) and
@@ -92,10 +116,59 @@ Listed in rough order of density.
    policy }` boilerplate. Declare segments as a `{ when, build, priority,
    policy }` data list reduced once.
 
-## This run
+## The evening run (2026-11-24): the app and the CLI
+
+Landed item 3, and widened to the app outside `ui/` and the hosts' non-UI
+code (`packages/texra/src`, `packages/cli/src` without the TUI,
+`packages/desktop/src/main`, `packages/extension/src` without webviews),
+ranking functions by length and by branch density. The one other chain
+over cases there, Claude's per-tool input summary
+(`describeToolInput` in `packages/texra/src/tools/agentCli/claudeAgentShared.ts`),
+is now a map from tool name to its line. The longest remaining functions
+read as deep modules or composition roots, not chains: `leanServer`'s and
+`leanServerPool`'s `make`, `serviceSession`, `openDesktopWindow`,
+`usageLogLayer`, `fetchAllCheckRuns`, `pollPull`,
+`extractFilenameHeaderDocuments` (a line-state parser whose flags interact;
+a rewrite is not provably equivalent) and `runInstallGithubAction` (a
+linear script of guarded steps). The settings view's body is already a
+handler table. Left for a later run: the validation model picks a scenario
+two ways, environment switches (`VALIDATION_SCENARIOS`) for the echo,
+fan-out and history-query replies and a system-text marker for the golden
+ones; one mechanism would touch `validate-run.mjs`, the e2e fixture and
+the kernel suites together.
+
+## The scan run
 
 Landed the one verified drift (the device-code fallback line) with a
 regression test, and recorded these candidates so the theme is not re-mined.
 The duplication result being a negative is the finding: there is no large
 mechanical consolidation to do, and the complex-function decompositions each
 need their own careful, behavior-preserving change rather than a batch.
+
+## The evening run (2026-11-24): the harness core
+
+Measured the longest functions in the harness core and llm (a
+TypeScript-AST measure of function spans, crossed with a month's churn).
+What landed is the duplication inside them, each change behavior-preserving:
+
+- `finishCall`: item 4.
+- `openStep` (`packages/harness/src/agent/runtime/loop/step.ts`): the
+  contributor filter it and `resolveActivations` each wrote is one
+  `contributedBy`, and the programs list it hands the description maps its
+  three sources once.
+- `agentCall` (`packages/harness/src/agent/runtime/delegation/AgentTool.ts`):
+  whether a launch is a program's or a chat's was decided in three places
+  (the program check, the file lists, the agent it runs as); one block now
+  decides the child once, and the four file lists are one `ChildFiles` type.
+- `invocationBody` (`packages/llm/src/api/anthropicMessages.ts`): the
+  thinking parameter is one expression instead of a `let` assigned down a
+  ladder.
+
+Tried and reverted in review: phase splits of `finishCall`, `openStep`
+(`stepSkills`, `stepMemory`, `changeWarnings`), `agentCall` (`childOf`) and
+`invocationBody` (`lowerMessages`) into single-caller steps; see the refused
+shape above. Measured and left: `modelInvokerLayer` and
+`openaiResponsesModel` are factories whose length is their inner functions,
+each already named; `runToolUse` already reads as `runTurn` and `loopBody`;
+`toolCatalogLayer`'s native-revision read (`readWith`) sits on the
+plugin-trust path; `scriptDoor` is one ordering protocol over shared state.

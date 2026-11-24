@@ -982,6 +982,35 @@
           "signature": "export const openStore = Effect.fnUntraced(function* <E, R>(connect: Effect.Effect<Sql, E, R | Scope.Scope>, path: string, filename: string, schema: StoreSchema) {…})"
         }
       ]
+    },
+    {
+      "id": "LOOP-phase-split-long-functions",
+      "candidate": "Make a long core function read as its outline by extracting its sequential phases into single-caller named steps: finishCall into invokeCall, resultOfExit and commitOutcome over a CallOutcome hand-off; openStep's skills, memory and change report into stepSkills, stepMemory and changeWarnings; agentCall's program-or-chat decision into childOf; invocationBody's history lowering into lowerMessages",
+      "why": "Each step has one caller and only cuts the function into phases in time order, which root AGENTS.md refuses twice: single-caller extractions are banned, and temporal decomposition is a named red flag. The split moves lines without removing a decision, adds a hand-off record and a doc comment per step, and grew the code (+169 lines on 2026-11-24). What the same functions did yield is the duplication inside them: cardOf and stagedOf (three row builders), one contributedBy filter (openStep and resolveActivations), the child decided once in agentCall, the thinking parameter as one expression.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-24-duplication-and-complexity-scan.md#complex-functions-worth-a-dedicated-decomposition",
+      "reopenWhen": "a phase gains a second caller, or root AGENTS.md drops its ban on single-caller extractions",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/runtime/loop/toolUseDispatch.ts",
+          "symbol": "finishCall",
+          "signature": "const finishCall = Effect.fn('toolUse.finishCall')(function* ( call: Call, place: Pick<RunCallShape, 'script' | 'scriptCalls'>, ended = false, ): Effect.fn.Return<void, InvokeError, AgentRunServices> {…})"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/loop/step.ts",
+          "symbol": "openStep",
+          "signature": "const openStep = Effect.fn('Step.open')(function* ( run: AgentRunShape, state: RunState, recorded: readonly OfferedTool[] | null, holding: boolean, recordedHooks: readonly string[] | null, ) {…})"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/delegation/AgentTool.ts",
+          "symbol": "agentCall",
+          "signature": "const agentCall = Effect.fn('AgentTool.agentCall')(function* ( call: RunToolCall, launch: ChildLaunch, ) {…})"
+        },
+        {
+          "file": "packages/llm/src/api/anthropicMessages.ts",
+          "symbol": "invocationBody",
+          "signature": "const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* ( input: ResolvedTurn, origin: ModelOrigin & { readonly protocol: 'anthropic-messages' }, config: AnthropicMessagesConfiguration, uploads: UploadCache, ) {…})"
+        }
+      ]
     }
   ]
 }
