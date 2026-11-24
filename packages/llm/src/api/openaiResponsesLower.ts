@@ -3,11 +3,7 @@ import { Clock, Effect, Number as Num, Schema } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
-import {
-  replayableHistory,
-  systemUpdateText,
-  type AssistantMessage,
-} from '../message.js';
+import { replayableHistory, systemUpdateText } from '../message.js';
 import { sameModelOrigin } from '../protocol.js';
 import { ModelError } from '../errors.js';
 import { anchoredPrefix, coveredPrefix } from './continuation.js';
@@ -66,170 +62,148 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   const namespace = config.toolNamespace;
   const content = (part: Parameters<typeof responsesContent>[0]) =>
     responsesContent(part, documents);
-  const lowerAssistantPart = Effect.fnUntraced(function* (
-    part: AssistantMessage['content'][number],
-    origin: AssistantMessage['origin'],
-  ): Effect.fn.Return<OpenAI.Responses.ResponseInputItem, ModelError> {
-    if (part.evidence != null && !sameModelOrigin(origin, turn)) {
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: 'Provider content evidence belongs to another model origin.',
+  const invalidRequest = (message: string) =>
+    new ModelError({ kind: 'invalid-request', message });
+  const input: OpenAI.Responses.ResponseInput = [];
+  for (const message of yield* replayableHistory(turn.messages, turn, from)) {
+    if (message.role === 'tool') {
+      for (const { call, result } of message.answered) {
+        // A result that carries only text keeps the plain string output
+        // the API has always taken. Attachments keep `result.content` order
+        // so a label still sits next to the file it names.
+        let output: string | OpenAI.Responses.ResponseInputContent[];
+        if (result.content.every((part) => part.kind === 'text')) {
+          const text = result.content.map((part) => part.text).join('');
+          output = result.status === 'error' ? `Error: ${text}` : text;
+        } else {
+          const lowered = yield* Effect.forEach(result.content, content);
+          output =
+            result.status === 'error'
+              ? [{ type: 'input_text' as const, text: 'Error: ' }, ...lowered]
+              : lowered;
+        }
+        input.push({
+          type: 'function_call_output',
+          call_id: call.providerCallId,
+          output,
+        });
+      }
+      continue;
+    }
+    if (message.role === 'system') {
+      // A developer message outranks user text; elsewhere it is user text.
+      input.push(
+        onOpenAiEndpoint(config)
+          ? { role: 'developer', content: message.text }
+          : { role: 'user', content: systemUpdateText(message.text) },
+      );
+      continue;
+    }
+    if (message.role === 'user') {
+      input.push({
+        role: 'user',
+        content: yield* Effect.forEach(message.content, content),
       });
+      continue;
     }
-    switch (part.kind) {
-      case 'message': {
-        if (part.evidence) {
-          if (part.evidence.kind !== 'openai-responses-message') {
-            return yield* new ModelError({
-              kind: 'invalid-request',
-              message: 'Responses cannot replay foreign message evidence.',
-            });
-          }
-          return {
-            type: 'message',
-            role: 'assistant',
-            id: part.evidence.itemId,
-            status: part.evidence.status,
-            ...(part.evidence.phase !== undefined
-              ? { phase: part.evidence.phase }
-              : {}),
-            content: part.content.map((child) =>
-              child.kind === 'text'
-                ? {
-                    type: 'output_text',
-                    text: child.text,
-                    annotations: [],
-                  }
-                : { type: 'refusal', refusal: child.text },
-            ),
-          };
-        }
-        if (part.content.some((child) => child.kind !== 'text'))
-          return yield* new ModelError({
-            kind: 'invalid-request',
-            message:
-              'Responses refusal history requires its original message evidence.',
-          });
-        return {
-          role: 'assistant',
-          content: part.content.map((child) => child.text).join(''),
-        };
-      }
-      case 'reasoning': {
-        if (part.evidence?.kind !== 'openai-responses-reasoning') {
-          return yield* new ModelError({
-            kind: 'invalid-request',
-            message:
-              'Responses reasoning requires its original provider evidence.',
-          });
-        }
-        return {
-          type: 'reasoning',
-          id: part.evidence.itemId,
-          summary: part.summary.map((child) => ({
-            type: 'summary_text',
-            text: child.text,
-          })),
-          ...(part.content !== undefined
-            ? {
-                content: part.content.map((child) => ({
-                  type: 'reasoning_text' as const,
-                  text: child.text,
-                })),
-              }
-            : {}),
-          ...(part.evidence.status !== undefined
-            ? { status: part.evidence.status }
-            : {}),
-          ...(part.evidence.encryptedContent !== undefined
-            ? { encrypted_content: part.evidence.encryptedContent }
-            : {}),
-        };
-      }
-      case 'local-call': {
-        if (
-          part.evidence !== undefined &&
-          part.evidence.kind !== 'openai-responses-function-call'
-        ) {
-          return yield* new ModelError({
-            kind: 'invalid-request',
-            message:
-              'Responses tool history requires local calls without foreign evidence.',
-          });
-        }
-        return {
-          type: 'function_call',
-          call_id: part.providerCallId,
-          name: part.name,
-          ...(namespace === null ? {} : { namespace }),
-          arguments: part.argumentsText,
-          ...(part.evidence?.itemId !== undefined
-            ? { id: part.evidence.itemId }
-            : {}),
-          ...(part.evidence?.status !== undefined
-            ? { status: part.evidence.status }
-            : {}),
-        };
-      }
-    }
-  });
-  const history = yield* replayableHistory(turn.messages, turn, from);
-  const input = yield* Effect.forEach(
-    history,
-    Effect.fnUntraced(function* (message): Effect.fn.Return<
-      OpenAI.Responses.ResponseInput,
-      ModelError
-    > {
-      if (message.role === 'tool') {
-        return yield* Effect.forEach(
-          message.answered,
-          Effect.fnUntraced(function* ({ call, result }) {
-            // A result that carries only text keeps the plain string output
-            // the API has always taken. Attachments keep `result.content` order
-            // so a label still sits next to the file it names.
-            const errorPrefix = result.status === 'error' ? 'Error: ' : '';
-            const output = result.content.every((part) => part.kind === 'text')
-              ? errorPrefix + result.content.map((part) => part.text).join('')
-              : yield* Effect.forEach(result.content, content).pipe(
-                  Effect.map((parts) =>
-                    errorPrefix
-                      ? [
-                          { type: 'input_text' as const, text: errorPrefix },
-                          ...parts,
-                        ]
-                      : parts,
-                  ),
-                );
-            return {
-              type: 'function_call_output',
-              call_id: call.providerCallId,
-              output,
-            } satisfies OpenAI.Responses.ResponseInputItem.FunctionCallOutput;
-          }),
+    for (const part of message.content) {
+      if (part.evidence != null && !sameModelOrigin(message.origin, turn)) {
+        return yield* invalidRequest(
+          'Provider content evidence belongs to another model origin.',
         );
       }
-      if (message.role === 'system') {
-        // A developer message outranks user text; elsewhere it is user text.
-        return [
-          onOpenAiEndpoint(config)
-            ? { role: 'developer', content: message.text }
-            : { role: 'user', content: systemUpdateText(message.text) },
-        ];
+      switch (part.kind) {
+        case 'message': {
+          if (part.evidence) {
+            if (part.evidence.kind !== 'openai-responses-message') {
+              return yield* invalidRequest(
+                'Responses cannot replay foreign message evidence.',
+              );
+            }
+            input.push({
+              type: 'message',
+              role: 'assistant',
+              id: part.evidence.itemId,
+              status: part.evidence.status,
+              ...(part.evidence.phase !== undefined
+                ? { phase: part.evidence.phase }
+                : {}),
+              content: part.content.map((child) =>
+                child.kind === 'text'
+                  ? { type: 'output_text', text: child.text, annotations: [] }
+                  : { type: 'refusal', refusal: child.text },
+              ),
+            });
+          } else {
+            if (part.content.some((child) => child.kind !== 'text'))
+              return yield* invalidRequest(
+                'Responses refusal history requires its original message evidence.',
+              );
+            input.push({
+              role: 'assistant',
+              content: part.content.map((child) => child.text).join(''),
+            });
+          }
+          break;
+        }
+        case 'reasoning': {
+          if (part.evidence?.kind !== 'openai-responses-reasoning') {
+            return yield* invalidRequest(
+              'Responses reasoning requires its original provider evidence.',
+            );
+          }
+          input.push({
+            type: 'reasoning',
+            id: part.evidence.itemId,
+            summary: part.summary.map((child) => ({
+              type: 'summary_text',
+              text: child.text,
+            })),
+            ...(part.content !== undefined
+              ? {
+                  content: part.content.map((child) => ({
+                    type: 'reasoning_text' as const,
+                    text: child.text,
+                  })),
+                }
+              : {}),
+            ...(part.evidence.status !== undefined
+              ? { status: part.evidence.status }
+              : {}),
+            ...(part.evidence.encryptedContent !== undefined
+              ? { encrypted_content: part.evidence.encryptedContent }
+              : {}),
+          });
+          break;
+        }
+        case 'local-call': {
+          if (
+            part.evidence !== undefined &&
+            part.evidence.kind !== 'openai-responses-function-call'
+          ) {
+            return yield* invalidRequest(
+              'Responses tool history requires local calls without foreign evidence.',
+            );
+          }
+          input.push({
+            type: 'function_call',
+            call_id: part.providerCallId,
+            name: part.name,
+            ...(namespace === null ? {} : { namespace }),
+            arguments: part.argumentsText,
+            ...(part.evidence?.itemId !== undefined
+              ? { id: part.evidence.itemId }
+              : {}),
+            ...(part.evidence?.status !== undefined
+              ? { status: part.evidence.status }
+              : {}),
+          });
+          break;
+        }
       }
-      if (message.role === 'user') {
-        return [
-          {
-            role: 'user',
-            content: yield* Effect.forEach(message.content, content),
-          },
-        ];
-      }
-      return yield* Effect.forEach(message.content, (part) =>
-        lowerAssistantPart(part, message.origin),
-      );
-    }),
-  );
-  return input.flat();
+    }
+  }
+  return input;
 });
 
 const RESPONSES_PREFIX_DOMAIN = 'texra-openai-responses-prefix-v1';

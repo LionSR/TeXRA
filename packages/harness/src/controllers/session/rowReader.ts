@@ -117,6 +117,8 @@ const INLINE_BLOBS = `SELECT DISTINCT b.digest AS digest, b.value AS value
   FROM event_blob l JOIN blob b ON b.digest = l.digest
   WHERE l.inline = 1 AND l."commit" IN (SELECT value FROM json_each(?))`;
 const decodeCommit = Schema.decodeUnknownSync(Schema.Int);
+const decodeRunId = Schema.decodeUnknownSync(RunIdSchema);
+const readSqlRow = Schema.decodeUnknownSync(RowSchema);
 /** An earlier-build run row, as `EARLIER_RUNS` and
  *  `EARLIER_AGGREGATE_PARENTS` select it. */
 const EarlierRowSchema = Schema.Struct({
@@ -134,17 +136,15 @@ const RUN_PLUGIN_FACTS = `SELECT s.logical_id AS logicalId, e."commit" AS "commi
 
 /** A plugin fact row's header: the top-level fields `decodeRow` reads. A
  *  row this cannot read is left to `decodeRow`, which reads it as damaged. */
-const PluginFactHeaderSchema = Schema.Struct({
-  plugin: Schema.String,
-  kind: Schema.String,
-  version: Schema.Int,
-});
-const factHeader = (data: unknown) => {
-  const header = Schema.decodeUnknownResult(
-    Schema.fromJsonString(PluginFactHeaderSchema),
-  )(String(data));
-  return Result.getOrUndefined(header);
-};
+const decodeFactHeader = Schema.decodeUnknownResult(
+  Schema.fromJsonString(
+    Schema.Struct({
+      plugin: Schema.String,
+      kind: Schema.String,
+      version: Schema.Int,
+    }),
+  ),
+);
 
 /** A selected row's reader, and the runs it found it cannot open. */
 export interface RowReader {
@@ -216,7 +216,7 @@ export function rowReader(
       const { logicalId, commit, type } =
         Schema.decodeUnknownSync(EarlierRowSchema)(row);
       markEarlier(
-        Schema.decodeUnknownSync(RunIdSchema)(logicalId),
+        decodeRunId(logicalId),
         new DatabaseRowEarlier({ commit, type }),
       );
     }
@@ -224,17 +224,14 @@ export function rowReader(
       const { logicalId, commit } = Schema.decodeUnknownSync(
         EarlierRowSchema.mapFields(Struct.omit(['type'])),
       )(row);
-      const header = factHeader(row.data);
+      const header = Result.getOrUndefined(decodeFactHeader(String(row.data)));
       const factKind = header && factKindOf(header, commit, factKinds);
       if (
         factKind &&
         Result.isFailure(factKind) &&
         factKind.failure._tag === 'DatabaseRowEarlier'
       )
-        markEarlier(
-          Schema.decodeUnknownSync(RunIdSchema)(logicalId),
-          factKind.failure,
-        );
+        markEarlier(decodeRunId(logicalId), factKind.failure);
     }
     scanned = true;
   });
@@ -284,9 +281,9 @@ export function rowReader(
       // Malformed SQL rows still fail validation after the first refusal.
       let refusal: DatabaseRowEarlier | undefined;
       for (const row of rows) {
-        const { kind, logicalId } = Schema.decodeUnknownSync(RowSchema)(row);
+        const { kind, logicalId } = readSqlRow(row);
         if (kind !== 'run') continue;
-        const runId = Schema.decodeUnknownSync(RunIdSchema)(logicalId);
+        const runId = decodeRunId(logicalId);
         refusal ??= earlier.get(runId);
       }
       if (refusal !== undefined) return yield* refusal;
@@ -307,7 +304,7 @@ export function rowReader(
       if (Result.isSuccess(decoded)) {
         if (decoded.success !== undefined) events.push(decoded.success);
         else {
-          const { type } = Schema.decodeUnknownSync(RowSchema)(row);
+          const { type } = readSqlRow(row);
           yield* warnOnce(
             type,
             `${path}: rows of the retired kind ${type} fed only what a view showed; they are skipped, and their runs still resume.`,
@@ -321,13 +318,13 @@ export function rowReader(
         `${decoded.failure.commit}`,
         `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run is shown as unreadable and cannot be opened.`,
       );
-      const { kind, logicalId } = Schema.decodeUnknownSync(RowSchema)(row);
-      if (kind === 'run')
+      const parsed = readSqlRow(row);
+      if (parsed.kind === 'run')
         mark(
-          Schema.decodeUnknownSync(RunIdSchema)(logicalId),
+          decodeRunId(parsed.logicalId),
           decoded.failure._tag === 'DatabaseRowEarlier',
         );
-      const start = bareStart(row);
+      const start = bareStart(parsed);
       if (start !== null) events.push(start);
     }
     return events;
@@ -342,13 +339,12 @@ export function rowReader(
 }
 
 /** A damaged `run.start` as a bare one, so its run still lists. */
-function bareStart(input: SqlRow): SessionRow | null {
-  const row = Schema.decodeUnknownSync(RowSchema)(input);
+function bareStart(row: typeof RowSchema.Type): SessionRow | null {
   if (row.type !== 'run.start' || row.kind !== 'run') return null;
   return {
     type: 'run.start',
     maxCostUsd: null,
-    aggregateId: Schema.decodeUnknownSync(RunIdSchema)(row.logicalId),
+    aggregateId: decodeRunId(row.logicalId),
     seq: row.seq,
     commit: row.commit,
     at: row.at,

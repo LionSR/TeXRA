@@ -295,7 +295,6 @@ const openViewer = Effect.fn('openBuild.openViewer')(
         schedule: Schedule.spaced(PDF_POLL_INTERVAL),
         until: (exists) => exists,
       }),
-      Effect.asVoid,
       Effect.timeoutOrElse({
         duration: PDF_WRITE_BUDGET,
         orElse: () =>

@@ -258,26 +258,14 @@ export const resolveTaskFiles = Effect.fn('resolveTaskFiles')(function* (
   TaskFilesFailure,
   Scope.Scope | FileSystem.FileSystem
 > {
-  type ResolvedSource =
-    | { readonly role: TaskFileRole; readonly paths: readonly string[] }
-    | Extract<TaskFileSource, { text: unknown }>;
-  const expanded = yield* Effect.all(
-    sources.map(
-      (
-        source,
-      ): Effect.Effect<
-        ResolvedSource,
-        TaskFilesFailure,
-        FileSystem.FileSystem
-      > =>
-        'spec' in source
-          ? Effect.map(
-              expandSpec(source.spec, source.role, root, task),
-              (paths) => ({ role: source.role, paths }),
-            )
-          : Effect.succeed(source),
-    ),
-    { concurrency: 8, mode: 'result' },
+  const expanded = yield* Effect.forEach(
+    sources,
+    Effect.fnUntraced(function* (source: TaskFileSource) {
+      if (!('spec' in source)) return source;
+      const { role, spec } = source;
+      return { role, paths: yield* expandSpec(spec, role, root, task) };
+    }, Effect.result),
+    { concurrency: 8 },
   );
   const resolved = yield* Effect.fromResult(Result.all(expanded));
 
@@ -285,11 +273,11 @@ export const resolveTaskFiles = Effect.fn('resolveTaskFiles')(function* (
   const filesOf = Effect.fn('taskFiles.filesOf')(function* (
     role: TaskFileRole,
   ) {
-    const files: string[] = [];
+    const files = new Set<string>();
     for (const source of resolved) {
       if (source.role !== role) continue;
       if ('paths' in source) {
-        for (const path of source.paths) files.push(path);
+        for (const path of source.paths) files.add(path);
         continue;
       }
       // No resource exists while the host is still reading, so an
@@ -304,9 +292,9 @@ export const resolveTaskFiles = Effect.fn('resolveTaskFiles')(function* (
         task,
       );
       writtenFiles.push(written);
-      files.push(written);
+      files.add(written);
     }
-    return [...new Set(files)];
+    return [...files];
   });
 
   const inputs = yield* filesOf('input');

@@ -1,6 +1,6 @@
 // Third-party imports
 import { GoogleGenAI, type Interactions } from '@google/genai';
-import { Array as Arr, Effect, Ref, Result, Schema, Stream } from 'effect';
+import { Effect, Ref, Result, Schema, Stream } from 'effect';
 
 // Local imports - canonical model contract
 import { anchoredPrefix, coveredPrefix } from './continuation.js';
@@ -120,32 +120,24 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
       // A function result takes text and images alone; a document, audio or
       // video a tool attached is accepted in a user turn only, so those parts
       // follow the results in one user_input step, each named by its call.
-      const lowered = yield* Effect.forEach(
-        message.answered,
-        Effect.fnUntraced(function* ({ call, result }) {
-          const parts = yield* Effect.forEach(result.content, lowerInputPart);
-          const [content, attachments] = Arr.partition(parts, (part) =>
-            part.type === 'text' || part.type === 'image'
-              ? Result.succeed(part)
-              : Result.fail(part),
-          );
-          return {
-            step: {
-              type: 'function_result',
-              call_id: call.providerCallId,
-              name: call.name,
-              ...(result.status === 'error' ? { is_error: true } : {}),
-              result: content,
-            } satisfies Interactions.Step,
-            carried: attachments.flatMap((part) => [
-              { type: 'text' as const, text: `From ${call.name}:` },
-              part,
-            ]),
-          };
-        }),
-      );
-      for (const { step } of lowered) steps.push(step);
-      const carried = lowered.flatMap(({ carried }) => carried);
+      const carried: Interactions.Content[] = [];
+      for (const { call, result } of message.answered) {
+        const content: Array<
+          Interactions.TextContent | Interactions.ImageContent
+        > = [];
+        for (const input of result.content) {
+          const part = yield* lowerInputPart(input);
+          if (part.type === 'text' || part.type === 'image') content.push(part);
+          else carried.push({ type: 'text', text: `From ${call.name}:` }, part);
+        }
+        steps.push({
+          type: 'function_result',
+          call_id: call.providerCallId,
+          name: call.name,
+          ...(result.status === 'error' ? { is_error: true } : {}),
+          result: content,
+        });
+      }
       if (carried.length > 0)
         steps.push({ type: 'user_input', content: carried });
     } else {

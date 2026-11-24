@@ -174,12 +174,12 @@ const runEndOf = Effect.fn('runEndOf')(function* (
       'Failed to fold the run usage from its run history rows',
     ).pipe(Effect.annotateLogs({ runId, error: loaded.failure.message }));
   }
-  const turns = Result.isSuccess(loaded) ? loaded.success?.usage : undefined;
-  const withLabel = ({ label }: RunRows) =>
-    Result.isSuccess(loaded) && during(label?.commit ?? -1) && label?.usage
+  const turns = Result.getOrUndefined(loaded)?.usage;
+  const { label } = held;
+  const own =
+    Result.isSuccess(loaded) && label?.usage && during(label.commit)
       ? addUsage(turns ?? NO_USAGE, label.usage)
       : turns;
-  const own = withLabel(held);
   // A program's work is its children's runs, which hold what it cost: those this activation started, each as it had ended
   // by this end, whatever a later resume of it spent.
   const children =

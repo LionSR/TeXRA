@@ -181,17 +181,14 @@ export const filesApiUploads = Effect.fn('llm.uploads')(function* (
   const uploadFile = Effect.fn('llm.uploads.uploadFile')(function* (
     file: FileUpload,
   ) {
-    const upload = yield* Schema.decodeUnknownEffect(FileUploadSchema)(
-      file,
-    ).pipe(
-      Effect.mapError(
-        (cause) =>
-          new ModelError({
-            kind: 'invalid-request',
-            message: 'The file to upload is invalid.',
-            cause,
-          }),
-      ),
+    const upload = yield* Effect.mapError(
+      Schema.decodeUnknownEffect(FileUploadSchema)(file),
+      (cause) =>
+        new ModelError({
+          kind: 'invalid-request',
+          message: 'The file to upload is invalid.',
+          cause,
+        }),
     );
     const digest = digestOf(upload.base64);
     // Only the request is interruptible: once it answers, the id has one

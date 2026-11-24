@@ -8,7 +8,7 @@
  * through `resumeRun`, and a child's launch through `startChildRun`
  * (`delegation/childLaunch.ts`).
  */
-import { Clock, ConfigProvider, Effect, Iterable, Layer, Record } from 'effect';
+import { Clock, ConfigProvider, Effect, Layer, Record } from 'effect';
 
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import type { ITool } from '@tools/core/ToolTypes';
@@ -118,13 +118,11 @@ const enterRun = Effect.fn('enterRun')(function* (
       message: `Run ${runId} already exists; resume it.`,
     });
   let held: AgentEvent[] | null = [];
+  const publish = (event: AgentEvent) => log.publish(runId, event);
+  const buffer = (event: AgentEvent) =>
+    held === null ? publish(event) : held.push(event);
   const logger = yield* Effect.acquireRelease(
-    Effect.sync(
-      () =>
-        new TraceEmitter((event) =>
-          held === null ? log.publish(runId, event) : held.push(event),
-        ),
-    ),
+    Effect.sync(() => new TraceEmitter(buffer)),
     (trace) => Effect.sync(() => trace.close()),
   );
   const enter: RunLaunch['entry']['enter'] = (commit) => {
@@ -134,16 +132,14 @@ const enterRun = Effect.fn('enterRun')(function* (
       const events = held ?? [];
       carried = events.findIndex((e) => e.type.startsWith('stream.'));
       if (carried < 0) carried = events.length;
-      return Array.from(
-        Iterable.flatMapNullishOr(Iterable.take(events, carried), (event) =>
-          runEventDraft(runId, event),
-        ),
-      );
+      return events
+        .slice(0, carried)
+        .flatMap((e) => runEventDraft(runId, e) ?? []);
     });
     return commit(alongside).pipe(
       Effect.tap(() =>
         Effect.sync(() => {
-          for (const e of held?.slice(carried) ?? []) log.publish(runId, e);
+          held?.slice(carried).forEach(publish);
           held = null;
         }),
       ),

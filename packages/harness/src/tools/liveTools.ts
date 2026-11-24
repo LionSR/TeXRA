@@ -229,10 +229,13 @@ export const toolCatalogLayer = (
                 native.revision !== revision &&
                 !loader.rejected(native),
             );
-          const noteFor = (failed: NativePluginFailed, stand?: NativePlugin) =>
-            stand === undefined
-              ? failed.message
-              : `${failed.message}; revision ${shortPluginId(stand.revision)} stays in use until the plugin is fixed or disabled.`;
+          const notes: string[] = [];
+          const say = (failed: NativePluginFailed, stand?: NativePlugin) =>
+            notes.push(
+              stand === undefined
+                ? failed.message
+                : `${failed.message}; revision ${shortPluginId(stand.revision)} stays in use until the plugin is fixed or disabled.`,
+            );
           const loaded = yield* Effect.forEach(
             found.plugins,
             ({ id, source }) =>
@@ -243,19 +246,14 @@ export const toolCatalogLayer = (
                 const result = yield* Effect.result(loader.load(source));
                 if (Result.isSuccess(result))
                   return { native: result.success, fresh: true };
-                const stand = standInFor(id);
-                return {
-                  native: stand,
-                  warning: noteFor(result.failure, stand),
-                };
+                return { native: standInFor(id), warning: result.failure };
               }),
             { concurrency: 'unbounded' },
           );
           const fresh = new Set<NativePlugin>();
-          const notes: string[] = [];
           const candidates: NativePlugin[] = [];
           for (const entry of loaded) {
-            if (entry.warning !== undefined) notes.push(entry.warning);
+            if (entry.warning !== undefined) say(entry.warning, entry.native);
             if (entry.native !== undefined) {
               candidates.push(entry.native);
               if (entry.fresh) fresh.add(entry.native);
@@ -271,9 +269,7 @@ export const toolCatalogLayer = (
                 ? standInFor(plugin.id, revision)
                 : undefined;
               if (stand === undefined) return [];
-              notes.push(
-                noteFor(notLoaded(plugin.id, revision, reason), stand),
-              );
+              say(notLoaded(plugin.id, revision, reason), stand);
               return [[native, stand]];
             }),
           );
@@ -285,9 +281,7 @@ export const toolCatalogLayer = (
                   candidates.map((native) => replaced.get(native) ?? native),
                 );
           for (const { native, reason } of composed.withheld)
-            notes.push(
-              noteFor(notLoaded(native.plugin.id, native.revision, reason)),
-            );
+            say(notLoaded(native.plugin.id, native.revision, reason));
           for (const native of composed.table.natives) {
             const held = inUse.get(native.plugin.id);
             if (held !== undefined && held.revision !== native.revision)

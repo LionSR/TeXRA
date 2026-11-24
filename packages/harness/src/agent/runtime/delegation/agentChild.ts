@@ -44,6 +44,7 @@ import {
   type RunId,
   type SubagentProgressUpdate,
   type ToolResult,
+  type ToolResultPayload,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -322,9 +323,7 @@ export const reusable = Effect.fn('agent.reusable')(function* (
     log.runRows(runId, 'results'),
   );
   const mine = `${script.callId}/`;
-  let origin:
-    | { callId: string; result: Extract<ToolResult, { status: 'executed' }> }
-    | undefined;
+  let origin: ToolResultPayload | undefined;
   for (const row of Iterable.flatMap(results, (run) => run.results)) {
     if (row.result.status !== 'executed' || row.result.reuseKey !== key)
       continue;
@@ -335,14 +334,15 @@ export const reusable = Effect.fn('agent.reusable')(function* (
       row.callId !== callId
     )
       return duplicate;
-    origin = { callId: row.callId, result: row.result };
+    origin = row;
   }
-  if (origin === undefined) return null;
-  const from = origin.result.reusedFrom ?? origin.callId;
-  const { value } = origin.result;
+  if (origin?.result.status !== 'executed') return null;
+  const { result } = origin;
+  const from = result.reusedFrom ?? origin.callId;
+  const { value } = result;
   return {
-    ...origin.result,
-    output: `Reused the result of call ${from}: nothing ran again.\n\n${origin.result.output ?? ''}`,
+    ...result,
+    output: `Reused the result of call ${from}: nothing ran again.\n\n${result.output ?? ''}`,
     reusedFrom: from,
     // What this run has spent is read now, not where the result was made.
     ...(typeof value === 'object' &&

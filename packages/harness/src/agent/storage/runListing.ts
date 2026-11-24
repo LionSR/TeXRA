@@ -33,7 +33,7 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
     ),
     (run) =>
       Effect.gen(function* (): Effect.fn.Return<
-        readonly [number, AgentRunListingEntry] | null,
+        AgentRunListingEntry | null,
         never,
         SessionLog
       > {
@@ -49,32 +49,25 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
           return null;
         }
         const continuation = yield* deriveContinuation(id);
-        const launchedAt = new Date(run.launchedAt);
-        return [
-          launchedAt.getTime(),
-          {
-            id,
-            timestamp: launchedAt.toISOString(),
-            outcome: run.outcome,
-            ...(run.description === null
-              ? {}
-              : { description: run.description }),
-            continuation:
-              continuation.kind === 'checkpoint'
-                ? { kind: 'continues' }
-                : continuation.kind === 'finished'
-                  ? { kind: 'finished' }
-                  : { kind: 'blocked', cause: continuation.cause },
-            identity,
-            record,
-          },
-        ];
+        return {
+          id,
+          timestamp: new Date(run.launchedAt).toISOString(),
+          outcome: run.outcome,
+          ...(run.description === null ? {} : { description: run.description }),
+          continuation:
+            continuation.kind === 'checkpoint'
+              ? { kind: 'continues' }
+              : continuation.kind === 'finished'
+                ? { kind: 'finished' }
+                : { kind: 'blocked', cause: continuation.cause },
+          identity,
+          record,
+        };
       }),
     { concurrency: RUN_STORAGE_CONCURRENCY },
   );
 
   return results
     .filter(Predicate.isNotNull)
-    .toSorted(([a], [b]) => b - a)
-    .map(([, entry]) => entry);
+    .toSorted((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
 });

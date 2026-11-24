@@ -21,7 +21,6 @@ import { type PresentationEventHandlers } from '@texra-ai/worldline/host';
 import { isPathWithin } from '@texra-ai/worldline/node';
 
 import {
-  Array as Arr,
   Cause,
   Clock,
   Context,
@@ -29,7 +28,6 @@ import {
   Equal,
   Iterable,
   Layer,
-  Order,
   Queue,
   RcMap,
   Ref,
@@ -131,15 +129,13 @@ export const makeWindowTable = () => {
 
   /** The window a call of `key`'s project goes to. */
   const target = (key: string, capability: HostCapability) => {
-    const able = [...windows.values()].filter(
-      (window) => window.key === key && window.capabilities.has(capability),
-    );
-    return Arr.isArrayNonEmpty(able)
-      ? Arr.max(
-          able,
-          Order.mapInput(Order.Number, (window: Window) => window.focusedAt),
-        )
-      : undefined;
+    let focused: Window | undefined;
+    for (const window of windows.values()) {
+      if (window.key !== key || !window.capabilities.has(capability)) continue;
+      if (focused === undefined || window.focusedAt > focused.focusedAt)
+        focused = window;
+    }
+    return focused;
   };
   const offers = (key: string, capability: HostCapability) =>
     target(key, capability) !== undefined;
@@ -213,13 +209,23 @@ export const makeWindowTable = () => {
 
   /** The window went: its project hears once when no window of it is
    *  left. What it was asked ends as its client here closes. */
-  const detach = Effect.fn('detach')(function* (window: Window) {
-    windows.delete(window.id);
-    if (!Iterable.some(windows.values(), (other) => other.key === window.key))
-      yield* Effect.logWarning(
-        `No TeXRA window of ${window.project} is attached: its tasks run without diagnostics, inline criticism or PDF opening until one attaches.`,
-      );
-  });
+  const register = (window: Window) =>
+    Effect.acquireRelease(
+      Effect.sync(() => void windows.set(window.id, window)),
+      () =>
+        Effect.gen(function* () {
+          windows.delete(window.id);
+          if (
+            !Iterable.some(
+              windows.values(),
+              (other) => other.key === window.key,
+            )
+          )
+            yield* Effect.logWarning(
+              `No TeXRA window of ${window.project} is attached: its tasks run without diagnostics, inline criticism or PDF opening until one attaches.`,
+            );
+        }),
+    );
 
   const interactionsOf = (session: Session): SessionHost => {
     const key = session.roots.storage;
@@ -290,13 +296,7 @@ export const makeWindowTable = () => {
       if (window) window.focusedAt = now;
     });
   return {
-    register: (window: Window) =>
-      Effect.acquireRelease(
-        Effect.sync(() => {
-          windows.set(window.id, window);
-        }),
-        () => detach(window),
-      ),
+    register,
     interactionsOf,
     answer,
     focus,

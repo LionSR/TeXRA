@@ -12,6 +12,9 @@ import {
 import { ModelError } from '../errors.js';
 import { sameModelOrigin, type ModelOrigin } from '../protocol.js';
 
+const invalidRequest = (message: string, cause?: Schema.SchemaError) =>
+  new ModelError({ kind: 'invalid-request', message, ...(cause && { cause }) });
+
 /**
  * Prepares a turn on the `origin` binding: revalidates the authored request,
  * refuses a continuation another protocol issued, a background turn on a
@@ -30,38 +33,25 @@ export const resolveTurn = Effect.fn('llm.resolveTurn')(function* (
   ) => Effect.Effect<{ readonly controls: object }, ModelError>,
   lower: (turn: ResolvedTurn) => Effect.Effect<unknown, ModelError>,
 ) {
-  const input = yield* Schema.decodeUnknownEffect(TurnRequestSchema)(
-    request,
-  ).pipe(
-    Effect.mapError(
-      (cause) =>
-        new ModelError({
-          kind: 'invalid-request',
-          message: 'The turn request is invalid.',
-          cause,
-        }),
-    ),
+  const input = yield* Effect.mapError(
+    Schema.decodeUnknownEffect(TurnRequestSchema)(request),
+    (cause) => invalidRequest('The turn request is invalid.', cause),
   );
   if (
     input.continuation !== undefined &&
     input.continuation.origin.protocol !== origin.protocol
   )
-    return yield* new ModelError({
-      kind: 'invalid-request',
-      message: 'The continuation belongs to another protocol.',
-    });
+    return yield* invalidRequest(
+      'The continuation belongs to another protocol.',
+    );
   if (input.mode === 'background' && background === undefined)
-    return yield* new ModelError({
-      kind: 'invalid-request',
-      message: 'The model does not run background turns.',
-    });
+    return yield* invalidRequest('The model does not run background turns.');
   const toolChoice = input.toolChoice ?? 'auto';
   const tools = input.tools ?? [];
   if (toolChoice !== 'auto' && !tools.some((t) => t.name === toolChoice.name))
-    return yield* new ModelError({
-      kind: 'invalid-request',
-      message: 'The required tool must be present in the supplied definitions.',
-    });
+    return yield* invalidRequest(
+      'The required tool must be present in the supplied definitions.',
+    );
   const { controls } = yield* resolve(input);
   // A protocol without continuations drops the field as undeclared.
   const turn = yield* Schema.decodeUnknownEffect(ResolvedTurnSchema)({
@@ -73,13 +63,8 @@ export const resolveTurn = Effect.fn('llm.resolveTurn')(function* (
     continuation: input.continuation,
     controls: { toolChoice, ...controls },
   }).pipe(
-    Effect.mapError(
-      (cause) =>
-        new ModelError({
-          kind: 'invalid-request',
-          message: 'The request resolves to no supported turn.',
-          cause,
-        }),
+    Effect.mapError((cause) =>
+      invalidRequest('The request resolves to no supported turn.', cause),
     ),
   );
   yield* lower(turn);
@@ -105,10 +90,8 @@ export function boundTurn<
   return bound(turn)
     ? Effect.succeed(turn)
     : Effect.fail(
-        new ModelError({
-          kind: 'invalid-request',
-          message:
-            'The prepared turn belongs to another model binding or execution mode.',
-        }),
+        invalidRequest(
+          'The prepared turn belongs to another model binding or execution mode.',
+        ),
       );
 }

@@ -37,9 +37,7 @@ import {
   Effect,
   Equivalence,
   type FileSystem,
-  Iterable,
   Record,
-  Result,
   Schema,
   ScopedRef,
 } from 'effect';
@@ -201,30 +199,19 @@ function describedAtFreeze<T extends ResolvedTools>(
       lane: tools.registry.get(definition.name)?.lane,
     }));
   const offered = tools.definitions.map(({ name }) => name);
-  const recorded = new Map<string, OfferedTool['shown']>();
-  if (state.offeredContext !== null) {
-    for (const { name, shown } of state.offeredTools ?? []) {
-      if (!recorded.has(name)) recorded.set(name, shown);
-    }
-  }
+  const recorded = state.offeredContext === null ? null : state.offeredTools;
+  const shown = new Map<string, OfferedTool['shown']>();
   const definitions = tools.definitions.map((definition) => {
     const describe = tools.registry.get(definition.name)?.describe;
     if (describe === undefined) return definition;
-    const shown = recorded.get(definition.name);
-    return {
-      ...definition,
-      description:
-        shown === undefined
-          ? describe(declared, modules, programs, offered)
-          : stored(state, shown, RecordedDescription).description,
-    };
+    const previous = recorded?.find((tool) => tool.name === definition.name);
+    const description = previous
+      ? stored(state, previous.shown, RecordedDescription).description
+      : describe(declared, modules, programs, offered);
+    const described = { ...definition, description };
+    shown.set(definition.name, toolDigests({ definition: described }).shown);
+    return described;
   });
-  const shown = new Map(
-    definitions.map((definition) => [
-      definition.name,
-      toolDigests({ definition }).shown,
-    ]),
-  );
   return {
     ...tools,
     definitions,
@@ -392,11 +379,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const contributes = ({ plugin }: SkillCatalogEntry) =>
       plugin === null || contributors.has(plugin);
     const byName = new Map(
-      Iterable.filterMap(catalog.named, (entry) =>
-        contributes(entry)
-          ? Result.succeed([entry.name, entry] as const)
-          : Result.failVoid,
-      ),
+      catalog.named.filter(contributes).map((entry) => [entry.name, entry]),
     );
     // A skill the run recorded (listed, or activated by its user) that this
     // step does not offer, its plugin withdrawn or the skill gone, is left
@@ -413,12 +396,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const listed = !listing
       ? []
       : recordedSkills === null
-        ? Array.from(
-            Iterable.take(
-              Iterable.filter(catalog.catalog, contributes),
-              SKILL_CATALOG_MAX_SKILLS,
-            ),
-          )
+        ? catalog.catalog.filter(contributes).slice(0, SKILL_CATALOG_MAX_SKILLS)
         : offered(recordedSkills);
     const activated = offered(names);
     const hooks = stepHooks(run, pinned.installed, recordedHooks);

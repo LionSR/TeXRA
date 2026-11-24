@@ -289,6 +289,22 @@ export const projectServers = Effect.fnUntraced(function* (
   // twice.
   const failed = new Map<string, ServerKey>();
   const eviction = yield* Semaphore.make(1);
+  const retryFailed = eviction.withPermit(
+    Effect.gen(function* () {
+      for (const key of [...failed.values()]) {
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            // Hold the checked generation through invalidation so its idle
+            // timer cannot replace it while another caller starts a server.
+            const entry = yield* RcMap.getOption(servers, key);
+            if (Option.getOrUndefined(entry)?.failure !== undefined)
+              yield* RcMap.invalidate(servers, key);
+          }),
+        );
+        if (failed.get(key.id) === key) failed.delete(key.id);
+      }
+    }),
+  );
   const holdServer: ProjectServers['holdServer'] = (plugin, load = '') =>
     Effect.gen(function* () {
       const key = new ServerKey(plugin, yield* ProjectEnvironment, load);
@@ -298,24 +314,7 @@ export const projectServers = Effect.fnUntraced(function* (
     });
   const hold: ProjectServers['hold'] = Effect.fn('ToolCatalog.hold')(
     function* (declared, root) {
-      if (root)
-        yield* eviction.withPermit(
-          Effect.gen(function* () {
-            for (const key of [...failed.values()]) {
-              // Keep the checked generation held until it is invalidated.
-              // A concurrent root cannot evict a healthy replacement.
-              yield* Effect.scoped(
-                Effect.gen(function* () {
-                  const entry = yield* RcMap.getOption(servers, key);
-                  if (Option.isSome(entry) && entry.value.failure !== undefined)
-                    yield* RcMap.invalidate(servers, key);
-                }),
-              );
-              // A concurrent holder can have reported another failure.
-              if (failed.get(key.id) === key) failed.delete(key.id);
-            }
-          }),
-        );
+      if (root) yield* retryFailed;
       const read = yield* loader(declared);
       const held = yield* Effect.forEach(
         read.plugins,

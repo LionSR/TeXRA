@@ -1,9 +1,12 @@
-import { Effect, Iterable } from 'effect';
+import { Effect } from 'effect';
 import { SessionRequests } from '@agent/runtime/requests';
 import { logFailure } from '@logger/effectLog';
 import { SessionViewAccess } from '@shared/session/runHistory';
 
-const CHANNEL = 'LeftoverRunSweep';
+const retained = logFailure(
+  'LeftoverRunSweep',
+  'A background shell was retained because automatic deletion was refused.',
+);
 
 /**
  * The background shells of the cohort captured before session open that
@@ -16,23 +19,10 @@ export const sweepLeftoverRuns = Effect.gen(function* () {
   // The listing as the store holds it at open: a run launched since is
   // held here, which the closer leaves alone.
   const { runs } = yield* (yield* SessionViewAccess).read([]);
-  const finished = Iterable.filter(
-    runs.values(),
-    (run) => run.identity.kind === 'process' && run.outcome !== null,
-  );
-  yield* Effect.forEach(
-    finished,
-    (run) =>
-      requests
-        .request({ kind: 'run.delete', runId: run.id })
-        .pipe(
-          Effect.catch((error) =>
-            logFailure(
-              CHANNEL,
-              'A background shell was retained because automatic deletion was refused.',
-            )({ runId: run.id, error }),
-          ),
-        ),
-    { discard: true },
-  );
+  for (const { id, identity, outcome } of runs.values()) {
+    if (identity.kind !== 'process' || outcome === null) continue;
+    yield* requests
+      .request({ kind: 'run.delete', runId: id })
+      .pipe(Effect.catch((error) => retained({ runId: id, error })));
+  }
 });

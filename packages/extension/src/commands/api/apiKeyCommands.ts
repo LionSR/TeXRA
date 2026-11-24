@@ -82,7 +82,7 @@ function promptForApiKey(
       yield* Effect.forkScoped(openKeyPortal, { startImmediately: true });
       return yield* Effect.callback<string | undefined>((resume) => {
         ib.onDidAccept(() => resume(Effect.succeed(ib.value)));
-        ib.onDidHide(() => resume(Effect.succeed(undefined)));
+        ib.onDidHide(() => resume(Effect.undefined));
         ib.show();
       });
     }),

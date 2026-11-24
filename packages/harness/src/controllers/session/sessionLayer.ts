@@ -231,9 +231,10 @@ const unopenedEntry =
 const heldSession = Effect.fn('heldSession')(function* (root: string) {
   const sessions = yield* SessionMap;
   const keys = yield* RcMap.keys(sessions.rcMap);
-  const found = Iterable.findFirst(keys, (key) => key.storage === root);
-  if (Option.isNone(found)) return undefined;
-  const key = found.value;
+  const key = Option.getOrUndefined(
+    Iterable.findFirst(keys, (key) => key.storage === root),
+  );
+  if (key === undefined) return undefined;
   const held = yield* sessions
     .contextEffectOption(key)
     .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));

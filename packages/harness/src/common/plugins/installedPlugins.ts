@@ -194,37 +194,26 @@ const installFromRoot = Effect.fn('installFromRoot')(function* (
     root,
     only,
   );
-  const batches = yield* Effect.forEach(
-    candidates,
-    Effect.fnUntraced(function* (candidate): Effect.fn.Return<
-      InstalledPlugin[],
-      PluginError | PluginRequestError,
-      ChildProcessSpawner | FileSystem.FileSystem
-    > {
-      if (candidate.kind === 'git') {
-        if (nested) {
-          return yield* new PluginError({
-            message: `${candidate.url} is listed by a marketplace that was itself listed by one; only one level is followed.`,
-          });
-        }
-        return yield* installOrigin(candidate, [], run, true);
+  const records: InstalledPlugin[] = [];
+  for (const candidate of candidates) {
+    if (candidate.kind === 'git') {
+      if (nested) {
+        return yield* new PluginError({
+          message: `${candidate.url} is listed by a marketplace that was itself listed by one; only one level is followed.`,
+        });
       }
-      const plugin = yield* readPlugin(candidate.dir, candidate.entry);
-      yield* claimName(run, plugin.name);
-      if (fetched.kind === 'local') {
-        return [
-          {
-            name: plugin.name,
-            source: candidate.dir,
-            path: candidate.dir,
-            skills: plugin.skills.map((skill) =>
-              path.join(candidate.dir, skill),
-            ),
-            ...standIn(candidate),
-            enabled: false,
-          },
-        ];
-      }
+      for (const record of yield* installOrigin(candidate, [], run, true))
+        records.push(record);
+      continue;
+    }
+    const plugin = yield* readPlugin(candidate.dir, candidate.entry);
+    yield* claimName(run, plugin.name);
+    let location: Pick<InstalledPlugin, 'source' | 'path' | 'ref' | 'commit'> =
+      {
+        source: candidate.dir,
+        path: candidate.dir,
+      };
+    if (fetched.kind === 'git') {
       // Each fetched plugin gets its own managed copy of the checkout, so
       // update and remove act on one plugin without touching another.
       const dest = managedDir(run.env, plugin.name);
@@ -242,22 +231,22 @@ const installFromRoot = Effect.fn('installFromRoot')(function* (
       // The checkout holds no symlinks (`checkoutDetached` writes them as
       // plain files), so the copy has none to rewrite.
       yield* fs.copy(root, dest).pipe(Effect.mapError(ioError));
-      const pluginPath = path.join(dest, path.relative(root, candidate.dir));
-      return [
-        {
-          name: plugin.name,
-          source: fetched.url,
-          ...(fetched.ref ? { ref: fetched.ref } : {}),
-          commit: fetched.commit,
-          path: pluginPath,
-          skills: plugin.skills.map((skill) => path.join(pluginPath, skill)),
-          ...standIn(candidate),
-          enabled: false,
-        },
-      ];
-    }),
-  );
-  return batches.flat();
+      location = {
+        source: fetched.url,
+        ...(fetched.ref ? { ref: fetched.ref } : {}),
+        commit: fetched.commit,
+        path: path.join(dest, path.relative(root, candidate.dir)),
+      };
+    }
+    records.push({
+      name: plugin.name,
+      ...location,
+      skills: plugin.skills.map((skill) => path.join(location.path, skill)),
+      ...standIn(candidate),
+      enabled: false,
+    });
+  }
+  return records;
 });
 
 function installOrigin(

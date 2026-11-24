@@ -33,13 +33,18 @@ ON CONFLICT(family, key) DO UPDATE SET
   value = excluded.value, at = excluded.at
 `;
 
-const MATCHED_KEYS = `FROM current_value
-  WHERE family = ? AND key IN (SELECT value FROM json_each(?))`;
+/** Keep a row at every requested position, including missing keys. */
+const SELECT_REQUESTED = `SELECT stored.key, stored.value
+  FROM json_each(?) AS requested
+  LEFT JOIN current_value AS stored ON stored.family = ? AND stored.key = requested.value
+  ORDER BY requested.key`;
 
 /** The keys' rows in key order as one JSON text: equal exactly when no
  *  value changed. */
 const SNAPSHOT = `SELECT json_group_array(json_array(key, value) ORDER BY key)
-    AS snapshot ${MATCHED_KEYS}`;
+    AS snapshot
+  FROM current_value
+  WHERE family = ? AND key IN (SELECT value FROM json_each(?))`;
 
 /** Use the same UTF-8 strings SQLite would see as individual bound keys. */
 const requestedKeys = (keys: readonly string[]) =>
@@ -72,15 +77,10 @@ const READ_RETRY = Schedule.exponential('250 millis').pipe(
 export const changeRead = <E>(
   read: Effect.Effect<unknown, E>,
   failed: string,
-): Effect.Effect<unknown> =>
-  read.pipe(
-    Effect.retry(
-      READ_RETRY.pipe(
-        Schedule.tap(({ input }) =>
-          logFailure('sessionDatabase', `${failed}; retrying.`)(input),
-        ),
-      ),
-    ),
+): Effect.Effect<unknown> => {
+  const retrying = logFailure('sessionDatabase', `${failed}; retrying.`);
+  return read.pipe(
+    Effect.retry(READ_RETRY.pipe(Schedule.tap(({ input }) => retrying(input)))),
     Effect.catch((error) =>
       logFailure(
         'sessionDatabase',
@@ -88,6 +88,7 @@ export const changeRead = <E>(
       )(error).pipe(Effect.as(Symbol('unread'))),
     ),
   );
+};
 
 const decodeString = Schema.decodeUnknownSync(Schema.String);
 
@@ -158,21 +159,15 @@ export function currentValues(
     ) =>
       transact(
         Effect.gen(function* () {
-          const selected =
-            keys.length === 0
-              ? []
-              : yield* exec(`SELECT key, value ${MATCHED_KEYS}`, [
-                  family.name,
-                  requestedKeys(keys),
-                ]);
-          const rows = new Map(
-            selected.map((row) => [decodeString(row.key), row]),
-          );
+          const rows = yield* exec(SELECT_REQUESTED, [
+            requestedKeys(keys),
+            family.name,
+          ]);
           const current: Partial<Record<K, T>> = {};
-          for (const key of keys) {
-            const row = rows.get(key.toWellFormed());
-            if (row === undefined) continue;
-            current[key] = yield* decodeValue(family, row);
+          for (const [position, key] of keys.entries()) {
+            const row = rows[position];
+            if (row?.key != null)
+              current[key] = yield* decodeValue(family, row);
           }
           // cast: every key with a row was set above; the others read absent.
           const result = change(current as Readonly<Record<K, T | undefined>>);
@@ -181,11 +176,11 @@ export function currentValues(
           const next = result.success[1];
           let deleted = false;
           let upserted = false;
-          for (const key of keys) {
-            const row = rows.get(key.toWellFormed());
+          for (const [position, key] of keys.entries()) {
+            const row = rows[position];
             const nextValue = next[key];
             if (nextValue === undefined) {
-              if (row === undefined) continue;
+              if (row?.key == null) continue;
               yield* exec(
                 'DELETE FROM current_value WHERE family = ? AND key = ?',
                 [family.name, key],

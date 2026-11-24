@@ -10,13 +10,11 @@ import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
 import {
-  Array as Arr,
   type Context,
   Effect,
   Exit,
   Layer,
   PubSub,
-  Result,
   Schedule,
   Stream,
   SubscriptionRef,
@@ -62,21 +60,19 @@ import { DEBUG_MODE_SETTING } from '@shared/state/stateSettings';
  * delay rather than the session's view; one that persists ends the view's
  * updates, which fails every reader of the view's changes at that boundary.
  */
+const logReplayRetry = logFailure(
+  'sessionInputs',
+  'Session view read failed; retrying',
+);
+const replayRetry = Schedule.exponential('50 millis').pipe(
+  Schedule.upTo({ times: 5 }),
+  Schedule.tap(({ input }) => logReplayRetry(input)),
+);
 const requiredRead = <A>(
   read: Effect.Effect<A, DatabaseReadFailed>,
 ): Effect.Effect<A> =>
   read.pipe(
-    Effect.retry(
-      Schedule.exponential('50 millis').pipe(
-        Schedule.upTo({ times: 5 }),
-        Schedule.tap(({ input }) =>
-          logFailure(
-            'sessionInputs',
-            'Session view read failed; retrying',
-          )(input),
-        ),
-      ),
-    ),
+    Effect.retry(replayRetry),
     Effect.tapError(
       logFailure(
         'sessionInputs',
@@ -320,9 +316,9 @@ function reconcileExistence(
 ): ExistenceReconciliation {
   return {
     checkedAggregateIds: [...checkedAggregateIds],
-    present: Arr.filterMap(read.state, ({ closed, aggregateId }) =>
-      closed ? Result.failVoid : Result.succeed(aggregateId),
-    ),
+    present: read.state
+      .filter((state) => !state.closed)
+      .map(({ aggregateId }) => aggregateId),
     unreadable: [...read.damaged],
   };
 }

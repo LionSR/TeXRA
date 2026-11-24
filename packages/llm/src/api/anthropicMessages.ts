@@ -162,17 +162,14 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
     } else if (message.role === 'tool') {
       const content = yield* Effect.forEach(
         message.answered,
-        ({ call, result }) =>
-          Effect.map(
-            Effect.forEach(result.content, lowerPart),
-            (content) =>
-              ({
-                type: 'tool_result',
-                tool_use_id: call.providerCallId,
-                is_error: result.status === 'error',
-                content,
-              }) satisfies ToolResultBlockParam,
-          ),
+        Effect.fnUntraced(function* ({ call, result }) {
+          return {
+            type: 'tool_result',
+            tool_use_id: call.providerCallId,
+            is_error: result.status === 'error',
+            content: yield* Effect.forEach(result.content, lowerPart),
+          } satisfies ToolResultBlockParam;
+        }),
       );
       messages.push({ role: 'user', content });
     } else {

@@ -12,8 +12,8 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { MODEL_CONFIGS } from '@texra-ai/llm';
 import type { Scope } from 'effect';
+import { MODEL_CONFIGS } from '@texra-ai/llm';
 import { transcribeAudio } from '@texra-ai/llm/node';
 
 import { type WorkspaceRoots } from '@texra-ai/worldline';
@@ -212,82 +212,56 @@ export class HostDraftRequests {
 
   /** The take from microphone startup to its answer. Completion belongs to
    *  Start, even when another project or view stops the recorder. */
-  private readonly runTake = Effect.fn('HostDraftRequests.take')(function* (
-    this: HostDraftRequests,
-    take: Take,
-  ) {
-    const takeProgram: Effect.Effect<
-      HostOutcome,
-      Rejected,
-      Secrets | FileSystem.FileSystem | ChildProcessSpawner
-    > = Effect.gen(function* () {
-      // sox lives in this block's scope. Its close (SIGTERM, then a join on
-      // the exit) is the stop, so the microphone is off before anything
-      // below reads a credential. The recorder writes under the take's own
-      // session storage, so its roots travel with the call.
-      const capturedPath = yield* Effect.scoped(
-        Effect.gen(function* () {
-          const recorder = yield* startRecording(take.roots).pipe(
-            Effect.mapError((error) => new Rejected({ reason: error.message })),
-          );
-          // sox exiting before Stop ends the take, a clean exit included:
-          // the microphone is no longer recording. Cancel interrupts.
-          yield* Effect.raceFirst(
-            take.stopped.await,
-            recorder.handle.exitCode.pipe(
-              Effect.match({
-                onFailure: (error) => error.message,
-                onSuccess: (code) => `sox exited with code ${code}`,
+  private readonly runTake = Effect.fn('HostDraftRequests.take')(function* ({
+    roots,
+    stopped,
+  }: Take): Effect.fn.Return<
+    HostOutcome,
+    Rejected,
+    Secrets | FileSystem.FileSystem | ChildProcessSpawner
+  > {
+    const reject = (error: { message: string }) =>
+      new Rejected({ reason: error.message });
+    // Closing this scope stops sox and waits for its file before transcription.
+    const captured = yield* Effect.scoped(
+      Effect.gen(function* () {
+        const recorder = yield* startRecording(roots).pipe(
+          Effect.mapError(reject),
+        );
+        const unexpectedExit = recorder.handle.exitCode.pipe(
+          Effect.match({
+            onFailure: (error) => error.message,
+            onSuccess: (code) => `sox exited with code ${code}`,
+          }),
+          Effect.flatMap((reason) =>
+            Effect.fail(
+              new Rejected({
+                reason: `Recording stopped unexpectedly: ${reason}`,
               }),
-              Effect.flatMap((reason) =>
-                Effect.fail(
-                  new Rejected({
-                    reason: `Recording stopped unexpectedly: ${reason}`,
-                  }),
-                ),
-              ),
-              Effect.tapError((error) => Effect.logWarning(error.reason)),
             ),
-          );
-          return recorder.path;
-        }),
-      );
-      const recordingPath = yield* validateRecordingFile(capturedPath).pipe(
-        Effect.mapError((error) => new Rejected({ reason: error.message })),
-      );
-      // Transcription takes an OpenAI key, read here as a pinned OpenAI
-      // model's own-key route. The take holds no session frame to enter —
-      // its roots travel with each call — so the endpoint read runs in the
-      // calling frame, and the resolved credential reaches the
-      // transcription as data.
-      const postStop = Effect.gen(function* () {
-        const credential = yield* ownKeyCredential(
-          take.roots,
-          MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
-        ).pipe(
-          Effect.mapError((error) => new Rejected({ reason: error.message })),
-        );
-        const text = yield* transcribeAudio(recordingPath, credential).pipe(
-          Effect.tapError((error) =>
-            Effect.logError(`Transcription failed: ${error.message}`),
           ),
-          Effect.mapError((error) => new Rejected({ reason: error.message })),
+          Effect.tapError((error) => Effect.logWarning(error.reason)),
         );
-        // The sweep is rooted by the take's storage root, as data, rather
-        // than by an ambient read of the calling fiber's roots.
-        yield* sweepStaleFiles(
-          yield* FileSystem.FileSystem,
-          recordingsDir(take.roots),
-        );
-        return { kind: 'text', text } satisfies HostOutcome;
-      });
-      // A Cancel after Stop interrupts the upload.
-      return yield* postStop;
-    });
-    // The take's warnings (an unexpected sox exit, the stale-take sweep)
-    // stay on this channel.
-    return yield* takeProgram.pipe(withLogChannel(CHANNEL));
-  });
+        yield* Effect.raceFirst(stopped.await, unexpectedExit);
+        return recorder.path;
+      }),
+    );
+    const recordingPath = yield* validateRecordingFile(captured).pipe(
+      Effect.mapError(reject),
+    );
+    const credential = yield* ownKeyCredential(
+      roots,
+      MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
+    ).pipe(Effect.mapError(reject));
+    const text = yield* transcribeAudio(recordingPath, credential).pipe(
+      Effect.tapError((error) =>
+        Effect.logError(`Transcription failed: ${error.message}`),
+      ),
+      Effect.mapError(reject),
+    );
+    yield* sweepStaleFiles(yield* FileSystem.FileSystem, recordingsDir(roots));
+    return { kind: 'text', text };
+  }, withLogChannel(CHANNEL));
 
   /** Stop acknowledges its own request; the take transcribes. */
   private readonly stop = Effect.suspend(() =>

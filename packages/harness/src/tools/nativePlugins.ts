@@ -293,39 +293,33 @@ const hostRun = (
     },
     call: (input) =>
       withinDeadline(
-        Effect.suspend(() => tool.call(input)).pipe(
-          Effect.exit,
-          Effect.flatMap((exit) => {
-            if (Exit.isSuccess(exit)) {
-              const result = exit.value;
-              return result.status === 'error'
-                ? Effect.succeed({ ...result, ...failed(result.error) })
-                : exit;
-            }
-            const { cause } = exit;
-            if (
-              Exit.hasInterrupts(exit) ||
-              findStorageRefusal(cause) !== undefined
-            )
-              return exit;
-            const defect = Cause.findDefect(cause);
-            const error = Cause.findError(cause);
-            if (Result.isSuccess(defect)) {
-              const message = ensureError(defect.success).message;
-              return Effect.logWarning(`${what} crashed: ${message}`).pipe(
-                withLogChannel('plugins'),
-                Effect.as(
-                  failed(
-                    Result.isSuccess(error) ? error.success.message : message,
-                  ),
-                ),
-              );
-            }
-            return Result.isSuccess(error)
-              ? Effect.succeed(failed(error.success.message))
-              : exit;
-          }),
-        ),
+        Effect.gen(function* () {
+          const exit = yield* Effect.exit(
+            Effect.suspend(() => tool.call(input)),
+          );
+          if (Exit.isSuccess(exit)) {
+            const result = exit.value;
+            return result.status === 'error'
+              ? { ...result, ...failed(result.error) }
+              : result;
+          }
+          const { cause } = exit;
+          if (
+            Exit.hasInterrupts(exit) ||
+            findStorageRefusal(cause) !== undefined
+          )
+            return yield* exit;
+          const error = Result.getOrUndefined(Cause.findError(cause));
+          const defect = Cause.findDefect(cause);
+          if (Result.isFailure(defect))
+            return error === undefined ? yield* exit : failed(error.message);
+
+          const message = ensureError(defect.success).message;
+          yield* Effect.logWarning(`${what} crashed: ${message}`).pipe(
+            withLogChannel('plugins'),
+          );
+          return failed(error?.message ?? message);
+        }),
         what,
       ),
   };

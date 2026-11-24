@@ -246,9 +246,7 @@ const prepareStore = Effect.fnUntraced(function* (
   const applyAdditions = Effect.forEach(
     schema.additive,
     (statement) => run(sql, statement),
-    {
-      discard: true,
-    },
+    { discard: true },
   );
   let initialized = false;
   if (!(yield* checkStamps(sql, path, schema))) {
@@ -256,9 +254,7 @@ const prepareStore = Effect.fnUntraced(function* (
     initialized = yield* Effect.gen(function* () {
       // Another process may have stamped the file while this one waited.
       if (yield* checkStamps(sql, path, schema)) return false;
-      yield* Effect.forEach(schema.tables, (statement) => run(sql, statement), {
-        discard: true,
-      });
+      for (const statement of schema.tables) yield* run(sql, statement);
       yield* applyAdditions;
       yield* run(sql, `PRAGMA user_version = ${schema.version}`);
       return true;

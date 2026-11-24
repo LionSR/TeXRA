@@ -299,15 +299,12 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
       result: Schema.optional(resultSchema),
       error: Schema.optional(JsonRpcErrorSchema),
     });
-    const response = yield* Schema.decodeUnknownEffect(responseSchema)(
-      raw,
-    ).pipe(
-      Effect.mapError(
-        (failure) =>
-          new ToolError(
-            `Better BibTeX returned an unexpected response for ${method}: ${failure.message}`,
-          ),
-      ),
+    const response = yield* Effect.mapError(
+      Schema.decodeUnknownEffect(responseSchema)(raw),
+      (failure) =>
+        new ToolError(
+          `Better BibTeX returned an unexpected response for ${method}: ${failure.message}`,
+        ),
     );
     if (response.error) {
       return yield* new ToolError(

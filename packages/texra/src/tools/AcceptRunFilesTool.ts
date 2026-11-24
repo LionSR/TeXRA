@@ -284,8 +284,8 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
       }
 
       return {
-        path: mapping.path,
-        original: dest.relativePath,
+        outputPath: mapping.path,
+        originalPath: dest.relativePath,
         destAbsolutePath: dest.absolutePath,
         proposedContent,
         originalContent,
@@ -296,87 +296,72 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     { concurrency: 'unbounded' },
   );
 
-  // Phase 2: Request approval and write each file, in order.
-  const outcomes = yield* Effect.forEach(
-    prepared,
-    Effect.fnUntraced(function* (entry) {
-      const target =
-        entry.path === entry.original
-          ? entry.original
-          : `${entry.original} (from ${entry.path})`;
+  // Phase 2: Request approval and write each file
+  const results: string[] = [];
+  const acceptedEntries: {
+    file: (typeof prepared)[number];
+    edit: EditRecord;
+  }[] = [];
+  let unchanged = 0;
+  const rejections: RecordedRejection[] = [];
 
-      if (entry.originalContent === entry.proposedContent) {
-        return {
-          status: 'unchanged',
-          line: `unchanged: ${target}`,
-        } as const;
-      }
+  for (const file of prepared) {
+    const target =
+      file.outputPath === file.originalPath
+        ? file.originalPath
+        : `${file.originalPath} (from ${file.outputPath})`;
 
-      // Null when the destination did not exist: the reviewed base the
-      // approval carries, and the one the write is checked against below, so
-      // a resume between the proposal and the approval cannot swap in a
-      // fresh read of the destination.
-      const approval = yield* requestToolEditApproval({
-        path: entry.original,
-        originalContent: entry.destExists ? entry.originalContent : null,
-        proposedContent: entry.proposedContent,
-        sourceTool: 'accept_run_files',
-      });
+    if (file.originalContent === file.proposedContent) {
+      unchanged++;
+      results.push(`unchanged: ${target}`);
+      continue;
+    }
 
-      if (approval.action !== 'apply') {
-        return {
-          status: 'rejected',
-          line: `rejected: ${target}`,
-          rejection: { path: entry.original, decision: approval },
-        } as const;
-      }
+    // Null when the destination did not exist: the reviewed base the
+    // approval carries, and the one the write is checked against below, so
+    // a resume between the proposal and the approval cannot swap in a
+    // fresh read of the destination.
+    const approval = yield* requestToolEditApproval({
+      path: file.originalPath,
+      originalContent: file.destExists ? file.originalContent : null,
+      proposedContent: file.proposedContent,
+      sourceTool: 'accept_run_files',
+    });
 
-      // A conflict is this file's outcome; the rest are still offered.
-      const conflict = yield* approvedWriteConflict(
-        entry.original,
-        approval.originalContent,
-        approval.appliedContent,
-      );
-      if (conflict !== undefined) {
-        return {
-          status: 'conflict',
-          line: `conflict: ${target}`,
-        } as const;
-      }
+    if (approval.action !== 'apply') {
+      rejections.push({ path: file.originalPath, decision: approval });
+      results.push(`rejected: ${target}`);
+      continue;
+    }
 
-      const action = entry.destExists ? 'replaced' : 'created';
-      const strippedNote =
-        entry.strippedCount > 0
-          ? ` (stripped ${entry.strippedCount} \\criticize)`
-          : '';
-      return {
-        status: 'accepted',
-        line: `${action}: ${target}${strippedNote}`,
-        edit: {
-          path: entry.original,
-          lineChanges: approval.lineChanges,
-          startLine: approval.startLine,
-        } satisfies EditRecord,
-        outputPath: entry.path,
-        originalPath: entry.original,
-        destAbsolutePath: entry.destAbsolutePath,
-        strippedCount: entry.strippedCount,
-      } as const;
-    }),
-  );
-  const results: string[] = outcomes.map(({ line }) => line);
-  const acceptedEntries = outcomes.filter(
-    (outcome) => outcome.status === 'accepted',
-  );
-  const edits = acceptedEntries.map(({ edit }) => edit);
-  const rejections = outcomes
-    .filter((outcome) => outcome.status === 'rejected')
-    .map(({ rejection }) => rejection);
-  const unchanged = Arr.countBy(
-    outcomes,
-    ({ status }) => status === 'unchanged',
-  );
-  const changed = outcomes.length - unchanged;
+    // A conflict is this file's outcome; the rest are still offered.
+    const conflict = yield* approvedWriteConflict(
+      file.originalPath,
+      approval.originalContent,
+      approval.appliedContent,
+    );
+    if (conflict !== undefined) {
+      results.push(`conflict: ${target}`);
+      continue;
+    }
+
+    const action = file.destExists ? 'replaced' : 'created';
+    const strippedNote =
+      file.strippedCount > 0
+        ? ` (stripped ${file.strippedCount} \\criticize)`
+        : '';
+    results.push(`${action}: ${target}${strippedNote}`);
+    acceptedEntries.push({
+      file,
+      edit: {
+        path: file.originalPath,
+        lineChanges: approval.lineChanges,
+        startLine: approval.startLine,
+      },
+    });
+  }
+
+  const changed = files.length - unchanged;
   const detailedOutput = (summary: string): string =>
     `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`;
 
@@ -386,7 +371,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
       status: 'executed',
       summary,
       output: detailedOutput(summary),
-      edits,
+      edits: [],
     };
   }
 
@@ -398,14 +383,16 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   }
 
   // Phase 3: Clean up diff files from workspace for accepted files
-  const cleaned = yield* cleanupAcceptedWorkspaceDiffFiles(acceptedEntries);
+  const cleaned = yield* cleanupAcceptedWorkspaceDiffFiles(
+    acceptedEntries.map(({ file }) => file),
+  );
   for (const f of cleaned) {
     results.push(`cleaned: ${f}`);
   }
 
   const accepted = acceptedEntries.length;
   const totalStripped = acceptedEntries.reduce(
-    (total, { strippedCount }) => total + strippedCount,
+    (total, { file }) => total + file.strippedCount,
     0,
   );
   const strippedSuffix =
@@ -419,14 +406,14 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     status: 'executed',
     summary,
     output: detailedOutput(summary),
-    edits,
+    edits: acceptedEntries.map(({ edit }) => edit),
     // The files it wrote, as a fact on this run, committed as the call
     // finishes: every process that applies the run (a window over a service
     // task among them) badges and refreshes them.
     ...(accepted > 0 && {
       facts: [
         documentsAcceptedFact(
-          acceptedEntries.map((e) => e.destAbsolutePath),
+          acceptedEntries.map(({ file }) => file.destAbsolutePath),
           yield* Clock.currentTimeMillis,
         ),
       ],

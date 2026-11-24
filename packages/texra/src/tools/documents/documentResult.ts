@@ -257,44 +257,34 @@ const computeAndWriteOutputDiffs = Effect.fn('documents.computeDiffs')(
             { concurrency: 2 },
           );
 
-          // Flag large changes so the orchestrator knows to also read the
-          // full output file — the diff alone may not capture everything.
-          let largeChange = false;
-          const originalLines = countLines(original);
-          if (originalLines > 0 && o.added !== null && o.removed !== null) {
-            const changedLines = o.added + o.removed;
-            largeChange = changedLines / originalLines > LARGE_CHANGE_RATIO;
-          }
-
           const diff = yield* unifiedDiffOf(original, modified);
           if (!diff) return undefined;
+          // A large diff signals the reader to inspect the full output.
+          const originalLines = countLines(original);
+          const largeChange =
+            originalLines > 0 &&
+            o.added !== null &&
+            o.removed !== null &&
+            (o.added + o.removed) / originalLines > LARGE_CHANGE_RATIO;
           const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
-          const summary: ResultDiffSummary = {
-            path: o.absolutePath,
-            diffRelPath: `diffs/${outputSlotName(normalizeFilePath(o.relativePath))}.diff`,
-            largeChange,
-          };
           return Result.succeed({
-            summary,
+            summary: {
+              path: o.absolutePath,
+              diffRelPath: `diffs/${outputSlotName(normalizeFilePath(o.relativePath))}.diff`,
+              largeChange,
+            } satisfies ResultDiffSummary,
             content: truncateDiff(diff, limit),
           });
         }).pipe(
-          // A file read failure costs that file's diff, not the others', and
-          // is answered as failed so the result says the diff is missing
-          // rather than reading the file as unchanged.
-          Effect.catch((error) =>
-            Effect.logWarning(
-              `Skipping diff for ${o.absolutePath}: ${toErrorMessage(error)}`,
+          Effect.catch((error) => {
+            const reason = toErrorMessage(error);
+            return Effect.logWarning(
+              `Skipping diff for ${o.absolutePath}: ${reason}`,
             ).pipe(
               withLogChannel(CHANNEL),
-              Effect.as(
-                Result.fail({
-                  path: o.relativePath,
-                  reason: toErrorMessage(error),
-                }),
-              ),
-            ),
-          ),
+              Effect.as(Result.fail({ path: o.relativePath, reason })),
+            );
+          }),
         ),
       { concurrency: 'unbounded' },
     );
