@@ -80,81 +80,27 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
   return { script, calls };
 });
 
-/** The files a call's child wrote, when its value is a run's envelope: a
- *  program's changes (`Program.result.changes`, in the order it wrote
- *  them), or an agent's edits. */
+/** The files a call's child wrote, when its value is a run's envelope. */
 const EnvelopeFilesSchema = Schema.Struct({
   files: Schema.Array(Schema.String),
-  changes: Schema.optional(
-    Schema.Array(
-      Schema.Struct({
-        path: Schema.String,
-        absolutePath: Schema.String,
-        base: Schema.NullOr(Schema.String),
-        added: Schema.NullOr(Schema.Number),
-        removed: Schema.NullOr(Schema.Number),
-      }),
-    ),
-  ),
 });
 
-/** A document's count over the calls that wrote it: the counted calls
- *  add up, and a call that reports none (an agent's edit) leaves the
- *  total unknown until a later call reports one, which starts it over. */
-const summed = (
-  prior: number | null | undefined,
-  next: number | null,
-): number | null => (prior == null || next === null ? next : prior + next);
-
-/**
- * The files the calls wrote, one row per workspace document. A later call
- * whose diff base is an earlier call's output (a merge stage over a fix
- * stage's file) continues that document's row, with its counts summed over
- * the calls; within a call, every revision is diffed against the same
- * pre-run snapshot, so the call's change is its last revision's.
- */
+/** The files the calls' children wrote, each once, in the order first
+ *  written. Nothing counts their lines. */
 function deliveredFiles(
   calls: readonly ScriptCallCard[],
 ): ScriptDeliverySummary['files'] {
-  const files = new Map<string, ScriptDeliverySummary['files'][number]>();
-  /** Each delivered output by its absolute path, for a later call's base. */
-  const delivered = new Map<string, string>();
-  const add = (
-    path: string,
-    added: number | null,
-    removed: number | null,
-  ): void => {
-    const prior = files.get(path);
-    files.set(path, {
-      path,
-      added: summed(prior?.added, added),
-      removed: summed(prior?.removed, removed),
-    });
-  };
+  const paths = new Set<string>();
   for (const call of calls) {
     const result = call.result?.result;
     if (result?.status !== 'executed') continue;
     const envelope = Schema.decodeUnknownResult(EnvelopeFilesSchema)(
       result.value,
     );
-    if (!Result.isSuccess(envelope)) continue;
-    const { changes } = envelope.success;
-    if (changes === undefined) {
-      for (const path of envelope.success.files) add(path, null, null);
-      continue;
-    }
-    // A later entry for the same document is its later revision.
-    const latest = new Map<string, (typeof changes)[number]>();
-    for (const change of changes) {
-      const path =
-        (change.base === null ? undefined : delivered.get(change.base)) ??
-        change.path;
-      delivered.set(change.absolutePath, path);
-      latest.set(path, change);
-    }
-    for (const [path, { added, removed }] of latest) add(path, added, removed);
+    if (Result.isSuccess(envelope))
+      for (const path of envelope.success.files) paths.add(path);
   }
-  return [...files.values()];
+  return [...paths].map((path) => ({ path, added: null, removed: null }));
 }
 
 /**

@@ -3,11 +3,11 @@ import { WORKSPACE_DIFF_SUFFIX } from '@latex/latexdiff/diffFileNameManager';
 /** The folder beside a document that TeXRA compiles it into. */
 export const LATEX_BUILD_DIRECTORY = 'build';
 
-/** The folder a packed run's files are copied into. */
-export const PACKED_RUNS_DIRECTORY = 'History';
+/** The folder earlier versions copied a packed run's files into. */
+const PACKED_RUNS_DIRECTORY = 'History';
 
-/** The folder beside an input that a latexdiff-vc pack moves its diffs into. */
-export const PACKED_DIFFS_DIRECTORY = 'Diffs';
+/** The folder beside an input that earlier versions moved its diffs into. */
+const PACKED_DIFFS_DIRECTORY = 'Diffs';
 
 /**
  * Directories that never hold a source the user works on: build output,

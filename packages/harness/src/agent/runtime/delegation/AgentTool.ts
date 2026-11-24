@@ -15,7 +15,7 @@
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
-import { programLaunch, readProgramResult } from '@agent/runtime/programRun';
+import { programLaunch } from '@agent/runtime/programRun';
 import { capReached } from '@agent/runtime/spendCap';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
@@ -246,14 +246,11 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
     return yield* Effect.die(
       new Error(`The agent run ${runId} completed without a report.`),
     );
-  const config = yield* records.readConfig();
   const view = yield* (yield* SessionViewAccess).read([]);
-  const program = yield* readProgramResult(config, runId, call.env.roots);
   return {
     ...executed(report, `Completed '${agentName}'`),
     value: toJsonValue({
       ...result.output,
-      ...(program !== undefined && { changes: program.changes }),
       runId,
       outcome: result.outcome,
       cost: treeCostOf(view, runId),
@@ -335,7 +332,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   if (launch.program !== null) {
     const { name, args } = launch.program;
     const known = yield* Effect.result(
-      programLaunch(name, args, launch.files, call.env.roots),
+      programLaunch(name, args, call.env.roots),
     );
     if (Result.isFailure(known)) return errorResult(known.failure.message);
     child = { agent: { name, system: '', tools: [] }, files: launch.files };
@@ -522,7 +519,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     program === null
       ? null
       : yield* Effect.result(
-          programLaunch(program.name, program.args, approved, call.env.roots),
+          programLaunch(program.name, program.args, call.env.roots),
         );
   if (relaunched !== null && Result.isFailure(relaunched))
     return errorResult(relaunched.failure.message);

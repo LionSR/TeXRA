@@ -15,7 +15,7 @@ it.effect('fails naming the origin when VS Code declines to open a link', () =>
       (spy) => Effect.sync(() => spy.mockRestore()),
     );
     // cast: the link binding reads none of the window's options.
-    const { bindings } = yield* createExtensionHostRequests({
+    const { bindings } = createExtensionHostRequests({
       roots: {},
       snapshot: {},
       extensionPath: '',

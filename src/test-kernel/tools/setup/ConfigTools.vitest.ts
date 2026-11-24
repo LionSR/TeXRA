@@ -49,9 +49,9 @@ layer(SessionGraph.hosted)('ConfigTools — update_config allowlist', (it) => {
       );
 
       // Control: an allowlisted key on the same layer is written.
-      const allowed = yield* update('texra.git.numberOfCommitsToShow', 50);
+      const allowed = yield* update('texra.maxImageDimension', 500);
       assert.equal(allowed.status, 'executed');
-      assert.equal(roots.config.get('git.numberOfCommitsToShow'), 50);
+      assert.equal(roots.config.get('maxImageDimension'), 500);
     }),
   );
 });
@@ -67,7 +67,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     it.effect('asks before writing, and a rejected call writes nothing', () =>
       Effect.gen(function* () {
         const project = createFakeHost({
-          config: { 'git.numberOfCommitsToShow': 20 },
+          config: { maxImageDimension: 200 },
         });
         const session = yield* isolatedTestSession(
           createRecordingHost().interactions,
@@ -80,8 +80,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         }));
 
         const result = yield* guardedToolCall(UpdateConfigTool, {
-          key: 'texra.git.numberOfCommitsToShow',
-          value: 50,
+          key: 'texra.maxImageDimension',
+          value: 500,
           target: 'user',
         }).pipe(
           Effect.provide(
@@ -97,10 +97,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             payload.kind === 'bash' ? payload.data.command : payload.kind,
           ),
         ).toEqual([
-          'update_config {"key":"texra.git.numberOfCommitsToShow","value":50,"target":"user"}',
+          'update_config {"key":"texra.maxImageDimension","value":500,"target":"user"}',
         ]);
         expect(result.status).toBe('error');
-        expect(project.roots.config.get('git.numberOfCommitsToShow')).toBe(20);
+        expect(project.roots.config.get('maxImageDimension')).toBe(200);
       }),
     );
   },

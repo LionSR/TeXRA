@@ -24,14 +24,10 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
-import { repositoryRoot } from '@texra-ai/worldline/node';
 import { runTool } from '@texra/utils/system/toolChecks';
 
 // Local file imports
-import {
-  generateDiffFileName,
-  versionControlDiffStem,
-} from './latexdiff/diffFileNameManager';
+import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import {
   LATEXDIFF_CHANGES_ONLY_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
@@ -290,69 +286,6 @@ export const latexdiff = Effect.fn('latexdiff')(function* (
   );
   return diffPath;
 });
-
-/**
- * latexdiff-vc of `input` against `commit`: the absolute path of the diff
- * it wrote beside the input.
- */
-export const latexdiffAgainstCommit = Effect.fn('latexdiffAgainstCommit')(
-  function* (input: FileLocation, commit: string, roots: WorkspaceRoots) {
-    const fs = yield* FileSystem.FileSystem;
-    const inputFile = input.absolutePath;
-    const content = yield* readNormalizedFile(fs, inputFile);
-    yield* requireDocument(inputFile, content);
-
-    // latexdiff-vc --git runs `git show <commit>:<file>`, which expects a
-    // path relative to the repository root; an absolute path breaks its temp
-    // path construction.
-    const fileDir = path.dirname(inputFile);
-    const gitRoot = yield* repositoryRoot(fileDir);
-    const cwd = gitRoot ?? fileDir;
-    const filePath = gitRoot
-      ? path.relative(gitRoot, inputFile)
-      : path.basename(inputFile);
-
-    const flags = yield* markupFlags(roots, {});
-    yield* runWithFlattenFallback(
-      'latexdiff-vc',
-      (flatten) => [
-        '--encoding=utf8',
-        '-c',
-        `PICTUREENV=${LATEXDIFF_PICTURE_ENVIRONMENTS}`,
-        '--force',
-        ...(flatten ? ['--flatten'] : []),
-        '--git',
-        ...flags,
-        '-r',
-        commit,
-        filePath,
-      ],
-      roots,
-      cwd,
-    );
-
-    // latexdiff-vc writes beside the input, relative to cwd, inserting
-    // `-diff<hash>` before the extension. Anchor the insertion to the parsed
-    // extension: a plain `.tex` replacement would land on the first `.tex`
-    // anywhere in the path, so a directory such as `my.texnotes/` would send
-    // us looking for a file that was never written.
-    const parsed = path.parse(filePath);
-    const diffPath = path.join(
-      cwd,
-      parsed.dir,
-      `${versionControlDiffStem(parsed.name, commit)}${parsed.ext}`,
-    );
-    const diffContent = yield* readNormalizedFile(fs, diffPath);
-    yield* fs.writeFileString(
-      diffPath,
-      yield* cleanDiff(diffContent, content, roots),
-    );
-    return diffPath;
-  },
-);
-
-// The clean-up of latexdiff's output: pure text transforms, then the
-// workspace's replacement rules.
 
 /** The starred (unnumbered) display environments, whose labels are removed. */
 const STAR_ENV_REGEX = new RegExp(

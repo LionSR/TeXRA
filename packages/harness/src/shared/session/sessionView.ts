@@ -381,8 +381,8 @@ function pendingRequests<View extends SessionView>(
 }
 
 /**
- * The one attention rule every host reads (the extension's badge, reveal and
- * chime, the desktop's dock badge, notifications, and rail): a pending
+ * The one attention rule every host reads (the extension's badge and reveal,
+ * the desktop's dock badge, notifications, and rail): a pending
  * request wants the user, and a run when its outcome lands.
  */
 export function attentionOf<View extends SessionView>(

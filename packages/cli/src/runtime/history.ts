@@ -20,7 +20,6 @@ import {
 } from '@texra-ai/worldline/host';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
-import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
 import { formatBytes } from '@ui/copy/format';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 import type { RunStatusKey } from '@texra/shared/session/runStatusKey';
@@ -60,7 +59,7 @@ export interface CliHistoryEntry {
    *  show a blocked run's cause. */
   readonly continuation: AgentRunListingEntry['continuation'];
   readonly inputBasename: string;
-  /** A document task's run, or a chat. */
+  /** A program's run, or a chat. */
   readonly kind?: 'task' | 'chat';
   readonly description?: string;
 }
@@ -354,9 +353,6 @@ export function formatCliHistoryDetailsText(
 ): string {
   const { config, run } = details;
   const model = details.currentModel ?? config?.model;
-  const cliOutputFile = config
-    ? cliLaunchOutput(config).outputFile?.trim()
-    : undefined;
   // Worded as every host words it.
   const status = `${run ? runStatusLabel(run.statusKey) : 'Unknown'}${
     details.continues
@@ -379,7 +375,6 @@ export function formatCliHistoryDetailsText(
     lines.push(`Startup model: ${config.model}`);
   }
   if (config) lines.push(`Kind: ${runKindOf(config)}`);
-  if (cliOutputFile) lines.push(`CLI output: ${cliOutputFile}`);
   if (run?.parentId) lines.push(`Parent: ${run.parentId}`);
   if (run?.description) lines.push(`Description: ${run.description}`);
   if (details.result) {
@@ -428,7 +423,7 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
   };
 }
 
-/** A document task's run, or a chat: what its launch config ran. */
+/** A program's run, or a chat: what its launch config ran. */
 function runKindOf(config: AgentConfig): 'task' | 'chat' {
   return programOf(config) !== null ? 'task' : 'chat';
 }

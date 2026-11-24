@@ -1,7 +1,6 @@
 /**
- * A document task's conversation: the header, its pending requests, then
- * the transcript log, the files and usage
- * it closes with, and once it has ended, what the user can do next. Reads the view
+ * A program run's conversation: its pending requests, then the transcript
+ * log, the usage it closes with, and once it has ended, what the user can do next. Reads the view
  * and the surface; every send is a child's event.
  */
 
@@ -9,42 +8,22 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import {
-  documentRoundsOf,
-  isDocumentTaskRun,
-} from '@texra/shared/plugins/documents';
-
 // Local imports - progress view
 import { BaseRunContent } from './BaseRunContent';
 import { conversationContentStyles } from './ConversationContent.styles';
 
-// Side-effect imports - register the elements rendered below
-import './FileList';
-
-@customElement('document-task-run-content')
-export class DocumentTaskRunContent extends BaseRunContent {
+@customElement('program-run-content')
+export class ProgramRunContent extends BaseRunContent {
   static override styles = conversationContentStyles;
 
   override render(): TemplateResult | typeof nothing {
     const { run, view, surface } = this;
     if (!run || !view || !surface || !run.program) return nothing;
-    // Any plugin's program run shows its log here; the files panel is the
-    // theory plugin's, for its own tasks only.
-    const rounds = isDocumentTaskRun(run) ? documentRoundsOf(run) : null;
     return html`
       <div class="conversation-content">
         ${this.renderApprovalDock()} ${this.renderLog()}
 
         <div class="conversation-column conversation-epilogue">
-          ${
-            rounds === null
-              ? nothing
-              : html`<file-list
-                  .runId=${run.id}
-                  .surface=${surface}
-                  .rounds=${rounds}
-                ></file-list>`
-          }
           ${this.renderUsagePanel(run)}
         </div>
       </div>
@@ -63,6 +42,6 @@ export class DocumentTaskRunContent extends BaseRunContent {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'document-task-run-content': DocumentTaskRunContent;
+    'program-run-content': ProgramRunContent;
   }
 }

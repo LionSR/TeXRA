@@ -22,8 +22,8 @@ How to work:
 
 Scripts, programs and other agents:
 (1) Write a \`script\` when several tool calls depend on each other, repeat over many items, or combine results in code. Its description lists the functions it can call.
-(2) Start a \`program\` for a job a plugin already packages (a whole-document revision, for example): pass the files and say what to do in the prompt.
-(3) Delegate with \`agent\` when part of the work is separable, benefits from a fresh context or an independent check, or can run in parallel. Give the child its own \`system\` text written for that job, only the tools it needs, and a prompt that states the goal, the files and what to return. You stay responsible for the result: read what comes back before you rely on it.
+(2) Start a \`program\` for a job a plugin already packages (completing Lean proofs, a referee's annotations on a paper, for example): pass the files and say what to do in the prompt.
+(3) Delegate with \`agent\` when part of the work is separable, benefits from a fresh context or an independent check, or can run in parallel. To compare several attempts at one change, copy the files into separate directories and give each child its own \`working_directory\`. Give the child its own \`system\` text written for that job, only the tools it needs, and a prompt that states the goal, the files and what to return. You stay responsible for the result: read what comes back before you rely on it.
 
 Writing to files: a file outlives this conversation. Write it for a reader who never saw your instructions or earlier drafts, as the author of that document, and define notation before using it.`;
 
@@ -51,7 +51,6 @@ const ENTRY_TOOLS: readonly string[] = Object.freeze([
   'program',
   'script',
   'executions',
-  'accept_run_files',
   'codex',
   'claude_code',
   'ask_user_question',

@@ -15,7 +15,7 @@
  * - `session.host`: what the host renders but does not own, each time its
  *   producers write it.
  * - `session.actions`: the host acting on state the surface owns (the
- *   composer's Send, a selection, the chime), the ones it sent before the
+ *   composer's Send, a selection), the ones it sent before the
  *   surface listened first.
  * - `session.request` and `host.request`: one runtime or host command,
  *   answered with its outcome or the error it failed with, as the class.
@@ -123,12 +123,8 @@ const HostSurfaceActionSchema = Schema.Union([
       Schema.Struct({ fileName: Schema.String, media: StoredMediaSchema }),
     ),
   }),
-  /** A document task run of this session left running for finished or
-   *  cancelled: the host decides the transition once and sends it to one
-   *  port, which plays the completion chime. */
-  Schema.Struct({ kind: Schema.Literal('chime') }),
   /** A change to the launcher's form the host makes: the run Run again…
-   *  opens it on, or the commit of a base file the editor picked. */
+   *  opens it on. */
   Schema.Struct({ kind: Schema.Literal('launch'), patch: LaunchPatchSchema }),
 ]);
 export type HostSurfaceAction = typeof HostSurfaceActionSchema.Type;

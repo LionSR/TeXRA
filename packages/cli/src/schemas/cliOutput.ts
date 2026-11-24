@@ -19,7 +19,6 @@ import {
   RunEndSchema,
   RunIdSchema,
 } from '@texra-ai/worldline/schemas';
-import { DocumentsResultSchema } from '@texra/shared/plugins/documentOutputs';
 
 /**
  * The CLI output contract version, stamped on every NDJSON line as
@@ -55,23 +54,6 @@ const CliRunResultSchema = RunEndSchema.mapFields(
   }),
 );
 export type CliRunResult = typeof CliRunResultSchema.Type;
-
-/**
- * A document task's result: its output carries its documents (what its
- * documents row reports, in place of a `structured` value), with the run's storage folder
- * and where `--output` or `--output-dir` copied the outputs.
- */
-const CliDocumentTaskResultSchema = CliRunResultSchema.mapFields(
-  Struct.assign({
-    output: RunEndSchema.fields.output
-      .mapFields(Struct.omit(['structured']))
-      .mapFields(Struct.assign({ documents: DocumentsResultSchema })),
-    runDirectory: Schema.String,
-    copiedOutput: Schema.optional(Schema.String),
-    copiedOutputs: Schema.optional(Schema.Array(Schema.String)),
-  }),
-);
-export type CliDocumentTaskResult = typeof CliDocumentTaskResultSchema.Type;
 
 /** A command's result that is not a run's (`plugin`, `clone`): named by
  *  its command, its fields the command's own. */
@@ -127,5 +109,5 @@ export type CliNdjsonRecord =
   | { readonly kind: 'agent-result'; readonly result: CliRunResult }
   | {
       readonly kind: 'result';
-      readonly result: CliDocumentTaskResult | CliCommandResult;
+      readonly result: CliCommandResult;
     };

@@ -34,13 +34,6 @@ const MissingToolSchema = Schema.Struct({
 });
 export type MissingTool = typeof MissingToolSchema.Type;
 
-const FileOptionsSchema = Schema.Struct({
-  baseFile: Schema.Array(Schema.String),
-  editedFile: Schema.Array(Schema.String),
-  commit: Schema.Array(Schema.String),
-});
-export type FileOptions = typeof FileOptionsSchema.Type;
-
 /** How a project is named in a rail row, a chip, and the hero title. */
 const ProjectDisplaySchema = Schema.Struct({
   key: Schema.NonEmptyString,
@@ -89,8 +82,6 @@ export const HostSnapshotSchema = Schema.Struct({
   workspaceRoots: Schema.Array(WorkspaceRootOptionDataSchema),
   /** The project's configured policy, shown before a task is launched. */
   approvalPolicy: ApprovalPolicySchema,
-  fileOptions: FileOptionsSchema,
-  isGitRepo: Schema.Boolean,
   /** The one recorder per process and where its take is going. */
   recording: Schema.NullOr(
     Schema.Struct({ session: Schema.String, target: Schema.String }),
@@ -131,8 +122,6 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     tools: { icons: {}, terminalOutput: [] },
     workspaceRoots: [],
     approvalPolicy: APPROVAL_POLICY_DEFAULT,
-    fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
-    isGitRepo: false,
     recording: null,
     banners: {
       apiKey: false,
