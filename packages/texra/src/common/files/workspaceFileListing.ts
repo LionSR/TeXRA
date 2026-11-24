@@ -42,8 +42,7 @@ interface WorkspaceListing {
  * every config: a directory is entered when any config still visits it, and
  * only those configs judge what is below. A hidden entry, and a directory
  * the config excludes (by name, case-insensitively), is never entered.
- * Each entry's type comes with the directory listing (`readdir` dirents,
- * read from Node directly: `FileSystem` has no typed listing). A followed
+ * Each entry's type comes with the `FileSystem` directory listing. A followed
  * symlink costs a `stat`, through the `FileSystem` service: a link to a
  * directory is visited, a link to a file is listed, and a dangling,
  * circular, or unreadable link is skipped. A directory that vanished
@@ -83,7 +82,11 @@ export const listWorkspaceFiles = Effect.fn(
     directory: string,
     relativeDirectory: string,
     active: readonly number[],
-  ): Effect.fn.Return<void, PlatformError.PlatformError, Path.Path> {
+  ): Effect.fn.Return<
+    void,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem | Path.Path
+  > {
     const entries = yield* readDirectoryTypedTolerant(directory);
 
     // Results are sorted at the end, so entries are handled concurrently.

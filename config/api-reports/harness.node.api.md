@@ -52,7 +52,7 @@ Exports: 65
 - `pathExists` — `const pathExists: (fs: FileSystem, target: string) => Effect<boolean, PlatformError, never>`
 - `processRunning` — `function processRunning: (pid: number) => boolean`
 - `projectValueIgnored` — `function projectValueIgnored: (row: SettingRow<unknown> | undefined, value: unknown) => boolean`
-- `readDirectoryTypedTolerant` — `const readDirectoryTypedTolerant: (target: string) => Effect<(readonly [string, Type])[], PlatformError, Path>`
+- `readDirectoryTypedTolerant` — `const readDirectoryTypedTolerant: (target: string) => Effect<(readonly [string, Type])[], PlatformError, FileSystem | Path>`
 - `readNormalizedFile` — `const readNormalizedFile: (fs: FileSystem, target: string) => Effect<string, PlatformError, never>`
 - `recentCommitLabels` — `const recentCommitLabels: (cwd: string, limit: number) => Effect<null | readonly string[], never, ChildProcessSpawner>`
 - `relativeToRoot` — `function relativeToRoot: (root: string, filePath: string) => string | undefined`

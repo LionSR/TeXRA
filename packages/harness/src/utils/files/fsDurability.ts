@@ -1,16 +1,15 @@
 /**
  * The filesystem primitives the repo must keep that the standard library's
- * `FileSystem` does not provide: crash-safe replace, directory listings that
- * give every entry its own (unfollowed) type, probing the ones the listing
- * leaves `Unknown`, symlink-dereferencing copies, and links that fall back
- * to a copy where the host cannot make one.
+ * `FileSystem` does not provide: crash-safe replace, symlink-dereferencing
+ * copies, and links that fall back to a copy where the host cannot make one.
+ * Directory listings add policy over `FileSystem` operations. Recorded run
+ * paths also need metadata without a process filesystem in scope.
  *
  * Nothing here re-implements an operation `FileSystem` already has — an
  * append, for instance, is `fs.writeFile(path, data, { flag: 'a' })` and gets
  * no wrapper. The Node calls made here (`cp` with `dereference`, a native
- * `realPath`, the `write-file-atomic` package, and the `Path`-only listing
- * and probes) classify their errno exactly as `@effect/platform-node` does,
- * so a consumer matches `SystemError` by `reason._tag` either way.
+ * `realPath`, the `write-file-atomic` package and the metadata probes)
+ * classify their errno as `@effect/platform-node` does.
  */
 
 // Node imports
@@ -39,9 +38,7 @@ const CHANNEL = 'fsDurability';
 const MODULE = 'FsDurability';
 
 /**
- * `@effect/platform-node`'s errno classification, for the Node calls that have
- * no `FileSystem` equivalent: same codes, same normalized tags, so a consumer
- * matching `reason._tag` cannot tell which call produced the error.
+ * `@effect/platform-node`'s errno classification for direct Node calls.
  */
 const SYSTEM_ERROR_TAGS: Readonly<
   Record<string, PlatformError.SystemErrorTag>
@@ -136,18 +133,10 @@ export const writeFileAtomic = Effect.fn('fsDurability.writeFileAtomic')(
   },
 );
 
-/** An `lstat` result or a `readdir` dirent as `FileSystem`'s entry type: a
- *  link is itself. Both carry the same predicate set, so one mapping serves
- *  the probed and the listed case. */
-function entryTypeOf(entry: {
-  isSymbolicLink(): boolean;
-  isFile(): boolean;
-  isDirectory(): boolean;
-  isBlockDevice(): boolean;
-  isCharacterDevice(): boolean;
-  isFIFO(): boolean;
-  isSocket(): boolean;
-}): FileSystem.File.Type {
+/** A raw metadata probe reports the entry at the path, including a link. */
+function entryTypeOf(
+  entry: Awaited<ReturnType<typeof nodeFs.lstat>>,
+): FileSystem.File.Type {
   if (entry.isSymbolicLink()) return 'SymbolicLink';
   if (entry.isFile()) return 'File';
   if (entry.isDirectory()) return 'Directory';
@@ -161,10 +150,7 @@ function entryTypeOf(entry: {
 /**
  * The entry type and size at `target`, `lstat` first and then `stat` when the
  * entry is a link: a link that resolves reports its target's type and size,
- * and a dangling or circular one reports the link itself rather than failing.
- * `FileSystem.stat` gives neither half: it follows the link and fails
- * `NotFound` when the target is gone, so a caller sizing a recorded path
- * would lose the row.
+ * and a dangling or circular one reports the link itself.
  *
  * Absence is not recovered here; the caller decides what a missing path
  * means.
@@ -177,8 +163,7 @@ export const entryMetadataAt = Effect.fn('fsDurability.entryMetadataAt')(
     });
     const stats = link.isSymbolicLink()
       ? // A dangling link (its target absent) or a circular one (ELOOP) has no
-        // target to describe, so the link's own metadata stands in, the
-        // reading the facade's provider gave. Any other failure propagates.
+        // target to describe, so report the link's own metadata.
         yield* Effect.tryPromise({
           try: () => nodeFs.stat(target),
           catch: (cause) => systemErrorFrom('entryMetadataAt', target, cause),
@@ -196,6 +181,19 @@ export const entryMetadataAt = Effect.fn('fsDurability.entryMetadataAt')(
   },
 );
 
+const readListedEntry = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  target: string,
+  { name, type }: FileSystem.DirectoryEntry,
+) =>
+  type === 'Unknown'
+    ? Effect.map(
+        fs.lstat(path.join(target, name)),
+        (info) => [name, info.type] as const,
+      )
+    : Effect.succeed([name, type] as const);
+
 /**
  * The entries of `target` with the type of each, as the listing reports it:
  * a symlink is `SymbolicLink`, never what it points at, so the deletion and
@@ -207,13 +205,8 @@ export const readDirectoryTyped = Effect.fn('fsDurability.readDirectoryTyped')(
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const entries = yield* fs.readDirectoryEntries(target);
-    return yield* Effect.forEach(entries, ({ name, type }) =>
-      type === 'Unknown'
-        ? Effect.map(
-            fs.lstat(path.join(target, name)),
-            (info) => [name, info.type] as const,
-          )
-        : Effect.succeed([name, type] as const),
+    return yield* Effect.forEach(entries, (entry) =>
+      readListedEntry(fs, path, target, entry),
     );
   },
 );
@@ -231,46 +224,26 @@ export const readDirectoryTyped = Effect.fn('fsDurability.readDirectoryTyped')(
  * dirent type the platform left `Unknown` is probed, and only that probe's
  * failure costs a row. The strict form stays with the containment and
  * deletion walkers, where a refused answer is the safe one.
- *
- * It reads the dirents through Node's `readdir` directly, so its callers need
- * only `Path`; the strict form gets the same typed listing from
- * `FileSystem.readDirectoryEntries`.
  */
 export const readDirectoryTypedTolerant = Effect.fn(
   'fsDurability.readDirectoryTypedTolerant',
 )(function* (target: string) {
+  const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const dirents = yield* Effect.tryPromise({
-    try: () => nodeFs.readdir(target, { withFileTypes: true }),
-    catch: (cause) =>
-      systemErrorFrom('readDirectoryTypedTolerant', target, cause),
-  });
+  const entries = yield* fs.readDirectoryEntries(target);
   const rows = yield* Effect.forEach(
-    dirents,
-    (dirent) => {
-      const known = entryTypeOf(dirent);
-      if (known !== 'Unknown') {
-        return Effect.succeed([dirent.name, known] as const);
-      }
-      const entry = path.join(target, dirent.name);
-      return Effect.tryPromise({
-        try: async () =>
-          [dirent.name, entryTypeOf(await nodeFs.lstat(entry))] as const,
-        catch: (cause) =>
-          systemErrorFrom('readDirectoryTypedTolerant', entry, cause),
-      }).pipe(
+    entries,
+    (entry) =>
+      readListedEntry(fs, path, target, entry).pipe(
         Effect.catch((error) =>
           Effect.logWarning(
-            `Skipping ${entry}: its entry type could not be read (${error.reason._tag}).`,
+            `Skipping ${path.join(target, entry.name)}: its entry type could not be read (${error.reason._tag}).`,
           ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
         ),
-      );
-    },
+      ),
     { concurrency: 'unbounded' },
   );
-  return rows.filter(
-    (row): row is readonly [string, FileSystem.File.Type] => row !== undefined,
-  );
+  return rows.filter(Predicate.isNotUndefined);
 });
 
 /**

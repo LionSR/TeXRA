@@ -2084,7 +2084,7 @@ Inspect one run-relative entry of run `runId`'s storage under
 own or an ancestor directory's.
 
 ```ts
-const runEntryUnder: (storageRoot: string, runId: string & Brand<"RunId">, relativePath: string) => Effect<{ readonly kind: "file"; readonly location: { readonly kind: "runStorage"; readonly absolutePath: string; readonly relativePath: string; readonly runId: string & Brand<"RunId">; }; } | { readonly kind: "symlink" | "directory" | "unsupported"; readonly absolutePath: string; } | { readonly kind: "missing"; } | { kind: "invalid"; reason: string; }, PlatformError, FileSystem>
+const runEntryUnder: (storageRoot: string, runId: string & Brand<"RunId">, relativePath: string) => Effect<RunStorageEntry, PlatformError, FileSystem>
 ```
 
 ## RunHistoryInconsistent
