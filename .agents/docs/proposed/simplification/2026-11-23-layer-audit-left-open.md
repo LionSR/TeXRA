@@ -95,7 +95,11 @@ session-carried, or the service forwards it and the TUI follows it.
   path as the link that opens it, the terminal prints the path.
 - The TUI's key-save tip names Kimi K3 by hand
   (`packages/cli/src/chat/tui/commands/handlers/modelAccessCommands.ts`);
-  it belongs with item 2 of the 2026-11-21 layer note.
+  it belongs with item 2 of the 2026-11-21 layer note. Taken on
+  2026-11-24: the tip names the switch by its row's title and says what it
+  routes with the row's description (which states K3), so no model is
+  named by hand; both plans' tips point at `/login` or `/config`. Item 2 of
+  the 2026-11-21 note (which setting switches each plan on) stays open.
 - The loopback sign-in error names port 1455
   (`packages/texra/src/controllers/modelAccess/subscriptionProviders.ts`),
   which is llm's `CHATGPT_CALLBACK_PORTS`; it is wrong when that port was
