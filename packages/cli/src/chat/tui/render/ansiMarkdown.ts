@@ -218,12 +218,13 @@ const VALUED_ATTRIBUTES_RE = new RegExp(
   String.raw`^<\/?[a-z0-9]+(?:${VALUED_ATTRIBUTE})*\s*\/?>$`,
   'iu',
 );
-// A backtick code span (left as it is) or a `<code>` element, whose body is
-// source text: it becomes a code span before inline parsing reads it.
-const CODE_ELEMENT_RE = new RegExp(
-  String.raw`(?<!\x60)(\x60+)(?!\x60)[\s\S]*?(?<!\x60)\1(?!\x60)|<code(?:${VALUED_ATTRIBUTE})*\s*>([\s\S]*?)<\/code\s*>`,
-  'giu',
+// A `<code>` element's tags; its body is source text, so it becomes a code
+// span before inline parsing reads it.
+const CODE_OPEN_RE = new RegExp(
+  String.raw`<code(?:${VALUED_ATTRIBUTE})*\s*>`,
+  'iuy',
 );
+const CODE_CLOSE_RE = /<\/code\s*>/giu;
 
 /** `body` as a backtick code span, its fence longer than any run inside. */
 function codeSpan(body: string): string {
@@ -237,17 +238,70 @@ function codeSpan(body: string): string {
   return `${fence}${pad}${body}${pad}${fence}`;
 }
 
+/** `content` with each `<code>` element as a code span, and backtick code
+ *  spans left as they are. One pass from the left: each run's partner and
+ *  each closing tag are found once, so unmatched openers in a truncated
+ *  reply cost nothing extra. */
+function codeElementsAsSpans(content: string): string {
+  const runs = Array.from(content.matchAll(/\x60+/gu), (m) => ({
+    start: m.index,
+    end: m.index + m[0].length,
+  }));
+  // The next run of the same length closes a backtick code span.
+  const partner = new Int32Array(runs.length).fill(-1);
+  const nextOfLength = new Map<number, number>();
+  for (let k = runs.length - 1; k >= 0; k--) {
+    const length = runs[k].end - runs[k].start;
+    partner[k] = nextOfLength.get(length) ?? -1;
+    nextOfLength.set(length, k);
+  }
+  const closers = Array.from(content.matchAll(CODE_CLOSE_RE), (m) => ({
+    start: m.index,
+    end: m.index + m[0].length,
+  }));
+  const pieces: string[] = [];
+  let copied = 0;
+  let run = 0;
+  let closer = 0;
+  let index = 0;
+  while (index < content.length) {
+    const char = content[index];
+    if (char === '`') {
+      while (runs[run].start < index) run++;
+      const close = partner[run];
+      index = close === -1 ? runs[run].end : runs[close].end;
+      continue;
+    }
+    if (char === '<') {
+      CODE_OPEN_RE.lastIndex = index;
+      const open = CODE_OPEN_RE.exec(content);
+      if (open !== null) {
+        const bodyStart = index + open[0].length;
+        while (closer < closers.length && closers[closer].start < bodyStart)
+          closer++;
+        if (closer === closers.length) break;
+        pieces.push(
+          content.slice(copied, index),
+          codeSpan(content.slice(bodyStart, closers[closer].start)),
+        );
+        copied = index = closers[closer].end;
+        continue;
+      }
+    }
+    index++;
+  }
+  if (copied === 0) return content;
+  pieces.push(content.slice(copied));
+  return pieces.join('');
+}
+
 /** Core rule, before `inline`: each `<code>` element in an inline's source
  *  becomes a code span, so its body (`[label](target)`, `a\_b`) prints as
  *  written instead of being parsed as markdown. */
 function codeElementsToSpans(state: StateCore): void {
   for (const token of state.tokens) {
     if (token.type !== 'inline' || !/<code/iu.test(token.content)) continue;
-    token.content = token.content.replaceAll(
-      CODE_ELEMENT_RE,
-      (match, _fence: string | undefined, body: string | undefined) =>
-        body === undefined ? match : codeSpan(body),
-    );
+    token.content = codeElementsAsSpans(token.content);
   }
 }
 
