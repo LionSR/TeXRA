@@ -15,11 +15,12 @@ import {
 } from './latexPlaceholders';
 
 const REGEX_SPACE_RE = /\s/u;
-// What ends a candidate `$…$` span for the terminal, which parses HTML: a
-// `<code>` element (its text is literal) or the closing tag of an element
-// the terminal styles (math has no `</strong>`).
+// What ends a candidate `$…$` span for the terminal, which parses HTML: an
+// opening or closing tag of an element the terminal reads (math has no
+// `<strong>`), so `$5 for <strong>$x$</strong>` keeps the currency outside
+// the formula and `<code>` text stays literal.
 const NOT_MATH_TAG_RE =
-  /<code[\s/>]|<\/(?:strong|b|em|i|code|p|div|blockquote|h[1-6])\s*>/iu;
+  /<\/?(?:strong|b|em|i|code|p|div|blockquote|h[1-6])[\s/>]/iu;
 
 function isAsciiDigitCode(code: number): boolean {
   return code >= 0x30 && code <= 0x39;
