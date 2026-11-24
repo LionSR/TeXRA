@@ -235,108 +235,119 @@ export function replayTrace<E>(
     input._tag === 'event' &&
     input.read !== 'listing' &&
     input.event.aggregateId === id;
-  return Stream.suspend(() => {
-    /** The inputs until `replay.complete`, which a watch can split over
-     *  frames; null once read. */
-    let history: SessionViewInput[] | null = [];
-    /** Rows below this `seq` are read, or precede the activation; at it, the
-     *  rows of the kinds in `kinds` are. One `seq` can hold two rows: a
-     *  priced row and the `usage` row the store projects from it. */
-    let seq = -1;
-    const kinds = new Set<DisplayRow['type']>();
-    /** Each open stream's or card's text so far; null once it ended, when
-     *  its final text or result holds the rest. */
-    const text = new Map<string, string | null>();
-    /** The commit read through, and the store's head once the run was
-     *  over: past it, every row the run wrote, its end stored or not. */
-    let drainedTo = -1;
-    let endAt: CommitOrdinal | null = null;
-    let ended = false;
-    const done = (): boolean => ended || (endAt !== null && drainedTo >= endAt);
-    /** A live text input as the chunk it extends its stream with, if any. */
-    const chunkOf = (input: TextChunk): AgentEvent[] => {
-      const held = text.get(input.rowId);
-      if (input.runId !== runId || held === null) return [];
-      const at = held?.length ?? 0;
-      if (input.to <= at || input.from > at) return [];
-      const chunk = input.text.slice(at - input.from);
-      text.set(input.rowId, (held ?? '') + chunk);
-      return [{ type: 'stream.chunk', id: input.rowId, text: chunk }];
-    };
-    /** A row of the run as the trace events it stands for. */
-    const eventsOf = (row: DisplayRow): AgentEvent[] => {
-      if (row.seq < seq || (row.seq === seq && kinds.has(row.type))) return [];
-      if (row.seq > seq) kinds.clear();
-      seq = row.seq;
-      kinds.add(row.type);
-      // Its end, the next activation, or the run's removal ends the read.
-      ended ||= row.type === 'run.removed' || boundsLifecycle(row, runId);
-      if (!STORED_TRACE.has(row.type)) return [];
-      // cast: a stored trace row is its trace event plus the envelope the store and `runEventDraft` add.
-      const event = Struct.omit(row, ENVELOPE) as AgentEvent;
-      // A closed card's output text is done with, as the session drops it.
-      if (
-        row.type === 'tool.end' &&
-        row.status !== TOOL_CALL_STATUS.IN_PROGRESS
-      )
-        text.set(row.logId, null);
-      if (row.type !== 'stream.end') return [event];
-      // A stream that ends with text no chunk carried gets it as one chunk.
-      const held = text.get(row.id) ?? '';
-      text.set(row.id, null);
-      const missing = row.finalText?.startsWith(held)
-        ? row.finalText.slice(held.length)
-        : '';
-      return missing
-        ? [{ type: 'stream.chunk', id: row.id, text: missing }, event]
-        : [event];
-    };
+  interface Reading {
+    /** Inputs up through `replay.complete`, possibly split over frames. */
+    history: SessionViewInput[] | null;
+    /** The last read sequence and its kinds. A priced row and its usage
+     *  projection can share a sequence. */
+    seq: number;
+    readonly kinds: Set<DisplayRow['type']>;
+    /** Open streams' and cards' text. Null marks one that ended. */
+    readonly text: Map<string, string | null>;
+    drainedTo: CommitOrdinal;
+    /** The store's head once the run was over, its end stored or not. */
+    endAt: CommitOrdinal | null;
+    ended: boolean;
+  }
+  const done = ({ ended, endAt, drainedTo }: Reading) =>
+    ended || (endAt !== null && drainedTo >= endAt);
+  /** A live text input as the chunk it extends its stream with, if any. */
+  const chunkOf = ({ text }: Reading, input: TextChunk): AgentEvent[] => {
+    const held = text.get(input.rowId);
+    if (input.runId !== runId || held === null) return [];
+    const at = held?.length ?? 0;
+    if (input.to <= at || input.from > at) return [];
+    const chunk = input.text.slice(at - input.from);
+    text.set(input.rowId, (held ?? '') + chunk);
+    return [{ type: 'stream.chunk', id: input.rowId, text: chunk }];
+  };
+  /** A row of the run as the trace events it stands for. */
+  const eventsOf = (reading: Reading, row: DisplayRow): AgentEvent[] => {
+    const { seq, kinds, text } = reading;
+    if (row.seq < seq || (row.seq === seq && kinds.has(row.type))) return [];
+    if (row.seq > seq) kinds.clear();
+    reading.seq = row.seq;
+    kinds.add(row.type);
+    // Its end, the next activation, or the run's removal ends the read.
+    reading.ended ||= row.type === 'run.removed' || boundsLifecycle(row, runId);
+    if (!STORED_TRACE.has(row.type)) return [];
+    // cast: a stored trace row is its trace event plus the envelope the store and `runEventDraft` add.
+    const event = Struct.omit(row, ENVELOPE) as AgentEvent;
+    // A closed card's output text is done with, as the session drops it.
+    if (row.type === 'tool.end' && row.status !== TOOL_CALL_STATUS.IN_PROGRESS)
+      text.set(row.logId, null);
+    if (row.type !== 'stream.end') return [event];
+    // A stream that ends with text no chunk carried gets it as one chunk.
+    const held = text.get(row.id) ?? '';
+    text.set(row.id, null);
+    const missing = row.finalText?.startsWith(held)
+      ? row.finalText.slice(held.length)
+      : '';
+    return missing
+      ? [{ type: 'stream.chunk', id: row.id, text: missing }, event]
+      : [event];
+  };
+  /** One batch of inputs, or the store's head once the run is over. */
+  const take = (
+    reading: Reading,
+    next: readonly SessionViewInput[] | CommitOrdinal,
+  ): AgentEvent[] => {
+    if (typeof next === 'number') {
+      reading.endAt = next;
+      return [];
+    }
     const readInput = (input: SessionViewInput): AgentEvent[] => {
-      if (done()) return [];
-      if (input._tag === 'chunk') return chunkOf(input);
-      if (input._tag === 'drained') drainedTo = input.cursor;
-      return own(input) ? eventsOf(input.event) : [];
+      if (done(reading)) return [];
+      if (input._tag === 'chunk') return chunkOf(reading, input);
+      if (input._tag === 'drained') reading.drainedTo = input.cursor;
+      return own(input) ? eventsOf(reading, input.event) : [];
     };
-    /** One batch of inputs, or the store's head once the run is over. */
-    const take = (
-      next: readonly SessionViewInput[] | CommitOrdinal,
-    ): AgentEvent[] => {
-      if (typeof next === 'number') {
-        endAt = next;
-        return [];
-      }
-      if (history === null) return next.flatMap(readInput);
-      for (const input of next) history.push(input);
-      if (!next.some((input) => input._tag === 'replay.complete')) return [];
-      // The whole history: read from the reader's activation on.
-      const read = history;
-      history = null;
-      // The lifecycle the reader's activation is in starts at its
-      // `run.activate`, whether or not it has ended since. That row is read:
-      // the reader starts after it.
-      const start = read.findLast(
-        (input): input is Extract<SessionViewInput, { _tag: 'event' }> =>
-          own(input) &&
-          input.event.commit <= activation &&
-          input.event.type === 'run.activate',
-      )?.event;
-      if (start !== undefined) {
-        seq = start.seq;
-        kinds.add(start.type);
-      }
-      return read.flatMap(readInput);
-    };
-    const over = Effect.exit(result).pipe(
-      Effect.andThen(session.log.drained),
-      Effect.andThen(Effect.sync(session.log.now)),
-    );
-    return session.view.inputs([{ id, fromSeq: 0 }], 0, false).pipe(
+    const { history } = reading;
+    if (history === null) return next.flatMap(readInput);
+    for (const input of next) history.push(input);
+    if (!next.some((input) => input._tag === 'replay.complete')) return [];
+    // The whole history: read from the reader's activation on.
+    reading.history = null;
+    // The lifecycle the reader's activation is in starts at its
+    // `run.activate`, whether or not it has ended since. That row is read:
+    // the reader starts after it.
+    const start = history.findLast(
+      (input): input is Extract<SessionViewInput, { _tag: 'event' }> =>
+        own(input) &&
+        input.event.commit <= activation &&
+        input.event.type === 'run.activate',
+    )?.event;
+    if (start !== undefined) {
+      reading.seq = start.seq;
+      reading.kinds.add(start.type);
+    }
+    return history.flatMap(readInput);
+  };
+  const over = Effect.exit(result).pipe(
+    Effect.andThen(session.log.drained),
+    Effect.andThen(Effect.sync(session.log.now)),
+  );
+  return Stream.suspend(() =>
+    session.view.inputs([{ id, fromSeq: 0 }], 0, false).pipe(
       Stream.merge(Stream.fromEffect(over)),
-      // `done` as of each batch: a whole chunk maps before any is tested.
-      Stream.map((next) => ({ events: take(next), last: done() })),
+      Stream.mapAccum(
+        (): Reading => ({
+          history: [],
+          seq: -1,
+          kinds: new Set(),
+          text: new Map(),
+          drainedTo: -1,
+          endAt: null,
+          ended: false,
+        }),
+        (reading, next) => {
+          const events = take(reading, next);
+          return [reading, [{ events, last: done(reading) }]] as const;
+        },
+      ),
       Stream.takeUntil((read) => read.last),
       Stream.flatMap((read) => Stream.fromIterable(read.events)),
       Stream.onEnd(result),
-    );
-  });
+    ),
+  );
 }

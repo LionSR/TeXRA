@@ -6,7 +6,14 @@
  * (`sessionPrograms.ts`), so a reader that leaves, or a handle nobody reads,
  * changes nothing about the run.
  */
-import { Context, Effect, type Scope, Stream, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Equivalence,
+  type Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -62,17 +69,9 @@ export function activationView(
       ];
       const setOf = (ids: readonly RunId[]) =>
         ids.map((id) => ({ id: id, fromSeq: 0 }));
-      let subscribed = idsOf(source.current());
+      const subscribed = idsOf(source.current());
       const held = yield* source.subscribe(setOf(subscribed));
-      // A level that names the same runs changes nothing, so the union is
-      // not republished for every level the view emits.
-      const interest = (level: SessionView) => {
-        const ids = idsOf(level);
-        if (ids.join('\0') === subscribed.join('\0')) return Effect.void;
-        subscribed = ids;
-        return held.set(setOf(ids));
-      };
-      const replayed = runId;
+      const sameIds = Equivalence.Array(Equivalence.String);
       return source.changes.pipe(
         // The level replays on subscribe, and the fold lands the
         // activation's row and the subscription's replay asynchronously,
@@ -83,7 +82,7 @@ export function activationView(
           (level) =>
             level.cursor < activation ||
             !level.runs.has(runId) ||
-            !level.transcriptSeq.has(replayed),
+            !level.transcriptSeq.has(runId),
         ),
         // The first level holding this activation's durable outcome, or
         // showing the run removed, is the last element.
@@ -91,7 +90,14 @@ export function activationView(
           const run = level.runs.get(runId);
           return run === undefined || run.outcome != null;
         }),
-        Stream.tap(interest),
+        Stream.mapAccumEffect(
+          () => subscribed,
+          Effect.fnUntraced(function* (previous, level) {
+            const ids = idsOf(level);
+            if (!sameIds(previous, ids)) yield* held.set(setOf(ids));
+            return [ids, [level]] as const;
+          }),
+        ),
       );
     }),
   );

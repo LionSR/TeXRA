@@ -33,6 +33,7 @@ import {
   Exit,
   Fiber,
   FiberMap,
+  Iterable,
   Result,
   Schema,
   ScopedRef,
@@ -818,17 +819,13 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
  *  duplicate among them, whatever its tool's lane) form one group that runs
  *  under the window; every other call is a group of its own, a barrier that
  *  runs alone. */
-const groupsOf = (calls: readonly DispatchFacts[]): DispatchFacts[][] => {
-  const barrier = (fact: DispatchFacts) =>
-    fact.duplicateOf === null && fact.lane !== 'parallel';
-  const groups: DispatchFacts[][] = [];
-  for (const fact of calls) {
-    const open = groups.at(-1);
-    if (open === undefined || barrier(fact) || barrier(open[0]))
-      groups.push([fact]);
-    else open.push(fact);
-  }
-  return groups;
+const groupsOf = (calls: readonly DispatchFacts[]) => {
+  const parallel = (fact: DispatchFacts) =>
+    fact.duplicateOf !== null || fact.lane === 'parallel';
+  return Iterable.groupWith(
+    calls,
+    (left, right) => parallel(left) && parallel(right),
+  );
 };
 
 /** Delivery: the paid turn enters history once, with the complete tool

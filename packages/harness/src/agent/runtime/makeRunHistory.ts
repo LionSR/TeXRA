@@ -5,7 +5,14 @@
  * once the view has applied them) or the job a cell was opened within, and
  * `applyRunRows` rebuilds the state on both paths.
  */
-import { Effect, Predicate, Result, SynchronizedRef, absurd } from 'effect';
+import {
+  Effect,
+  Iterable,
+  Predicate,
+  Result,
+  SynchronizedRef,
+  absurd,
+} from 'effect';
 
 import {
   type RunId,
@@ -30,7 +37,7 @@ import {
   type RunHistoryDraft,
   type RunState,
 } from '@shared/session/runState';
-import type { HistoryMessage, WithBlobs } from '@shared/session/historyTurns';
+import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { Alongside, Append } from '@shared/session/sessionEvents';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import { formatWordList } from '@utils/text/stringUtils';
@@ -235,18 +242,14 @@ const commit = Effect.fn('RunCell.commit')(function* (
         });
   // Converted before the job: a row this build cannot store is refused
   // with its reason, nothing written.
-  const drafts: WithBlobs<SessionRowDraft>[] = [];
-  for (const row of rows) {
-    const draft = storedDraft(row);
-    if (Result.isFailure(draft))
-      return yield* new RunHistoryRefused({
-        reason: 'inconsistent',
-        runId: run,
-        detail: draft.failure.detail,
-        cause: draft.failure,
-      });
-    drafts.push(draft.success);
-  }
+  const drafts = Result.all(Iterable.map(rows, storedDraft));
+  if (Result.isFailure(drafts))
+    return yield* new RunHistoryRefused({
+      reason: 'inconsistent',
+      runId: run,
+      detail: drafts.failure.detail,
+      cause: drafts.failure,
+    });
   const target = run;
   const job = Effect.fn('job')(function* (append: Append) {
     // Decided in the job, so it reads what the jobs before it left.
@@ -256,7 +259,7 @@ const commit = Effect.fn('RunCell.commit')(function* (
     if (stray !== undefined)
       return yield* broken(`a registration targets ${stray.aggregateId}`);
     const beside = yield* alongside;
-    const written = yield* runStateAppend(append)([...born, ...drafts]);
+    const written = yield* runStateAppend(append)([...born, ...drafts.success]);
     yield* append(beside);
     // `load`'s answer with the batch in, at the commits the publisher
     // assigned: the state the run continues from. A batch `load` cannot

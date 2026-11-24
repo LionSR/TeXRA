@@ -10,7 +10,15 @@
  * the next message queued for its run, for the time a note the run wrote to
  * itself is due, or for the inbox to end it.
  */
-import { Clock, Effect, Latch, Option, Stream } from 'effect';
+import {
+  Array as Arr,
+  Clock,
+  Effect,
+  Latch,
+  Option,
+  Order,
+  Stream,
+} from 'effect';
 
 import { COMPACTION_REQUEST } from '@agent/runtime/run/compaction';
 import type { CommitOrdinal, RunId } from '@shared/schemas';
@@ -188,7 +196,9 @@ const inputOf = (
     batch,
     pending: (at) => compacting || batch(at) !== null,
     from,
-    nextDue: later.length > 0 ? Math.min(...later) : undefined,
+    nextDue: Arr.isArrayNonEmpty(later)
+      ? Arr.min(later, Order.Number)
+      : undefined,
   };
 };
 

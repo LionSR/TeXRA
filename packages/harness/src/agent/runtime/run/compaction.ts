@@ -353,35 +353,39 @@ export const agentEditsAtBoundary = Effect.fn('compaction.agentEdits')(
     input: Pick<CompactionInput, 'runId' | 'logger' | 'cell'>,
     contextWindow: number,
   ) {
-    let state = yield* input.cell.current;
-    for (const { from, to, with: text } of state.contextEdits) {
-      const activity = startCompactionActivity(input.logger);
-      const tokensBefore = contextTokens(state);
-      state = yield* input.cell.append([
-        {
-          type: 'context.edit',
-          aggregateId: input.runId,
-          payload: {
-            cause: 'edit',
-            trigger: null,
-            range: { from, to },
-            messages: [agentReplacement(text)],
-            usage: null,
+    const initial = yield* input.cell.current;
+    return yield* Effect.reduce(
+      initial.contextEdits,
+      () => initial,
+      Effect.fnUntraced(function* (state, { from, to, with: text }) {
+        const activity = startCompactionActivity(input.logger);
+        const tokensBefore = contextTokens(state);
+        const updated = yield* input.cell.append([
+          {
+            type: 'context.edit',
+            aggregateId: input.runId,
+            payload: {
+              cause: 'edit',
+              trigger: null,
+              range: { from, to },
+              messages: [agentReplacement(text)],
+              usage: null,
+            },
           },
-        },
-      ]);
-      // The count after is the run's own after the edit (an estimate, as an
-      // edit leaves no provider count for the new view), the figure the
-      // context gauge then shows; the tool's `freed` stays the agent's.
-      completed(
-        activity,
-        tokensBefore,
-        contextTokens(state),
-        contextWindow,
-        to - from,
-      );
-    }
-    return state;
+        ]);
+        // The count after is the run's own after the edit (an estimate, as an
+        // edit leaves no provider count for the new view), the figure the
+        // context gauge then shows; the tool's `freed` stays the agent's.
+        completed(
+          activity,
+          tokensBefore,
+          contextTokens(updated),
+          contextWindow,
+          to - from,
+        );
+        return updated;
+      }),
+    );
   },
 );
 

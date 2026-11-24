@@ -274,12 +274,16 @@ export const attachInteractions = (
           ),
         );
       if (!isPresenter(attached)) return;
-      for (const notice of yield* Queue.clear(interactions.notices))
-        yield* presentLogged(
-          notice,
-          attached,
-          'Failed to replay a session presentation notice',
-        );
+      yield* Effect.forEach(
+        yield* Queue.clear(interactions.notices),
+        (notice) =>
+          presentLogged(
+            notice,
+            attached,
+            'Failed to replay a session presentation notice',
+          ),
+        { discard: true },
+      );
     }),
     () =>
       SubscriptionRef.modify(interactions.host, (current) =>
