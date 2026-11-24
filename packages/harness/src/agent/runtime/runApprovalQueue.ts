@@ -129,28 +129,32 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
     if (grants != null && run !== undefined) runs.set(id, { ...run, grants });
   }
   const after: ApprovalGrantSource = { runs };
-  const rows: SessionRowDraft[] = [];
-  for (const id of reached) {
-    const covering = turnedOn.filter(
-      (kind) => id === runId || resolveBypass(after, id, kind) !== null,
-    );
-    if (covering.length === 0) continue;
-    const aggregateId = id;
-    const { requests } = yield* log.runRows(aggregateId, 'requests');
-    for (const [requestId, request] of Object.entries(requests))
-      if (
-        request.decided === null &&
-        !(id === runId && requestId === except) &&
-        grantAnswering((kind) => covering.includes(kind), request.answeredBy)
-      )
-        rows.push({
-          type: 'request.decided',
-          aggregateId,
-          requestId,
-          decision: { action: 'approve' },
-        });
-  }
-  return rows;
+  const rows = yield* Effect.forEach(
+    reached,
+    Effect.fnUntraced(function* (id) {
+      const covering = turnedOn.filter(
+        (kind) => id === runId || resolveBypass(after, id, kind) !== null,
+      );
+      if (covering.length === 0) return [];
+      const { requests } = yield* log.runRows(id, 'requests');
+      return Object.entries(requests).flatMap(
+        ([requestId, request]): SessionRowDraft[] =>
+          request.decided === null &&
+          !(id === runId && requestId === except) &&
+          grantAnswering((kind) => covering.includes(kind), request.answeredBy)
+            ? [
+                {
+                  type: 'request.decided',
+                  aggregateId: id,
+                  requestId,
+                  decision: { action: 'approve' },
+                },
+              ]
+            : [],
+      );
+    }),
+  );
+  return rows.flat();
 });
 
 /** The rows a change of `runId`'s grants writes: none when `edit` leaves

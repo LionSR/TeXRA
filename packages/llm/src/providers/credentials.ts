@@ -7,7 +7,7 @@
  * {@link resolveCredential}, the one secret-then-env ladder. The environment
  * is Effect's ambient `ConfigProvider`, which the host installs.
  */
-import { Config, Effect, Option, Schema } from 'effect';
+import { Config, Effect, Option, Result, Schema } from 'effect';
 
 /** Which member of a store failed: this port's, or `listStoredKeys` of a
  *  host's store that also lists its keys. */
@@ -89,9 +89,15 @@ export const resolveCredential = Effect.fnUntraced(function* (
 > {
   const stored = (yield* store.get(name))?.trim();
   if (stored) return { value: stored, origin: 'secret' as const };
-  for (const envName of envNames) {
-    const fromEnv = (yield* envVar(envName))?.trim();
-    if (fromEnv) return { value: fromEnv, origin: 'env' as const };
-  }
-  return { value: undefined, origin: 'none' as const };
+  const fromEnv = yield* Effect.findFirstFilter(envNames, (envName) =>
+    envVar(envName).pipe(
+      Effect.map((value) => {
+        const trimmed = value?.trim();
+        return trimmed ? Result.succeed(trimmed) : Result.failVoid;
+      }),
+    ),
+  );
+  return Option.isSome(fromEnv)
+    ? { value: fromEnv.value, origin: 'env' }
+    : { value: undefined, origin: 'none' };
 });

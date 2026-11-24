@@ -9,6 +9,7 @@ import {
   FileSystem,
   Layer,
   Number as Num,
+  Option,
   RcMap,
 } from 'effect';
 
@@ -180,17 +181,18 @@ export const deleteStorageInventory = Effect.fn('deleteStorageInventory')(
           // Removing an orphan removes its entire directory. An older host may
           // still hold its project database under the fixed pre-v1 filename,
           // independent of the current global store's naming convention.
-          for (const file of [
-            storeFileName(namespace, 'project'),
-            `${namespace}.db`,
-          ]) {
-            const database = path.join(target, file);
-            if (
-              (yield* fs.exists(database)) &&
-              (yield* storeOpenElsewhere(database)) === 'open'
-            )
-              return { path: target, outcome: 'kept' as const };
-          }
+          const open = yield* Effect.findFirst(
+            [storeFileName(namespace, 'project'), `${namespace}.db`],
+            Effect.fnUntraced(function* (file) {
+              const database = path.join(target, file);
+              return (
+                (yield* fs.exists(database)) &&
+                (yield* storeOpenElsewhere(database)) === 'open'
+              );
+            }),
+          );
+          if (Option.isSome(open))
+            return { path: target, outcome: 'kept' as const };
         }
         yield* fs.remove(target, { recursive: store, force: !store });
         return { path: target, outcome: 'deleted' as const };

@@ -5,15 +5,7 @@
  * (the extension, the desktop app, the terminal chat of a service session)
  * attaches through this one function with the capabilities it has.
  */
-import {
-  Cause,
-  Deferred,
-  Effect,
-  FiberHandle,
-  Ref,
-  type Scope,
-  Stream,
-} from 'effect';
+import { Cause, Deferred, Effect, Ref, type Scope, Stream } from 'effect';
 import { RpcServer, type RpcMessage } from 'effect/rpc';
 
 import type { HostInteractions } from '@texra-ai/worldline';
@@ -157,7 +149,6 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* <
   // refused or ended it: the caller goes on either way, and the logs say
   // which.
   const attached = yield* Deferred.make<void>();
-  const attachment = yield* FiberHandle.make<void, never>();
   // A link away for good (a newer TeXRA's service refused this window, or
   // the service keeps failing to start) finishes the wait (no attachment
   // comes) and is said once per refusal and link, in the first
@@ -187,13 +178,15 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* <
     ),
   );
   yield* Effect.forkScoped(
-    Stream.runForEach(link.client.changes, (client) =>
-      client === null
-        ? FiberHandle.clear(attachment)
-        : FiberHandle.run(
-            attachment,
-            attachTo(client, workspace, host, focused, attached),
-          ),
+    link.client.changes.pipe(
+      Stream.switchMap((client) =>
+        client === null
+          ? Stream.empty
+          : Stream.fromEffectDrain(
+              attachTo(client, workspace, host, focused, attached),
+            ),
+      ),
+      Stream.runDrain,
     ),
   );
   yield* Deferred.await(attached);

@@ -120,15 +120,18 @@ export class ProgressDocumentTaskFileActionsController {
         // Both sides are checked here, once for every host: a host's diff
         // view would otherwise fail on a missing side in its own words.
         const fs = yield* FileSystem.FileSystem;
-        for (const [label, side] of [
-          ['Base', base],
-          ['Edited', file],
-        ] as const) {
-          if (!(yield* fs.exists(side))) {
-            return yield* new Rejected({
-              reason: `${label} file not found: ${side}`,
-            });
-          }
+        const missing = yield* Effect.findFirst(
+          [
+            ['Base', base],
+            ['Edited', file],
+          ] as const,
+          ([, side]) => fs.exists(side).pipe(Effect.map((exists) => !exists)),
+        );
+        if (Option.isSome(missing)) {
+          const [label, side] = missing.value;
+          return yield* new Rejected({
+            reason: `${label} file not found: ${side}`,
+          });
         }
         // A diff view that would not open is worded here too, as a
         // rejection the surface shows, on every host.

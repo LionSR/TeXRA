@@ -19,7 +19,7 @@
 import { stripVTControlCharacters } from 'node:util';
 
 // Third-party imports
-import { Cause, Duration, Effect, Fiber, Option, Ref, Stream } from 'effect';
+import { Duration, Effect, Fiber, Option, Ref, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - common
@@ -194,9 +194,17 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   // Drain any final chunks; bound the wait so a hung reader can't
   // block the agent forever.
   const outputLost = yield* Fiber.join(reader).pipe(
-    Effect.timeout(READER_DRAIN),
     Effect.as(undefined),
-    Effect.catch((failure) => Effect.succeed(describeOutputLoss(failure))),
+    Effect.catch((failure) =>
+      Effect.succeed(`the output stream failed: ${failure.message}`),
+    ),
+    Effect.timeoutOrElse({
+      duration: READER_DRAIN,
+      orElse: () =>
+        Effect.succeed(
+          `the output did not finish draining within ${Duration.format(READER_DRAIN)}`,
+        ),
+    }),
   );
   if (outputLost !== undefined) {
     yield* Effect.logWarning(
@@ -214,13 +222,6 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
     timedOut: Option.isNone(raced),
   };
 });
-
-/** Why the drain stopped short: it outran its bound, or the stream failed. */
-function describeOutputLoss(failure: Error | Cause.TimeoutError): string {
-  return Cause.isTimeoutError(failure)
-    ? `the output did not finish draining within ${Duration.format(READER_DRAIN)}`
-    : `the output stream failed: ${failure.message}`;
-}
 
 /** Strip ANSI control sequences and retain the captured output tail. */
 function truncateTerminalOutput(output: string): string {

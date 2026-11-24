@@ -31,7 +31,7 @@
  *    subscription" on and a Kimi Code key stored, and their wire ID differs
  *    (`kimi-k3` becomes `k3`, see {@link KIMI_CODE_WIRE_MODEL_IDS}).
  */
-import { absurd } from 'effect';
+import { Array as Arr, Option, absurd } from 'effect';
 import { ModelProvider, type ModelConfig, type ReasoningMode } from 'llm-zoo';
 
 import { PLAN_ROUTES, type PlanRoute } from '../errors.js';
@@ -338,10 +338,10 @@ export function decideModelRoute(
   facts: RouteFacts,
 ): ModelRoute {
   if (isUnservedModel(config)) return { kind: 'unserved' };
-  for (const decide of Object.values(PLAN_DECISIONS)) {
-    const route = decide(config, facts);
-    if (route !== undefined) return route;
-  }
+  const route = Arr.findFirst(Object.values(PLAN_DECISIONS), (decide) =>
+    Option.fromNullishOr(decide(config, facts)),
+  );
+  if (Option.isSome(route)) return route.value;
   // A provider with no HTTP route of its own has no key route either.
   const endpoint = keyEndpoint(config, facts);
   if (!isApiProvider(config.provider) || endpoint === undefined)

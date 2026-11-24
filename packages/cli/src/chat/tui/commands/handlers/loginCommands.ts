@@ -118,28 +118,28 @@ const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
   never,
   Secrets | SubscriptionAccounts | HttpClient.HttpClient | AppSignals
 > {
-  const lines: string[] = [];
-
-  for (const providerId of SUBSCRIPTION_AUTH_PROVIDERS) {
-    if (target !== providerId && target !== 'all') continue;
-    const { label } = SUBSCRIPTION_AUTH_COPY[providerId];
-    yield* signOutCliSubscription(stores, providerId).pipe(
-      Effect.match({
-        onFailure: (error) => {
-          lines.push(
+  const lines = yield* Effect.forEach(
+    SUBSCRIPTION_AUTH_PROVIDERS.filter(
+      (id) => target === 'all' || target === id,
+    ),
+    (providerId) => {
+      const { label } = SUBSCRIPTION_AUTH_COPY[providerId];
+      return signOutCliSubscription(stores, providerId).pipe(
+        Effect.match({
+          onFailure: (error) => [
             ACCOUNT_OUTCOME.signOutFailedWithReason(
               label,
               toErrorMessage(error),
             ),
-          );
-        },
-        onSuccess: (update) => {
-          lines.push(ACCOUNT_OUTCOME.signedOut(label));
-          lines.push(subscriptionSignOutPreferenceMessage(providerId, update));
-        },
-      }),
-    );
-  }
+          ],
+          onSuccess: (update) => [
+            ACCOUNT_OUTCOME.signedOut(label),
+            subscriptionSignOutPreferenceMessage(providerId, update),
+          ],
+        }),
+      );
+    },
+  );
 
   const overviewLines = yield* loadCliModelAccessOverview(stores).pipe(
     Effect.match({
@@ -147,8 +147,7 @@ const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
       onSuccess: (overview) => overview.lines,
     }),
   );
-  lines.push(...overviewLines);
-  return lines;
+  return [...lines.flat(), ...overviewLines];
 });
 
 export const logoutFromChat = Effect.fn('logoutFromChat')(function* (

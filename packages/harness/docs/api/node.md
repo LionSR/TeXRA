@@ -720,12 +720,8 @@ dirent type the platform left `Unknown` is probed, and only that probe's
 failure costs a row. The strict form stays with the containment and
 deletion walkers, where a refused answer is the safe one.
 
-It reads the dirents through Node's `readdir` directly, so its callers need
-only `Path`; the strict form gets the same typed listing from
-`FileSystem.readDirectoryEntries`.
-
 ```ts
-const readDirectoryTypedTolerant: (target: string) => Effect<(readonly [string, Type])[], PlatformError, Path>
+const readDirectoryTypedTolerant: (target: string) => Effect<(readonly [string, Type])[], PlatformError, FileSystem | Path>
 ```
 
 ## readNormalizedFile

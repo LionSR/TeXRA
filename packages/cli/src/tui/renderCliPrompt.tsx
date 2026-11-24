@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Deferred, Effect, Option } from 'effect';
 import { render } from 'ink';
 
 import { tuiOutputStreamForColor } from './noColorOutput';
@@ -32,19 +32,13 @@ export function renderCliPrompt<T>(
   element: (resolve: (value: T) => void) => React.JSX.Element,
   options: CliPromptOptions,
 ): Effect.Effect<T | undefined> {
-  return Effect.suspend(() => {
-    let resolved: T | undefined;
-    // A separate latch, not `??=`: callers cancel by resolving `undefined`, and
-    // `??=` would leave that unlatched so a later stray resolve could turn a
-    // cancel into a committed choice.
-    let hasResolved = false;
-    return Effect.acquireUseRelease(
+  return Effect.gen(function* () {
+    const answer = yield* Deferred.make<T>();
+    return yield* Effect.acquireUseRelease(
       Effect.sync(() =>
         render(
           element((value) => {
-            if (hasResolved) return;
-            hasResolved = true;
-            resolved = value;
+            Deferred.doneUnsafe(answer, Effect.succeed(value));
           }),
           {
             stdout: tuiOutputStreamForColor(
@@ -58,7 +52,8 @@ export function renderCliPrompt<T>(
       ),
       (instance) =>
         Effect.promise(() => instance.waitUntilExit()).pipe(
-          Effect.map(() => resolved),
+          Effect.andThen(Deferred.poll(answer)),
+          Effect.flatMap(Option.getOrElse(() => Effect.undefined)),
         ),
       (instance) =>
         Effect.sync(() => {

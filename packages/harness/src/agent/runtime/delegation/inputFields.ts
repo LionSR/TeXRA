@@ -210,18 +210,18 @@ const assertInputFilesExist = Effect.fn('assertInputFilesExist')(function* (
   const entries = groups.flatMap(({ label, files }) =>
     files.filter((file) => file.trim() !== '').map((path) => ({ label, path })),
   );
-  const inspected = yield* Effect.forEach(
+  const missing = yield* Effect.filter(
     entries,
     (entry) =>
       absoluteWorkspacePath(workspaceRoot, entry.path).pipe(
         Effect.flatMap((absolute) => entryExists(fs, absolute)),
-        Effect.map((exists) => ({ ...entry, exists })),
+        Effect.map((exists) => !exists),
       ),
     { concurrency: 'unbounded' },
   );
-  const missing = inspected.find((entry) => !entry.exists);
-  if (missing) {
-    return yield* new ToolError(`${missing.label} not found: ${missing.path}`);
+  const first = missing[0];
+  if (first !== undefined) {
+    return yield* new ToolError(`${first.label} not found: ${first.path}`);
   }
 });
 

@@ -9,7 +9,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result, Schema } from 'effect';
+import { Effect, FileSystem, Option, Result, Schema } from 'effect';
 
 // Local imports
 import {
@@ -148,21 +148,20 @@ export const runEntryUnder = Effect.fn('runStorage.runEntry')(function* (
         path.join(runDirectory, ...pathSegments.slice(0, index + 1)),
       ),
   ];
-  for (const ancestor of ancestors) {
-    const ancestorType = yield* entryTypeIn(fs, ancestor);
-    if (ancestorType === undefined)
-      return { kind: 'missing' } satisfies RunStorageEntry;
-    if (ancestorType === 'SymbolicLink')
-      return {
-        kind: 'symlink',
-        absolutePath: ancestor,
-      } satisfies RunStorageEntry;
-    if (ancestorType !== 'Directory')
-      return {
-        kind: 'unsupported',
-        absolutePath: ancestor,
-      } satisfies RunStorageEntry;
-  }
+  const blocked = yield* Effect.findFirstFilter(ancestors, (absolutePath) =>
+    Effect.map(
+      entryTypeIn(fs, absolutePath),
+      (type): Result.Result<RunStorageEntry, void> => {
+        if (type === 'Directory') return Result.failVoid;
+        if (type === undefined) return Result.succeed({ kind: 'missing' });
+        return Result.succeed({
+          kind: type === 'SymbolicLink' ? 'symlink' : 'unsupported',
+          absolutePath,
+        });
+      },
+    ),
+  );
+  if (Option.isSome(blocked)) return blocked.value;
 
   const absolutePath = path.join(runDirectory, normalizedPath);
   const type = yield* entryTypeIn(fs, absolutePath);

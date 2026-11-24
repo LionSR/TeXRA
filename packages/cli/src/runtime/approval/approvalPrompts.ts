@@ -127,31 +127,23 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
           ? '[y/N, v view full, or n <feedback>] '
           : '[y/N, or n <feedback>] '
       }`;
-      let answer: string;
-      // `content.details()` renders caller-supplied content, so it can
-      // throw. Left as a bare call inside the gen its throw is a defect,
-      // which the `Effect.catch` below does not see: the rejection decision
-      // it finishes would be skipped and `runPromise` would abort the tool
-      // and the session, where the outer try/catch this replaced handled it.
-      // `Effect.try` puts it back in the failure channel, and unlike catching
-      // the whole cause it leaves interruption free to propagate.
-      while (true) {
-        answer = yield* whilePrompting(
-          hooks,
-          askCliApprovalQuestion({
-            summary: content.summary,
-            prompt,
-          }),
-        );
-        const details = content.details;
-        if (details == null || !isViewDetailsAnswer(answer)) {
-          break;
-        }
-        yield* Effect.try({
-          try: () => writeTextStderr(safeTerminalText(details())),
-          catch: CliPromptFailed.from,
-        });
-      }
+      const answer = yield* whilePrompting(
+        hooks,
+        askCliApprovalQuestion({ summary: content.summary, prompt }),
+      ).pipe(
+        Effect.repeat({
+          while: (answer) => {
+            const details = content.details;
+            if (details == null || !isViewDetailsAnswer(answer)) return false;
+            // A rendering error closes the request through the prompt's
+            // failure handler.
+            return Effect.try({
+              try: () => writeTextStderr(safeTerminalText(details())),
+              catch: CliPromptFailed.from,
+            }).pipe(Effect.as(true));
+          },
+        }),
+      );
 
       const parsed = parseApprovalAnswer(answer);
       let feedback = parsed.feedback;

@@ -28,6 +28,8 @@ import {
   type Deferred,
   Effect,
   FileSystem,
+  Iterable,
+  Option,
   Schema,
   Stream,
 } from 'effect';
@@ -102,11 +104,14 @@ export const agentChildRunId = (
 export const earlierChild = Effect.fn('agent.earlierChild')(function* (
   call: RunToolCall,
 ): Effect.fn.Return<RunId | null, DatabaseReadFailed, SessionLog> {
-  for (let earlier = call.attempt - 1; earlier >= 1; earlier -= 1) {
-    const runId = agentChildRunId(call, earlier);
-    if (yield* getRunRecords(runId).exists()) return runId;
-  }
-  return null;
+  const priorChildren = Iterable.take(
+    Iterable.makeBy((index) => agentChildRunId(call, call.attempt - index - 1)),
+    call.attempt - 1,
+  );
+  const found = yield* Effect.findFirst(priorChildren, (runId) =>
+    getRunRecords(runId).exists(),
+  );
+  return Option.getOrNull(found);
 });
 
 /** What an existing child's rows say this call does with it. */

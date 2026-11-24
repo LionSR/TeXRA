@@ -10,6 +10,8 @@
  *
  * Pure: no IO, no clock, no platform, no synthetic id.
  */
+import { Array as Arr, Result } from 'effect';
+
 import {
   type RunId,
   type RunOutcome,
@@ -175,14 +177,14 @@ export const RUN_ROW_READS = Object.freeze({
   results: rowRead(['tool.result'], (rows) => ({
     results: rows.map((row) => row.payload),
   })),
-  script: rowRead(['script.call', 'tool.result'], (rows) => ({
-    scriptCalls: rows.flatMap((row) =>
-      row.type === 'script.call' ? [row.payload] : [],
-    ),
-    results: rows.flatMap((row) =>
-      row.type === 'tool.result' ? [row.payload] : [],
-    ),
-  })),
+  script: rowRead(['script.call', 'tool.result'], (rows) => {
+    const [scriptCalls, results] = Arr.partition(rows, (row) =>
+      row.type === 'script.call'
+        ? Result.succeed(row.payload)
+        : Result.fail(row.payload),
+    );
+    return { scriptCalls, results };
+  }),
   positions: rowRead(['run.position'], (positions) => ({ positions })),
 });
 

@@ -5,7 +5,14 @@
  * the user's run listing and its deletion, and the notices it presents. No
  * row type the run history keeps private and no store facet leaves here.
  */
-import { Context, Effect, Stream, SubscriptionRef } from 'effect';
+import {
+  Array as Arr,
+  Context,
+  Effect,
+  Result,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requests';
@@ -128,25 +135,26 @@ const deleteRuns =
       const named = [...runs.keys()].filter(
         (runId) => target === 'all' || runId === target,
       );
-      const deleted: RunId[] = [];
-      const active: RunId[] = [];
-      const failed: { runId: RunId; error: RequestError }[] = [];
-      for (const runId of named) {
-        const removal = yield* Effect.result(
-          Context.get(session, SessionRequests)
-            .request({ kind: 'run.delete', runId })
-            .pipe(Effect.provide(session)),
-        );
-        if (removal._tag === 'Success') deleted.push(runId);
-        // Held here: the registry refuses it, or, while it is live, its
-        // actions offer no delete.
-        else if (
-          removal.failure._tag === 'RunActive' ||
-          removal.failure._tag === 'Rejected'
-        )
-          active.push(runId);
-        else failed.push({ runId, error: removal.failure });
-      }
+      const requests = Context.get(session, SessionRequests);
+      const removals = yield* Effect.forEach(named, (runId) =>
+        requests.request({ kind: 'run.delete', runId }).pipe(
+          Effect.provide(session),
+          Effect.result,
+          Effect.map(
+            Result.mapBoth({
+              onSuccess: () => runId,
+              onFailure: (error) => ({ runId, error }),
+            }),
+          ),
+        ),
+      );
+      const [deleted, refusals] = Arr.separate(removals);
+      // A live run may be refused by the registry or have no delete action.
+      const [active, failed] = Arr.partition(refusals, (refusal) =>
+        refusal.error._tag === 'RunActive' || refusal.error._tag === 'Rejected'
+          ? Result.succeed(refusal.runId)
+          : Result.fail(refusal),
+      );
       return { deleted, active, failed };
     });
 

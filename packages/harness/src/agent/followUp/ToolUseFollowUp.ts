@@ -1,4 +1,4 @@
-import { Cause, Context, Effect, Exit } from 'effect';
+import { Array as Arr, Cause, Context, Effect, Exit, Order } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import { checkpointRefusal } from '@agent/storage/continuation';
@@ -174,8 +174,8 @@ export const waitForWakeNotes = Effect.fn('waitForWakeNotes')(function* (
         const later = wakeNotes((yield* inbox.read(runId)).followUps)
           .map(({ due }) => due)
           .filter((due) => due > woken);
-        if (later.length === 0) return;
-        woken = Math.min(...later);
+        if (!Arr.isArrayNonEmpty(later)) return;
+        woken = Arr.min(later, Order.Number);
         yield* sleepUntil(woken);
         yield* wakeIfOwed(runId);
       }

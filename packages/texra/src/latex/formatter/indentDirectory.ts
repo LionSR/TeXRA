@@ -1,6 +1,13 @@
 import * as path from 'node:path';
 
-import { Effect, FileSystem, Path, PlatformError } from 'effect';
+import {
+  Array as Arr,
+  Effect,
+  FileSystem,
+  Path,
+  PlatformError,
+  Result,
+} from 'effect';
 
 import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { entryTypeIn } from '@texra-ai/worldline/node';
@@ -96,9 +103,6 @@ export const indentLatexFilesInDirectory = Effect.fn(
     };
   }
 
-  let indentedCount = 0;
-  const failed: string[] = [];
-
   const formatFile = Effect.fn('latex.indentFile')(function* (
     fullPath: string,
   ) {
@@ -113,13 +117,12 @@ export const indentLatexFilesInDirectory = Effect.fn(
       yield* Effect.logInfo(`Successfully formatted: ${fullPath}`).pipe(
         withLogChannel(CHANNEL),
       );
-      indentedCount++;
-    } else {
-      yield* Effect.logError(`Failed to format ${fullPath}`).pipe(
-        withLogChannel(CHANNEL),
-      );
-      failed.push(fullPath);
+      return Result.succeed(fullPath);
     }
+    yield* Effect.logError(`Failed to format ${fullPath}`).pipe(
+      withLogChannel(CHANNEL),
+    );
+    return Result.fail(fullPath);
   });
 
   const absoluteDirectory = path.resolve(workspaceRoot ?? '.', directory);
@@ -132,24 +135,23 @@ export const indentLatexFilesInDirectory = Effect.fn(
     links: 'skip',
   }).pipe(
     Effect.flatMap(([{ files }]) =>
-      Effect.forEach(
-        files,
-        (file) => formatFile(path.join(absoluteDirectory, file)),
-        { discard: true },
+      Effect.forEach(files, (file) =>
+        formatFile(path.join(absoluteDirectory, file)),
       ),
     ),
-    Effect.andThen(() =>
-      Effect.logInfo(
-        `${indentedCount} .tex files have been formatted in ${directory}`,
+    Effect.flatMap((outcomes) => {
+      const [indented, failed] = Arr.separate(outcomes);
+      return Effect.logInfo(
+        `${indented.length} .tex files have been formatted in ${directory}`,
       ).pipe(
         withLogChannel(CHANNEL),
         Effect.as<IndentLatexResult>({
           status: 'formatted',
-          count: indentedCount,
+          count: indented.length,
           failed,
         }),
-      ),
-    ),
+      );
+    }),
     Effect.catch((err) =>
       Effect.logError(
         `Error during indentation process: ${toErrorMessage(err)}`,

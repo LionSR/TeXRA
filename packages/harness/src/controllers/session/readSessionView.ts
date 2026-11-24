@@ -13,6 +13,7 @@ import {
   Layer,
   Option,
   RcMap,
+  Result,
 } from 'effect';
 
 import { logFailure } from '@logger/effectLog';
@@ -127,23 +128,24 @@ export const projectViews = Effect.fn('projectViews')(function* (
   storageRoot: string,
   held: (storage: string) => SessionView | undefined,
 ) {
-  const views: ProjectView[] = [];
-  for (const { workspace, storage } of yield* projectStores(storageRoot)) {
-    const live = held(storage);
-    if (live !== undefined) {
-      views.push({ workspace, storage, view: live });
-      continue;
-    }
-    const cold = yield* readSessionView(storage).pipe(
-      Effect.catchCause((cause) =>
-        Effect.logWarning(
-          `Leaving ${workspace} out of the project list: its store could not be read`,
-          cause,
-        ).pipe(Effect.as(Option.none<SessionView>())),
-      ),
-    );
-    if (Option.isSome(cold))
-      views.push({ workspace, storage, view: cold.value });
-  }
-  return views;
+  return yield* Effect.filterMapEffect(
+    yield* projectStores(storageRoot),
+    Effect.fnUntraced(function* ({ workspace, storage }) {
+      const live = held(storage);
+      const view =
+        live === undefined
+          ? yield* readSessionView(storage).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning(
+                  `Leaving ${workspace} out of the project list: its store could not be read`,
+                  cause,
+                ).pipe(Effect.as(Option.none<SessionView>())),
+              ),
+            )
+          : Option.some(live);
+      return Option.isSome(view)
+        ? Result.succeed<ProjectView>({ workspace, storage, view: view.value })
+        : Result.failVoid;
+    }),
+  );
 });

@@ -14,7 +14,14 @@
  */
 import { basename, dirname, join } from 'node:path';
 
-import { Cause, Effect, Exit, FileSystem, ScopedRef } from 'effect';
+import {
+  Array as Arr,
+  Cause,
+  Effect,
+  Exit,
+  FileSystem,
+  ScopedRef,
+} from 'effect';
 
 import {
   ChildRuns,
@@ -404,7 +411,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
     return configured;
   }
   const found = extracted.value.map((file) => file.absolutePath);
-  return [...new Set([...configured, ...found])];
+  return Arr.dedupe([...configured, ...found]);
 });
 
 /** Keep `reply` whole as the revision's reply, which every later

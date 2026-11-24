@@ -7,13 +7,11 @@
  * schedule. A transient failure (a network blip, a 5xx) is retried too, but
  * only a few times in a row: it is logged at warn each time, and when the
  * budget runs out, or the deadline passes, the poll fails with the transient's
- * own error rather than a timeout. The code's lifetime is a deadline on the runtime clock checked
- * before each wait and before each poll — never during a request, so a poll
- * in flight when the code expires still completes and its authorization is
- * honored. Cancellation is fiber interruption from the host's run edge; there
- * is no signal threading here.
+ * own error. The schedule caps waits at the code's deadline, and each poll
+ * checks the clock before starting. A request already in flight can still
+ * complete after expiry. Cancellation is fiber interruption from the host.
  */
-import { Duration, Effect, Ref, Schedule, Schema } from 'effect';
+import { Cause, Clock, Duration, Effect, Schedule, Schema } from 'effect';
 
 import { SubscriptionOAuthError } from './subscriptionOAuthError.js';
 
@@ -79,57 +77,49 @@ export const pollDeviceAuthorization = Effect.fn(
     message: DEVICE_CODE_TIMED_OUT_MESSAGE,
     kind: 'expired',
   });
-  const extraDelayMs = yield* Ref.make(0);
-  // Transients since the last pending answer.
-  const transients = yield* Ref.make(0);
+  const deadline = (yield* Clock.currentTimeMillis) + options.expiresInMs;
   const increment = options.slowDownIncrementMs ?? 0;
+  const schedule = Schedule.fromStep(
+    Effect.sync(() => {
+      let intervalMs = options.intervalMs;
+      let transients = 0;
+      return Effect.fnUntraced(function* (
+        now: number,
+        error: unknown,
+      ): Effect.fn.Return<[void, Duration.Duration], Cause.Done> {
+        if (isPending(error)) {
+          transients = 0;
+          if (error.slowDown) intervalMs += increment;
+        } else if (isTransient(error)) {
+          transients += 1;
+          yield* Effect.logWarning(
+            `Device authorization poll failed (transient): ${error.error.message}`,
+          );
+          if (transients >= MAX_CONSECUTIVE_TRANSIENTS)
+            return yield* Cause.done();
+        } else {
+          return yield* Cause.done();
+        }
 
-  // The server asks the client to wait the interval before its first poll,
-  // and the schedule spaces every later one, for as long as the code lives.
-  yield* Effect.sleep(Duration.millis(options.intervalMs));
-  const polled = options.poll.pipe(
-    Effect.tapError((error) => {
-      if (isPending(error)) {
-        return Ref.set(transients, 0).pipe(
-          Effect.andThen(
-            error.slowDown
-              ? Ref.update(extraDelayMs, (ms) => ms + increment)
-              : Effect.void,
-          ),
-        );
-      }
-      if (isTransient(error)) {
-        return Ref.update(transients, (count) => count + 1).pipe(
-          Effect.andThen(
-            Effect.logWarning(
-              `Device authorization poll failed (transient): ${error.error.message}`,
-            ),
-          ),
-        );
-      }
-      return Effect.void;
-    }),
-    Effect.retry({
-      // Still pending: wait once more. A transient also waits once more
-      // while the consecutive budget lasts.
-      while: (error) =>
-        isPending(error) ||
-        (isTransient(error) &&
-          Effect.map(
-            Ref.get(transients),
-            (count) => count < MAX_CONSECUTIVE_TRANSIENTS,
-          )),
-      schedule: Schedule.spaced(Duration.millis(options.intervalMs)).pipe(
-        Schedule.addDelay(() => Ref.get(extraDelayMs)),
-        Schedule.upTo({ duration: Duration.millis(options.expiresInMs) }),
-      ),
+        const remaining = deadline - now;
+        if (remaining <= 0) return yield* Cause.done();
+        return [undefined, Duration.millis(Math.min(intervalMs, remaining))];
+      });
     }),
   );
-  // The retry ends on its last failure: a pending one when the code's
-  // lifetime ran out is a timeout, a transient one (its budget spent, or the
-  // lifetime over) its own carried failure, a terminal answer itself.
-  return yield* Effect.mapError(polled, (error) => {
-    if (isPending(error)) return timedOut;
-    return isTransient(error) ? error.error : error;
-  });
+
+  yield* Effect.sleep(Math.min(options.intervalMs, options.expiresInMs));
+  return yield* Effect.gen(function* () {
+    if ((yield* Clock.currentTimeMillis) < deadline) return yield* options.poll;
+    // A wait can end at expiry. Preserve the previous network failure if
+    // it was the last answer the endpoint gave us.
+    const { input } = yield* Schedule.CurrentMetadata;
+    return yield* Effect.fail(isTransient(input) ? input.error : timedOut);
+  }).pipe(
+    Effect.retry(schedule),
+    Effect.mapError((error) => {
+      if (isPending(error)) return timedOut;
+      return isTransient(error) ? error.error : error;
+    }),
+  );
 });

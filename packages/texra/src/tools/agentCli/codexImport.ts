@@ -18,7 +18,7 @@
 
 import * as path from 'node:path';
 
-import { Effect, type FileSystem } from 'effect';
+import { Effect, type FileSystem, Option, Predicate } from 'effect';
 
 import { inheritedEnv, IS_WINDOWS } from '@texra-ai/worldline/node';
 import {
@@ -105,14 +105,15 @@ const codexBinaryInPlatformPackage = Effect.fn(
     packageDir: string,
   ) {
     const vendorDir = path.join(packageDir, 'vendor', platformInfo.triple);
-    for (const candidate of [
-      path.join(vendorDir, 'bin', CODEX_BINARY_NAME),
-      path.join(vendorDir, 'codex', CODEX_BINARY_NAME),
-    ]) {
-      const binary = yield* binaryIfPresent(candidate);
-      if (binary) return binary;
-    }
-    return undefined;
+    const found = yield* Effect.findFirst(
+      [
+        path.join(vendorDir, 'bin', CODEX_BINARY_NAME),
+        path.join(vendorDir, 'codex', CODEX_BINARY_NAME),
+      ],
+      (candidate) =>
+        binaryIfPresent(candidate).pipe(Effect.map(Predicate.isNotUndefined)),
+    );
+    return Option.getOrUndefined(found);
   });
 
   const direct = yield* findInPlatformPackage(platformPkgDir);

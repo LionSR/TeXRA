@@ -277,13 +277,11 @@ const markdownFiles = Effect.fn('markdownFiles')(function* (
         : [resolved];
     // Every entry is checked together; the first failure in listing order
     // is the one reported.
-    const checked = yield* Effect.forEach(
-      entries,
-      (entry) => Effect.result(containedPath(dir, path.relative(dir, entry))),
-      { concurrency: 16 },
+    const checked = yield* Effect.all(
+      entries.map((entry) => containedPath(dir, path.relative(dir, entry))),
+      { concurrency: 16, mode: 'result' },
     );
-    for (const result of checked) {
-      const file = yield* Effect.fromResult(result);
+    for (const file of yield* Effect.fromResult(Result.all(checked))) {
       if (file !== undefined) files.add(path.relative(dir, file));
     }
   }
@@ -331,7 +329,7 @@ const mcpServersOf = Effect.fn('mcpServersOf')(function* (
     const inner = Schema.decodeUnknownResult(McpFileSchema)(json.mcpServers);
     maps.push({
       where: resolved,
-      servers: Result.isSuccess(inner) ? inner.success : json,
+      servers: Result.getOrElse(inner, () => json),
     });
   }
   const servers: McpServerConfig[] = [];

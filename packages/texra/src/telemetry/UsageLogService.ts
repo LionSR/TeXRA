@@ -8,6 +8,7 @@ import {
   Effect,
   Fiber,
   Layer,
+  Option,
   Predicate,
   Queue,
   Result,
@@ -130,14 +131,16 @@ export const USAGE_LOGGING_ENV_OPT_OUT = formatWordList(
 const telemetryOptOutEnvVar = Effect.fnUntraced(function* (
   env?: Readonly<Record<string, string | undefined>>,
 ) {
-  for (const name of TELEMETRY_OPT_OUT_ENV_VARS) {
-    if (
-      (yield* envFlag(name, process.env)) ||
-      (env !== undefined && (yield* envFlag(name, env)))
-    )
-      return name;
-  }
-  return undefined;
+  const found = yield* Effect.findFirst(
+    TELEMETRY_OPT_OUT_ENV_VARS,
+    Effect.fnUntraced(function* (name) {
+      return (
+        (yield* envFlag(name, process.env)) ||
+        (env !== undefined && (yield* envFlag(name, env)))
+      );
+    }),
+  );
+  return Option.getOrUndefined(found);
 });
 
 /**

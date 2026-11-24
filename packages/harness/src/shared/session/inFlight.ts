@@ -18,7 +18,7 @@ import type {
   ScriptCallPayload,
   ToolResultPayload,
 } from '@shared/schemas';
-import { Result } from 'effect';
+import { Array as Arr, Result } from 'effect';
 
 import type { ModelOrigin, RemoteOperation } from '@texra-ai/llm';
 import type { RunRowState } from './runRowsShape';
@@ -203,7 +203,7 @@ const SEND: NextAttempt = { kind: 'send', retry: null };
 /** The automatic retries `failures` spent: one per recorded failure but a
  *  lost chain's, which is resent once outside them. */
 const spentRetries = (failures: readonly Failure[]): number =>
-  failures.filter((failure) => failure.next.kind !== 'unchain').length;
+  Arr.countBy(failures, (failure) => failure.next.kind !== 'unchain');
 
 /**
  * What `invocation` does next (null: a new one), from its rows, the run's

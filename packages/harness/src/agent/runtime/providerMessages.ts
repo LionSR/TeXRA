@@ -10,6 +10,7 @@
  */
 import {
   Effect,
+  Iterable,
   Predicate,
   Record as EffectRecord,
   Result,
@@ -346,10 +347,11 @@ export const providerMessages = <E>(
   messages: readonly HistoryMessage[],
   read: (digests: readonly string[]) => Effect.Effect<StoredBlobs, E>,
 ): Effect.Effect<readonly ProviderMessage[], E> => {
-  const digests = new Set<string>();
-  for (const message of messages)
-    for (const part of inputParts(message))
-      if (part.kind !== 'text') digests.add(part.digest);
+  const digests = new Set(
+    Iterable.flatMap(Iterable.flatMap(messages, inputParts), (part) =>
+      part.kind === 'text' ? [] : [part.digest],
+    ),
+  );
   const resolved = (part: StoredInputPart, texts: StoredBlobs): InputPart => {
     if (part.kind === 'text') return part;
     const { digest, ...rest } = part;

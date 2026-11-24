@@ -45,7 +45,7 @@
  * for the step to report when the offer changes.
  */
 
-import { Context, Effect, SubscriptionRef } from 'effect';
+import { Context, Effect, Iterable, Result, SubscriptionRef } from 'effect';
 
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { ITool } from '@tools/core/ToolTypes';
@@ -118,15 +118,18 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const table = yield* ToolRegistry;
   const roots = yield* SessionRoots;
   const warnings: string[] = [];
-  const injected: string[] = [];
-  if (input.injectTools) {
-    for (const { injectedWhen } of table.entries.values()) {
-      for (const [name, setting] of Object.entries(injectedWhen ?? {})) {
-        if (setting === true || (yield* Settings.get(roots, setting)))
-          injected.push(name);
-      }
-    }
-  }
+  const injected = input.injectTools
+    ? yield* Effect.filterMapEffect(
+        Iterable.flatMap(table.entries.values(), ({ injectedWhen }) =>
+          Object.entries(injectedWhen ?? {}),
+        ),
+        Effect.fnUntraced(function* ([name, setting]) {
+          return setting === true || (yield* Settings.get(roots, setting))
+            ? Result.succeed(name)
+            : Result.failVoid;
+        }),
+      )
+    : [];
   if (input.injectInstalled)
     for (const [name, entry] of catalog)
       if (isInstalledPluginId(entry.plugin)) injected.push(name);

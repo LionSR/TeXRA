@@ -1,5 +1,5 @@
 /** Canonical run metadata records, independent of runtime machinery. */
-import { Schema, SchemaGetter, Struct } from 'effect';
+import { Record as EffectRecord, Schema, SchemaGetter, Struct } from 'effect';
 
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import type { ExecEnd } from '@utils/system/execUtils';
@@ -75,8 +75,10 @@ export function serializeFilteredConfig(
   if (!excludeSet) {
     return JSON.stringify(record, null, 2);
   }
-  const filtered = Object.fromEntries(
-    Object.entries(record).filter(([key]) => !excludeSet.has(key)),
+  const fields: Readonly<Record<string, unknown>> = record;
+  const filtered = EffectRecord.filter(
+    fields,
+    (_, key) => !excludeSet.has(key),
   );
   return JSON.stringify(filtered, null, 2);
 }

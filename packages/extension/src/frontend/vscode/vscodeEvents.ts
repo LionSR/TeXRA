@@ -1,7 +1,7 @@
 /** VS Code events as Effect values: a stream of every report, or a wait on
  *  the first one. */
 
-import { Deferred, Effect, Option, Queue, Stream } from 'effect';
+import { Effect, Option, Queue, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 /**
@@ -30,20 +30,13 @@ export function firstEventOrTimeout<T>(
   subscribe: (report: (value: T) => void) => vscode.Disposable,
   timeoutMs: number,
 ): Effect.Effect<Option.Option<T>> {
-  return Effect.scoped(
-    Effect.gen(function* () {
-      const first = yield* Deferred.make<T>();
-      yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          subscribe((value) => {
-            Deferred.doneUnsafe(first, Effect.succeed(value));
-          }),
-        ),
-        (subscription) => Effect.sync(() => subscription.dispose()),
-      );
-      return yield* Deferred.await(first);
+  return eventStream(subscribe).pipe(
+    Stream.runHead,
+    Effect.timeoutOrElse({
+      duration: timeoutMs,
+      orElse: () => Effect.succeedNone,
     }),
-  ).pipe(Effect.timeoutOption(timeoutMs));
+  );
 }
 
 /**

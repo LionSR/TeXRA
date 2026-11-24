@@ -391,17 +391,11 @@ export const processInputFiles = Effect.fn('latexMedia.processInputFiles')(
     cfg: InputMediaOptions,
   ): Effect.fn.Return<FileLocation[], Error, MediaServices> {
     const fs = yield* FileSystem.FileSystem;
-    const probed = yield* Effect.forEach(
+    const existingFiles = yield* Effect.filter(
       inputFiles,
-      (file) =>
-        fs
-          .exists(file.absolutePath)
-          .pipe(Effect.map((exists) => ({ file, exists }))),
+      (file) => fs.exists(file.absolutePath),
       { concurrency: LATEX_CONCURRENCY },
     );
-    const existingFiles = probed
-      .filter((entry) => entry.exists)
-      .map((entry) => entry.file);
     if (existingFiles.length === 0) return [];
     const texFiles = existingFiles.filter((file) =>
       hasExtension(file.absolutePath, '.tex'),

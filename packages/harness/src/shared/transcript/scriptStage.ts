@@ -12,7 +12,7 @@
  * its answer is its card's typed result (`childAnswer`); its duration and
  * cost are its child's rows.
  */
-import { Predicate } from 'effect';
+import { Array as Arr, Predicate } from 'effect';
 import {
   PROGRAM_TOOL_NAME,
   TOOL_CALL_STATUS,
@@ -334,8 +334,8 @@ export function scriptStages(
         outcome: stage.end?.outcome ?? null,
         calls,
         sections: sectionsOf(calls),
-        agents: calls.filter((call) => CHILD_TOOLS.has(call.toolName)).length,
-        needsYou: calls.filter((call) => call.needsYou).length,
+        agents: Arr.countBy(calls, (call) => CHILD_TOOLS.has(call.toolName)),
+        needsYou: Arr.countBy(calls, (call) => call.needsYou),
         costUsd,
       },
     ];

@@ -21,9 +21,14 @@
  * same `parseTraceData` boundary.
  */
 import { Effect, Result, Schema, Stream } from 'effect';
+import { FetchHttpClient, HttpClient } from 'effect/http';
 import { RpcServer } from 'effect/rpc';
 
-import { Rejected, type TraceDocument } from '@texra-ai/worldline/schemas';
+import {
+  ensureError,
+  Rejected,
+  type TraceDocument,
+} from '@texra-ai/worldline/schemas';
 import {
   ClientEnvelopeSchema,
   SessionRpcs,
@@ -46,19 +51,40 @@ declare global {
 /** The session key the page's `<progress-app data-session>` names. */
 const TRACE_SESSION = 'trace';
 
-async function loadTrace(): Promise<TraceDocument> {
-  const inline = globalThis.__TEXRA_TRACE__;
-  if (inline) {
+class TraceLoadFailed extends Schema.TaggedError<TraceLoadFailed>()(
+  'TraceLoadFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {
+  static from = (cause: unknown) =>
+    new TraceLoadFailed({ message: ensureError(cause).message, cause });
+}
+
+const loadTrace = Effect.fn('traceViewer.loadTrace')(function* () {
+  let raw = globalThis.__TEXRA_TRACE__;
+  if (raw) {
     // Once consumed, drop the raw copy: nothing else reads this global.
     globalThis.__TEXRA_TRACE__ = undefined;
-    return parseTraceData(inline);
+  } else {
+    const params = new URLSearchParams(window.location.search);
+    const file = params.get('trace') ?? 'trace.json';
+    const url = yield* Effect.try({
+      try: () => new URL(file, document.baseURI),
+      catch: TraceLoadFailed.from,
+    });
+    const response = yield* HttpClient.get(url).pipe(
+      Effect.mapError(TraceLoadFailed.from),
+    );
+    if (response.status < 200 || response.status >= 300)
+      return yield* new TraceLoadFailed({
+        message: `Failed to fetch ${file}: ${response.status}`,
+      });
+    raw = yield* response.json.pipe(Effect.mapError(TraceLoadFailed.from));
   }
-  const params = new URLSearchParams(window.location.search);
-  const file = params.get('trace') ?? 'trace.json';
-  const res = await fetch(file);
-  if (!res.ok) throw new Error(`Failed to fetch ${file}: ${res.status}`);
-  return parseTraceData(await res.json());
-}
+  return yield* Effect.try({
+    try: () => parseTraceData(raw),
+    catch: TraceLoadFailed.from,
+  });
+});
 
 /** The `run.position` index the view is read at; null is the whole document. */
 let cut: number | null = null;
@@ -74,15 +100,12 @@ export function setTraceCut(index: number | null): void {
 /** The procedures over the trace. A call made before the document loads
  *  waits for it; one made after it failed to load gets nothing, since the
  *  entry renders the load failure. */
-function traceHandlers(document: Promise<TraceDocument>) {
-  const loaded = Stream.fromEffect(
-    Effect.promise(() =>
-      document.then(
-        (trace) => trace,
-        () => null,
-      ),
-    ),
-  ).pipe(Stream.filter((trace) => trace !== null));
+function traceHandlers(
+  document: Effect.Effect<TraceDocument, TraceLoadFailed>,
+) {
+  const loaded = Stream.fromEffect(document).pipe(
+    Stream.catch(() => Stream.empty),
+  );
   const refused = Effect.fail(
     new Rejected({ reason: 'An exported trace is read-only.' }),
   );
@@ -100,7 +123,9 @@ function traceHandlers(document: Promise<TraceDocument>) {
   });
 }
 
-function installTraceHostBridge(document: Promise<TraceDocument>): void {
+function installTraceHostBridge(
+  document: Effect.Effect<TraceDocument, TraceLoadFailed>,
+): void {
   let state: unknown;
   const deliver = (message: SessionWire): void => {
     window.dispatchEvent(new MessageEvent('message', { data: message }));
@@ -136,6 +161,9 @@ function installTraceHostBridge(document: Promise<TraceDocument>): void {
   globalThis[HOST_BRIDGE_API_KEY] = bridge;
 }
 
+const traceDocument = Effect.runSync(
+  Effect.cached(loadTrace().pipe(Effect.provide(FetchHttpClient.layer))),
+);
 /** The document this page shows; the bridge serves it. */
-export const trace: Promise<TraceDocument> = loadTrace();
-installTraceHostBridge(trace);
+export const trace: Promise<TraceDocument> = Effect.runPromise(traceDocument);
+installTraceHostBridge(traceDocument);

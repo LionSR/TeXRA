@@ -271,21 +271,19 @@ const replyDelivery = Effect.fn('replyDelivery')(function* (
     from: { kind: 'run', runId } as const,
     deliveryId: deliveryId(runId, facts),
   };
-  const rows: RunInputDraft[] = [];
-  for (const recipient of recipients) {
-    const accepted = yield* Effect.result(
-      inbox.acceptance(recipient, item, {}),
-    );
-    if (Result.isFailure(accepted))
-      yield* undelivered(
-        `run ${recipient} is closed or cannot be read`,
-        accepted.failure,
-      );
-    else if (accepted.success.sent.kind === 'refused')
-      yield* undelivered(`the input of run ${recipient} is closed`);
-    else rows.push(...accepted.success.rows);
-  }
-  return rows;
+  const rows = yield* Effect.forEach(recipients, (recipient) =>
+    inbox.acceptance(recipient, item, {}).pipe(
+      Effect.matchEffect({
+        onSuccess: ({ sent, rows }) =>
+          sent.kind === 'refused'
+            ? undelivered(`the input of run ${recipient} is closed`)
+            : Effect.succeed(rows),
+        onFailure: (error) =>
+          undelivered(`run ${recipient} is closed or cannot be read`, error),
+      }),
+    ),
+  );
+  return rows.flat();
 });
 
 /**

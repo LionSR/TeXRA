@@ -29,6 +29,8 @@ import {
   Effect,
   Exit,
   Fiber,
+  HashMap,
+  Option,
   type PlatformError,
   Queue,
   Ref,
@@ -118,7 +120,7 @@ type PendingError = JsonRpcRequestError | JsonRpcConnectionDisposed;
 interface ConnectionState {
   readonly closed: string | undefined;
   readonly lastId: number;
-  readonly pending: ReadonlyMap<number, PendingRequest>;
+  readonly pending: HashMap.HashMap<number, PendingRequest>;
 }
 
 /** A request's place in the table, or the reason the connection closed with. */
@@ -239,7 +241,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   const state = yield* Ref.make<ConnectionState>({
     closed: undefined,
     lastId: 0,
-    pending: new Map(),
+    pending: HashMap.empty(),
   });
   const closedReason = Effect.map(Ref.get(state), ({ closed }) => closed);
   const outbound = yield* Queue.make<Uint8Array, Cause.Done>();
@@ -248,12 +250,18 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   const close = Effect.fn('JsonRpc.close')(function* (reason: string) {
     const waiting = yield* Ref.modify(state, (current) =>
       current.closed === undefined
-        ? [current.pending, { ...current, closed: reason, pending: new Map() }]
+        ? [
+            current.pending,
+            { ...current, closed: reason, pending: HashMap.empty() },
+          ]
         : [undefined, current],
     );
     if (waiting === undefined) return;
     yield* Queue.end(outbound);
-    for (const { deferred } of waiting.values()) {
+    // Fail requests in registration order, which is the order of their ids.
+    for (const [, { deferred }] of Array.from(waiting).toSorted(
+      ([first], [second]) => first - second,
+    )) {
       yield* Deferred.fail(
         deferred,
         new JsonRpcConnectionDisposed({ message: reason }),
@@ -267,11 +275,12 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
 
   const takePending = (id: number) =>
     Ref.modify(state, (current) => {
-      const entry = current.pending.get(id);
+      const entry = Option.getOrUndefined(HashMap.get(current.pending, id));
       if (!entry) return [undefined, current];
-      const pending = new Map(current.pending);
-      pending.delete(id);
-      return [entry, { ...current, pending }];
+      return [
+        entry,
+        { ...current, pending: HashMap.remove(current.pending, id) },
+      ];
     });
 
   const dispatch = Effect.fn('JsonRpc.dispatch')(function* (
@@ -390,7 +399,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
           if (current.closed !== undefined)
             return [{ closed: current.closed }, current];
           const id = current.lastId + 1;
-          const pending = new Map(current.pending).set(id, {
+          const pending = HashMap.set(current.pending, id, {
             method,
             deferred,
           });

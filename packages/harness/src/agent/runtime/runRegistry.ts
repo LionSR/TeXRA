@@ -328,12 +328,14 @@ export class SessionRunRegistry implements RunsShape {
   ): Effect.Effect<readonly RunId[]> {
     return Effect.suspend(() => {
       const held = this.heldIds();
-      return Effect.flatMap(Effect.filter(held, matches), (matching) =>
-        this.heldSince(held)
-          ? Effect.succeed(matching)
-          : this.heldWhere(matches),
-      );
-    });
+      return Effect.map(Effect.filter(held, matches), (matching) => ({
+        matching,
+        stable: this.heldSince(held),
+      }));
+    }).pipe(
+      Effect.repeat({ until: ({ stable }) => stable }),
+      Effect.map(({ matching }) => matching),
+    );
   }
 
   /** Whether the runs held here are still exactly `held`. */
@@ -904,11 +906,12 @@ export class SessionRunRegistry implements RunsShape {
         runId === undefined
           ? this.get()
           : [this.get(runId)].flatMap((run) => run ?? []);
-      if (held.length === 0) return Effect.void;
-      return Effect.forEach(held, (run) => run.drained, {
-        discard: true,
-      }).pipe(Effect.andThen(this.awaitDrained(runId)));
-    });
+      return held.length === 0
+        ? Effect.succeed(true)
+        : Effect.forEach(held, (run) => run.drained, { discard: true }).pipe(
+            Effect.as(false),
+          );
+    }).pipe(Effect.repeat({ until: (drained) => drained }), Effect.asVoid);
   }
 
   // ----------------------------------------------------------------- close

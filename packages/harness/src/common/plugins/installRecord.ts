@@ -35,16 +35,14 @@ export const INSTALLED_PLUGINS_KEY = Object.freeze({
 function storedRecord(stored: unknown) {
   if (stored === undefined)
     return Result.succeed<readonly InstalledPlugin[]>([]);
-  const parsed = Schema.decodeUnknownResult(INSTALLED_PLUGINS_KEY.schema)(
-    stored,
-  );
-  return Result.isSuccess(parsed)
-    ? Result.succeed(parsed.success)
-    : Result.fail(
+  return Schema.decodeUnknownResult(INSTALLED_PLUGINS_KEY.schema)(stored).pipe(
+    Result.mapError(
+      (error) =>
         new PluginError({
-          message: `The installed plugin record (${INSTALLED_PLUGINS_KEY.key}) is unreadable: ${parsed.failure.message}`,
+          message: `The installed plugin record (${INSTALLED_PLUGINS_KEY.key}) is unreadable: ${error.message}`,
         }),
-      );
+    ),
+  );
 }
 
 /** The install record, as one read. */

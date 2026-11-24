@@ -26,7 +26,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result } from 'effect';
+import { Array as Arr, Effect, FileSystem, Result } from 'effect';
 
 // Local imports
 import { meansAbsent } from '@utils/files/fsEntryExists';
@@ -322,12 +322,8 @@ export const readPrograms = Effect.fn('readPrograms')(function* ({
       }),
     { concurrency: 8 },
   );
-  return {
-    loaded: read.flatMap((one) => (Result.isSuccess(one) ? [one.success] : [])),
-    refused: read.flatMap((one) =>
-      Result.isFailure(one) ? [one.failure] : [],
-    ),
-  };
+  const [loaded, refused] = Arr.separate(read);
+  return { loaded, refused };
 });
 
 /** The programs the plugin `plugin` at `dir` carries: those of its

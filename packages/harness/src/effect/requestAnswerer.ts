@@ -109,12 +109,15 @@ export const followPendingRequests = Effect.fn('followPendingRequests')(
     const fibers = yield* FiberMap.make<string>();
     yield* Stream.runForEach(view.changes, (level) => {
       const listed = new Set(level.requests.map(keyOf));
-      return Effect.forEach(
-        [...fibers].filter(([key]) => !listed.has(key)),
-        // Forked: the view loop never waits on a program's finalizers.
-        ([, fiber]) => Effect.forkChild(Fiber.interrupt(fiber)),
-        { discard: true },
-      ).pipe(
+      const withdrawn = [...fibers].flatMap(([key, fiber]) =>
+        listed.has(key) ? [] : [fiber],
+      );
+      // Signal every withdrawn program before joining any of its finalizers.
+      const cancel =
+        withdrawn.length === 0
+          ? Effect.void
+          : Effect.forkChild(Fiber.interruptAll(withdrawn));
+      return cancel.pipe(
         Effect.andThen(
           Effect.forEach(
             select(level),

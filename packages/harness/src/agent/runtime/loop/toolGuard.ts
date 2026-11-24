@@ -241,10 +241,14 @@ const rejection = Effect.fn('toolUse.guard')(function* (
         ? cause
         : new ToolError(ensureError(cause).message, { cause }),
   });
-  for (const target of targets) {
-    const path = yield* resolveToolPath(call.env, target);
-    yield* assertWritable(path, path.display);
-  }
+  yield* Effect.forEach(
+    targets,
+    (target) =>
+      resolveToolPath(call.env, target).pipe(
+        Effect.flatMap((path) => assertWritable(path, path.display)),
+      ),
+    { discard: true },
+  );
 
   if (!asks) return undefined;
   // The call as the prompt shows it: the guard's spelling, else the tool's
