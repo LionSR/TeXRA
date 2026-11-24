@@ -73,10 +73,16 @@ Listed in rough order of density.
    switch inside a composition root): move the switch to a handler map and lift
    the three multi-step cases (`useCurrentFile`, `fork`, `launch`) into named
    functions, leaving the root to wire controllers.
-3. `goldenTurn` (`packages/cli/src/runtime/models/validationModel.ts`, ~390
-   lines): one mock-model if-chain over ~20 unrelated conformance scenarios.
-   A table of `{ marker, handler }` with each scenario its own function; the
-   dispatcher finds the marker and delegates.
+3. **Landed 2026-11-24 (evening).** `goldenTurn`
+   (`packages/cli/src/runtime/models/validationModel.ts`, ~390 lines): one
+   mock-model if-chain over ~20 unrelated conformance scenarios. Each
+   scenario is now its own function in `GOLDEN_SCENARIOS`, a table of
+   `{ marker, play }` in the old chain's order; `goldenTurn` answers the
+   harness's own requests, the parked call and the overflow refusal (moved
+   in from `streamTurn`), then plays the first scenario whose marker the
+   system text holds. The non-golden replies are `cannedTurn`'s early
+   returns. A golden store regenerated after the change is byte-identical
+   to one generated before it on the same tree.
 4. ~~`finishCall` (`packages/harness/src/agent/runtime/loop/toolUseDispatch.ts`,
    ~256 lines): extract "run the body and classify the outcome" and "sanitize,
    capture and commit the result rows" into named helpers so the top reads as
@@ -95,7 +101,28 @@ Listed in rough order of density.
    policy }` boilerplate. Declare segments as a `{ when, build, priority,
    policy }` data list reduced once.
 
-## This run
+## The evening run (2026-11-24): the app and the CLI
+
+Landed item 3, and widened to the app outside `ui/` and the hosts' non-UI
+code (`packages/texra/src`, `packages/cli/src` without the TUI,
+`packages/desktop/src/main`, `packages/extension/src` without webviews),
+ranking functions by length and by branch density. The one other chain
+over cases there, Claude's per-tool input summary
+(`describeToolInput` in `packages/texra/src/tools/agentCli/claudeAgentShared.ts`),
+is now a map from tool name to its line. The longest remaining functions
+read as deep modules or composition roots, not chains: `leanServer`'s and
+`leanServerPool`'s `make`, `serviceSession`, `openDesktopWindow`,
+`usageLogLayer`, `fetchAllCheckRuns`, `pollPull`,
+`extractFilenameHeaderDocuments` (a line-state parser whose flags interact;
+a rewrite is not provably equivalent) and `runInstallGithubAction` (a
+linear script of guarded steps). The settings view's body is already a
+handler table. Left for a later run: the validation model picks a scenario
+two ways, environment switches (`VALIDATION_SCENARIOS`) for the echo,
+fan-out and history-query replies and a system-text marker for the golden
+ones; one mechanism would touch `validate-run.mjs`, the e2e fixture and
+the kernel suites together.
+
+## The scan run
 
 Landed the one verified drift (the device-code fallback line) with a
 regression test, and recorded these candidates so the theme is not re-mined.
@@ -103,7 +130,7 @@ The duplication result being a negative is the finding: there is no large
 mechanical consolidation to do, and the complex-function decompositions each
 need their own careful, behavior-preserving change rather than a batch.
 
-## 2026-11-24 evening
+## The evening run (2026-11-24): the harness core
 
 Item 4 landed, and the sweep widened to the longest functions left in the
 harness core and llm (a TypeScript-AST measure of function spans, crossed
