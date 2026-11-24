@@ -37,8 +37,8 @@ import {
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
 import {
-  formatSubscriptionUsagePercent,
   subscriptionQuotaTone,
+  subscriptionQuotaUsed,
 } from '@ui/copy/subscriptionUsage';
 import { RUN_GRANT_TONE, runStatus, type RunTone } from '@ui/copy/runStatus';
 import {
@@ -245,17 +245,16 @@ function subscriptionQuotaSegment(
   snapshot: SubscriptionUsageSnapshot | undefined,
 ): StatusBarSegment | undefined {
   if (snapshot?.state !== 'available') return undefined;
-  // The window the plan runs out of first, worded as every usage
-  // percentage is, so the bar and `/status` read one number.
+  // The bar shows the window the plan runs out of first: the most used.
   const limiting = snapshot.windows.toSorted(
     (left, right) => right.percentUsed - left.percentUsed,
   )[0];
   if (!limiting) return undefined;
-  const left = formatSubscriptionUsagePercent(limiting.percentRemaining);
+  const used = subscriptionQuotaUsed(limiting);
   const tone = subscriptionQuotaTone(limiting);
   return {
-    text: `${snapshot.planName} ${left} left`,
-    compactText: `${left} left`,
+    text: `${snapshot.planName} ${used}`,
+    compactText: used,
     ...(tone === undefined ? { dim: true } : { color: TONE_PAINT[tone].color }),
     priority: STATUS_BAR_PRIORITY.subscriptionQuota,
     policy: 'drop',

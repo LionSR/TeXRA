@@ -8,12 +8,22 @@
 // The fence highlighter delegates to `cli-highlight`, which uses the same
 // `highlight.js` grammars the webview already pulls — keeping fence rendering
 // consistent between hosts without dragging the HTML wrapper through.
+//
+// Model text carries HTML now and then (`<strong>`, `<br>`, `<p>`, …). The
+// terminal prints text, never HTML, so unlike the webview it lets markdown-it
+// tokenize tags (`html: true`) and turns the known ones into the tokens their
+// markdown equivalents produce (`applyHtmlTags`); every other tag prints as
+// its literal text.
 
 import { Number as Num, Predicate } from 'effect';
 import Table from 'cli-table3';
 import { highlight, supportsLanguage } from 'cli-highlight';
 import { LRUCache } from 'lru-cache';
-import MarkdownIt, { type RendererRule, type Token } from 'markdown-it';
+import MarkdownIt, {
+  type RendererRule,
+  type StateCore,
+  type Token,
+} from 'markdown-it';
 import pico from 'picocolors';
 
 import { toErrorMessage } from '@texra-ai/worldline/schemas';
@@ -197,11 +207,281 @@ function restoreProtectedLatexInCell(cell: string, env: unknown): string {
   return typeof restored === 'string' ? restored : cell;
 }
 
+// A tag markdown-it tokenized that the terminal knows how to show. The name
+// must end at whitespace, `/` or `>`, so `<strong-x>` or `<bx>` stays text.
+const KNOWN_HTML_TAG_RE =
+  /^<(\/?)(strong|b|em|i|p|div|br|blockquote|h[1-6])[\s/>]/iu;
+// An attribute without a value is far likelier prose than markup
+// (`if x <p and y> 1`), so a tag takes only `name=value` attributes.
+const VALUED_ATTRIBUTE = String.raw`\s+[^\s=/>]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>\x60]+)`;
+const VALUED_ATTRIBUTES_RE = new RegExp(
+  String.raw`^<\/?[a-z0-9]+(?:${VALUED_ATTRIBUTE})*\s*\/?>$`,
+  'iu',
+);
+// A backtick code span (left as it is) or a `<code>` element, whose body is
+// source text: it becomes a code span before inline parsing reads it.
+const CODE_ELEMENT_RE = new RegExp(
+  String.raw`(?<!\x60)(\x60+)(?!\x60)[\s\S]*?(?<!\x60)\1(?!\x60)|<code(?:${VALUED_ATTRIBUTE})*\s*>([\s\S]*?)<\/code\s*>`,
+  'giu',
+);
+
+/** `body` as a backtick code span, its fence longer than any run inside. */
+function codeSpan(body: string): string {
+  if (body.trim() === '') return '';
+  const longest = Math.max(
+    0,
+    ...(body.match(/\x60+/gu) ?? []).map((run) => run.length),
+  );
+  const fence = '`'.repeat(longest + 1);
+  const pad = body.startsWith('`') || body.endsWith('`') ? ' ' : '';
+  return `${fence}${pad}${body}${pad}${fence}`;
+}
+
+/** Core rule, before `inline`: each `<code>` element in an inline's source
+ *  becomes a code span, so its body (`[label](target)`, `a\_b`) prints as
+ *  written instead of being parsed as markdown. */
+function codeElementsToSpans(state: StateCore): void {
+  for (const token of state.tokens) {
+    if (token.type !== 'inline' || !/<code/iu.test(token.content)) continue;
+    token.content = token.content.replaceAll(
+      CODE_ELEMENT_RE,
+      (match, _fence: string | undefined, body: string | undefined) =>
+        body === undefined ? match : codeSpan(body),
+    );
+  }
+}
+
+interface HtmlTag {
+  readonly name: string;
+  readonly closing: boolean;
+}
+
+function knownHtmlTag(token: Token): HtmlTag | undefined {
+  if (token.type !== 'html_inline') return undefined;
+  const match = KNOWN_HTML_TAG_RE.exec(token.content);
+  if (!match || !VALUED_ATTRIBUTES_RE.test(token.content)) return undefined;
+  const tag = { name: match[2].toLowerCase(), closing: match[1] === '/' };
+  return tag.name === 'br' && tag.closing ? undefined : tag;
+}
+
+const isBreakTag = (tag: HtmlTag): boolean =>
+  tag.name === 'br' || tag.name === 'p' || tag.name === 'div';
+
+const isBlockContainer = (tag: HtmlTag): boolean =>
+  tag.name === 'blockquote' || tag.name.startsWith('h');
+
+/** `<strong>`, `<em>` and their synonyms style a run only between a matched
+ *  pair in one inline; the result maps each paired index to its partner's.
+ *  Breaks (`<br>`, `<p>`, `<div>`) need no partner, and `<blockquote>` and
+ *  `<h1>`–`<h6>` pair across paragraphs (`pairBlockContainers`). */
+function pairHtmlTags(
+  tags: readonly (HtmlTag | undefined)[],
+): Map<number, number> {
+  const partner = new Map<number, number>();
+  const open: number[] = [];
+  for (const [index, tag] of tags.entries()) {
+    if (tag === undefined || isBreakTag(tag) || isBlockContainer(tag)) continue;
+    if (!tag.closing) {
+      open.push(index);
+      continue;
+    }
+    const at = open.findLastIndex((i) => tags[i]?.name === tag.name);
+    if (at < 0) continue;
+    partner.set(open[at], index).set(index, open[at]);
+    // Openers inside the closed pair stay unmatched, so pairs always nest.
+    open.length = at;
+  }
+  return partner;
+}
+
+const HTML_INLINE_STYLE: Readonly<
+  Record<string, { readonly type: string; readonly markup: string }>
+> = Object.freeze({
+  strong: { type: 'strong', markup: '**' },
+  b: { type: 'strong', markup: '**' },
+  em: { type: 'em', markup: '_' },
+  i: { type: 'em', markup: '_' },
+});
+
+/** The `<blockquote>` and `<h1>`–`<h6>` tags that pair up across the
+ *  document's paragraphs, an opener with the next closer of its name at the
+ *  same block level, so a quote or heading whose body holds blank lines still
+ *  covers every paragraph in it. */
+function pairBlockContainers(tokens: readonly Token[]): Set<Token> {
+  const paired = new Set<Token>();
+  const open: {
+    readonly token: Token;
+    readonly name: string;
+    readonly level: number;
+  }[] = [];
+  for (const [index, token] of tokens.entries()) {
+    const before = tokens[index - 1];
+    if (token.type !== 'inline' || before?.type !== 'paragraph_open') continue;
+    for (const child of token.children ?? []) {
+      const tag = knownHtmlTag(child);
+      if (tag === undefined || !isBlockContainer(tag)) continue;
+      if (!tag.closing) {
+        open.push({ token: child, name: tag.name, level: before.level });
+        continue;
+      }
+      const at = open.findLastIndex(
+        (entry) => entry.name === tag.name && entry.level === before.level,
+      );
+      if (at < 0) continue;
+      paired.add(open[at].token).add(child);
+      open.length = at;
+    }
+  }
+  return paired;
+}
+
+/** An inline's children with each known tag replaced by the markdown token
+ *  it means. Block tags (`<p>`, `<div>`, a paired `<blockquote>` or `<h1>`)
+ *  come back as the tag itself when `blocks` is set, for the caller to split
+ *  the paragraph at; elsewhere (a table cell, a heading) they stay text. */
+function convertHtmlTags(
+  state: StateCore,
+  children: readonly Token[],
+  blocks: boolean,
+  containers: ReadonlySet<Token>,
+): (Token | HtmlTag)[] {
+  const tags = children.map(knownHtmlTag);
+  const partner = pairHtmlTags(tags);
+  const out: (Token | HtmlTag)[] = [];
+  for (const [index, child] of children.entries()) {
+    const tag = tags[index];
+    const close = partner.get(index);
+    if (tag === undefined) {
+      out.push(child);
+    } else if (tag.name === 'br') {
+      out.push(new state.Token('hardbreak', 'br', 0));
+    } else if (isBreakTag(tag) || containers.has(child)) {
+      out.push(blocks ? tag : child);
+    } else if (close === undefined) {
+      out.push(child);
+    } else {
+      const style = HTML_INLINE_STYLE[tag.name];
+      const token = new state.Token(
+        `${style.type}_${tag.closing ? 'close' : 'open'}`,
+        style.type,
+        tag.closing ? -1 : 1,
+      );
+      token.markup = style.markup;
+      out.push(token);
+    }
+  }
+  return out;
+}
+
+const isBlankInline = (token: Token): boolean =>
+  token.type === 'softbreak' ||
+  (token.type === 'text' && token.content.trim() === '');
+
+/** A paragraph split at its block tags into the paragraph, heading and
+ *  blockquote tokens markdown would have parsed, starting inside `heading`
+ *  when an earlier paragraph opened one; the heading still open at its end
+ *  comes back with the blocks. Line breaks and spaces at the edges of each
+ *  piece go, and an empty piece makes no block. */
+function splitParagraphAtHtml(
+  state: StateCore,
+  items: readonly (Token | HtmlTag)[],
+  hidden: boolean,
+  openHeading: string | undefined,
+): { readonly blocks: Token[]; readonly heading: string | undefined } {
+  const out: Token[] = [];
+  let piece: Token[] = [];
+  let heading = openHeading;
+  const flush = (): void => {
+    const start = piece.findIndex((token) => !isBlankInline(token));
+    const end = piece.findLastIndex((token) => !isBlankInline(token));
+    const children = piece.slice(start, end + 1);
+    piece = [];
+    if (start < 0) return;
+    const first = children[0];
+    const last = children[children.length - 1];
+    if (first.type === 'text') first.content = first.content.trimStart();
+    if (last.type === 'text') last.content = last.content.trimEnd();
+    const kind = heading === undefined ? 'paragraph' : 'heading';
+    const tag = heading ?? 'p';
+    const open = new state.Token(`${kind}_open`, tag, 1);
+    const inline = new state.Token('inline', '', 0);
+    const close = new state.Token(`${kind}_close`, tag, -1);
+    open.hidden = hidden && heading === undefined;
+    close.hidden = open.hidden;
+    inline.children = children;
+    out.push(open, inline, close);
+  };
+  for (const item of items) {
+    if (item instanceof state.Token) {
+      piece.push(item);
+      continue;
+    }
+    flush();
+    if (item.name === 'blockquote') {
+      const type = item.closing ? 'blockquote_close' : 'blockquote_open';
+      out.push(new state.Token(type, 'blockquote', item.closing ? -1 : 1));
+    } else if (item.name.startsWith('h')) {
+      heading = item.closing ? undefined : item.name;
+    }
+  }
+  flush();
+  return { blocks: out, heading };
+}
+
+/** Core rule: each known HTML tag becomes the markdown token it means, so the
+ *  ANSI rules render `<strong>` as they render `**`. `html_block` is off, so
+ *  a tag on a line of its own arrives inside its paragraph too. */
+function applyHtmlTags(state: StateCore): void {
+  const out: Token[] = [];
+  const { tokens } = state;
+  const containers = pairBlockContainers(tokens);
+  // The heading a paired `<h2>` opened in an earlier paragraph, which every
+  // paragraph up to its `</h2>` belongs to.
+  let heading: string | undefined;
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    const children = token.children ?? [];
+    const before = tokens[index - 1];
+    const paragraph =
+      token.type === 'inline' && before?.type === 'paragraph_open'
+        ? before
+        : undefined;
+    const hasHtml = children.some((child) => child.type === 'html_inline');
+    if (!hasHtml && (paragraph === undefined || heading === undefined)) {
+      out.push(token);
+      continue;
+    }
+    const items = hasHtml
+      ? convertHtmlTags(state, children, paragraph !== undefined, containers)
+      : children;
+    const inline = items.filter((item) => item instanceof state.Token);
+    if (
+      paragraph === undefined ||
+      (heading === undefined && inline.length === items.length)
+    ) {
+      token.children = inline;
+      out.push(token);
+      continue;
+    }
+    // The paragraph's open and close tokens give way to the split's blocks.
+    const split = splitParagraphAtHtml(state, items, paragraph.hidden, heading);
+    out.pop();
+    out.push(...split.blocks);
+    heading = split.heading;
+    index += 1;
+  }
+  state.tokens = out;
+}
+
 function configureAnsi(
   md: MarkdownItInstance,
   width: number,
   style: AnsiMarkdownStyle,
 ): void {
+  md.set({ html: true });
+  md.block.ruler.disable('html_block');
+  md.core.ruler.before('inline', 'terminal_code_html', codeElementsToSpans);
+  md.core.ruler.push('terminal_html', applyHtmlTags);
   const r = md.renderer.rules;
   let quoteDepth = 0;
   let headingDepth = 0;
@@ -389,6 +669,8 @@ function configureAnsi(
     if (linkHref !== undefined) linkText += content;
     return styleHeadingText(content);
   };
+  // A tag `applyHtmlTags` did not convert prints as the text it is.
+  r.html_inline = r.text;
   r.image = (tokens, idx) =>
     style.dim(`[image: ${tokens[idx]?.content ?? ''}]`);
 
@@ -532,8 +814,7 @@ interface RenderAnsiMarkdownOptions {
 /**
  * Render markdown to an ANSI-coloured string suitable for an Ink `<Text>`.
  * Uses a per-host LRU cache so streaming deltas don't re-render the entire
- * message body each frame. Transcript text arrives already HTML-normalized
- * (`transcriptRowHeadline`); this renderer does not normalize again.
+ * message body each frame.
  */
 export function renderAnsiMarkdown(
   content: string,

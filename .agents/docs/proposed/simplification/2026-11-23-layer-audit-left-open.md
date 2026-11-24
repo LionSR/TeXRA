@@ -47,6 +47,12 @@ and the settings view print the percent used
 "70% left" and "30%". The owner is that copy module: the limiting-window
 pick and one wording. Decision needed: used or left.
 
+Taken on 2026-11-24: percent used, everywhere. The status bar picks the
+most used window itself, and `subscriptionQuotaUsed` words it ("30% used") for the
+status bar, `/login status` and the settings meters; it takes the window, so
+no caller can pass `percentRemaining` through clamps written for the percent
+used, and `subscriptionQuotaTone` reads the same number.
+
 ## 2. The harness names one plan in the model listing
 
 `listedModels` (`packages/harness/src/model/computeModelOptions.ts`) lists
@@ -83,17 +89,27 @@ session-carried, or the service forwards it and the TUI follows it.
   at <path>" in the warning tone in the terminal
   (`packages/cli/src/chat/tui/panes/DocumentTaskRunDetails.tsx`).
   `ROUND_ALERT` (`packages/texra/src/ui/copy/documentOutputs.ts`) has no
-  entry for it. Decision needed: its tone.
+  entry for it. Decision needed: its tone. Taken on 2026-11-24:
+  `ROUND_ALERT.replyKept` ("Reply kept at", warning, since a kept reply
+  means the round produced no document or missed one); the web shows the
+  path as the link that opens it, the terminal prints the path.
 - The TUI's key-save tip names Kimi K3 by hand
   (`packages/cli/src/chat/tui/commands/handlers/modelAccessCommands.ts`);
-  it belongs with item 2 of the 2026-11-21 layer note.
+  it belongs with item 2 of the 2026-11-21 layer note. Taken on
+  2026-11-24: the tip names the switch by its row's title and says what it
+  routes with the row's description (which states K3), so no model is
+  named by hand; both plans' tips point at `/login` or `/config`. Item 2 of
+  the 2026-11-21 note (which setting switches each plan on) stays open.
 - The loopback sign-in error names port 1455
   (`packages/texra/src/controllers/modelAccess/subscriptionProviders.ts`),
   which is llm's `CHATGPT_CALLBACK_PORTS`; it is wrong when that port was
   taken and the fallback port is used.
 - The settings view words the helper-model control itself
   (`packages/texra/src/ui/settings/components/profile/ModelSelectionList.ts`)
-  beside the row's title and description.
+  beside the row's title and description. Taken on 2026-11-24: the control
+  reads `HELPER_MODEL_SETTING`'s title and description; the description
+  drops "Leave empty to use the task's own model", which is false in any
+  app whose catalog names a default (an empty setting reads the default).
 - The harness still spells the product in two temp-file prefixes
   (`packages/harness/src/agent/runtime/run/img.ts`), the shell wrapper's
   variable names (`packages/harness/src/utils/system/execUtils.ts`) and one

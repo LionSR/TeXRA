@@ -17,6 +17,7 @@ import {
   settingWriteFailure,
 } from '@texra/controllers/settingsView/stateSettingWrite';
 import { enabledLabel } from '@ui/copy/format';
+import { skillSourceToggleLabel } from '@ui/copy/skills';
 
 import { AsyncListForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';
@@ -62,7 +63,7 @@ export function SkillsSettingsForm(
       items={(data) => [
         ...ActiveSkillSourceScopeSchema.literals.map((scope) => ({
           value: { kind: 'source' as const, scope },
-          label: `Source: ${scope === 'interop' ? 'imported' : scope}`,
+          label: skillSourceToggleLabel(scope),
           description: enabledLabel(!data.disabledScopes.includes(scope)),
         })),
         ...data.skills.map((skill) => ({

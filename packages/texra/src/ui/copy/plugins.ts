@@ -54,11 +54,13 @@ export const PLUGINS_PAGE = Object.freeze({
   addPrompt:
     'Add a Claude Code or Codex plugin: github.com/<owner>/<repo>[@ref], a git URL, or a folder',
   addPlaceholder: 'github.com/owner/repo',
-  added: (names: readonly string[]) =>
-    `Installed ${names.join(', ')}. Switch ${names.length === 1 ? 'it' : 'them'} on to review and trust.`,
+  /** What an install reports; `where`: the place to switch it on, for a
+   *  host that is not already showing the list ('/plugins'). */
+  added: (names: readonly string[], where?: string) =>
+    `Installed ${names.join(', ')}. Switch ${names.length === 1 ? 'it' : 'them'} on${where === undefined ? '' : ` in ${where}`} to review and trust.`,
   trustQuestion: (name: string, version: string | null) =>
-    `Trust ${name}${version ? ` ${version}` : ''} and enable it?`,
-  trustAction: 'Trust and enable',
+    `Trust ${name}${version ? ` ${version}` : ''} and switch it on?`,
+  trustAction: 'Trust and switch on',
   declined: (name: string) => `${name} was not trusted, so it stays off.`,
 });
 

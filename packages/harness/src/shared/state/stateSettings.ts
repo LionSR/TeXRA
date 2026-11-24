@@ -466,8 +466,7 @@ export const HELPER_MODEL_SETTING = {
   slot: 'globalState',
   schema: Schema.UndefinedOr(Schema.NonEmptyString),
   title: 'Helper model',
-  description:
-    "Model for quick helper steps like task titles and small fixes. Leave empty to use the task's own model.",
+  description: 'Model for quick helper steps like task titles and small fixes.',
 } as const satisfies SettingRow<string | undefined>;
 
 export const KIMI_CODE_PREFER_SETTING = {

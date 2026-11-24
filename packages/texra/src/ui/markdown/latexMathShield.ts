@@ -1,30 +1,27 @@
-// LaTeX math shields: the bounded inline-dollar scanner, the combined
-// environment + span shield, and the exported shield the HTML normalizer runs
-// between its structural passes.
+// LaTeX math shields: the bounded inline-dollar scanner and the combined
+// environment + span shield.
 
 import {
   applyEnvironmentShields,
-  createBegEndEnvironmentProbe,
-  createProbeMarkdownIt,
   findDisplayMathRanges,
   type BegEndEnvironmentProbe,
 } from './begEndEnvironmentProbe';
 import {
-  MATH_SPAN_PATTERNS,
+  DISPLAY_MATH_SPAN_PATTERNS,
   protectPatternsInto,
   holdPlaceholder,
   placeholderRestorer,
   selectPlaceholderTag,
 } from './latexPlaceholders';
-import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
-
-type InlineDollarProtector = (
-  content: string,
-  tag: string,
-  items: string[],
-) => string;
 
 const REGEX_SPACE_RE = /\s/u;
+// What ends a candidate `$…$` span for the terminal, which parses HTML: a
+// tag of an element the terminal reads (math has no `<strong>`), so
+// `$5 for <strong>$x$</strong>` keeps the currency outside the formula and
+// `<code>` text stays literal. A one-letter element counts only when it
+// closes: `$0<p>1$` is an inequality.
+const NOT_MATH_TAG_RE =
+  /<\/?(?:strong|em|code|div|blockquote|h[1-6])[\s/>]|<\/[bip]\s*>/giu;
 
 function isAsciiDigitCode(code: number): boolean {
   return code >= 0x30 && code <= 0x39;
@@ -39,7 +36,7 @@ function isLineTerminatorCode(code: number): boolean {
 // rest of the line for every currency token. Precompute the next valid closer
 // per offset (a `$` preceded by a non-space, non-backslash character), then
 // scan openers once.
-export function protectRenderInlineDollarSpans(
+function protectRenderInlineDollarSpans(
   content: string,
   tag: string,
   items: string[],
@@ -61,6 +58,15 @@ export function protectRenderInlineDollarSpans(
       }
     }
     nextValidDollar[index] = next;
+  }
+  // End offset of the first not-math tag starting at or after each offset,
+  // so rejecting a candidate stays constant-time.
+  const nextTagEnd = new Int32Array(content.length).fill(-1);
+  for (const match of content.matchAll(NOT_MATH_TAG_RE)) {
+    nextTagEnd[match.index] = match.index + match[0].length;
+  }
+  for (let index = content.length - 2; index >= 0; index--) {
+    if (nextTagEnd[index] === -1) nextTagEnd[index] = nextTagEnd[index + 1];
   }
 
   const pieces: string[] = [];
@@ -106,6 +112,11 @@ export function protectRenderInlineDollarSpans(
       index++;
       continue;
     }
+    // `<code>$HOME</code> or <code>$PATH</code>` holds two shell variables.
+    if (nextTagEnd[index] !== -1 && nextTagEnd[index] <= closer) {
+      index++;
+      continue;
+    }
 
     pieces.push(content.slice(copiedUntil, index));
     pieces.push(holdPlaceholder(items, tag, content.slice(index, closer + 1)));
@@ -122,8 +133,6 @@ export function protectRenderInlineDollarSpans(
 export function protectLatexMathSpansWithEnvironment(
   content: string,
   environmentProbe: BegEndEnvironmentProbe,
-  patterns: readonly RegExp[],
-  protectInlineDollars?: InlineDollarProtector,
 ): {
   content: string;
   restore: (value: string) => string;
@@ -147,41 +156,17 @@ export function protectLatexMathSpansWithEnvironment(
   );
   const patternProtected = protectPatternsInto(
     envProtected,
-    patterns,
+    DISPLAY_MATH_SPAN_PATTERNS,
     selectedTag,
     items,
     true,
   );
-  const final = protectInlineDollars
-    ? protectInlineDollars(patternProtected, selectedTag, items)
-    : patternProtected;
-  return { content: final, restore: placeholderRestorer(selectedTag, items) };
-}
-
-let normalizeEnvironmentProbe: BegEndEnvironmentProbe | undefined;
-
-/**
- * `htmlMarkdownNormalize`'s math shield: the lax inline `$…$` set plus the
- * container/fence-aware environment probe. The normalize pass runs before the
- * renderer, so it needs the same list-continuation/blockquote awareness or a
- * `<br>` inside `10. Formula:\n    \begin{align}` would be mutated before the
- * render shield can protect it.
- *
- * CRLF / bare CR are normalized here defensively, and the caller normalizes
- * too: the probe and `applyEnvironmentShields` must always slice the same LF
- * string markdown-it's block parser sees.
- */
-export function protectLatexMathSpansForNormalize(content: string): {
-  content: string;
-  restore: (value: string) => string;
-} {
-  const source = normalizeLineEndings(content);
-  normalizeEnvironmentProbe ??= createBegEndEnvironmentProbe(
-    createProbeMarkdownIt(),
-  );
-  return protectLatexMathSpansWithEnvironment(
-    source,
-    normalizeEnvironmentProbe,
-    MATH_SPAN_PATTERNS,
-  );
+  return {
+    content: protectRenderInlineDollarSpans(
+      patternProtected,
+      selectedTag,
+      items,
+    ),
+    restore: placeholderRestorer(selectedTag, items),
+  };
 }

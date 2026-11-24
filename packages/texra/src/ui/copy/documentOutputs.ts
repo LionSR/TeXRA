@@ -12,7 +12,8 @@ export const GENERATED_FILES_LABEL = 'Generated files';
 
 /** A round's alerts: what each says and the tone it paints with. A failed
  *  compile check is an error to fix; a round that wrote nothing, or not
- *  everything it was asked for, is a caution. */
+ *  everything it was asked for, is a caution, and so is the reply kept for
+ *  checking it. */
 export const ROUND_ALERT = Object.freeze({
   noDocuments: Object.freeze({
     text: 'Wrote no documents',
@@ -20,6 +21,9 @@ export const ROUND_ALERT = Object.freeze({
   }),
   /** The words before the missing output's name. */
   missingOutput: Object.freeze({ text: 'Missing output', tone: 'warning' }),
+  /** The words before the kept reply's path, which each host shows its own
+   *  way (a link to open it, or the path to copy). */
+  replyKept: Object.freeze({ text: 'Reply kept at', tone: 'warning' }),
   compileFailed: Object.freeze({
     text: 'Compile check failed',
     tone: 'danger',

@@ -16,12 +16,8 @@ import {
   type BegEndEnvironmentProbe,
 } from './begEndEnvironmentProbe';
 import { type MarkdownItInstance } from './createMarkdownRenderer';
+import { protectLatexMathSpansWithEnvironment } from './latexMathShield';
 import {
-  protectLatexMathSpansWithEnvironment,
-  protectRenderInlineDollarSpans,
-} from './latexMathShield';
-import {
-  DISPLAY_MATH_SPAN_PATTERNS,
   LATEX_MACRO,
   protectByPatterns,
   holdPlaceholder,
@@ -130,8 +126,6 @@ export function createMarkdownProcessor(
           (environmentProbe ??= createBegEndEnvironmentProbe(
             createProbeMarkdownIt(),
           )),
-          DISPLAY_MATH_SPAN_PATTERNS,
-          protectRenderInlineDollarSpans,
         )
       : { content: refProtected, restore: (value: string) => value };
     const mathProtected = mathProtection.content;
