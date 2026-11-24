@@ -14,7 +14,11 @@ import {
   type SubscriptionSignInPresenter,
   type SubscriptionSignOutResult,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { ACCOUNT_OUTCOME, SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
+import {
+  ACCOUNT_OUTCOME,
+  SIGN_IN_PROMPT,
+  SUBSCRIPTION_AUTH_COPY,
+} from '@ui/copy/accountAuth';
 
 import { presentCliSignInUrl, type CliSignInProgress } from './signInUrl';
 import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
@@ -137,7 +141,10 @@ export function subscriptionSignOutPreferenceMessage(
 ): string {
   const { displayName, modelFamily } = subscriptionProvider(providerId);
   return result.preferenceError === undefined
-    ? `${displayName} subscription disabled for ${modelFamily}.`
+    ? ACCOUNT_OUTCOME.planDisabled(
+        SUBSCRIPTION_AUTH_COPY[providerId].subscriptionLabel,
+        modelFamily,
+      )
     : ACCOUNT_OUTCOME.subscriptionNotDisabled(
         displayName,
         result.preferenceError,

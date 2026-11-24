@@ -124,6 +124,10 @@ export const ACCOUNT_OUTCOME = Object.freeze({
     modelFamily: string,
   ): string =>
     `Signed in with ${providerDisplayName} as ${accountLabel} (${modelFamily} enabled).`,
+  /** A plan's switch turned off (`planName`: the switch's own name, "ChatGPT
+   *  subscription", "Kimi Code subscription"), by a sign-out or by hand. */
+  planDisabled: (planName: string, modelFamily: string): string =>
+    `${planName} disabled for ${modelFamily}.`,
   /** A sign-out that could not turn the subscription off afterwards. */
   subscriptionNotDisabled: (
     providerDisplayName: string,
