@@ -10,7 +10,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { computed } from '@lit-labs/signals';
-import { Cause, Effect } from 'effect';
+import { Array as Arr, Cause, Effect } from 'effect';
 
 import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { transcriptText } from '@texra-ai/worldline/transcript';
@@ -195,7 +195,7 @@ export function conversationRows(
     rows: out,
     finalRows:
       finalRows +
-      runNotices.filter((notice) => notice.row.seqNo <= finalSeq).length,
+      Arr.countBy(runNotices, (notice) => notice.row.seqNo <= finalSeq),
   };
 }
 

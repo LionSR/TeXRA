@@ -53,16 +53,14 @@ export const makeDesktopPrompts = Effect.fnUntraced(function* (
       ),
     },
     request: ({ title, prompt, password }) =>
-      FiberSet.run(
-        asking,
-        client.prompt({ title, prompt, password: password ?? false }),
-      ).pipe(
-        // An asker that gives up takes its call with it.
-        Effect.flatMap((call) =>
-          Fiber.join(call).pipe(
-            Effect.onInterrupt(() => Fiber.interrupt(call)),
-          ),
+      Effect.acquireUseRelease(
+        FiberSet.run(
+          asking,
+          client.prompt({ title, prompt, password: password ?? false }),
         ),
+        Fiber.join,
+        Fiber.interrupt,
+      ).pipe(
         Effect.map((value) => value ?? undefined),
         // Ended by a reset or the window's close (or a renderer that could
         // not answer): no answer.

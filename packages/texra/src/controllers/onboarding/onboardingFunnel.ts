@@ -21,7 +21,7 @@
  * snapshot (`hostSnapshotSource.ts`) holds its inputs and follows them.
  */
 
-import { Effect, Schema, type Scope, Stream } from 'effect';
+import { Effect, Option, Schema, type Scope, Stream } from 'effect';
 import {
   decodingDefault,
   type SessionView,
@@ -112,8 +112,8 @@ export const recordFirstCompletedRun = Effect.fn('recordFirstCompletedRun')(
     );
     yield* session.view.changes.pipe(
       Stream.filter(hasCompletedRun),
-      Stream.take(1),
-      Stream.runForEach(() => record),
+      Stream.runHead,
+      Effect.flatMap((first) => (Option.isSome(first) ? record : Effect.void)),
       Effect.forkScoped,
     );
   },

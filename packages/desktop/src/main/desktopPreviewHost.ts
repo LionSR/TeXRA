@@ -94,17 +94,18 @@ export function createDesktopPreviewHost(
   ): Effect.fn.Return<void, HostFailed, FileSystem.FileSystem> {
     yield* ensurePathExists('openPath', filePath);
 
+    const openFailed = (message: string) =>
+      new HostFailed({
+        member: 'openPath',
+        message: `Failed to open file ${filePath}: ${message}`,
+        cause: undefined,
+      });
     const shellError = yield* Effect.tryPromise({
       try: () => options.shell.openPath(filePath),
-      catch: toErrorMessage,
-    }).pipe(Effect.catch((message) => Effect.succeed(message)));
+      catch: (cause) => openFailed(toErrorMessage(cause)),
+    });
 
-    if (shellError) {
-      return yield* fail(
-        'openPath',
-        `Failed to open file ${filePath}: ${shellError}`,
-      );
-    }
+    if (shellError) return yield* openFailed(shellError);
   });
 
   const openExternal = (url: string): Effect.Effect<void, HostFailed> =>

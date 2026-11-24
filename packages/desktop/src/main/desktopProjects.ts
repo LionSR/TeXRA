@@ -148,11 +148,14 @@ const partitionFolders = Effect.fn('desktopProjects.partitionFolders')(
     const unique = [...new Set(candidates.map(canonicalizeWorkspaceRoot))];
     const stats = yield* Effect.forEach(
       unique,
-      (root) => fs.stat(root).pipe(Effect.result),
+      (root) =>
+        fs.stat(root).pipe(
+          Effect.result,
+          Effect.map((stat) => ({ root, stat })),
+        ),
       { concurrency: 8 },
     );
-    for (const [index, root] of unique.entries()) {
-      const stat = stats[index];
+    for (const { root, stat } of stats) {
       if (Result.isSuccess(stat)) {
         if (stat.success.type === 'Directory') {
           roots.push(root);

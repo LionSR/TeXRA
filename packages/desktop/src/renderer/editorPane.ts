@@ -18,6 +18,7 @@
 import '@awesome.me/webawesome/dist/components/tree/tree.js';
 import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import {
+  Cause,
   Duration,
   Effect,
   Exit,
@@ -208,7 +209,7 @@ export function createEditorPane(
   // Everything the pane runs lives in its scope: disposing the pane
   // interrupts whatever is still in flight.
   const scope = Scope.makeUnsafe();
-  const { tree, opening, listing, directoryLoads, fork, ensureEditor } =
+  const { tree, opening, listing, directoryLoads, runInPane, ensureEditor } =
     runtime.runSync(
       Effect.gen(function* () {
         const tree = yield* SubscriptionRef.make(FRESH_TREE);
@@ -223,37 +224,39 @@ export function createEditorPane(
         );
         // Monaco and the pane's editor, made once; a load that failed is
         // tried again by the next open.
-        const [editorOnce, forgetEditor] =
-          yield* Effect.cachedInvalidateWithTTL(
-            Effect.tryPromise({
-              try: () => loadMonaco(),
-              catch: (cause) =>
-                new EditorPaneError({
-                  message: ensureError(cause).message,
-                  cause,
-                }),
-            }).pipe(
-              Effect.map((loadedMonaco) => {
-                monaco = loadedMonaco;
-                editor = loadedMonaco.editor.create(editorHost, {
-                  ...monacoPresentationOptions(document.body),
-                  theme: applyMonacoTheme(loadedMonaco, theme, document.body),
-                  // Monaco measures its own container, and the pane is resized by
-                  // splits and divider drags, not only by the window.
-                  automaticLayout: true,
-                  // Papers and proofs have paragraph-length lines, so wrapping
-                  // beats a horizontal scrollbar — but wrap on word boundaries,
-                  // not anywhere.
-                  wordWrap: 'bounded',
-                  wordWrapColumn: 120,
-                  wrappingStrategy: 'simple',
-                  folding: true,
-                });
-                return { monaco: loadedMonaco, editor };
+        const ensureEditor = yield* Effect.cachedWithTTL(
+          Effect.tryPromise({
+            try: () => loadMonaco(),
+            catch: (cause) =>
+              new EditorPaneError({
+                message: ensureError(cause).message,
+                cause,
               }),
-            ),
-            Duration.infinity,
-          );
+          }).pipe(
+            Effect.map((loadedMonaco) => {
+              monaco = loadedMonaco;
+              editor = loadedMonaco.editor.create(editorHost, {
+                ...monacoPresentationOptions(document.body),
+                theme: applyMonacoTheme(loadedMonaco, theme, document.body),
+                // Monaco measures its own container, and the pane is resized by
+                // splits and divider drags, not only by the window.
+                automaticLayout: true,
+                // Papers and proofs have paragraph-length lines, so wrapping
+                // beats a horizontal scrollbar — but wrap on word boundaries,
+                // not anywhere.
+                wordWrap: 'bounded',
+                wordWrapColumn: 120,
+                wrappingStrategy: 'simple',
+                folding: true,
+              });
+              return { monaco: loadedMonaco, editor };
+            }),
+          ),
+          (exit) =>
+            Exit.isFailure(exit) && Cause.hasFails(exit.cause)
+              ? Duration.zero
+              : Duration.infinity,
+        );
         return {
           tree,
           /** The open that chooses which file is visible: a newer open
@@ -264,8 +267,8 @@ export function createEditorPane(
           /** The folders being listed; a refresh interrupts them all. */
           directoryLoads: yield* FiberSet.make<void>(),
           /** Starts a fiber of the pane's scope. */
-          fork: yield* FiberSet.makeRuntime<never, void, never>(),
-          ensureEditor: editorOnce.pipe(Effect.tapError(() => forgetEditor)),
+          runInPane: yield* FiberSet.makeRuntimePromise<never, void, never>(),
+          ensureEditor,
         };
       }).pipe(Scope.provide(scope)),
     );
@@ -274,9 +277,7 @@ export function createEditorPane(
   const run = (program: Effect.Effect<void>): Promise<void> =>
     disposed
       ? Promise.resolve()
-      : new Promise((resolve) => {
-          fork(logDefect(program)).addObserver(() => resolve());
-        });
+      : runInPane(logDefect(program)).catch(() => undefined);
   const files = new Map<string, FileState>();
   /** Change the tree's state from outside an Effect. */
   const setTree = (change: (state: TreeState) => TreeState): void =>
