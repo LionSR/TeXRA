@@ -38,20 +38,3 @@ export class AppState extends Context.Service<AppState, AppStateStore>()(
     });
   }
 }
-
-// ---------------------------------------------------------------------------
-// Host resources
-// ---------------------------------------------------------------------------
-
-/**
- * What the host ships beside its code, as an Effect service the composition
- * root provides once through `processLayer`.
- */
-export class HostResources extends Context.Service<
-  HostResources,
-  {
-    /** The packaged resources root (templates, bundled plugin files).
-     *  Absent where none ships: an embedder with no resources. */
-    readonly resourcesRoot?: string;
-  }
->()('@texra-ai/worldline/platform/HostResources') {}

@@ -36,7 +36,7 @@ import { mcpConfigPathOf } from '@common/plugins/mcpServers';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { AppSignals } from '@platform/appSignals';
-import { HostResources, AppState } from '@platform/interfaces';
+import type { AppState } from '@platform/interfaces';
 import { globalStorageFsLayer, SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
@@ -285,8 +285,6 @@ export interface ProcessServicesOptions {
     never,
     AppSignals
   >;
-  /** What the host ships beside its code (its resources root). */
-  readonly hostResources: Layer.Layer<HostResources>;
   /** The global application-state layer, acquired in this runtime's scope
    *  (`processLayer` picks the host's and seeds it). */
   readonly appState: Layer.Layer<AppState, DatabaseOpenFailed, GlobalDatabase>;
@@ -333,7 +331,6 @@ export function ownerProcessLayer(
     settings,
     secrets,
     appState,
-    hostResources,
     toolAvailability = toolAvailabilityLayer,
     usageLog = UsageLog.disabled,
     minimumLogLevel,
@@ -355,7 +352,6 @@ export function ownerProcessLayer(
   const globalDatabase = globalDatabaseLayer(globalStorage).pipe(Layer.orDie);
   const services = Layer.mergeAll(
     secrets,
-    hostResources,
     catalog,
     // One retry gate per process: a 429 cools a credential for every project.
     Layer.sync(RouteRetries, makeRetryGate),

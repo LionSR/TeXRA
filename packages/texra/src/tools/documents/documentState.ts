@@ -22,7 +22,6 @@ import {
   ToolError,
   sourceLocationUnder,
   pathToLocationIn,
-  HostResources,
 } from '@texra-ai/worldline/plugins';
 import {
   toErrorMessage,
@@ -31,6 +30,7 @@ import {
   type FileLocation,
 } from '@texra-ai/worldline/schemas';
 import { processInputFiles, type InputMediaOptions } from '@latex/latexMedia';
+import { ResourcesRoot } from '@texra/hosts/resourcesRoot';
 import { getTeXCountStats } from '@latex/texcount';
 import {
   DOCUMENT_OUTPUT_BASENAME,
@@ -190,12 +190,10 @@ export interface RevisionRequest extends InputMediaOptions {
 
 /** Where the plugin's template files ship, under the host's packaged
  *  resources; undefined for a host that ships none. */
-export const templateDirectory = Effect.map(
-  HostResources,
-  ({ resourcesRoot }) =>
-    resourcesRoot === undefined
-      ? undefined
-      : join(resourcesRoot, 'plugins', 'theory', 'templates'),
+export const templateDirectory = Effect.map(ResourcesRoot, (resourcesRoot) =>
+  resourcesRoot === undefined
+    ? undefined
+    : join(resourcesRoot, 'plugins', 'theory', 'templates'),
 );
 
 /** The task's template files, read: each is a document of the prompt, under

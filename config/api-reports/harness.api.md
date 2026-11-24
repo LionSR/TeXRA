@@ -5,7 +5,7 @@ Generated from `packages/harness/src/index.ts` by `npm run docgen`; do not edit.
 Exports: 45
 
 - `AgentEvent` — `type AgentEvent = TraceRow<(typeof TRACE_ROW_TYPES)[number]> | StreamChunkEvent; ≡ AgentEvent`
-- `AgentPlatform` — `interface AgentPlatform { readonly resourcesRoot?: string; readonly roots: WorkspaceRoots; readonly secrets: PlatformSecrets; }`
+- `AgentPlatform` — `interface AgentPlatform { readonly roots: WorkspaceRoots; readonly secrets: PlatformSecrets; }`
 - `AgentRuntimeEmitOptions` — `interface AgentRuntimeEmitOptions { readonly fallbackMessage?: string; }`
 - `ApprovalHandler` — `type ApprovalHandler = (request: PendingRequest) => Effect.Effect<RequestDecision, Error>; ≡ ApprovalHandler`
 - `Composition` — `interface Composition { readonly platform: AgentPlatform; readonly plugins: readonly Plugin[]; readonly client: ClientIdentity; readonly skills?: HostSkillOptions; }`

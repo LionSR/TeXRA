@@ -57,7 +57,6 @@ import {
   StateStores,
   ToolCatalog,
   type StateStore,
-  HostResources,
 } from '@texra-ai/worldline/plugins';
 import {
   attachInteractions,
@@ -184,7 +183,7 @@ const followedPorts = (current: Ref.Ref<HostRecord>) => {
  * platform services (`PlatformServices`): the Node
  * `FileSystem`, `Path` and `ChildProcessSpawner`, `GlobalStorageFs`, the
  * `GlobalDatabase` handle, the `HttpClient`,
- * `Secrets` with its `SubscriptionAccounts`, `AppState`, `HostResources`,
+ * `Secrets` with its `SubscriptionAccounts`, `AppState`,
  * `GlobalValues`, `StateStores`, `UsageLog` and `AppSignals`. The agent runtime adds (`RunServices`)
  * the model routes' `RouteRetries` gate, the plans'
  * `PlanQuotas`, the `ToolRegistry`
@@ -204,7 +203,6 @@ const PROCESS_SERVICES = [
   Secrets,
   SubscriptionAccounts,
   AppState,
-  HostResources,
   GlobalValues,
   StateStores,
   UsageLog,
@@ -264,8 +262,6 @@ const composedProcess = ({
         plugins: [...host.app.plugins(), ...extra],
         secrets: Secrets.layer(ports.secrets, host.app.client),
         appState: AppState.layer(ports.appState),
-        // No packaged resources: a suite that needs them names its own.
-        hostResources: Layer.succeed(HostResources)({}),
         toolAvailability: unprobedToolAvailability,
         // The process reports no usage; the telemetry suite starts its own.
         usageLog: UsageLog.disabled,

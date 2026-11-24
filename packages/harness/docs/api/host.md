@@ -540,7 +540,6 @@ type PlatformServices =
   | Secrets
   | SubscriptionAccounts
   | AppState
-  | HostResources
   | GlobalValues
   | StateStores
   | UsageLog
@@ -816,8 +815,6 @@ interface ProcessServicesOptions {
     never,
     AppSignals
   >;
-  /** What the host ships beside its code (its resources root). */
-  readonly hostResources: Layer.Layer<HostResources>;
   /** The global application-state layer, acquired in this runtime's scope
    *  (`processLayer` picks the host's and seeds it). */
   readonly appState: Layer.Layer<AppState, DatabaseOpenFailed, GlobalDatabase>;
