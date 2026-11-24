@@ -72,6 +72,7 @@ type LspDiagnostic = typeof LspDiagnosticSchema.Type;
 /** `textDocument/publishDiagnostics` as the server sends it. */
 const LspPublishDiagnosticsSchema = Schema.Struct({
   uri: Schema.String,
+  version: Schema.optional(Schema.NullOr(Schema.Int)),
   diagnostics: Schema.Array(LspDiagnosticSchema),
 });
 type LspPublishDiagnosticsParams = typeof LspPublishDiagnosticsSchema.Type;
@@ -258,10 +259,12 @@ const make = ({
         const file = absolute && openFiles.get(absolute);
         if (!file) return;
         const diagnostics = params.diagnostics.map(toLeanDiagnostic);
-        yield* SubscriptionRef.update(file, (state) => ({
-          ...state,
-          diagnostics,
-        }));
+        // A report that omits its version still applies to the open file.
+        yield* SubscriptionRef.updateSome(file, (state) =>
+          params.version == null || state.version === params.version
+            ? Option.some({ ...state, diagnostics })
+            : Option.none(),
+        );
       },
     );
 
@@ -276,11 +279,11 @@ const make = ({
       )
         ? 'processing'
         : 'elaborated';
-      yield* SubscriptionRef.update(file, (state) =>
-        // A report on a version since replaced says nothing about this one.
+      yield* SubscriptionRef.updateSome(file, (state) =>
+        // A report on an old version must not restart the quiet window.
         state.version === params.textDocument.version
-          ? { ...state, progress }
-          : state,
+          ? Option.some({ ...state, progress })
+          : Option.none(),
       );
     });
 

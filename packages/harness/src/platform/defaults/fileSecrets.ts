@@ -12,19 +12,20 @@
  * would. Reads open the file each time, so they always see the current
  * value.
  */
-import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import {
+  Deferred,
   Effect,
-  Fiber,
   FileSystem,
   type PlatformError,
+  Result,
   Schedule,
   Stream,
 } from 'effect';
 
 import { SecretsFailed, type SecretsOperation } from '@texra-ai/llm';
+import { withLogChannel } from '@logger/effectLog';
 import type { PlatformSecrets } from '@platform/secrets';
 import { nodeFileServices } from '@utils/files/fsDurability';
 import {
@@ -41,8 +42,8 @@ import {
 
 const DIRECTORY_MODE = 0o700;
 const FILE_MODE = 0o600;
-/** A staged write's name: `%` never starts an encoded key, so a listing
- *  tells a staged file from a key without parsing it. */
+/** This prefix cannot occur in an encoded key: a percent escape has two
+ *  hexadecimal digits. */
 const STAGED_PREFIX = '%staged-';
 
 /** One lane per key file, so this process's writes of one key keep their
@@ -52,6 +53,30 @@ const keyLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
 /** The file name of `key`: its URI encoding, which names every key. */
 const fileNameOf = (key: string): string =>
   encodeURIComponent(key).replace(/^\./, '%2E');
+
+/** Interpret a directory entry before announcing or listing it as a key. */
+function keyFromFileName(
+  directory: string,
+  name: string,
+): Effect.Effect<Result.Result<string, 'staged' | 'invalid'>> {
+  if (name.startsWith(STAGED_PREFIX))
+    return Effect.succeed(Result.fail('staged'));
+  return Effect.gen(function* () {
+    const decoded = Result.try({
+      try: () => {
+        const key = decodeURIComponent(name);
+        return key !== '' && fileNameOf(key) === name ? key : undefined;
+      },
+      catch: toErrorMessage,
+    });
+    if (Result.isSuccess(decoded) && decoded.success !== undefined)
+      return Result.succeed(decoded.success);
+    yield* Effect.logWarning(
+      `Invalid credential filename ${JSON.stringify(name)} in ${directory}: ${Result.isFailure(decoded) ? decoded.failure : 'expected an encoded key'}.`,
+    );
+    return Result.fail('invalid' as const);
+  });
+}
 
 /** A credential store operation's failure at `directory`. */
 function failure(
@@ -78,19 +103,13 @@ const heldOpenOnWindows = (error: PlatformError.PlatformError): boolean =>
   IS_WINDOWS &&
   (error.reason._tag === 'PermissionDenied' || error.reason._tag === 'Busy');
 
-/** The keys stored under `directory`, staged writes left out. */
-const storedKeys = (
-  directory: string,
-): Effect.Effect<readonly string[], SecretsFailed> =>
+const storedKeys = (directory: string) =>
   FileSystem.FileSystem.use((fs) => fs.readDirectory(directory)).pipe(
-    Effect.map((names) =>
-      names
-        .filter((name) => !name.startsWith(STAGED_PREFIX))
-        .map((name) => decodeURIComponent(name)),
-    ),
     Effect.catchIf(meansAbsent, () => Effect.succeed([])),
     Effect.mapError((cause) => failure(directory, 'listStoredKeys', cause)),
-    Effect.provide(nodeFileServices),
+    Effect.flatMap((names) =>
+      Effect.filterMapEffect(names, (name) => keyFromFileName(directory, name)),
+    ),
   );
 
 /**
@@ -112,7 +131,6 @@ export class FileSecrets implements PlatformSecrets {
     return FileSystem.FileSystem.use((fs) =>
       fs.readFileString(this.fileOf(key)),
     ).pipe(
-      Effect.map((value): string | undefined => value),
       Effect.catchIf(meansAbsent, () => Effect.undefined),
       Effect.mapError((cause) => failure(this.directory, 'get', cause, key)),
       Effect.provide(nodeFileServices),
@@ -130,28 +148,32 @@ export class FileSecrets implements PlatformSecrets {
           recursive: true,
           mode: DIRECTORY_MODE,
         });
-        const staged = path.join(directory, `${STAGED_PREFIX}${randomUUID()}`);
-        // The commit: the staged file becomes the key's in one rename, so a
-        // reader sees the old value or the new one, never a partial file.
-        yield* fs.writeFileString(staged, value, { mode: FILE_MODE }).pipe(
-          Effect.andThen(
-            fs.rename(staged, file).pipe(
-              Effect.retry({
-                schedule: Schedule.exponential('10 millis'),
-                times: 6,
-                while: heldOpenOnWindows,
-              }),
-            ),
-          ),
-          Effect.onError(() =>
-            fs.remove(staged, { force: true }).pipe(
+        yield* Effect.acquireUseRelease(
+          fs.makeTempDirectory({ directory, prefix: STAGED_PREFIX }),
+          (staging) => {
+            const staged = path.join(staging, 'value');
+            // Write on the destination's filesystem, then replace the key's
+            // directory entry in one rename.
+            return fs.writeFileString(staged, value, { mode: FILE_MODE }).pipe(
+              Effect.andThen(
+                fs.rename(staged, file).pipe(
+                  Effect.retry({
+                    schedule: Schedule.exponential('10 millis'),
+                    times: 6,
+                    while: heldOpenOnWindows,
+                  }),
+                ),
+              ),
+              Effect.uninterruptible,
+            );
+          },
+          (staging) =>
+            fs.remove(staging, { recursive: true, force: true }).pipe(
               Effect.ignore({
                 log: 'Warn',
-                message: `A staged credential file stays behind: ${staged}`,
+                message: `A credential staging directory stays behind: ${staging}`,
               }),
             ),
-          ),
-          Effect.uninterruptible,
         );
       }),
     );
@@ -163,16 +185,19 @@ export class FileSecrets implements PlatformSecrets {
     );
   }
 
+  /** A stray filename is warned about and left out of the key listing. */
   listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed> {
-    return storedKeys(this.directory);
+    return storedKeys(this.directory).pipe(
+      Effect.provide(nodeFileServices),
+      withLogChannel('secrets'),
+    );
   }
 
   /**
    * `announce` every key another process writes under `directory`, for as
-   * long as the caller's fiber runs: once for every stored key when the
-   * watch is up (what changed before it began), then per key as its file
-   * changes. A watch that fails is retried with backoff before it is given
-   * up, loudly.
+   * long as the caller's fiber runs. Reconcile existing keys when each
+   * watch is installed, then announce individual file changes. A failed
+   * watch retries with backoff before reporting that it stopped.
    */
   static watch<R>(
     directory: string,
@@ -183,9 +208,10 @@ export class FileSecrets implements PlatformSecrets {
         `Stopped watching ${directory}: keys another process saves apply here after a restart (${reason})`,
       );
     const announceAll = storedKeys(directory).pipe(
-      Effect.flatMap((keys) => Effect.forEach(keys, announce)),
-      Effect.asVoid,
-      Effect.catch((error) => stopped(error.message)),
+      Effect.flatMap((keys) =>
+        Effect.forEach(keys, announce, { discard: true }),
+      ),
+      Effect.catch((error) => Effect.logWarning(error.message)),
     );
     return Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -193,27 +219,39 @@ export class FileSecrets implements PlatformSecrets {
         recursive: true,
         mode: DIRECTORY_MODE,
       });
-      const watcher = yield* fs.watch(directory).pipe(
-        Stream.retry(fileWatchRetrySchedule),
-        Stream.map((event) => path.basename(event.path)),
-        // A staged file's rename is reported under either name: the key's
-        // file says which key, a staged name (macOS) only that one changed.
-        Stream.runForEach((name) =>
-          name.startsWith(STAGED_PREFIX)
-            ? announceAll
-            : announce(decodeURIComponent(name)),
-        ),
-        // fs.watch can also throw synchronously (EMFILE, ENOSPC): a defect.
-        Effect.catchCause((cause) => stopped(toErrorMessage(cause))),
-        // Watching before the first listing, so no write falls between.
-        (watching) => Effect.forkScoped(watching, { startImmediately: true }),
+      // Each subscription (including a retry) lists the keys after the
+      // filesystem has installed its watcher and can buffer events.
+      const changes = Stream.unwrap(
+        Effect.gen(function* () {
+          const ready = yield* Deferred.make<void>();
+          return fs
+            .watch(directory, {
+              onReady: () => {
+                Deferred.doneUnsafe(ready, Effect.void);
+              },
+            })
+            .pipe(
+              Stream.mergeEffect(
+                Deferred.await(ready).pipe(Effect.andThen(announceAll)),
+              ),
+            );
+        }),
       );
-      yield* announceAll;
-      // Held for as long as the watch runs; it ends only once given up.
-      return yield* Fiber.join(watcher);
+      yield* changes.pipe(
+        Stream.retry(fileWatchRetrySchedule),
+        Stream.runForEach((event) =>
+          keyFromFileName(directory, path.basename(event.path)).pipe(
+            Effect.flatMap((entry) => {
+              if (Result.isSuccess(entry)) return announce(entry.success);
+              // The watcher can report just the staging name, with no key.
+              return entry.failure === 'staged' ? announceAll : Effect.void;
+            }),
+          ),
+        ),
+      );
     }).pipe(
-      Effect.scoped,
       Effect.catchCause((cause) => stopped(toErrorMessage(cause))),
+      withLogChannel('secrets'),
     );
   }
 
