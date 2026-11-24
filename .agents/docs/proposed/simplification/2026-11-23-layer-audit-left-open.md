@@ -103,6 +103,49 @@ session-carried, or the service forwards it and the TUI follows it.
   variables `_lifeline_pid` and `_command_status`, and the export
   `harnessToolOfClaudeTool`.
 
+## 5. Modules that sit in a layer their readers are not (2026-11-24)
+
+A sweep of the app outside `ui/` and the hosts' non-UI code for modules
+whose readers are all in another layer, or that reach up a layer.
+**Landed 2026-11-24:**
+
+- The revision layout (`revisionLayout.ts`) left `shared/constants/` for
+  `packages/texra/src/agent/output/`: every reader is Node-side, and
+  `shared/` holds wire contracts and webview-shared types.
+- The CLI's result writer (`emitCliResult`, `writeCliResult`) left
+  `commands/_helpers/` for `packages/cli/src/runtime/platform/output.ts`,
+  so `runtime/doctor.ts` no longer imports a command helper to print.
+- The slash palette's typo distance (`editDistance.ts`) moved beside its
+  one reader, `packages/cli/src/chat/tui/commands/slashRegistry.ts`; its
+  subcommand half went when the command tree moved to effect/cli.
+- `texra run`'s target wording (`runtime/runTarget.ts`) and the settings
+  view's `commandOnly` (`messageFactories.ts`) folded into their one reader.
+
+Still open, each blocked only by the files open PR #15216 holds:
+
+- **The CLI runtime reads the chat TUI's state for a resume command.**
+  `formatResumeCommand` and `oneShotResumeNotice`
+  (`packages/cli/src/chat/tui/state/resumeHint.ts`) are read by the
+  headless runtime (`packages/cli/src/runtime/headless/interruptedResumeHint.ts`)
+  and by `texra resume` (`packages/cli/src/commands/resumeRun.ts`). Both
+  belong in the runtime, beside the context they format; the TUI keeps
+  the exit hint's usage lines. `chatSessionController.ts` imports
+  `oneShotResumeNotice` from the TUI module, so the move waits for #15216.
+- **Each GUI host stages a tool edit's two files its own way.** The
+  desktop makes a directory per request and removes it
+  (`packages/desktop/src/main/desktopToolEditApproval.ts`); the extension
+  writes into one storage directory and removes the two files
+  (`packages/extension/src/frontend/approval/VscodeToolEditApprovalHost.ts`).
+  Both call `writeApprovalTempFiles`
+  (`packages/texra/src/controllers/approval/tempFileManager.ts`), whose
+  header names the split. The controller could stage both the same way and
+  hand the host only the paths; the extension's directory is passed in by
+  `ProgressViewProvider.ts`.
+- **Two desktop "shared" modules only the renderer reads**
+  (`packages/desktop/src/shared/desktopShellState.ts`,
+  `packages/desktop/src/shared/postMessageOrigin.ts`) belong under
+  `packages/desktop/src/renderer/`.
+
 ## Checked and left alone
 
 - **A clone's recovery steps** (2026-11-20 item 2). Both hosts read
