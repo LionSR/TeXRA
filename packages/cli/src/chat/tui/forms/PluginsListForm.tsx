@@ -140,9 +140,7 @@ export function PluginsListForm(
       }
       emptyMessage={PLUGINS_PAGE.empty}
       availableRows={props.availableRows}
-      description={
-        pending ? undefined : <Text dimColor>{PLUGINS_TUI.description}</Text>
-      }
+      description={pending ? undefined : PLUGINS_TUI.description}
       detailFor={(data) => {
         if (reviewLines) return reviewLines;
         if (data.mcpWarnings.length === 0) return undefined;

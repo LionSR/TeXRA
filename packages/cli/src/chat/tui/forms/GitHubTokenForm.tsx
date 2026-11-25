@@ -126,13 +126,7 @@ export function GitHubTokenForm(
       title="GitHub token"
       availableRows={props.availableRows}
       items={buildGitHubTokenActionItems(status)}
-      description={
-        <Text dimColor>
-          {formatGitHubTokenSummary({ ...props.status, data: status })}
-          {'. '}
-          {statusHint(status)}
-        </Text>
-      }
+      description={`${formatGitHubTokenSummary({ ...props.status, data: status })}. ${statusHint(status)}`}
       detail={errorNode}
       detailRows={errorNode ? 1 : 0}
       compactDetail={errorNode}

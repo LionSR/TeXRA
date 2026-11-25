@@ -77,7 +77,7 @@ export function SkillsSettingsForm(
         })),
       ]}
       availableRows={props.availableRows}
-      description={<Text dimColor>Toggle skills for this project.</Text>}
+      description="Toggle skills for this project."
       detailFor={(data) =>
         data.issueCount > 0 ? (
           <Text dimColor>

@@ -3,7 +3,6 @@
 // model among those already enabled and runnable.
 
 import { joinFacts } from '@texra-ai/worldline/schemas';
-import { Text } from 'ink';
 
 import {
   listCliEnabledModelCatalog,
@@ -45,12 +44,7 @@ export function EnabledModelsForm(
         }))
       }
       availableRows={props.availableRows}
-      description={
-        <Text dimColor>
-          Enable models for /model pickers. Does not change API keys or
-          subscriptions.
-        </Text>
-      }
+      description="Enable models for /model pickers. Does not change API keys or subscriptions."
       action="toggle"
       onSelect={(id, { data: models, update }) => {
         const row = models.find((candidate) => candidate.id === id);

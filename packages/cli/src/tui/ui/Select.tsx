@@ -214,6 +214,18 @@ function selectHotkeyForIndex(index: number): string | undefined {
   return undefined;
 }
 
+/**
+ * The shortcut keys a list of `itemCount` rows answers, as a key hint names
+ * them: `1`, `1-4`, or `1-9/a-z` once the letters start. Undefined for an
+ * empty list.
+ */
+export function selectHotkeyRangeLabel(itemCount: number): string | undefined {
+  if (itemCount <= 0) return undefined;
+  if (itemCount === 1) return '1';
+  if (itemCount <= 9) return `1-${itemCount}`;
+  return '1-9/a-z';
+}
+
 /** Inverse of {@link selectHotkeyForIndex}: maps a typed key to a row index. */
 function selectIndexForHotkey(input: string): number | undefined {
   if (input.length !== 1) return undefined;
