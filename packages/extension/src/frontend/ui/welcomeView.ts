@@ -55,7 +55,6 @@ function renderWelcomeHtml(): string {
       line-height: 1.25;
     }
     p { margin: 0 0 12px; }
-    .muted { color: color-mix(in srgb, var(--vscode-foreground) 70%, transparent); }
     ol { margin: 0 0 14px; padding-left: 22px; }
     li { margin-bottom: 6px; }
     .actions {
@@ -63,14 +62,6 @@ function renderWelcomeHtml(): string {
       grid-template-columns: minmax(0, 1fr);
       gap: 8px;
       margin: 8px 0 16px;
-    }
-    .section-label {
-      margin: 14px 0 4px;
-      font-weight: 600;
-      text-transform: uppercase;
-      font-size: 0.85em;
-      letter-spacing: 0.04em;
-      color: color-mix(in srgb, var(--vscode-foreground) 80%, transparent);
     }
     a {
       color: var(--vscode-textLink-foreground);

@@ -41,6 +41,7 @@ import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { WORKBENCH_KIND_META } from '../shared/desktopShellState';
 import { applyMonacoTheme } from './monacoTheme';
 import { monacoPresentationOptions } from './monacoOptions';
 import { installMonacoCommandDescriptions } from './monacoCommandDescriptions';
@@ -484,7 +485,9 @@ export function createEditorPane(
         .selected=${isOpen}
         title=${node.path}
       >
-        <span class="desktop-editor-tree-icon">${waIcon('file-lines')}</span>
+        <span class="desktop-editor-tree-icon"
+          >${waIcon(WORKBENCH_KIND_META.editor.icon)}</span
+        >
         <span class="desktop-editor-tree-label truncate">${node.name}</span>
         ${dirty ? html`<span class="status-dot desktop-editor-dirty-dot"></span>` : nothing}
       </wa-tree-item>

@@ -40,7 +40,7 @@ function renderLoadError(err: unknown): void {
   errorRegion.setAttribute('role', 'alert');
   render(
     renderEmptyState({
-      icon: 'triangle-exclamation',
+      icon: 'circle-exclamation',
       title: 'Unable to load trace',
       body: toErrorMessage(err),
       headingTag: 'h1',
