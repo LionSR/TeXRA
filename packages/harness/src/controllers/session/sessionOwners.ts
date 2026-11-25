@@ -323,15 +323,19 @@ export const sessionOwnersLayer = (
             event.type === 'tool.end' &&
             event.result?.status === 'executed'
           ) {
-            // An edit names its file as the call did: absolute outside the
-            // project, relative to it inside.
+            // An edit names its file as its call resolved it: relative to
+            // the run's working directory when it has one and to the project
+            // otherwise, absolute outside both.
+            const base =
+              view.run(event.aggregateId)?.worktree?.workingDirectory ??
+              roots.workspace;
             const absolutePaths = (event.result.edits ?? []).flatMap(
               ({ path: edited }) =>
                 path.isAbsolute(edited)
                   ? [edited]
-                  : roots.workspace === undefined
+                  : base === undefined
                     ? []
-                    : [path.join(roots.workspace, edited)],
+                    : [path.join(base, edited)],
             );
             if (absolutePaths.length > 0)
               yield* emitAppSignal('workspaceFilesWritten', { absolutePaths });
