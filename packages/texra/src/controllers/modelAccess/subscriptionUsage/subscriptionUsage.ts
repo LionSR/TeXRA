@@ -34,12 +34,11 @@ const snapshotOf = (
   plan: CodingPlanSubscription,
   quota: PlanQuota,
 ): Effect.Effect<SubscriptionUsageSnapshot> => {
-  const providerName = providerDisplayName(plan.apiProvider);
   switch (quota.state) {
     case 'read':
       return Effect.succeed({
         state: 'available',
-        providerName,
+        providerName: providerDisplayName(plan.apiProvider),
         planName: quota.planName ?? plan.displayName,
         windows: [...quota.windows],
         fetchedAt: quota.at,
@@ -47,10 +46,6 @@ const snapshotOf = (
     case 'failed':
       return Effect.succeed({
         state: 'unavailable',
-        providerName,
-        planName: plan.displayName,
-        windows: [],
-        fetchedAt: quota.at,
         reason: quota.reason,
       });
     default:

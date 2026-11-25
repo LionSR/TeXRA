@@ -495,7 +495,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         },
       );
 
-      /** Rebind for a retry on `credentials`, retiring the failed binding,
+      /** Rebind for a retry on its credentials, retiring the failed binding,
        *  on the routes the run declines as its rows now stand plus the one
        *  the retry `declines`; the new binding, or null when another stands.
        *  A failure keeps the old one, loudly. The turn's loop is the
@@ -504,7 +504,7 @@ export const modelInvokerLayer = (): Layer.Layer<
        *  one the loop bound itself, and stands. */
       const rebind = (
         cell: RunCell,
-        { credentials, declines }: RetryCredentials,
+        { personal, declines }: RetryCredentials,
         failed: BoundModel,
       ): Effect.Effect<BoundModel | null, CallFailure> =>
         Effect.flatMap(cell.current, (state) => {
@@ -521,7 +521,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                 modelId: failed.modelId,
                 // A personal-key retry drops the route's overlay (window,
                 // prices, PDF acceptance, Kimi endpoint) for the catalog's.
-                config: credentials === 'personal' ? undefined : failed.config,
+                config: personal ? undefined : failed.config,
                 backend: failed.backend,
                 declinedRoutes,
                 textOnly: failed.textOnly,

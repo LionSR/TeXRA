@@ -192,7 +192,6 @@ export function toolUseTurn(runId: RunId) {
       attempt: 1,
       logId: null,
       disposition: 'executed',
-      duplicateOf: null,
       result: { status: 'executed', output: 'ok' },
       attachments: [],
       ...over,
