@@ -302,7 +302,8 @@ export const attachInteractions = (
   ).pipe(Effect.asVoid);
 
 /**
- * Present a classified failure on a host: the missing-key instruction, or an
+ * Present a classified failure on a host: the missing-key instruction, in
+ * the route's own words (they name the provider), or an
  * error toast with a model failure's verdict beside its message, which a
  * host may word in its place. Replayed to a surface that attaches later, so
  * no guidance is lost for want of an attached host.
@@ -318,7 +319,7 @@ function presentAgentFailure(
   )
     return interactions.emit('requestShowInstruction', {
       key: HARNESS_INSTRUCTION_KEY.MISSING_API_KEY,
-      message: 'API key not found. Set your API key and run again.',
+      message: runEndErrorMessage(error),
     });
   return interactions.emit('requestShowError', {
     message: runEndErrorMessage(error),

@@ -46,14 +46,17 @@ function workspacePathSegments(path: string): string[] {
     .filter((segment) => segment.length > 0 && segment !== '.');
 }
 
+/** File-manager order: `file2` before `file10`, case and accents ignored. */
+const byName = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: 'base',
+});
+
 function compareTreeNodes(left: NamedTreeNode, right: NamedTreeNode): number {
   if (left.kind !== right.kind) {
     return left.kind === 'directory' ? -1 : 1;
   }
-  return left.name.localeCompare(right.name, undefined, {
-    numeric: true,
-    sensitivity: 'base',
-  });
+  return byName.compare(left.name, right.name);
 }
 
 function freezeNodes(

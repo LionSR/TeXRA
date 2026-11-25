@@ -3,8 +3,9 @@
  * (`MODEL_SELECTION_KEY.key`) is owned by the harness —
  * `getEnabledModels` reads it, `setModelEnabled` writes it and enforces the
  * "at least one enabled" and "never enable a retired model" invariants for
- * every host. This module only resolves CLI argument spellings and shapes the
- * rows `texra models enabled` and the `/models` form print.
+ * every host, and `enableableModels` is the catalog every host lists. This
+ * module only resolves CLI argument spellings and shapes the rows
+ * `texra models enabled` and the `/models` form print.
  *
  * The global state store arrives from the caller (the CLI composition root's
  * own `CliPlatformServices`, or the `AppState` service), so the read and the
@@ -12,13 +13,12 @@
  */
 import { Effect } from 'effect';
 
+import { modelRefOf, resolveModelSource } from '@texra-ai/llm';
 import {
-  isUnservedModel,
-  modelConfig,
-  modelRefOf,
-  MODELS,
-} from '@texra-ai/llm';
-import { getEnabledModels, setModelEnabled } from '@texra-ai/worldline/host';
+  enableableModels,
+  getEnabledModels,
+  setModelEnabled,
+} from '@texra-ai/worldline/host';
 import type {
   SettingsStores,
   StateReadFailed,
@@ -38,27 +38,22 @@ export interface CliEnabledModelRow {
 }
 
 /**
- * Full catalog for enable/disable UIs: every CLI-supported model TeXRA can
- * still serve, marked with whether it is currently enabled.
+ * The catalog for enable/disable UIs: every model a person can switch on,
+ * under the provider the Models tab groups it by, marked with whether it is
+ * currently enabled.
  */
 export const listCliEnabledModelCatalog = Effect.fn(
   'listCliEnabledModelCatalog',
 )(function* (stores: Pick<SettingsStores, 'config' | 'globalState'>) {
   const enabled = new Set(yield* getEnabledModels(stores));
-  return MODELS.filter((id) => {
-    const config = modelConfig(id);
-    return config === undefined || !isUnservedModel(config);
-  })
-    .map((id) => {
-      const config = modelConfig(id);
-      return {
-        id,
-        label: getModelLabel(id),
-        provider: config?.provider ?? 'unknown',
-        enabled: enabled.has(id),
-        deprecated: config?.deprecated ?? false,
-      };
-    })
+  return enableableModels()
+    .map((config) => ({
+      id: config.ref,
+      label: getModelLabel(config.ref),
+      provider: resolveModelSource(config),
+      enabled: enabled.has(config.ref),
+      deprecated: config.deprecated ?? false,
+    }))
     .toSorted((a, b) => {
       if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
       return a.label.localeCompare(b.label);

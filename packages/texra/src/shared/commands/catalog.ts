@@ -7,6 +7,9 @@ export interface CommandKeybinding {
   readonly mac?: string;
 }
 
+/** The palette group of TeXRA's commands on every host that has a palette. */
+export const COMMAND_CATEGORY = 'TeXRA';
+
 /** What a TeXRA command is, whichever host offers it. */
 export interface CommandCatalogEntry {
   readonly id: string;
