@@ -34,8 +34,8 @@ where its other wording is.
   gone).
 - **One label, three derivations.** A subscription's account label was
   computed by the controller, again by the settings view and a third time by
-  the terminal, each with its own fallback. `SubscriptionAuthStatus` carries
-  `accountLabel`; the two renderers read it.
+  the terminal, each with its own fallback. Left to #15234, which names an
+  account through one function (`subscriptionAccountLabel`).
 - **Host rules.** `adoptLoginShellEnvironment` knows Windows has no login
   shell, where only the desktop did; the extension's linter asks
   `isLatexFile`, so a `.ltx` file is built before its diagnostics are read.
