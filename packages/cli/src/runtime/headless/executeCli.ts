@@ -194,7 +194,7 @@ export const executeCliConfig: (
       .attachRunProgressRenderer(session, request.runId)
       .pipe(Scope.provide(presentationScope));
     const host = yield* createHeadlessCliHostInteractions(session, {
-      prompting: () => presentationHost.holdForPrompt?.(),
+      prompting: () => presentationHost.holdForPrompt(),
       emit: (event, payload) => {
         if (event === 'requestShowError') failurePresented = true;
         presentationHost.emit(event, payload);
@@ -232,7 +232,7 @@ export const executeCliConfig: (
     if (renderPlainProgress) {
       yield* attachScriptPlainOutput(session, {
         runId: request.runId,
-        beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
+        beforeWrite: () => presentationHost.prepareInteractivePrompt(),
         writeLine: writeTextStderr,
       }).pipe(Scope.provide(presentationScope));
     }
