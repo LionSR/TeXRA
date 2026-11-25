@@ -104,7 +104,7 @@ export function createDesktopDialogs(
   spawn: DesktopSpawn,
 ) {
   /** A message box nobody answers or waits for, held by the window; one
-   *  the window cannot show is logged at warn, and once the window's scope
+   *  the window cannot show is logged at warn with what it said, and once the window's scope
    *  has closed a notice starts nothing. */
   const notify = (
     level: NoticeLevel,
@@ -115,7 +115,9 @@ export function createDesktopDialogs(
       spawn(
         choose(window, { type: level, message, project, choices: [] }).pipe(
           Effect.catch((error) =>
-            Effect.logWarning(error.message).pipe(withLogChannel('desktop')),
+            Effect.logWarning(`${error.message}: ${message}`).pipe(
+              withLogChannel('desktop'),
+            ),
           ),
           Effect.asVoid,
         ),

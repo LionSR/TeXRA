@@ -18,6 +18,16 @@ Two PRs open that morning (#15229, #15230) delete the document pipeline and
 the coding-agent plugins across about 430 files; a finding whose readers
 they rewrite waits for them.
 
+Rechecked on the evening of 2026-11-25 (the core-notes sweep): none of
+1–3 is decision-free yet. 1 and 3 still need the owner's word (a plugin
+API signature; a stored global value with no version). 2 changes the
+`context.edit` encoding, so it needs a row-version bump and a regenerated
+golden store (`src/test-kernel/fixtures/storage/golden-1.0.sql`), which an
+open PR holds; keeping the encoding (each case writing its `null`s) would
+delete the filter but keep the nulls, which is not the shape proposed.
+`RegisterRunOptions.takesFollowUps` (5) waits too: two of its producers
+(`executeAgent.ts`, `processRun.ts`) are in an open PR.
+
 ## 1. Request payloads restate the `requestId` and `runId` their row carries
 
 Every schema in `packages/harness/src/shared/schemas/requestPayloads.ts`
@@ -108,7 +118,9 @@ calls it too.
   `texra-local chat` reaches; its callers are in the open PRs.
 - `attachDroppedFiles`
   (`packages/texra/src/controllers/mainView/MainViewDroppedFilesController.ts`)
-  returns `attachedCount` beside the `paths` it counts.
+  returns `attachedCount` beside the `paths` it counts. (2026-11-25
+  evening: its single-caller helper `attachDroppedPaths` is inlined; the
+  field waits on its reader, `openGuiWindow.ts`.)
 - `allocateConversationPanelRows` (`packages/cli/src/chat/tui/appLayout.ts`)
   returns four row counts where a panel kind and its rows would do.
 - `RegisterRunOptions.takesFollowUps`

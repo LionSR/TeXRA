@@ -23,10 +23,8 @@ import {
 } from '@texra-ai/worldline/schemas';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import {
-  codexAccountLabel,
-  type SubscriptionAccountNames,
+  subscriptionAccountLabel,
   type SubscriptionAuthStatus,
-  xaiAccountLabel,
 } from '@texra/shared/model/subscriptionAuthStatus';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postToHost } from '@ui/settings/messageDispatcher';
@@ -61,8 +59,6 @@ interface SubscriptionSectionProvider {
   readonly preference: SettingRow<boolean>;
   /** The provider the section's sign-in, sign-out and preference commands address. */
   readonly providerId: SubscriptionAuthStatus['provider'];
-  /** Human-readable account name for the signed-in row. */
-  readonly accountLabel: (account: SubscriptionAccountNames) => string;
   /** Optional advanced input-budget control for this subscription route. */
   readonly contextWindowSetting?: typeof CHATGPT_CODEX_CONTEXT_WINDOW_SETTING;
 }
@@ -112,7 +108,10 @@ export class SubscriptionSection extends TexraSignalElement {
     const contextWindowSetting = provider.contextWindowSetting;
     const signedIn = this.auth?.signedIn ?? false;
     const preferSubscription = this.auth?.preferSubscription ?? false;
-    const account = provider.accountLabel(this.auth ?? {});
+    const account = subscriptionAccountLabel(
+      provider.providerId,
+      this.auth ?? {},
+    );
     return html`
       <section id=${provider.sectionId} aria-labelledby=${headingId}>
         ${renderSettingsSectionHeading({
@@ -221,7 +220,6 @@ export const SUBSCRIPTION_SECTIONS = Object.freeze({
     contextWindowSetting: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
     preference: CHATGPT_PREFER_SUBSCRIPTION_SETTING,
     providerId: 'chatgpt',
-    accountLabel: codexAccountLabel,
   }),
 
   /**
@@ -234,7 +232,6 @@ export const SUBSCRIPTION_SECTIONS = Object.freeze({
     note: 'Uses the public Grok CLI OAuth client, which xAI may change or revoke.',
     preference: XAI_PREFER_SUBSCRIPTION_SETTING,
     providerId: 'grok',
-    accountLabel: xaiAccountLabel,
   }),
 } satisfies {
   readonly [P in SubscriptionAuthProvider]: SubscriptionSectionProvider & {

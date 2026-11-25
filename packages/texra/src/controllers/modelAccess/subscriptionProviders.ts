@@ -26,10 +26,8 @@ import {
 } from '@texra-ai/worldline/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import {
-  codexAccountLabel,
-  type SubscriptionAccountNames,
+  subscriptionAccountLabel,
   type SubscriptionAuthStatus,
-  xaiAccountLabel,
 } from '@texra/shared/model/subscriptionAuthStatus';
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
@@ -188,14 +186,6 @@ export interface SubscriptionSignOutResult {
 type AccountOf<Id extends SubscriptionProviderId> =
   SubscriptionAccounts['Service'][(typeof SUBSCRIPTION_ROUTES)[Id]];
 
-/** A row's id and how it labels an account; its names are the account's
- *  copy (`SUBSCRIPTION_AUTH_COPY`), and its account runs the sign-in
- *  itself. */
-interface SubscriptionProviderBindings<Id extends SubscriptionProviderId> {
-  readonly id: Id;
-  readonly accountLabel: (account: SubscriptionAccountNames) => string;
-}
-
 /** A sign-in that could not finish: no transport this machine can use, or
  *  an account signed in whose subscription could not be turned on. The
  *  message is the user-facing text. */
@@ -208,10 +198,9 @@ class SubscriptionSignInFailed extends Schema.TaggedError<SubscriptionSignInFail
  * Bind one provider's account to the shared sign-in flow. Two callers (the
  * catalog rows below); the flow it closes over is the whole point.
  */
-function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
-  accountLabel,
-  id,
-}: SubscriptionProviderBindings<Id>): SubscriptionProvider {
+function defineSubscriptionProvider<Id extends SubscriptionProviderId>(
+  id: Id,
+): SubscriptionProvider {
   const { label, sessionName, copyTarget, modelFamily } =
     SUBSCRIPTION_AUTH_COPY[id];
   const descriptor = {
@@ -334,7 +323,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
         signedIn: true,
         email: session.email,
         accountId: session.accountId,
-        label: accountLabel(session),
+        label: subscriptionAccountLabel(descriptor.id, session),
       } satisfies SubscriptionAccount;
     },
   );
@@ -365,7 +354,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
       Effect.flatMap(account, (coordinator) =>
         Effect.map(coordinator.getStatus(), (status) => ({
           ...status,
-          label: accountLabel(status),
+          label: subscriptionAccountLabel(descriptor.id, status),
         })),
       ),
   });
@@ -376,19 +365,13 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
  * ChatGPT plan instead of an OpenAI API key, through OpenAI's token sharing.
  * The sign-in is browser-only: OpenAI's flow has no device code.
  */
-const CHATGPT_PROVIDER = defineSubscriptionProvider({
-  id: 'chatgpt',
-  accountLabel: (account) => codexAccountLabel(account),
-});
+const CHATGPT_PROVIDER = defineSubscriptionProvider('chatgpt');
 
 /**
  * Experimental "Sign in with Grok": xAI models then run on the user's
  * SuperGrok / xAI account OAuth token instead of an xAI API key.
  */
-const GROK_PROVIDER = defineSubscriptionProvider({
-  id: 'grok',
-  accountLabel: (account) => xaiAccountLabel(account),
-});
+const GROK_PROVIDER = defineSubscriptionProvider('grok');
 
 /** Canonical catalog of OAuth subscription providers, shared by every host. */
 const SUBSCRIPTION_PROVIDERS: Readonly<

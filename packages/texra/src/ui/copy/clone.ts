@@ -4,7 +4,12 @@
  * the terminal names its command, its destination and the next step to
  * type, the editor offers buttons.
  */
-import type { OverleafRemote } from '@latex/overleafProject';
+import type { OverleafCloneOutcome } from '@latex/overleafClone';
+import {
+  OVERLEAF_GIT_TOKEN_URL,
+  OVERLEAF_TOKEN_DOCS_URL,
+  type OverleafRemote,
+} from '@latex/overleafProject';
 import { installAdvice } from '@texra/shared/constants/latexToolchain';
 import type { OsPlatform } from '@texra/shared/osPlatform';
 
@@ -46,3 +51,71 @@ export const CLONE_COPY = Object.freeze({
   /** `AuthFailure`, before the host's next step for its credential. */
   authFailed: 'Clone failed: authentication error.',
 });
+
+/**
+ * What a clone's outcome tells the user, the same on every host: a
+ * sentence, the pages that help with the next step (buttons in the editor,
+ * lines in the terminal) and git's own words where it failed. A host adds
+ * only its own next step, and its own buttons for a missing git.
+ */
+export interface OverleafCloneNotice {
+  readonly level: 'info' | 'warning' | 'error';
+  readonly message: string;
+  readonly links: readonly { readonly label: string; readonly url: string }[];
+  /** git's message, which follows the sentence where a host shows it. */
+  readonly gitError?: string;
+}
+
+const TOKEN_GUIDE_LINK = Object.freeze({
+  label: 'How to get a token',
+  url: OVERLEAF_TOKEN_DOCS_URL,
+});
+
+/** The notice for `outcome` of cloning `remote`. */
+export function overleafCloneNotice(
+  remote: OverleafRemote,
+  outcome: OverleafCloneOutcome,
+  platform: OsPlatform,
+): OverleafCloneNotice {
+  const error = (
+    message: string,
+    links: OverleafCloneNotice['links'] = [],
+  ): OverleafCloneNotice => ({ level: 'error', message, links });
+  switch (outcome._tag) {
+    case 'Cloned':
+      return {
+        level: 'info',
+        message: CLONE_COPY.cloned(remote, outcome.destination),
+        links: [],
+      };
+    case 'Cancelled':
+      return { level: 'warning', message: CLONE_COPY.cancelled, links: [] };
+    case 'InvalidToken':
+      // The token guide is Overleaf's; a ShareLaTeX host has its own.
+      return error(
+        outcome.message,
+        remote.isOverleaf ? [TOKEN_GUIDE_LINK] : [],
+      );
+    case 'GitMissing':
+      return error(CLONE_COPY.gitMissing(platform));
+    case 'WorkspaceUnreadable':
+      return error(CLONE_COPY.unreadable(outcome.message));
+    case 'WorkspaceNotEmpty':
+      return error(CLONE_COPY.notEmpty(outcome.destination));
+    case 'AuthFailure':
+      return {
+        ...error(
+          `${CLONE_COPY.authFailed} ${CLONE_COPY.authDetail(remote)}`,
+          remote.isOverleaf
+            ? [
+                { label: 'Get new token', url: OVERLEAF_GIT_TOKEN_URL },
+                TOKEN_GUIDE_LINK,
+              ]
+            : [],
+        ),
+        gitError: outcome.error,
+      };
+    case 'CloneFailed':
+      return { ...error(CLONE_COPY.failed), gitError: outcome.error };
+  }
+}

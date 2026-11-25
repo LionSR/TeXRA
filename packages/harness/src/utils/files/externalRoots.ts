@@ -2,9 +2,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Array as Arr, Order, Predicate } from 'effect';
+import { Predicate } from 'effect';
 
-import { isPathWithin } from '@utils/core/pathCore';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 
 /**
@@ -18,12 +17,12 @@ import { meansAbsent } from '@utils/files/fsEntryExists';
  *
  * Security notes
  * --------------
- * - Lookup canonicalises its input (resolve, then realpath), as the step
- *   canonicalised its roots, so symlinks in a root component do not cause
- *   silent matching failures. Canonicalisation is tolerant of non-existent
- *   trailing segments and fails closed on permission errors (any EACCES/EPERM
- *   makes `findExternalRoot` return null rather than accept an un-verifiable
- *   path).
+ * - Lookup (`findExternalRoot`, `tools/pathResolution.ts`) canonicalises its
+ *   input (resolve, then realpath), as the step canonicalised its roots, so
+ *   symlinks in a root component do not cause silent matching failures.
+ *   Canonicalisation is tolerant of non-existent trailing segments and fails
+ *   closed on permission errors (on any EACCES/EPERM the lookup returns null
+ *   rather than accept an un-verifiable path).
  * - A symlink inside a root that resolves outside it (e.g. at `/etc/passwd`)
  *   is NOT matched and tools reject it.
  * - Containment is tested via `path.relative`, which works correctly even
@@ -38,11 +37,6 @@ export interface StepRoot {
   readonly absolutePath: string;
   readonly label: string;
   readonly writable?: boolean;
-}
-
-/** The root a path falls in, as a tool's permission check reads it. */
-export interface MatchedExternalRoot extends StepRoot {
-  readonly writable: boolean;
 }
 
 /**
@@ -102,40 +96,4 @@ function readLinkOrUndefined(entry: string): string | undefined {
     if (notALink || meansAbsent(err)) return undefined;
     throw err;
   }
-}
-
-/**
- * Return the step root that contains `absolutePath`, or null when none
- * matches or the path cannot be canonicalised (fail closed). `stepRoots` are
- * the read-only roots the asking call's step accepts; a call outside a run
- * has none. The most specific root wins.
- */
-export function findExternalRoot(
-  absolutePath: string,
-  stepRoots: readonly StepRoot[] = [],
-): MatchedExternalRoot | null {
-  if (!path.isAbsolute(absolutePath)) return null;
-  // Checked before canonicalisation so a lookup with nothing to match pays
-  // no realpath syscall.
-  if (stepRoots.length === 0) return null;
-
-  let resolved: string;
-  try {
-    resolved = canonicalizePath(absolutePath);
-  } catch {
-    // Permission error or unexpected failure — refuse to accept the path
-    // rather than approve something we cannot verify.
-    return null;
-  }
-
-  const within = stepRoots.filter((root) =>
-    isPathWithin(root.absolutePath, resolved),
-  );
-  if (!Arr.isReadonlyArrayNonEmpty(within)) return null;
-  // The deepest root that holds the path, the first of several as deep.
-  const best = Arr.max(
-    within,
-    Order.mapInput(Order.Number, (root: StepRoot) => root.absolutePath.length),
-  );
-  return { ...best, writable: best.writable ?? false };
 }

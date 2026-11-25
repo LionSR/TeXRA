@@ -10,7 +10,7 @@
  * recorded effect is used instead.
  */
 import { callKey } from '@shared/session/runFacts';
-import { ancestorIds } from '@shared/session/runRelation';
+import { ancestorIds } from '@agent/runtime/runRelation';
 import * as path from 'node:path';
 
 import {

@@ -8,7 +8,6 @@ import { Argument, Command } from 'effect/cli';
 import { Secrets, type PlatformSecrets } from '@texra-ai/worldline/plugins';
 import {
   cloneOverleafProject,
-  overleafCloneNotice,
   type OverleafCloneOutcome,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
@@ -19,6 +18,7 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import { osPlatformOf } from '@texra/shared/osPlatform';
+import { overleafCloneNotice } from '@ui/copy/clone';
 
 // Local imports - runtime
 import {

@@ -36,7 +36,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { workspaceEnvironmentLayer } from '@platform/defaults/nodeServices';
 import type { RequestDecision, RunId, RunStopReason } from '@shared/schemas';
 import type { SessionLog } from '@shared/session/runHistory';
-import { ancestorIds } from '@shared/session/runRelation';
+import { ancestorIds } from './runRelation';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { LiveRun, RunControls, RunsShape } from './runs';

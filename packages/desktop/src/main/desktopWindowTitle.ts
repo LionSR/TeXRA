@@ -1,10 +1,7 @@
 import { type BrowserWindow } from 'electron';
 import { Effect, type Scope, Stream } from 'effect';
 import { sessionActivity } from '@texra-ai/worldline/schemas';
-import {
-  formatSessionTitle,
-  NATIVE_WINDOW_TITLE,
-} from '@texra/shared/sessionTitle';
+import { formatSessionTitle, NATIVE_WINDOW_TITLE } from '@ui/copy/sessionTitle';
 import type { Session } from '@texra-ai/worldline';
 
 type DesktopTitleProject = {

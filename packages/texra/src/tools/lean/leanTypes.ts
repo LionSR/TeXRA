@@ -8,7 +8,7 @@
 import { Schema } from 'effect';
 
 // Local imports - utils
-import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
+import type { GenericDiagnostic } from '@texra/tools/diagnosticFormatting';
 
 // Constants and commands
 

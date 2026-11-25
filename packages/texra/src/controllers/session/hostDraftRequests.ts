@@ -21,7 +21,7 @@ import { ownKeyCredential } from '@texra-ai/worldline/host';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import { polishTextWithAI } from '@texra/agent/runtime/textEnhancement';
+import { polishTextWithAI } from '@texra/controllers/session/draftPolish';
 import {
   recordingsDir,
   startRecording,

@@ -114,6 +114,11 @@ already catalogued and unchanged:
   (`createEditorPane`, the `openGuiWindow` dispatcher, `configureAnsi`,
   `buildStatusBarDisplay`), each its own careful change, not a sweep.
 
+Rechecked on the evening of 2026-11-25: each of these is still
+owner-gated, ratchet-reversing or a public-surface change, and the
+generated API references a public-surface change regenerates
+(`packages/harness/docs/api/`) are held by an open PR. Nothing here landed.
+
 ## Subagent boundaries
 
 Unchanged from the four prior runs: a run is already the independent-agent unit

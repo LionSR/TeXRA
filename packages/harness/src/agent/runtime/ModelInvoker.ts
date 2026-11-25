@@ -62,7 +62,7 @@ import {
   type RetryCredentials,
 } from '@shared/session/inFlight';
 import { turnText } from '@shared/session/runFacts';
-import { readCause } from '@shared/session/causeReading';
+import { readCause } from './causeReading';
 import {
   SessionLog,
   type CellError,
