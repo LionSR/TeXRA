@@ -1,8 +1,3 @@
-<script setup>
-import OutputArtifactsTree from '../.vitepress/components/OutputArtifactsTree.vue';
-import CliRunHero from '../.vitepress/components/CliRunHero.vue';
-</script>
-
 # Quick start guide
 
 On a fresh install, the **setup assistant** walks you through connecting a model, checking your environment, and running a first task. This page is the reference for the **New task** view in VS Code and its CLI equivalents.
@@ -31,7 +26,7 @@ model, open your paper, run the setup assistant, your first task) and links dire
 This guide walks through the VS Code extension. If you installed the
 [CLI](./texra-cli.md), the same assistant runs from the command line: start an
 interactive session with `texra chat`, or run a single program with
-`texra run edit --input draft.tex`.
+`texra run annotate --input draft.tex`.
 :::
 
 ## Add a key or connect a subscription
@@ -83,25 +78,13 @@ Be specific about your objectives: state both what the assistant should improve 
 
 To send figures or other media along, use **Attach** in the instruction box.
 
-### Approve the program run
+### Approve what it proposes
 
-The New task view does not list programs and has no file section of its own.
-For a document edit, the assistant proposes a run of one of the
-[programs](./programs.md) (`edit` for a polish), and the
-proposal card shows the program, the instruction and the files. Approve it,
-or select **Edit** to change it first: the launch form opens on the proposal
-with a **Documents and attachments** section.
-
-1. In the **Input** group, use <wa-icon library="texra" name="add"></wa-icon> **Add input files** to pick the documents the program revises. If you have several `.tex` files open and want them all, use <wa-icon library="texra" name="folder-opened"></wa-icon> **Add opened files as input**.
-2. (Optional) Use the same buttons in **Context** to add read-only references or preamble, and **Media** to add figure files.
-
-::: info Multiple Files
-Each category holds an ordered list. Add as many files as the task needs and drag rows to reorder them.
-:::
-
-<FileSelectHero />
-
-<p class="hero-caption">The file selector of a proposal you are editing: Input holds the document the program revises, Context holds references and preamble, and Media holds figures.</p>
+The assistant edits your files itself and asks before each change under your
+approval policy. For a job one of the [programs](./programs.md) packages
+(`annotate` for a referee's comments, `prove` for Lean proofs) it proposes a
+program run: the proposal card shows the program, the instruction and the
+files. Approve it, or select **Edit** to change the files first.
 
 ### Start the task and watch it
 
@@ -109,39 +92,13 @@ Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>). The
 
 <GuideIntroHero />
 
-<p class="hero-caption">The Tasks view streams progress live (helper agents and tool calls) alongside the output files.</p>
+<p class="hero-caption">The Tasks view streams progress live (helper agents and tool calls).</p>
 
 ### Review results
 
-1. When the program completes, VS Code opens the final revision from run storage (for `edit`, `r1/draft.tex`, keeping your input filename).
-2. Inspect the proposed edits; the scientific judgment stays yours. Compare original and modified versions with either tool:
-   - **Tasks view diff**: Under **Generated files**, select <wa-icon library="texra" name="code-compare"></wa-icon> **Compare with base** to diff the original against the generated output.
-
-     <CompareHero />
-
-     <p class="hero-caption">VS Code's diff editor opens the generated revision beside your original: additions in green, removals in red.</p>
-
-     You can accept reviewed outputs from the Tasks view after comparing the changes.
-
-   - **latexdiff**: Use a file's latexdiff button, or **latexdiff…** in the panel's **⋯** menu, for a compiled PDF with additions in blue and deletions in red.
-
-<div class="quick-pdf-viewer">
-  <div class="pdf-tabs">
-    <button type="button" class="pdf-tab active" data-pdf="/examples/draft.pdf">Original</button>
-    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r0_gemini25p_diff.pdf">Revision 1 Changes</button>
-    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diff.pdf">Revision 2 Changes</button>
-    <button type="button" class="pdf-tab" data-pdf="/examples/draft_polish_r1_gemini25p_diffr1r0.pdf">Revision 1 vs Revision 2</button>
-  </div>
-  <iframe src="/examples/draft.pdf" id="pdf-frame" class="quick-pdf-frame"></iframe>
-  <a href="/examples/draft.pdf" target="_blank" id="pdf-link" class="quick-pdf-link">Open full example</a>
-</div>
-
-<div class="quick-legend">
-  <div class="legend-item"><span class="del">Red strikethrough</span>: Removed content</div>
-  <div class="legend-item"><span class="add">Blue underlined</span>: Added/improved content</div>
-</div>
-
-For details on how LaTeX diff works, read the [LaTeX diff guide](./latex-diff.md).
+The files in your project are the result. Open them in the editor, or run
+`git diff`, to see what changed; ask the assistant for a `latexdiff` PDF when
+you want the changes marked up in the compiled document.
 
 ## From the CLI
 
@@ -156,9 +113,9 @@ texra auth chatgpt login
 # Or let the guided setup handle credentials, environment, and your first task:
 texra setup
 
-# One-shot run (prints the revised file's path; --output copies it to a file you name):
-texra run edit --input draft.tex \
-  --instruction "Improve clarity; preserve math and citations."
+# One-shot run: the assistant edits draft.tex in place and prints its answer.
+texra run chat \
+  --instruction "Improve the clarity of draft.tex; preserve math and citations." --print
 
 # Or open an interactive chat:
 texra chat
@@ -168,128 +125,29 @@ texra chat
 Claude Max/Team and ChatGPT Pro/Business subscriptions include monthly API credits that an ordinary provider API key can spend; see [Getting API keys](./installation.md#setting-up-api-keys).
 :::
 
-<CliRunHero
-  command='texra run edit --input draft.tex --instruction "Improve clarity; preserve math and citations."'
-  :rounds="[
-    { label: 'Revision 1: draft', state: 'done' },
-    { label: 'Revision 2: review and correct', state: 'done' },
-  ]"
-  :outputs="['…/executions/9f3a6c81d24e/r1/draft.tex']"
-/>
-
-<p class="hero-caption">What a one-shot run looks like: revisions stream as progress, then the full path to the revised document prints on stdout.</p>
-
 Task history is shared across the CLI, VS Code extension, and desktop app, so a
 task started in the CLI shows up in the Tasks view (and vice versa). Read the
 [TeXRA CLI guide](./texra-cli.md) for sign-in, project defaults, and headless
 output formats.
 
-<style>
-.quick-pdf-viewer {
-  position: relative;
-  width: 100%;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
-  overflow: hidden;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-  margin: 1rem 0 1.5rem;
-}
-.quick-pdf-frame {
-  width: 100%;
-  height: 350px;
-  border: none;
-}
-.quick-pdf-link {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  color: white;
-  padding: 5px 10px;
-  border-radius: 4px;
-  text-decoration: none;
-  font-size: 0.85rem;
-  z-index: 10;
-}
-.quick-pdf-link:hover {
-  background: var(--vp-c-brand);
-}
-.pdf-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--vp-c-divider);
-  overflow-x: auto;
-  white-space: nowrap;
-}
-.pdf-tab {
-  padding: 0.5rem 1rem;
-  cursor: pointer;
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: 4px 4px 0 0;
-  font-size: 0.9rem;
-  background: none;
-  font-family: inherit;
-  text-align: center;
-}
-.pdf-tab:hover {
-  background-color: var(--vp-c-bg-soft);
-}
-.pdf-tab.active {
-  background-color: var(--vp-c-bg-soft);
-  border-color: var(--vp-c-divider);
-  border-bottom-color: var(--vp-c-bg-soft);
-  color: var(--vp-c-brand);
-  font-weight: 500;
-  margin-bottom: -1px;
-}
-.quick-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  margin-top: 0.5rem;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 4px;
-  padding: 0.75rem;
-  background-color: var(--vp-c-bg-soft);
-}
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.quick-legend .del {
-  color: #ff5252;
-  text-decoration: line-through;
-  font-weight: 500;
-}
-.quick-legend .add {
-  color: #0066cc;
-  text-decoration: underline;
-  font-weight: 500;
-}
-</style>
-
 ## Common quick tasks
 
 Some common tasks to try with TeXRA. Ask the assistant in the New task view, or run the program from the terminal:
 
-| Task                        | Ask the assistant                                                     | From the terminal                                                                  |
-| :-------------------------- | :-------------------------------------------------------------------- | :--------------------------------------------------------------------------------- |
-| Proofread a draft           | "Proofread draft.tex: fix typos, grammar and LaTeX formatting only."  | `texra run edit --input draft.tex`                                                 |
-| Polish writing style        | "Polish draft.tex for clarity and flow; keep the math and citations." | `texra run edit --input draft.tex --instruction "Polish for clarity and flow"`     |
-| Review as a first reader    | "Annotate draft.tex as a first-time reader would."                    | `texra run annotate --input draft.tex --instruction "Read as a first-time reader"` |
-| Build slides from the paper | "Turn paper.tex into a slide deck."                                   | `texra run slides --input paper.tex --output slides.tex`                           |
+| Task                     | Ask the assistant                                                     | From the terminal                                                                               |
+| :----------------------- | :-------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------- |
+| Proofread a draft        | "Proofread draft.tex: fix typos, grammar and LaTeX formatting only."  | `texra run chat --instruction "Proofread draft.tex: typos, grammar and LaTeX formatting only."` |
+| Polish writing style     | "Polish draft.tex for clarity and flow; keep the math and citations." | `texra run chat --instruction "Polish draft.tex for clarity and flow."`                         |
+| Review as a first reader | "Annotate draft.tex as a first-time reader would."                    | `texra run annotate --input draft.tex --instruction "Read as a first-time reader"`              |
+| Build slides             | "Turn paper.tex into a Beamer slide deck, slides.tex."                | `texra run chat --instruction "Turn paper.tex into a Beamer slide deck, slides.tex."`           |
 
 ## Understanding the output
 
-A completed task writes everything into its run folder, one folder per revision (`r0/`, `r1/`, …). Each revision holds the revised document (keeping your **input filename**, e.g. `draft.tex`) and raw reply (`output.xml`); `latexdiff` files go under `diff/r{revision}/`, compiled PDFs under `output/r{revision}/`, and compile logs under `compile/`:
-
-<OutputArtifactsTree />
-
-<p class="hero-caption">One folder per revision: revised document at <code>r{revision}/&lt;input-filename&gt;</code> with the model's reply; <code>latexdiff</code> files under <code>diff/</code>, compiled PDFs under <code>output/</code>, and compile logs under <code>compile/</code>.</p>
-
-The CLI writes the same per-revision tree under `executions/<run-id>/` in the
-project's storage folder under `~/.texra`, which VS Code shares. Read [First run](./first-run.md) for the terminal walkthrough.
+A task changes the files in your project, so your editor and `git diff` show
+its result. Each task also has a run folder under `executions/<run-id>/` in
+the project's storage folder under `~/.texra`, shared by the CLI, VS Code
+and the desktop app, which holds its conversation and logs. Read
+[First run](./first-run.md) for the terminal walkthrough.
 
 ## Next steps
 

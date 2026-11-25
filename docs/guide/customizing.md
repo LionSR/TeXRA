@@ -86,8 +86,8 @@ assistant their tools while the plugin is enabled. Read
 You need no new agent to change how a job is done. The programs take their
 scope and point of view from the instruction: "read as a referee for a
 physics journal and mark every unsupported claim" is `annotate` with that
-sentence. To combine steps, ask the assistant to chain programs, for example
-`annotate`, then `apply`.
+sentence. To combine steps, ask the assistant, for example to run
+`annotate` and then fix what it flagged.
 
 ::: info If you used 0.40
 Custom agent YAML files, the custom agents folder, the Agents library in

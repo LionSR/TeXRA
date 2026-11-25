@@ -7,7 +7,6 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
-  realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -361,28 +360,21 @@ function validateBinarySmoke() {
 
 function validateFileFlagMissingValues() {
   assertUsageError(
-    run(process.execPath, [binaryPath, 'run', 'edit', '--input', '--print']),
+    run(process.execPath, [
+      binaryPath,
+      'run',
+      'annotate',
+      '--input',
+      '--print',
+    ]),
     'texra run missing --input value',
     'Missing value for flag --input.',
   );
   assertUsageError(
-    run(process.execPath, [binaryPath, 'run', 'edit', '-i', '-p']),
+    run(process.execPath, [binaryPath, 'run', 'annotate', '-i', '-p']),
     'texra run missing -i value',
     // effect/cli names a flag by its long name, whichever spelling was typed.
     'Missing value for flag --input.',
-  );
-  assertUsageError(
-    run(process.execPath, [
-      binaryPath,
-      'run',
-      'edit',
-      '--input',
-      'paper.tex',
-      '--output',
-      '--print',
-    ]),
-    'texra run missing --output value',
-    'Missing value for flag --output.',
   );
   assertUsageError(
     run(process.execPath, [
@@ -629,11 +621,9 @@ function validateRunCommand() {
     const baseArgs = [
       binaryPath,
       'run',
-      'edit',
+      'annotate',
       '--input',
       'paper.tex',
-      '--output',
-      'paper.polished.tex',
       '--cwd',
       cwd,
       '--approval-policy',
@@ -647,11 +637,11 @@ function validateRunCommand() {
       validationFlagPath,
     });
     assertSuccess(text, 'texra run text');
-    const copiedOutputPath = path.join(realpathSync(cwd), 'paper.polished.tex');
-    const outputPathPattern = /^r\d+\/paper\.polished\.tex$/;
+    // The scripted child edits nothing, so the program's check passes and
+    // the run's reply is the child's.
     assert(
-      text.stdout.trim() === copiedOutputPath,
-      'text run output should print the filesystem copy path when --output is used',
+      text.stdout.includes('Validated CLI Runtime'),
+      `a program's text run should print the run's reply\nstdout:\n${text.stdout}`,
     );
     // The progress line prints the fold's status label from the one table in
     // packages/harness/src/shared/runs/runStatusDisplay.ts (RUN_STATUS_COPY).
@@ -672,32 +662,14 @@ function validateRunCommand() {
     assertSuccess(json, 'texra run JSON');
     const jsonResult = JSON.parse(json.stdout);
     assert(
-      jsonResult.output?.documents != null,
-      'JSON run output should serialize the document task result',
-    );
-    const finalOutput = jsonResult.output.documents.outputs.at(-1);
-    assert(
-      outputPathPattern.test(finalOutput?.relativePath ?? ''),
-      'JSON run output should report the run-storage output path',
-    );
-    assert(
-      finalOutput.location === 'runStorage',
-      'JSON run output should identify extracted output as run storage',
-    );
-    assert(
-      jsonResult.runDirectory ===
-        path.dirname(path.dirname(finalOutput.absolutePath)),
-      'JSON run output should report the run directory',
-    );
-    assert(
-      jsonResult.copiedOutput === copiedOutputPath,
-      'JSON run output should report the filesystem copy path',
-    );
-    assert(
-      readFileSync(finalOutput.absolutePath, 'utf8').includes(
+      String(jsonResult.output?.response ?? '').includes(
         'Validated CLI Runtime',
       ),
-      'texra run should write the validation output through the real workflow path',
+      "JSON run output should carry the program's reply",
+    );
+    assert(
+      readFileSync(inputPath, 'utf8') === '\\section{Input}\nOriginal text.\n',
+      'a round that edits nothing should leave the input as it was',
     );
 
     const ndjson = run(
@@ -708,9 +680,9 @@ function validateRunCommand() {
     assertSuccess(ndjson, 'texra run NDJSON');
     assert(
       parseNdjson(ndjson.stdout, 'run NDJSON').some(
-        (record) => record.kind === 'result',
+        (record) => record.kind === 'agent-result',
       ),
-      'run NDJSON should include a result record',
+      'run NDJSON should include the run result record',
     );
   } finally {
     removeScratch(cwd);
@@ -759,7 +731,7 @@ function validateToolUseAgentRunCommand() {
 
     const jsonResult = JSON.parse(result.stdout);
     assert(
-      jsonResult.output != null && jsonResult.output.documents === undefined,
+      jsonResult.output != null,
       'JSON agent run output should serialize the chat result',
     );
     assert(

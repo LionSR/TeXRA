@@ -29,14 +29,14 @@ research project.
 | Formalize in Lean 4                        | [Lean 4 proofs](./lean.md)                                           |
 | Search literature, no fabricated citations | ask the assistant, see [Research tools](./research-tools.md)         |
 | Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)                      |
-| Fix typos, grammar and notation            | `edit` program, see [Programs](./programs.md#document-programs)      |
-| Build slides from a paper                  | `slides` program, see [Programs](./programs.md#document-programs)    |
+| Fix typos, grammar and notation            | ask the assistant, see [Programs](./programs.md#everything-else-ask) |
+| Build slides from a paper                  | ask the assistant, see [Programs](./programs.md#everything-else-ask) |
 | Generate TikZ figures                      | [TikZ figures](./tikz-figures.md)                                    |
 
 ## Understand the system
 
 - [**The assistant and programs**](./programs.md): what you can ask for, and every program
-- [**Programs: how they work**](./agent-architecture.md): revisions, the critic, run storage
+- [**Programs: how they work**](./agent-architecture.md): rounds and the coded check
 - [**Multi-agent workflows**](./multi-agent-workflows.md): how the assistant fans work out in parallel
 - [**Models**](./models.md): picking a model for the job
 - [**Tailoring TeXRA**](./customizing.md): project instructions, skills, plugins and your own programs
@@ -91,7 +91,7 @@ TeXRA works in two ways:
 
 <AgentClasses />
 
-<p class="hero-caption">A document program runs a structured pipeline and returns a diff; the assistant works conversationally with grounded tools.</p>
+<p class="hero-caption">A program runs rounds of a helper agent and checks each in code; the assistant works conversationally with grounded tools.</p>
 
 TeXRA combines three mechanisms: **reflection** (critiquing and revising output),
 **tool use** (checking work against compilers, language servers,

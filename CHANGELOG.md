@@ -81,20 +81,29 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   `model.gpt5ReasoningSummary`. DeepSeek, Kimi, GLM, DashScope, MiniMax and
   xAI keys use each vendor's newer API; a model the vendor does not offer
   there is no longer available.
-- **Document tasks are programs, not agents.** The agents `correct`,
-  `polish`, `generic`, `devise`, `criticize`, `firstread`, `logic`,
-  `notation`, `enhance`, `apply`, `merge`, `ocr`, `transcribe_audio`,
-  `paper2slide`, `paper2poster` and `critic` are replaced by eight programs:
-  `edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides`
-  and `poster`. What to change and from which point of view is the
-  instruction: `edit` covers a proofread and a restructuring, `annotate` a
-  referee and a first reader. Start one with
-  `texra run <program> --input <file>` or ask the assistant. `texra run` no longer
-  takes `--reflect`, `--attachTeXCount`, `--autoExtractFigure`,
-  `--autoExtractTikzFigure` or `--autoCompileInputPdf`, and the launch form
-  no longer lists document tasks. A response cut off at the model's output
-  limit is kept as that revision's output, with a warning, instead of being
-  continued.
+- **The document pipeline is gone: the assistant edits your files.** The
+  agents `correct`, `polish`, `generic`, `devise`, `criticize`, `firstread`,
+  `logic`, `notation`, `enhance`, `apply`, `merge`, `ocr`,
+  `transcribe_audio`, `paper2slide`, `paper2poster` and `critic` have no
+  fixed procedure behind them any more. Ask the assistant to proofread,
+  polish, apply a review's comments or build a slide deck: it edits the
+  files in place with its file tools, compiles them and runs `latexdiff`
+  itself, and each edit asks under your approval policy. Nothing is staged
+  in run storage, so there is no **Accept**, no revisions list, no
+  **Archive outputs to History** or **Delete output files**, no latexdiff
+  sheet, and no completion chime in VS Code. Two programs remain, because
+  each is more than a prompt: `annotate` adds `\criticize` comments and
+  checks in code that it changed nothing else, and `transcribe` turns
+  images or audio into a new LaTeX file. `texra run <program>` prints the
+  run's reply; `--output`, `--output-dir`, `--reflect`, `--attachTeXCount`,
+  `--autoExtractFigure`, `--autoExtractTikzFigure` and
+  `--autoCompileInputPdf` are removed, and JSON output has no
+  `output.documents`, `runDirectory` or `copiedOutput`. The settings
+  `documents.compileAfterOutput`, `documents.compileTimeoutMs`,
+  `documents.openPdf`, `documents.rejectOnCompileFailure`,
+  `latexdiff.generateBetweenRoundDiffs`, `agentOutputs.autoOpenFinal` and
+  `git.numberOfCommitsToShow` are no longer read. The bundled Beamer slide
+  and poster templates are no longer shipped.
 - **One assistant instead of an agent menu.** Every task starts the same
   way: say what you want in the launch form, `texra chat` or bare `texra`;
   there is no agent to pick. The assistant does the work itself, hands parts
@@ -105,8 +114,8 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   `numerics`), `code` (was `coder` and `engineer`), `review-code` (was
   `codeReviewer`), `simplify` (was `simplifier` and `codeSimplifier`),
   `test` (was `testEngineer`), `fix-latex` (was `latexFixer`) and
-  `latexdiff` (was `latexDiff`). Slides and posters are the `slides` and
-  `poster` programs, and the Lean agents' jobs are the Lean plugin's `prove`,
+  `latexdiff` (was `latexDiff`). Slides and posters are requests in plain
+  words, and the Lean agents' jobs are the Lean plugin's `prove`,
   `lean-simplify`, `lean-search` and `blueprint`. `orchestrator`, `assistant`, `progressCheck` and
   `creator` have no replacement of their own: the assistant plans and
   delegates, and a goal's judge checks its rounds. Setup and the fix after a
@@ -286,12 +295,10 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   as `own:<name>` from its next step. Any run in a project can message
   another with `executions send`, and an agent reports to whoever gave it
   the work.
-- **Programs.** Besides the eight document programs, the Lean plugin has
+- **Programs.** Besides `annotate` and `transcribe`, the Lean plugin has
   `prove` (completes the proofs in the `.lean` files you pass, checked with
   Lean's diagnostics), `lean-simplify` (brings them toward Mathlib quality
-  under the same check), `blueprint` and `lean-search`. A document program takes
-  `reflect: true` to have a critic read each revision's diff and compile
-  result.
+  under the same check), `blueprint` and `lean-search`.
 - **Plugins.** Install Claude Code and Codex plugins from GitHub, a git URL
   or a folder with `texra plugin install`, `/plugins add` or Settings ›
   Plugins; all three apps see the same ones. A plugin stays off until you
