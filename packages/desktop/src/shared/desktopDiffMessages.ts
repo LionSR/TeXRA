@@ -1,7 +1,5 @@
 import { Schema } from 'effect';
 import {
-  decodingDefault,
-  decodingDefaultType,
   NonNegativeIntSchema,
 } from '@texra-ai/worldline/schemas';
 
@@ -35,11 +33,11 @@ export const DesktopShowDiffMessageSchema = Schema.Struct({
   displayPath: Schema.String,
   originalText: Schema.String,
   proposedText: Schema.String,
-  additions: decodingDefault(NonNegativeIntSchema, 0),
-  deletions: decodingDefault(NonNegativeIntSchema, 0),
+  additions: NonNegativeIntSchema,
+  deletions: NonNegativeIntSchema,
   // Monaco language id (e.g. 'plaintext', 'typescript', 'latex'). The
   // renderer falls back to 'plaintext' on unknown values.
-  language: decodingDefaultType(Schema.String, 'plaintext'),
+  language: Schema.String,
 });
 
 export type DesktopShowDiffMessage =
