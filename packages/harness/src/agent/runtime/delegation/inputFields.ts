@@ -20,7 +20,7 @@ import {
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import { runStorageLocationUnder } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
-import { ToolError, type RunId } from '@shared/schemas';
+import { asToolError, ToolError, type RunId } from '@shared/schemas';
 import type {
   RunHistory,
   SessionLog,
@@ -36,7 +36,7 @@ import {
 } from '@tools/core/inputSchema';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { meansAbsent, entryExists } from '@utils/files/fsEntryExists';
-import { formatError, ensureError } from '@utils/errors/errorMessage';
+import { formatError } from '@utils/errors/errorMessage';
 import { escapesRoot } from '@utils/core/pathCore';
 
 /**
@@ -174,7 +174,7 @@ const absoluteWorkspacePath = (
 ): Effect.Effect<string, ToolError> =>
   Effect.try({
     try: () => workspaceAbsolutePath(workspaceRoot, target),
-    catch: (cause) => new ToolError(ensureError(cause).message, { cause }),
+    catch: asToolError,
   });
 
 interface InputFileGroup {

@@ -15,6 +15,7 @@
  */
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { logFailure, withLogChannel } from '@logger/effectLog';
+import { pathExists } from '@utils/files/fsEntryExists';
 import {
   isDamaged,
   pragmaValue,
@@ -331,7 +332,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     return yield* Effect.failCause(first.cause);
   const aside = `${filename}.corrupt-${yield* Clock.currentTimeMillis}`;
   for (const suffix of STORE_FILE_SUFFIXES) {
-    if (yield* fs.exists(`${filename}${suffix}`))
+    if (yield* pathExists(fs, `${filename}${suffix}`))
       yield* fs.rename(`${filename}${suffix}`, `${aside}${suffix}`);
   }
   yield* Effect.logWarning(

@@ -47,7 +47,7 @@ import { toneStyles } from '@ui/styles/toneStyles';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, nestedCountsLabel } from '@ui/copy/nestedRuns';
-import { getTimeFormatter } from '../formatters/timestampUtils';
+import { TIME_OF_DAY } from '../formatters/timestampUtils';
 import { dispatchDisclosureToggle } from './disclosureToggle';
 import type { SessionView, RunView } from '@texra-ai/worldline/schemas';
 
@@ -240,7 +240,7 @@ export class BackgroundTasksPanel extends TexraElement {
       since === null
         ? nothing
         : html`<span class="dispatch-since"
-            >since ${getTimeFormatter().format(new Date(since))}</span
+            >since ${TIME_OF_DAY.format(new Date(since))}</span
           >`
     }`;
     const open =

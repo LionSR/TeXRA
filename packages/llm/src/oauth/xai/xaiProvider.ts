@@ -125,6 +125,16 @@ const XaiSessionSchema = SubscriptionSessionBaseSchema.mapFields(
 /** A stored xAI (Grok) session. */
 export type XaiSession = typeof XaiSessionSchema.Type;
 
+/** A positive count of seconds as a number or its text; anything else reads
+ *  as absent, and the flow's own default applies. */
+const OptionalSeconds = Schema.optional(
+  Schema.NullOr(
+    Schema.Union([Schema.Finite, Schema.FiniteFromString]).check(
+      Schema.isGreaterThan(0),
+    ),
+  ),
+).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))));
+
 /** RFC 8628 device-code authorization response. */
 const XaiDeviceCodeSchema = Schema.Struct({
   device_code: Schema.NonEmptyString,
@@ -133,20 +143,8 @@ const XaiDeviceCodeSchema = Schema.Struct({
   verification_uri_complete: Schema.optional(
     Schema.NullOr(Schema.NonEmptyString),
   ),
-  expires_in: Schema.optional(
-    Schema.NullOr(
-      Schema.Union([Schema.Finite, Schema.FiniteFromString]).check(
-        Schema.isGreaterThan(0),
-      ),
-    ),
-  ).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined)))),
-  interval: Schema.optional(
-    Schema.NullOr(
-      Schema.Union([Schema.Finite, Schema.FiniteFromString]).check(
-        Schema.isGreaterThan(0),
-      ),
-    ),
-  ).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined)))),
+  expires_in: OptionalSeconds,
+  interval: OptionalSeconds,
 });
 
 // JWT claim extraction. We never verify the signature (the token came from the

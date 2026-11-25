@@ -1,5 +1,7 @@
 import { Data, Schema, SchemaGetter, SchemaIssue, Struct } from 'effect';
 
+import { ensureError } from '@utils/errors/errorMessage';
+
 import { LineChangesSchema } from './lineChanges';
 import { Sha256Schema } from './identifiers';
 
@@ -207,6 +209,13 @@ export class ToolError extends Data.TaggedError('ToolError')<{
     super({ message, ...options });
   }
 }
+
+/** What a tool's own code threw, as the `ToolError` its call fails with: a
+ *  thrown `ToolError` as it is, anything else under its own message. */
+export const asToolError = (cause: unknown): ToolError =>
+  cause instanceof ToolError
+    ? cause
+    : new ToolError(ensureError(cause).message, { cause });
 
 /** An attachment as its `tool.result` row holds it: its captured bytes by
  *  their session-store blob address (`blobAddress` of the base64), never

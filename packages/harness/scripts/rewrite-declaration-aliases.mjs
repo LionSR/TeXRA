@@ -1,16 +1,14 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { tsconfigPaths } from '../../../scripts/aliases.mjs';
 import { walkFiles } from '../../../scripts/walkFiles.mjs';
-import { isFile } from './fsWalk.mjs';
+import { isFile, moduleSpecifier } from './declarations.mjs';
 
 const packageRoot = path.resolve(import.meta.dirname, '..');
 const repositoryRoot = path.resolve(packageRoot, '../..');
 const outputRoot = path.join(packageRoot, 'dist/types');
-const tsconfig = JSON.parse(
-  await readFile(path.join(repositoryRoot, 'tsconfig.json'), 'utf8'),
-);
-const aliases = Object.entries(tsconfig.compilerOptions.paths).toSorted(
+const aliases = Object.entries(tsconfigPaths).toSorted(
   ([left], [right]) => right.length - left.length,
 );
 
@@ -53,9 +51,6 @@ function emittedPath(sourcePath) {
     .replace(/\.tsx?$/u, '.d.ts')
     .replace(/\.mts$/u, '.d.mts');
 }
-
-const moduleSpecifier =
-  /(?<prefix>\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\bexport\s+\*\s+from\s*)(?<quote>['"])(?<specifier>[^'"]+)\k<quote>/gu;
 
 async function resolveDeclarationSpecifier(specifier, declaration) {
   let emitted;

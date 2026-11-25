@@ -51,6 +51,11 @@ export function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+/** Record `message` in `failures` unless `condition` holds. */
+export function assert(condition, message, failures) {
+  if (!condition) failures.push(message);
+}
+
 /** Print accumulated failures under `label` and exit(1); no-op when empty. */
 export function reportCheckFailures(label, failures) {
   if (failures.length === 0) return;

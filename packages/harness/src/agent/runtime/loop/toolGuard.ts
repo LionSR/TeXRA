@@ -23,11 +23,11 @@ import {
 import {
   type DecisionOf,
   type HookOutcomePayload,
+  asToolError,
   type RefusalDecision,
   type RequestPayload,
   type RunId,
   toJsonValue,
-  ToolError,
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
@@ -44,7 +44,6 @@ import type {
 } from '@shared/session/sessionApprovals';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
-import { ensureError } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 
 import { Interactions } from '../HostInteractions';
@@ -233,10 +232,7 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   // becoming a defect.
   const targets = yield* Effect.try({
     try: () => guard?.writes?.(decoded) ?? [],
-    catch: (cause) =>
-      cause instanceof ToolError
-        ? cause
-        : new ToolError(ensureError(cause).message, { cause }),
+    catch: asToolError,
   });
   yield* Effect.forEach(
     targets,
