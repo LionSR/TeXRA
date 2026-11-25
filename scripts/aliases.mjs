@@ -10,14 +10,9 @@ import ts from 'typescript';
 
 const rootDir = resolve(import.meta.dirname, '..');
 
-/**
- * The root tsconfig's paths as build tool aliases. Every package tsconfig
- * extends the root and inherits its `paths`.
- *
- * tsconfig format: { "@alias/*": ["src/path/*"] }
- * output format:   { "@alias": "/absolute/path/to/src/path" }
- */
-function loadAliases() {
+/** The root tsconfig's `paths`, as written: `{ "@alias/*": ["src/path/*"] }`.
+ *  Every package tsconfig extends the root and inherits them. */
+function loadTsconfigPaths() {
   const tsconfigPath = resolve(rootDir, 'tsconfig.json');
   const { config: tsconfig, error } = ts.parseConfigFileTextToJson(
     tsconfigPath,
@@ -26,9 +21,20 @@ function loadAliases() {
   if (error) {
     throw new Error(ts.flattenDiagnosticMessageText(error.messageText, '\n'));
   }
+  return tsconfig.compilerOptions.paths;
+}
 
+export const tsconfigPaths = Object.freeze(loadTsconfigPaths());
+
+/**
+ * The root tsconfig's paths as build tool aliases.
+ *
+ * tsconfig format: { "@alias/*": ["src/path/*"] }
+ * output format:   { "@alias": "/absolute/path/to/src/path" }
+ */
+function loadAliases() {
   return Object.fromEntries(
-    Object.entries(tsconfig.compilerOptions.paths).map(([key, values]) => {
+    Object.entries(tsconfigPaths).map(([key, values]) => {
       const aliasKey = key.replace('/*', '');
       // Prefer the bare '*' variant (ends with just '/*') — it strips
       // cleanly to a directory path for build tools.  Fall back to the
