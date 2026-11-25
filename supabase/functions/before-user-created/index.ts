@@ -41,16 +41,13 @@ function warn(message: string): void {
 }
 
 function allow(): Response {
-  return new Response('{}', {
-    status: 200,
-    headers: { 'content-type': 'application/json' },
-  });
+  return Response.json({});
 }
 
 function block(message: string, httpCode = 400): Response {
-  return new Response(
-    JSON.stringify({ error: { http_code: httpCode, message } }),
-    { status: httpCode, headers: { 'content-type': 'application/json' } },
+  return Response.json(
+    { error: { http_code: httpCode, message } },
+    { status: httpCode },
   );
 }
 
