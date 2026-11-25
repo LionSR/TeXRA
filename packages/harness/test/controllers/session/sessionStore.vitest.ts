@@ -9,16 +9,20 @@
  * - R24 of the harness 1.0 release acceptance: a transaction whose rows
  *   commit but whose view never shows them reports success to its caller,
  *   or leaves it waiting; the rows it committed are rolled back, or read as
- *   absent, by a later session over the same store.
+ *   absent, by a later session over the same store;
+ * - a file a run wrote from its own working directory is announced
+ *   (`workspaceFilesWritten`) under the project root, a path that names no
+ *   file, so no window lists or marks what the run wrote.
  */
 import { join } from 'node:path';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 import { layer } from '@effect/vitest';
-import { Context, Effect, Exit, Schema, Stream } from 'effect';
+import { Context, Effect, Exit, PubSub, Schema, Stream } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/worldline';
+import { AppSignals } from '@texra-ai/worldline/plugins';
 import { AgentConfigSchema, generateRunId } from '@texra-ai/worldline/schemas';
 import { SessionRequests } from '@agent/runtime/requests';
 import { rootRun } from '@agent/runtime/rootLaunch';
@@ -116,6 +120,47 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
             expect(view.runs.get(runId)).toMatchObject({
               description: 'Renamed by hand',
             });
+          }),
+      );
+
+      it.effect(
+        'a file a run wrote from its working directory is announced where it is',
+        () =>
+          Effect.gen(function* () {
+            const { roots } = yield* FakeHost;
+            assert(roots.workspace !== undefined, 'no test workspace');
+            const chapters = join(roots.workspace, 'chapters');
+            mkdirSync(chapters);
+            // Subscribed before the run starts, so it holds every signal.
+            const signals = yield* (yield* AppSignals).subscribe;
+            const session = yield* persistentTestSession(roots);
+            const runId = generateRunId();
+            yield* rootRun({
+              config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                label: 'chapter_writer',
+                system: `GOLDEN-APPROVAL write_file ${JSON.stringify({ path: 'nested.tex', content: 'Nested.\n' })}`,
+                tools: ['write_file'],
+                model: 'openai/gpt-5.6-sol',
+                instruction: 'Write the chapter.',
+                workingDirectory: chapters,
+              }),
+              runId,
+              approval: 'autoApprove',
+            }).pipe(Effect.provide(session));
+            yield* untilStored(roots.storage, (rows) =>
+              rows.some((row) => row.run === runId && row.type === 'run.end'),
+            );
+            // The close waits for the session's reader of committed rows.
+            yield* Sessions.use((sessions) => sessions.close(roots));
+            const published = yield* PubSub.takeUpTo(
+              signals,
+              Number.POSITIVE_INFINITY,
+            );
+            expect(
+              published.flatMap(({ signal, payload }) =>
+                signal === 'workspaceFilesWritten' ? [payload] : [],
+              ),
+            ).toEqual([{ absolutePaths: [join(chapters, 'nested.tex')] }]);
           }),
       );
     });
