@@ -33,13 +33,10 @@ type AgentErrorPresentation =
       readonly payload: RequestShowErrorPayload;
     };
 
-const MISSING_API_KEY_MESSAGE =
-  'API key not found. Set your API key and run again.';
-
 /**
- * Map a run's failure to host guidance: the missing-key instruction, or an
- * error with a model failure's verdict beside its message, which a host may
- * word in its place.
+ * Map a run's failure to host guidance: the missing-key instruction, in the
+ * route's own words (they name the provider), or an error with a model
+ * failure's verdict beside its message, which a host may word in its place.
  */
 export function agentErrorPresentation(
   error: NonNullable<RunEnd['error']>,
@@ -53,7 +50,7 @@ export function agentErrorPresentation(
       type: 'instruction',
       payload: {
         key: HARNESS_INSTRUCTION_KEY.MISSING_API_KEY,
-        message: MISSING_API_KEY_MESSAGE,
+        message: runEndErrorMessage(error),
       },
     };
   return {
