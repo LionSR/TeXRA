@@ -30,7 +30,7 @@ export type SubscriptionAuthStatuses = Readonly<
 >;
 
 /** The names a signed-in session may carry for its account. */
-export type SubscriptionAccountNames = Pick<
+type SubscriptionAccountNames = Pick<
   SubscriptionAuthStatus,
   'email' | 'accountId'
 >;
