@@ -137,7 +137,8 @@ const resolveWritable = Effect.fn('workspaceFileRequest.resolveWritable')(
  * agent input picker: it shares the ignore policy but not the picker's
  * `.ts`/`.js`/`.json` exclusions, and hides only known binary media and
  * office formats. A symlink is not listed: its target is either a second
- * entry for a file already in the tree or outside the project.
+ * entry for a file already in the tree or outside the project. The entries
+ * come as the file system returns them: the tree that shows them sorts them.
  */
 const listDirectory = Effect.fn('workspaceFileRequest.listDirectory')(
   function* (requested: string) {
@@ -166,28 +167,18 @@ const listDirectory = Effect.fn('workspaceFileRequest.listDirectory')(
     // it. The tolerant form drops an entry whose type cannot be read
     // (warn-logged) rather than failing the tree.
     const entries = yield* readDirectoryTypedTolerant(absoluteDirectory);
-    return entries
-      .flatMap(([name, type]) => {
-        if (type === 'SymbolicLink') return [];
-        const path = normalizeFilePath(
-          directory ? join(directory, name) : name,
-        );
-        if (type === 'Directory') {
-          return shouldVisitDirectory(path, filters)
-            ? [{ name, path, isDirectory: true }]
-            : [];
-        }
-        return type === 'File' && passesFileFilters(path, filters)
-          ? [{ name, path, isDirectory: false }]
+    return entries.flatMap(([name, type]) => {
+      if (type === 'SymbolicLink') return [];
+      const path = normalizeFilePath(directory ? join(directory, name) : name);
+      if (type === 'Directory') {
+        return shouldVisitDirectory(path, filters)
+          ? [{ path, isDirectory: true }]
           : [];
-      })
-      .sort((left, right) =>
-        left.name.localeCompare(right.name, undefined, {
-          numeric: true,
-          sensitivity: 'base',
-        }),
-      )
-      .map(({ path, isDirectory }) => ({ path, isDirectory }));
+      }
+      return type === 'File' && passesFileFilters(path, filters)
+        ? [{ path, isDirectory: false }]
+        : [];
+    });
   },
 );
 
