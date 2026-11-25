@@ -75,16 +75,28 @@ const withoutAnnotations = (text) => {
   }
 };
 
-/** What a round must leave as it found it: text without the definition's
- *  lines, its annotations and its whitespace. A file may have held the
- *  definition or annotations already, so both sides lose them. */
-const original = (text) =>
+/** The lines of the macro's definition that text holds. */
+const definitionLines = (text) =>
+  DEFINITION.filter((line) =>
+    text.split('\n').some((held) => held.trim() === line),
+  );
+
+/** What a round must leave as it found it: text without its annotations,
+ *  without the definition lines a round may add (those not in `held`, the
+ *  ones the file started with), and with each run of whitespace as one
+ *  space, so words a round joined or split still differ. */
+const original = (text, held) =>
   withoutAnnotations(
     text
       .split('\n')
-      .filter((line) => !DEFINITION.includes(line.trim()))
+      .filter(
+        (line) =>
+          held.includes(line.trim()) || !DEFINITION.includes(line.trim()),
+      )
       .join('\n'),
-  ).replace(/\s+/g, '');
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
 
 export default async (args, { instruction, inputFiles, contextFiles }) => {
   // `main.TEX` is a LaTeX file too.
@@ -95,8 +107,13 @@ export default async (args, { instruction, inputFiles, contextFiles }) => {
     throw new Error(
       'annotate works on .tex files: pass the documents to review as inputFiles.',
     );
+  const held = {};
   const before = {};
-  for (const file of files) before[file] = original(await read(file));
+  for (const file of files) {
+    const text = await read(file);
+    held[file] = definitionLines(text);
+    before[file] = original(text, held[file]);
+  }
   const task = [
     ...(instruction.trim()
       ? ['<instruction>\n' + instruction.trim() + '\n</instruction>']
@@ -140,7 +157,8 @@ export default async (args, { instruction, inputFiles, contextFiles }) => {
     );
     changed = [];
     for (const file of files)
-      if (original(await read(file)) !== before[file]) changed.push(file);
+      if (original(await read(file), held[file]) !== before[file])
+        changed.push(file);
     if (changed.length === 0) return answer('', reply.response);
   }
   return answer(

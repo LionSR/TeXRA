@@ -69,8 +69,8 @@ curl -s -o /dev/null -w '%{http_code}\n' --max-time 30 \
 - `itemType` is one of `journalArticle`, `book`, `bookSection`, `conferencePaper`, `thesis`, `report`, `webpage`, `preprint`. An arXiv paper or any other preprint is `preprint`, never `webpage`.
 - Other fields: `publicationTitle` (the journal), `volume`, `issue`, `pages`.
 - A person is `{"firstName","lastName","creatorType":"author"}`, with a name particle ("van der") in `lastName`; an organization is `{"name","creatorType":"author"}`.
-- Add `"targetID":"<collection key>"` beside `items` to file the item in a collection.
+- The item goes into the collection selected in the Zotero window, or the library root when none is. The request names no collection: to file it elsewhere, ask the person to select that collection in Zotero first.
 
-With only a URL, let Zotero read the page's metadata: POST `{"url":"https://..."}` (and `targetID` if wanted) to `/connector/saveSnapshot`. A snapshot takes no metadata, so use `saveItems` whenever you have any.
+With only a URL, let Zotero read the page's metadata: POST `{"url":"https://..."}` to `/connector/saveSnapshot`. A snapshot takes no metadata, so use `saveItems` whenever you have any.
 
 `200` or `201` means the item was saved; any other status carries an `error` in its JSON body. Do not interrupt or blindly repeat a save that timed out: check the library first, since the item may have landed. Take the metadata from the source (the arXiv record, the DOI's publisher page), not from memory.

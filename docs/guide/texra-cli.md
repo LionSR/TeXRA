@@ -127,7 +127,7 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 `contract: 3` (the 1.0 contract version):
 
 - `kind: "progress"` carries a session event verbatim, with `event` set to the
-  event's `type` (`run.start`, `run.activate`, `run.end`, `usage`, `stage.start`,
+  event's `type` (`run.start`, `run.activate`, `run.end`, `usage`,
   `tool.start`, `run.description`, `run.removed`, and so on) and `payload`
   holding the remaining fields:
   - **Identity & outcomes:** Run events identify their run via
@@ -136,10 +136,8 @@ Every `--output-format ndjson` line is one JSON object whose first key is
     appear on `run.end` as `outcome`.
   - **Spend:** Each `usage` event represents one priced model turn, so total
     run spend is the sum of its `usage` events.
-  - **Turns, stages & scripts:** Run turns appear as `run.position` events
-    (`turn.begin`, `turn.end`). A `stage.start`/`stage.end` pair marks a
-    labelled span (such as a script section); any stage still open when the run
-    ends closes with `run.end`. Tool calls made inside a script carry a
+  - **Turns & scripts:** Run turns appear as `run.position` events
+    (`turn.begin`, `turn.end`). Tool calls made inside a script carry a
     `stageId` matching the enclosing `script` card's `logId`, which closes with
     its own `tool.end`.
   - **Live children (`event: "run.children"`):** The one synthetic progress event (no

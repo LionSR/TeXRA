@@ -39,7 +39,7 @@ You can also start any program yourself, by name, from the terminal.
 
   ```bash
   texra run annotate --input paper.tex --instruction "Flag every unclear step in Section 3"
-  texra run transcribe --input notes-page1.jpg --input notes-page2.jpg"
+  texra run transcribe --input notes-page1.jpg --input notes-page2.jpg
   ```
 
   Every program needs at least one `--input` file. A name that is not a
