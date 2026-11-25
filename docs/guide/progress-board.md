@@ -77,7 +77,7 @@ The header summarizes and controls the selected task:
     - **Compact conversation**: Summarize earlier turns.
     - **Run again…**: Open the New task form prefilled with the chat's model, instruction, skills, and images to start a fresh task.
   - **Global**: **Open tasks in editor** (or **Back to sidebar**).
-- **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation up to its last finished turn, leaving the original untouched) and, for interrupted tasks or program runs with saved outputs, **Resume** (continues from saved outputs instead of starting over). Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
+- **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation up to its last finished turn, leaving the original untouched) and, for interrupted tasks, **Resume** (continues from where the task stopped instead of starting over). Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
 
 ### Checking a launch
 
