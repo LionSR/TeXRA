@@ -31,6 +31,7 @@ import {
   type AgentConfigPayload,
   generateRunId,
   programOf,
+  RUN_OUTCOME,
   type RunId,
   Rejected,
   acceptsFollowUp,
@@ -270,7 +271,7 @@ export function createChatSessionController(
   ): Effect.Effect<void> =>
     Effect.suspend(() => {
       if (rootRunId.get() !== runId) return Effect.void;
-      if (runViewOf(currentView(), runId)?.outcome === 'cancelled')
+      if (runViewOf(currentView(), runId)?.outcome === RUN_OUTCOME.CANCELLED)
         return Effect.void;
       session.rootFailed(runId);
       return showFailure(error);
@@ -824,7 +825,7 @@ export function createChatSessionController(
       if (
         root !== undefined &&
         (root.holder === 'here' ||
-          (root.outcome === 'cancelled' && acceptsFollowUp(root)))
+          (root.outcome === RUN_OUTCOME.CANCELLED && acceptsFollowUp(root)))
       )
         return yield* send(root.id, true);
       const started = yield* startSession(line, mediaFiles, skills);
