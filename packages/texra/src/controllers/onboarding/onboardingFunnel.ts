@@ -24,6 +24,7 @@
 import { Effect, Option, Schema, type Scope, Stream } from 'effect';
 import {
   decodingDefault,
+  RUN_OUTCOME,
   type SessionView,
   type StateKey,
 } from '@texra-ai/worldline/schemas';
@@ -81,7 +82,7 @@ export function setFirstRunDone(
 function hasCompletedRun(view: SessionView): boolean {
   for (const run of view.runs.values()) {
     if (
-      run.outcome === 'completed' &&
+      run.outcome === RUN_OUTCOME.COMPLETED &&
       run.identity.kind === 'agent' &&
       run.identity.agent !== SETUP_AGENT_NAME
     )

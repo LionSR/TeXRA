@@ -467,7 +467,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
    *  call's error fails it and is the reply (`turnResponse`). */
   const completeTurn = (at: RunState): RunExit => ({
     state: at,
-    outcome: at.handedDown?.status === 'error' ? 'failed' : 'completed',
+    outcome:
+      at.handedDown?.status === 'error'
+        ? RUN_OUTCOME.FAILED
+        : RUN_OUTCOME.COMPLETED,
   });
 
   /** A handed-down call asks no model, and a delivered result may end the
@@ -578,10 +581,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       });
       state = outcome.state;
       if (outcome.kind === 'cancelled')
-        return { state, outcome: 'cancelled' } as const;
+        return { state, outcome: RUN_OUTCOME.CANCELLED } as const;
       if (outcome.kind !== 'failed') continue;
       const compacted = yield* compactAfterOverflow({ ...compaction, bound });
-      if (compacted === null) return { state, outcome: 'failed' } as const;
+      if (compacted === null)
+        return { state, outcome: RUN_OUTCOME.FAILED } as const;
       state = compacted;
     }
   });
@@ -635,7 +639,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }
       const turn: RunExit = yield* runTurn(cell);
       state = turn.state;
-      if (turn.outcome === 'cancelled') {
+      if (turn.outcome === RUN_OUTCOME.CANCELLED) {
         return { state, outcome: RUN_OUTCOME.CANCELLED };
       }
       // The turn boundary, in one batch: Stop hooks, the steps (`waiting`
@@ -647,7 +651,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         reply,
       );
       const goesOn =
-        !run.toolPolicy.stopAfterCycle && turn.outcome === 'completed';
+        !run.toolPolicy.stopAfterCycle &&
+        turn.outcome === RUN_OUTCOME.COMPLETED;
       const ending = [
         positionRow(runId, state, 'turn.end'),
         ...log.closure(runId),
@@ -663,7 +668,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           : yield* followUps.consume(cell, next, {
               rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
             });
-      if (turn.outcome === 'completed') {
+      if (turn.outcome === RUN_OUTCOME.COMPLETED) {
         const cost = state.usage.cost;
         run.onProgress?.({
           kind: 'overview',
@@ -675,7 +680,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (block !== null) continue;
       // A one-shot run ends with its completed turn; a handed-down call's
       // run ends at its park, however its turn ended.
-      if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
+      if (
+        run.toolPolicy.stopAfterCycle &&
+        turn.outcome === RUN_OUTCOME.COMPLETED
+      )
         return { state, outcome: turn.outcome };
     }
   });

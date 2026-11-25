@@ -13,10 +13,7 @@ import {
   REQUEST_ACTIONS,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
-import {
-  runGrantCliAction,
-  RUN_GRANT_ORDER,
-} from '@ui/copy/delegationApproval';
+import { runGrantCliAction } from '@ui/copy/delegationApproval';
 import {
   requestDeclineLabel,
   requestPrimaryLabel,
@@ -34,13 +31,21 @@ type ConfirmCardKind = {
 
 type ConfirmCardKey = Pick<ReturnKeyInput, 'escape' | 'ctrl' | 'meta'>;
 
+/** A card's key hint, with the shorter action a narrow card shows in its
+ *  place; without one the action is already short. */
+interface ConfirmCardHint extends KeyHint {
+  readonly compact?: string;
+}
+
 /** One key of a card's keymap: its hint and what pressing it answers.
  *  `'feedback'` opens the rejection note instead of deciding. */
-export interface ConfirmCardKeyRow extends KeyHint {
+export interface ConfirmCardKeyRow extends ConfirmCardHint {
   readonly decision: SurfaceDecision | 'feedback';
 }
 
-export interface ConfirmCardHintOptions<Extra extends KeyHint = KeyHint> {
+export interface ConfirmCardHintOptions<
+  Extra extends ConfirmCardHint = ConfirmCardHint,
+> {
   /** The request kind answered: what `y`, `n` and Esc send is its row of
    *  `REQUEST_ACTIONS`. A kind that declines with a note opens the note on
    *  `n`; one that stops the task stops it at once. Its words are the
@@ -81,7 +86,9 @@ export function confirmCardPulsedTitle(nowMs: number, title: string): string {
  * The card's keymap in hint order, one row per letter key. Esc is not a row:
  * it always declines, and `confirmCardKeyHints` appends its hint last.
  */
-export function confirmCardKeyRows<Extra extends KeyHint = ConfirmCardKeyRow>({
+export function confirmCardKeyRows<
+  Extra extends ConfirmCardHint = ConfirmCardKeyRow,
+>({
   kind,
   grant,
   extraActions = [],
@@ -97,6 +104,7 @@ export function confirmCardKeyRows<Extra extends KeyHint = ConfirmCardKeyRow>({
     {
       key: 'n',
       action: feedback ? `${decline} & note` : decline,
+      compact: decline,
       decision: feedback ? 'feedback' : declineDecision(kind),
     },
     ...(grant == null
@@ -105,6 +113,7 @@ export function confirmCardKeyRows<Extra extends KeyHint = ConfirmCardKeyRow>({
           {
             key: 'a',
             action: runGrantCliAction(grant).full,
+            compact: runGrantCliAction(grant).compact,
             // A separate key on screen only: `approvalDecisionDelivery` sends it
             // as a plain approve that grants the request's own session bypass.
             decision: { action: APPROVE_SESSION_ACTION },
@@ -136,7 +145,9 @@ export function confirmCardKeyDecision(
   return rows.find((row) => row.key.toLowerCase() === pressed)?.decision;
 }
 
-function confirmCardKeyHints(options: ConfirmCardHintOptions): KeyHint[] {
+function confirmCardKeyHints(
+  options: ConfirmCardHintOptions,
+): ConfirmCardHint[] {
   return [
     ...confirmCardKeyRows(options),
     { key: 'Esc', action: declineAction(options.kind) },
@@ -147,19 +158,6 @@ export function confirmCardFeedbackHints(): KeyHint[] {
   return [{ key: 'Enter', action: 'send note' }, BACK_HINT];
 }
 
-const COMPACT_HINT_ACTIONS: Readonly<Record<string, string>> = {
-  'reject & note': 'reject',
-  ...Object.fromEntries(
-    RUN_GRANT_ORDER.map((kind) => {
-      const { full, compact } = runGrantCliAction(kind);
-      return [full, compact];
-    }),
-  ),
-  // The plan card's two goal keys, so both fit beside y and n.
-  'run as goal': 'goal',
-  'goal, approve all': 'all work',
-};
-
 function isCoreApprovalHint(hint: KeyHint): boolean {
   return hint.key === 'y' || hint.key === 'n' || hint.key === 'Esc';
 }
@@ -168,9 +166,9 @@ export function confirmCardKeyHintsForWidth(
   options: ConfirmCardHintWidthOptions,
 ): KeyHint[] {
   const fullHints = confirmCardKeyHints(options);
-  const compactHints = fullHints.map((hint) => ({
-    ...hint,
-    action: COMPACT_HINT_ACTIONS[hint.action] ?? hint.action,
+  const compactHints = fullHints.map(({ key, action, compact }) => ({
+    key,
+    action: compact ?? action,
   }));
   const candidates: readonly KeyHint[][] = [
     fullHints,

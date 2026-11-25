@@ -140,8 +140,7 @@ interface CompactionInput {
   readonly bound: BoundModel;
   /** The run's invoker, which makes the summary call. */
   readonly invoker: ModelInvoker['Service'];
-  /** The run's cell: a token renewal reads its declined routes, and the
-   *  summary lands on it. */
+  /** The run's cell, which the summary lands on. */
   readonly cell: RunCell;
   /** The session's setting slots: the threshold is a live per-check read. */
   readonly stores: SettingsStores;
@@ -187,7 +186,7 @@ const thresholdTokens = Effect.fn('compaction.thresholdTokens')(function* (
  */
 const summarize = Effect.fn('compaction.summarize')(function* (
   state: RunState,
-  input: Pick<CompactionInput, 'logger' | 'bound' | 'invoker' | 'cell'>,
+  input: Pick<CompactionInput, 'logger' | 'bound' | 'invoker'>,
   trigger: Trigger,
   /** The tokens a threshold summary leaves as written. */
   tail: number,
@@ -226,7 +225,7 @@ const summarize = Effect.fn('compaction.summarize')(function* (
   // up to the model's limit; a limit too small for a manual thinking budget
   // runs without thinking (the model's rule, not this one's).
   const summarized = yield* Effect.exit(
-    input.invoker.call(input.cell, {
+    input.invoker.call({
       mode: 'foreground',
       system: COMPACTION_SYSTEM_PROMPT,
       messages: [

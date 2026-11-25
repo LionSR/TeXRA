@@ -35,7 +35,7 @@ interface CliSessionStatusInput {
   /** Root run id, when a run has started. Surfaces the resume command
    *  mid-session instead of only in the exit hint. */
   readonly sessionId?: string;
-  readonly commandName?: string;
+  readonly commandName: string;
   readonly cwd?: string;
   readonly processCwd?: string;
   readonly approvalPolicy: ApprovalPolicy;

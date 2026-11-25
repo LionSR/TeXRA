@@ -29,7 +29,11 @@ import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAut
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
-import { ACCOUNT_OUTCOME, SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
+import {
+  ACCOUNT_OUTCOME,
+  SIGN_IN_PROMPT,
+  SUBSCRIPTION_AUTH_COPY,
+} from '@ui/copy/accountAuth';
 import {
   emitAppSignal,
   logFailure,
@@ -106,7 +110,8 @@ interface SubscriptionSignInOptions {
 /** One OAuth subscription provider, as every host consumes it. */
 export interface SubscriptionProvider {
   readonly id: SubscriptionProviderId;
-  /** Name used verbatim in prompts, titles, and errors. */
+  /** Name used verbatim in prompts, titles, and errors: the account copy's
+   *  `label`. */
   readonly displayName: string;
   /** Account the browser session belongs to ('ChatGPT', 'xAI'). */
   readonly sessionName: string;
@@ -178,14 +183,10 @@ export interface SubscriptionSignOutResult {
 type AccountOf<Id extends SubscriptionProviderId> =
   SubscriptionAccounts['Service'][(typeof SUBSCRIPTION_ROUTES)[Id]];
 
-/** A row's descriptor fields pass through to the provider unchanged; its
- *  account runs the sign-in itself. */
-interface SubscriptionProviderBindings<
-  Id extends SubscriptionProviderId,
-> extends Pick<
-  SubscriptionProvider,
-  'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
-> {
+/** A row's id and how it labels an account; its names are the account's
+ *  copy (`SUBSCRIPTION_AUTH_COPY`), and its account runs the sign-in
+ *  itself. */
+interface SubscriptionProviderBindings<Id extends SubscriptionProviderId> {
   readonly id: Id;
   /** How the account is named in a sentence, from the names its session
    *  carries. */
@@ -208,8 +209,17 @@ class SubscriptionSignInFailed extends Schema.TaggedError<SubscriptionSignInFail
  */
 function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
   accountLabel,
-  ...descriptor
+  id,
 }: SubscriptionProviderBindings<Id>): SubscriptionProvider {
+  const { label, sessionName, copyTarget, modelFamily } =
+    SUBSCRIPTION_AUTH_COPY[id];
+  const descriptor = {
+    id,
+    displayName: label,
+    sessionName,
+    copyTarget,
+    modelFamily,
+  };
   const account: Effect.Effect<
     AccountOf<Id>,
     never,
@@ -367,10 +377,6 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
  */
 const CHATGPT_PROVIDER = defineSubscriptionProvider({
   id: 'chatgpt',
-  displayName: 'ChatGPT',
-  sessionName: 'ChatGPT',
-  copyTarget: 'ChatGPT',
-  modelFamily: 'OpenAI models',
   // The email is the identity a user recognizes; the account id is the only
   // other identifier the token carries.
   accountLabel: (account) =>
@@ -383,10 +389,6 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
  */
 const GROK_PROVIDER = defineSubscriptionProvider({
   id: 'grok',
-  displayName: 'Grok',
-  sessionName: 'xAI',
-  copyTarget: 'Grok / xAI',
-  modelFamily: 'xAI models',
   accountLabel: (account) => account.email ?? 'your Grok account',
 });
 

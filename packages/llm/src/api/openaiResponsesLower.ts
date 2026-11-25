@@ -1,5 +1,5 @@
 // Third-party imports
-import { Clock, Effect, Number as Num, Schema } from 'effect';
+import { Clock, Effect, Number as Num } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract

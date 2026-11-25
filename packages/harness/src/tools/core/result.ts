@@ -4,8 +4,6 @@
 // result carries only `output` and an optional `summary`; a result that also
 // carries `diagnostics`, `files`, `edits`, `endTurn`, … stays an explicit
 // literal, since those fields are the point of the call site.
-//
-// Host-agnostic, VS Code-free.
 
 import type { ToolResult } from '@shared/schemas';
 

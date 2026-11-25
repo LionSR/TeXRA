@@ -62,7 +62,7 @@ export function createDesktopShellCommands(
     );
   };
   const isMainCommand = (id: DesktopCommandId): id is DesktopMainCommandId =>
-    (DESKTOP_MAIN_COMMANDS as readonly DesktopCommandId[]).includes(id);
+    Object.hasOwn(programs, id);
   return {
     run: (id) => {
       if (isMainCommand(id)) runHere(id);

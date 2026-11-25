@@ -31,7 +31,7 @@ const queuedTexts = (session: Context.Context<SessionServices>, runId: RunId) =>
   Effect.gen(function* () {
     const log = Context.get(session, SessionLog);
     yield* log.drained;
-    const rows = yield* log.history(runId, undefined, ['followup.queued']);
+    const rows = yield* log.display(runId);
     return rows.flatMap((row) =>
       row.type === 'followup.queued' && 'text' in row.content
         ? [row.content.text]

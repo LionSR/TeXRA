@@ -80,7 +80,7 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
       items={(result) => skillSelectItemsForTui(result.skills)}
       isEmpty={(result) => result.skills.length === 0}
       availableRows={props.availableRows}
-      description={<Text dimColor>Select a skill to activate it.</Text>}
+      description="Select a skill to activate it."
       detailFor={skillIssueSummaryDetail}
       detailRowsFor={(result) =>
         (result.issues.length > 0 ? 1 : 0) +

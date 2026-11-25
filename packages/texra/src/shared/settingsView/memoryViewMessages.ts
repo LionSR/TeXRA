@@ -7,7 +7,7 @@ import { Schema } from 'effect';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 
 /** Which folder: the person's own, or this project's. */
-export const MEMORY_FOLDER_SCOPES = Object.freeze(['user', 'project'] as const);
+const MEMORY_FOLDER_SCOPES = Object.freeze(['user', 'project'] as const);
 export type MemoryFolderScope = (typeof MEMORY_FOLDER_SCOPES)[number];
 
 export const OpenMemoryFolderMessageSchema = Schema.Struct({

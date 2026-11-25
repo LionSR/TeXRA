@@ -53,8 +53,6 @@ type ClipboardAttachResult =
       readonly ok: true;
       /** Absolute path to the saved image under the shared `pasted/` dir. */
       readonly path: string;
-      readonly mediaType: string;
-      readonly displayName: string;
     }
   | { readonly ok: false; readonly reason: string };
 
@@ -255,16 +253,10 @@ export function attachClipboardImage(
       return notAttached('Clipboard image is too large to attach.');
     }
 
-    const fileName = generatePastedImageName('png');
     const path = yield* withSessionFs(
       roots,
-      savePastedImageBuffer(read, fileName),
+      savePastedImageBuffer(read, generatePastedImageName('png')),
     );
-    return {
-      ok: true as const,
-      path,
-      mediaType: 'image/png',
-      displayName: fileName,
-    };
+    return { ok: true as const, path };
   }).pipe(Effect.scoped);
 }

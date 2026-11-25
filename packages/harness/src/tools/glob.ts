@@ -23,7 +23,7 @@ import { toPosixPath } from '@utils/core/pathCore';
 import { listedEntryGone } from '@utils/files/fsEntryExists';
 import { globEscape } from '@utils/files/rootedFileSystem';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { pluralize } from '@utils/text/stringUtils';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/definition';
@@ -146,10 +146,10 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
     })
     .map((item) => toPosixPath(item.relativePath));
   const count = lines.length;
-  const header = `Found ${count} ${pluralize(count, 'file')} matching "${input.pattern}" under ${display}`;
+  const header = `Found ${formatResultCount(count, 'file')} matching "${input.pattern}" under ${display}`;
   return executed(
     formatToolOutput(header, lines, '(no matches)'),
-    `Found ${count} ${pluralize(count, 'file')} for "${input.pattern}" in ${display}`,
+    `Found ${formatResultCount(count, 'file')} for "${input.pattern}" in ${display}`,
   );
 });
 

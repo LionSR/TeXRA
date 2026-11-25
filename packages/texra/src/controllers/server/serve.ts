@@ -301,9 +301,9 @@ export const serve = Effect.fn('server.serve')(function* (
   ProcessServices | Sessions | HostWindows | Scope.Scope
 > {
   if (IS_WINDOWS)
-    return yield* new ServiceListenFailed({
-      socket: '',
-      cause: new Error(WINDOWS_UNSUPPORTED),
+    return yield* new ServiceUnavailable({
+      reason: WINDOWS_UNSUPPORTED,
+      failure: { kind: 'none' },
     });
   const fs = yield* FileSystem.FileSystem;
   // In a scope of their own, which the exit below closes before the socket:

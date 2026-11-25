@@ -1827,6 +1827,7 @@ function appendHarnessStatus(): void {
   const run = runViewOf(view, runId);
   appendHarnessAssistantTranscript(
     formatCliSessionStatus({
+      commandName: HARNESS_CLI_CONTEXT.commandName,
       agent: meta.chat.label,
       model: meta.model,
       modelAccess: run?.usage.usageRoute,
@@ -1992,6 +1993,7 @@ function renderHarnessApp(): React.JSX.Element {
         }}
       >
         <App
+          commandName={HARNESS_CLI_CONTEXT.commandName}
           session={harnessRunSession}
           draft={harnessDraft}
           onSubmit={(draft) => handleHarnessSubmit(expandText(draft).trim())}

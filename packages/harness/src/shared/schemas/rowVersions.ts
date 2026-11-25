@@ -153,7 +153,8 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     'context.edit': Object.freeze({ ...V1, listing: 'none' }),
     'tool.intent': Object.freeze({ ...V1, listing: 'none' }),
     'script.call': Object.freeze({ ...V1, listing: 'none' }),
-    'tool.result': Object.freeze({ ...V1, listing: 'none' }),
+    // v2: no `duplicateOf`; the response's dispatch fact names the primary.
+    'tool.result': Object.freeze({ version: 2, listing: 'none' }),
     'tools.offered': Object.freeze({ ...V1, listing: 'none' }),
     // The recorded request a blob holds is part of this kind's shape, its
     // controls as each protocol prepares them: a resumed background turn is

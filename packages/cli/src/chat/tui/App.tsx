@@ -103,7 +103,7 @@ interface AppProps {
   /** The chat's draft, which the input bar edits. */
   readonly draft: SubscriptionRef.SubscriptionRef<InputDraft>;
   readonly onSubmit: (draft: InputDraft, holdUntil?: 'turn') => void;
-  readonly commandName?: string;
+  readonly commandName: string;
   /** The chat's scrollback record and its repaint. */
   readonly scrollback: ChatScrollback;
   /** Hand the second Ctrl+C (the one no draft consumed) to the host's SIGINT

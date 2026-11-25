@@ -13,10 +13,7 @@ import type { HttpClientRequest } from 'effect/http';
  * tests that serve a scripted fetch through `FetchHttpClient.Fetch`.
  */
 export function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return Response.json(body, { status });
 }
 
 /** The HTTP client of a suite that answers no HTTP: any request dies, so an

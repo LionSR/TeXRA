@@ -71,12 +71,10 @@ export interface SessionLogShape {
   /** The current commit ordinal: where a new reader starts its {@link tail}. */
   now(): CommitOrdinal;
   /** A run's history rows, the kinds its state reads, in seq order; with
-   *  `fromSeq`, only those from that seq on; with `types`, those kinds
-   *  instead. */
+   *  `fromSeq`, only those from that seq on. */
   history(
     id: RunId,
     fromSeq?: number,
-    types?: readonly SessionRow['type'][],
   ): Effect.Effect<readonly SessionRow[], DatabaseReadFailed>;
   /** What one read (`RUN_ROW_READS`) makes of the rows of its kinds, read
    *  through the type index of a run's aggregate; with `through`, of its

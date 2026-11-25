@@ -1,5 +1,3 @@
-import { Text } from 'ink';
-
 import { CANCEL_HINT } from '@cli/tui/ui/KeyHints';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
@@ -46,12 +44,7 @@ export function ApprovalPolicyForm(
       items={items}
       compactVisibleItems={items.length}
       activeValue={props.currentPolicy}
-      description={
-        <Text dimColor>
-          Choose when commands and edits ask first. Press a on a request to
-          approve all of its kind in this task.
-        </Text>
-      }
+      description="Choose when commands and edits ask first. Press a on a request to approve all of its kind in this task."
       selectMarginTop={1}
       action="select"
       escape={CANCEL_HINT}

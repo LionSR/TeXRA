@@ -9,11 +9,7 @@ import {
   withText,
 } from '@cli/chat/tui/input/draftAttachments';
 
-const img = (name: string) => ({
-  path: `/p/${name}`,
-  mediaType: 'image/png',
-  displayName: name,
-});
+const img = (name: string) => `/p/${name}`;
 
 describe('Draft attachments', () => {
   it('resolves only image chips still present in the draft (orphan gate)', () => {

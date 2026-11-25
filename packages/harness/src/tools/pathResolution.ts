@@ -3,10 +3,9 @@ import * as path from 'node:path';
 import { Array as Arr, Effect, Order, Result } from 'effect';
 
 // Local imports
-import { ToolError } from '@shared/schemas';
+import { asToolError, ToolError } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores, StateReadFailed } from '@shared/config/settings';
-import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { canonicalizePath, type StepRoot } from '@utils/files/externalRoots';
@@ -204,10 +203,7 @@ export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
         call.stepRoots,
       );
     },
-    catch: (cause) =>
-      cause instanceof ToolError
-        ? cause
-        : new ToolError(ensureError(cause).message, { cause }),
+    catch: asToolError,
   });
 
   if (!('kind' in resolution)) {

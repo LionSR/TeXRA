@@ -211,13 +211,11 @@ test('settings across themes and window sizes', async () => {
             {
               name: '5-hour',
               percentUsed: 1,
-              percentRemaining: 99,
               resetAt: now + 34 * 60_000,
             },
             {
               name: '7-day',
               percentUsed: 0,
-              percentRemaining: 100,
               resetAt: now + 6 * 86_400_000,
             },
           ],

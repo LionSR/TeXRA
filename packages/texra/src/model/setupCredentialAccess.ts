@@ -23,12 +23,9 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
     const models = Object.values(SETUP_MODEL_BY_PROVIDER);
     const options = yield* readModelOptions(stores, models);
     const byModel = new Map(options.map((option) => [option.model, option]));
-    const rows = new Map(
-      modelOptionsFrom(options).map((row) => [row.value, row]),
-    );
     const isRunnable = (model: string): boolean => {
-      const row = rows.get(model);
-      return row !== undefined && isModelOptionAvailable(row);
+      const option = byModel.get(model);
+      return option !== undefined && isModelOptionAvailable(option);
     };
     const pick =
       models.find(
@@ -39,7 +36,7 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
     // A key that could not be read is neither a credential nor its absence:
     // with nothing runnable, the answer is unknown, not "none".
     const unreadable = Object.entries(SETUP_MODEL_BY_PROVIDER).find(
-      ([, model]) => rows.get(model)?.availability === 'key-unreadable',
+      ([, model]) => byModel.get(model)?.availability === 'key-unreadable',
     );
     if (unreadable !== undefined) {
       return yield* new StateReadFailed({

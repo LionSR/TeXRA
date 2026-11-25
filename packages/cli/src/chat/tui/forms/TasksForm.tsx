@@ -92,12 +92,7 @@ export function TasksForm(props: TasksFormProps): React.JSX.Element {
         }))
       }
       availableRows={props.availableRows}
-      description={
-        <Text dimColor>
-          Every project&apos;s tasks; * runs in the service. Choose one to
-          attach.
-        </Text>
-      }
+      description="Every project's tasks; * runs in the service. Choose one to attach."
       emptyMessage={EMPTY_TASK_LIST.line}
       selectMarginTop={1}
       action="attach"

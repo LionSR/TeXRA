@@ -8,11 +8,12 @@
 // resolves a worker path at run time, so the extension's CJS bundle, the
 // CLI's single ESM file, the desktop's split ESM chunks and the desktop's
 // app.asar all start the same worker without a per-host lookup table.
-import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import { build } from 'esbuild';
+
+import workspaceManifest from '../package.json' with { type: 'json' };
 
 const repoRoot = resolve(import.meta.dirname, '..');
 export const CODE_SANDBOX_WORKER_ID = 'virtual:code-sandbox-worker';
@@ -114,8 +115,7 @@ export const codeSandboxWorker = {
  */
 function buildIdentityDefine() {
   const version =
-    process.env.TEXRA_BUILD_VERSION?.trim() ||
-    JSON.parse(readFileSync(resolve(repoRoot, 'package.json'), 'utf8')).version;
+    process.env.TEXRA_BUILD_VERSION?.trim() || workspaceManifest.version;
   return { 'process.env.TEXRA_BUILD_VERSION': JSON.stringify(version) };
 }
 

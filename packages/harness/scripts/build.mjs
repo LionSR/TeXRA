@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
@@ -15,7 +15,7 @@ const runNode = (args) => {
 };
 const runNodeScript = (script) => runNode([`scripts/${script}`]);
 
-runNodeScript('clean.mjs');
+rmSync(join(packageRoot, 'dist'), { force: true, recursive: true });
 runNodeScript('bundle.mjs');
 // The package's sources are TypeScript the repository type-checks as one
 // program, so the manifest declares no module type; the built output is

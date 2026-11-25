@@ -196,11 +196,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             outcome: RUN_OUTCOME.COMPLETED,
             output: { response: 'The check passed.' },
           });
-          const edits = yield* Context.get(session, SessionLog).history(
+          const edits = (yield* Context.get(session, SessionLog).history(
             runId,
-            undefined,
-            ['context.edit'],
-          );
+          )).filter((row) => row.type === 'context.edit');
           expect(edits).toMatchObject([
             { type: 'context.edit', payload: { trigger: 'overflow' } },
           ]);
@@ -248,11 +246,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               outcome: RUN_OUTCOME.COMPLETED,
               output: { response: 'Done.' },
             });
-            const edits = yield* Context.get(session, SessionLog).history(
+            const edits = (yield* Context.get(session, SessionLog).history(
               runId,
-              undefined,
-              ['context.edit'],
-            );
+            )).filter((row) => row.type === 'context.edit');
             // The first replaces the task and six exchanges; the second
             // starts after the first's summary.
             expect(edits).toMatchObject([
@@ -330,11 +326,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             ],
           });
           expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-          const edits = yield* Context.get(session, SessionLog).history(
+          const edits = (yield* Context.get(session, SessionLog).history(
             runId,
-            undefined,
-            ['context.edit'],
-          );
+          )).filter((row) => row.type === 'context.edit');
           expect(edits).toMatchObject([
             { payload: { cause: 'edit', range: { from: 3, to: 5 } } },
             { payload: { cause: 'edit', range: { from: 1, to: 3 } } },
@@ -393,11 +387,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             script: [textTurn('The proof begins with the', 'length')],
           });
           expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-          const finalized = yield* Context.get(session, SessionLog).history(
+          const finalized = (yield* Context.get(session, SessionLog).history(
             runId,
-            undefined,
-            ['response.finalized'],
-          );
+          )).filter((row) => row.type === 'response.finalized');
           expect(finalized).toMatchObject([
             { type: 'response.finalized', cut: 'length' },
           ]);

@@ -319,7 +319,6 @@ const skipCall = (
     Math.max(1, reached),
     {
       disposition: 'skipped',
-      duplicateOf: null,
       result: { status: 'error', error: reason },
       attachments: [],
     },
@@ -358,7 +357,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     if (primary !== null)
       yield* commitResult(call, Math.max(1, attemptOf(status)), {
         disposition: 'duplicate',
-        duplicateOf: fact.duplicateOf,
         result: withoutEffects(primary.result),
         attachments: [],
       });
@@ -569,7 +567,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
         attempt,
         {
           disposition: dispositionOf(sanitized),
-          duplicateOf: null,
           result: storedResult(sanitized),
           attachments,
         },
@@ -760,7 +757,6 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
       const result = answer();
       yield* commitResult(call, 1, {
         disposition: dispositionOf(result),
-        duplicateOf: null,
         result,
         attachments: [],
       });

@@ -16,7 +16,10 @@ import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { normalizeLineEndings } from '@texra/shared/utils/lineEndings';
-import { DESKTOP_LOCAL_COMMANDS } from '../shared/desktopCommandSurface';
+import {
+  DESKTOP_LOCAL_COMMANDS,
+  desktopCommandEntry,
+} from '../shared/desktopCommandSurface';
 import {
   DESKTOP_LOG_COMMANDS,
   type DesktopSetLogMessage,
@@ -243,8 +246,11 @@ export function createLogsPane(): LogsPaneController {
             ${action('file-export', 'Export', () =>
               postToMain({ command: DESKTOP_LOG_COMMANDS.EXPORT_LOG }),
             )}
-            ${action('folder-open', 'Open Logs Folder', () =>
-              postToMain({ command: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER }),
+            ${action(
+              'folder-open',
+              desktopCommandEntry(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER).title,
+              () =>
+                postToMain({ command: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER }),
             )}
           </div>
         </header>

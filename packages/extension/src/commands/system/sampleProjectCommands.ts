@@ -6,6 +6,7 @@ import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - fs
+import { pathExists } from '@texra-ai/worldline/node';
 import { withLogChannel, WorkspaceFs } from '@texra-ai/worldline/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import {
@@ -47,7 +48,7 @@ export const createSampleProjectWithoutWorkspace: (
     }
 
     const dest = path.join(parentPath, 'texra-sample');
-    if (yield* fs.exists(dest)) {
+    if (yield* pathExists(fs, dest)) {
       yield* showLoggedInfoMessage(
         'A texra-sample folder already exists there — opening it.',
       );
