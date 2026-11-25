@@ -1,7 +1,7 @@
 import { Command } from 'effect/cli';
 import type { SubscriptionAuthProvider } from '@texra-ai/worldline/schemas';
 
-import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
+import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 
 import { defineSubscriptionAuthCommand } from './_helpers/subscriptionAuthCommand';
 
@@ -20,7 +20,7 @@ const PROVIDER_COMMANDS = {
 // bare `texra auth` lists the groups.
 export const authCommand = Command.make('auth').pipe(
   Command.withDescription(
-    `Sign in with a ${CHATGPT_AUTH.subscriptionLabel} or ${GROK_AUTH.subscriptionLabel}; check status`,
+    `Sign in with a ${SUBSCRIPTION_AUTH_COPY.chatgpt.subscriptionLabel} or ${SUBSCRIPTION_AUTH_COPY.grok.subscriptionLabel}; check status`,
   ),
   Command.withSubcommands([PROVIDER_COMMANDS.chatgpt, PROVIDER_COMMANDS.grok]),
 );

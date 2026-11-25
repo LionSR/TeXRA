@@ -14,7 +14,7 @@ import {
 } from '@texra-ai/worldline/transcript';
 import { absurd } from 'effect';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
-import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
+import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import type {
   DeclinableUsageRoute,
   ModelAvailabilityKind,
@@ -38,11 +38,11 @@ import {
  */
 const PLAN_NAMES = Object.freeze({
   'chatgpt-subscription': {
-    plan: CHATGPT_AUTH.subscriptionLabel,
+    plan: SUBSCRIPTION_AUTH_COPY.chatgpt.subscriptionLabel,
     fallback: 'your own OpenAI API key',
   },
   'xai-subscription': {
-    plan: GROK_AUTH.subscriptionLabel,
+    plan: SUBSCRIPTION_AUTH_COPY.grok.subscriptionLabel,
     fallback: 'your own xAI API key',
   },
   'kimi-code-subscription': {
@@ -64,8 +64,8 @@ export function planFallbackName(route: DeclinableUsageRoute): string {
 /** The account each subscription session signs in to, by the route it
  *  bills: its switch and its sign-in, which a lapsed session names. */
 const SESSION_ACCOUNTS = Object.freeze({
-  'chatgpt-subscription': CHATGPT_AUTH,
-  'xai-subscription': GROK_AUTH,
+  'chatgpt-subscription': SUBSCRIPTION_AUTH_COPY.chatgpt,
+  'xai-subscription': SUBSCRIPTION_AUTH_COPY.grok,
 });
 
 /** The words for each availability kind but a subscription's, which its
