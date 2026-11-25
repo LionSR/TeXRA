@@ -25,7 +25,12 @@ import {
   toErrorMessage,
 } from '@texra-ai/worldline/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
-import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAuthStatus';
+import {
+  codexAccountLabel,
+  type SubscriptionAccountNames,
+  type SubscriptionAuthStatus,
+  xaiAccountLabel,
+} from '@texra/shared/model/subscriptionAuthStatus';
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
@@ -188,11 +193,7 @@ type AccountOf<Id extends SubscriptionProviderId> =
  *  itself. */
 interface SubscriptionProviderBindings<Id extends SubscriptionProviderId> {
   readonly id: Id;
-  /** How the account is named in a sentence, from the names its session
-   *  carries. */
-  readonly accountLabel: (
-    account: Pick<SubscriptionAuthStatus, 'email' | 'accountId'>,
-  ) => string;
+  readonly accountLabel: (account: SubscriptionAccountNames) => string;
 }
 
 /** A sign-in that could not finish: no transport this machine can use, or
@@ -377,10 +378,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
  */
 const CHATGPT_PROVIDER = defineSubscriptionProvider({
   id: 'chatgpt',
-  // The email is the identity a user recognizes; the account id is the only
-  // other identifier the token carries.
-  accountLabel: (account) =>
-    account.email ?? account.accountId ?? 'your ChatGPT account',
+  accountLabel: (account) => codexAccountLabel(account),
 });
 
 /**
@@ -389,7 +387,7 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
  */
 const GROK_PROVIDER = defineSubscriptionProvider({
   id: 'grok',
-  accountLabel: (account) => account.email ?? 'your Grok account',
+  accountLabel: (account) => xaiAccountLabel(account),
 });
 
 /** Canonical catalog of OAuth subscription providers, shared by every host. */
@@ -459,7 +457,6 @@ export function subscriptionAuthStatus(
     signedIn: status.signedIn,
     email: status.email,
     accountId: status.accountId,
-    accountLabel: status.label,
     preferSubscription: provider.isPreferSubscription(stores),
   }));
 }

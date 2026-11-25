@@ -198,7 +198,6 @@ test('settings across themes and window sizes', async () => {
           provider: 'chatgpt',
           signedIn: true,
           email: 'researcher@example.org',
-          accountLabel: 'researcher@example.org',
           preferSubscription: true,
         },
         now,
