@@ -24,17 +24,11 @@ import {
   formatCliCodingPlanPreference,
   formatCliSubscriptionPreference,
   cliCodingPlanStatus,
-  subscriptionAccountLabel,
 } from './modelAccessRoute';
 import {
   readModelAccessStatus,
   type ModelAccessStatus,
 } from '@texra/controllers/modelAccess/modelAccessPreference';
-
-function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
-  if (!signedIn) return 'signed out';
-  return `signed in${accountLabel ? ` as ${accountLabel}` : ''}`;
-}
 
 interface CliModelAccessOverview {
   readonly access: ModelAccessStatus;
@@ -140,10 +134,9 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
       subscription.preferSubscription,
       subscription.signedIn,
       'sign in required',
-      formatAccountStatus(
-        subscription.signedIn,
-        subscriptionAccountLabel(subscription),
-      ),
+      subscription.signedIn
+        ? `signed in as ${subscription.accountLabel}`
+        : 'signed out',
     );
     if (line) lines.push(line);
   }

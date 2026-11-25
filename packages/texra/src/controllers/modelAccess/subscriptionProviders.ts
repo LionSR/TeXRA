@@ -25,12 +25,7 @@ import {
   toErrorMessage,
 } from '@texra-ai/worldline/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
-import {
-  codexAccountLabel,
-  type SubscriptionAccountNames,
-  type SubscriptionAuthStatus,
-  xaiAccountLabel,
-} from '@texra/shared/model/subscriptionAuthStatus';
+import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAuthStatus';
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
@@ -192,7 +187,11 @@ interface SubscriptionProviderBindings<
   'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
 > {
   readonly id: Id;
-  readonly accountLabel: (account: SubscriptionAccountNames) => string;
+  /** How the account is named in a sentence, from the names its session
+   *  carries. */
+  readonly accountLabel: (
+    account: Pick<SubscriptionAuthStatus, 'email' | 'accountId'>,
+  ) => string;
 }
 
 /** A sign-in that could not finish: no transport this machine can use, or
@@ -372,7 +371,10 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
   sessionName: 'ChatGPT',
   copyTarget: 'ChatGPT',
   modelFamily: 'OpenAI models',
-  accountLabel: (account) => codexAccountLabel(account),
+  // The email is the identity a user recognizes; the account id is the only
+  // other identifier the token carries.
+  accountLabel: (account) =>
+    account.email ?? account.accountId ?? 'your ChatGPT account',
 });
 
 /**
@@ -385,7 +387,7 @@ const GROK_PROVIDER = defineSubscriptionProvider({
   sessionName: 'xAI',
   copyTarget: 'Grok / xAI',
   modelFamily: 'xAI models',
-  accountLabel: (account) => xaiAccountLabel(account),
+  accountLabel: (account) => account.email ?? 'your Grok account',
 });
 
 /** Canonical catalog of OAuth subscription providers, shared by every host. */
@@ -455,6 +457,7 @@ export function subscriptionAuthStatus(
     signedIn: status.signedIn,
     email: status.email,
     accountId: status.accountId,
+    accountLabel: status.label,
     preferSubscription: provider.isPreferSubscription(stores),
   }));
 }

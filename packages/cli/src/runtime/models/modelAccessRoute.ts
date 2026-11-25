@@ -40,20 +40,12 @@ export type CliModelAccessItemsInput =
       readonly state: 'failed' | 'loading';
     };
 
-/** The account a subscription session is signed in as, when it names one. */
-export function subscriptionAccountLabel(
-  status: SubscriptionAuthStatus,
-): string | undefined {
-  return status.email ?? status.accountId ?? undefined;
-}
-
 /** Format one subscription preference independently of its session. */
 export function formatCliSubscriptionPreference(
   status: SubscriptionAuthStatus,
 ): string {
-  const account = subscriptionAccountLabel(status) ?? 'your account';
-  if (status.preferSubscription && status.signedIn) return `On · ${account}`;
-  if (status.signedIn) return `Off · ${account}`;
+  if (status.signedIn)
+    return `${status.preferSubscription ? 'On' : 'Off'} · ${status.accountLabel}`;
   return status.preferSubscription
     ? 'On · sign in required'
     : 'Off · select to sign in and turn on';
@@ -160,8 +152,7 @@ export function buildCliAccountAccessRows(
         provider,
         operation: 'sign-out',
         label: copy.signOutLabel,
-        description:
-          subscriptionAccountLabel(subscription) ?? copy.subscriptionLabel,
+        description: subscription.accountLabel,
       });
     } else if (subscription.preferSubscription) {
       rows.push({

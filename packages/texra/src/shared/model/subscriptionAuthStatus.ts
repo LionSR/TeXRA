@@ -1,5 +1,5 @@
 /** Subscription sign-in status, as the model access controllers report it
- *  and every host's account surface shows it, and how its account is named. */
+ *  and every host's account surface shows it. */
 import { Schema } from 'effect';
 
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
@@ -15,6 +15,9 @@ export const SubscriptionAuthStatusSchema = Schema.Struct({
   signedIn: Schema.Boolean,
   email: Schema.optional(Schema.String),
   accountId: Schema.optional(Schema.String),
+  /** How the account is named in a sentence: its email, or the provider's
+   *  words for an account that names none. */
+  accountLabel: Schema.String,
   preferSubscription: Schema.Boolean,
 });
 export type SubscriptionAuthStatus =
@@ -28,24 +31,3 @@ export type SubscriptionAuthStatus =
 export type SubscriptionAuthStatuses = Readonly<
   Partial<Record<SubscriptionAuthStatus['provider'], SubscriptionAuthStatus>>
 >;
-
-/** The names a signed-in session may carry for its account. */
-export type SubscriptionAccountNames = Pick<
-  SubscriptionAuthStatus,
-  'email' | 'accountId'
->;
-
-/**
- * How a ChatGPT account is named in user-facing text, from a session, a
- * coordinator status, or the settings wire payload — all of which carry the
- * same optional `email`/`accountId` pair. The email is the identity a user
- * recognizes; the account id is the only other identifier the token carries.
- */
-export function codexAccountLabel(account: SubscriptionAccountNames): string {
-  return account.email ?? account.accountId ?? 'your ChatGPT account';
-}
-
-/** How a Grok account is named in user-facing text: its email, if known. */
-export function xaiAccountLabel(account: SubscriptionAccountNames): string {
-  return account.email ?? 'your Grok account';
-}
