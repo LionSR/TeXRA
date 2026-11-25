@@ -381,9 +381,10 @@ export function createEditorPane(
     }));
     if (expanded) {
       void run(
-        FiberSet.run(directoryLoads, logDefect(loadDirectory(directory.path))).pipe(
-          Effect.asVoid,
-        ),
+        FiberSet.run(
+          directoryLoads,
+          logDefect(loadDirectory(directory.path)),
+        ).pipe(Effect.asVoid),
       );
     }
   }

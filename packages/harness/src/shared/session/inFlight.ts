@@ -13,7 +13,6 @@ import type {
   DispatchFacts,
   StepAfterFailure,
   InvocationRef,
-  RequestDecision,
   ModelFailure,
   ScriptCallPayload,
   ToolResultPayload,
@@ -244,9 +243,7 @@ export function nextAttempt(
           retry: {
             personal,
             declines:
-              personal && offer?.kind === 'decline-route'
-                ? offer.route
-                : null,
+              personal && offer?.kind === 'decline-route' ? offer.route : null,
           },
         };
       }
