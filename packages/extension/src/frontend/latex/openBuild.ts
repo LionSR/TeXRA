@@ -63,25 +63,27 @@ function resolveLatexWorkshopOutDir(
   const relativeDir = path.relative(workspaceFolder, dir);
   const relativeDoc = path.relative(workspaceFolder, doc);
 
-  // Order matters: longer/more-specific placeholders first to avoid partial matches.
-  const replacements: [string, string][] = [
-    ['%DOC_EXT_W32%', filePath.replaceAll('/', '\\')],
-    ['%DOCFILE_EXT%', path.basename(filePath)],
-    ['%DOC_EXT%', filePath],
-    ['%DOCFILE%', docfile],
-    ['%DOC_W32%', doc.replaceAll('/', '\\')],
-    ['%DOC%', doc],
-    ['%DIR_W32%', dir.replaceAll('/', '\\')],
-    ['%DIR%', dir],
-    ['%WORKSPACE_FOLDER%', workspaceFolder],
-    ['%RELATIVE_DIR%', relativeDir],
-    ['%RELATIVE_DOC%', relativeDoc],
-    ['%TMPDIR%', os.tmpdir()],
-  ];
+  const values: Readonly<Record<string, string>> = {
+    '%DOC_EXT_W32%': filePath.replaceAll('/', '\\'),
+    '%DOCFILE_EXT%': path.basename(filePath),
+    '%DOC_EXT%': filePath,
+    '%DOCFILE%': docfile,
+    '%DOC_W32%': doc.replaceAll('/', '\\'),
+    '%DOC%': doc,
+    '%DIR_W32%': dir.replaceAll('/', '\\'),
+    '%DIR%': dir,
+    '%WORKSPACE_FOLDER%': workspaceFolder,
+    '%RELATIVE_DIR%': relativeDir,
+    '%RELATIVE_DOC%': relativeDoc,
+    '%TMPDIR%': os.tmpdir(),
+  };
 
-  const resolved = replacements.reduce(
-    (acc, [placeholder, value]) => acc.replaceAll(placeholder, value),
-    normalizedRaw,
+  // One pass over whole placeholders (each name ends at its `%`, so none is
+  // a prefix of another), each value from a function: a path holding `$&` or
+  // a placeholder's name is inserted as written.
+  const resolved = normalizedRaw.replaceAll(
+    new RegExp(Object.keys(values).join('|'), 'g'),
+    (placeholder) => values[placeholder] ?? placeholder,
   );
 
   return path.isAbsolute(resolved) ? resolved : path.resolve(dir, resolved);
