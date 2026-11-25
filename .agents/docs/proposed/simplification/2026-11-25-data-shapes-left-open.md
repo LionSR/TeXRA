@@ -118,7 +118,9 @@ calls it too.
   `texra-local chat` reaches; its callers are in the open PRs.
 - `attachDroppedFiles`
   (`packages/texra/src/controllers/mainView/MainViewDroppedFilesController.ts`)
-  returns `attachedCount` beside the `paths` it counts.
+  returns `attachedCount` beside the `paths` it counts. (2026-11-25
+  evening: its single-caller helper `attachDroppedPaths` is inlined; the
+  field waits on its reader, `openGuiWindow.ts`.)
 - `allocateConversationPanelRows` (`packages/cli/src/chat/tui/appLayout.ts`)
   returns four row counts where a panel kind and its rows would do.
 - `RegisterRunOptions.takesFollowUps`
