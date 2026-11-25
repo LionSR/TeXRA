@@ -26,10 +26,8 @@ import {
 } from '@texra-ai/worldline/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import {
-  codexAccountLabel,
-  type SubscriptionAccountNames,
+  subscriptionAccountLabel,
   type SubscriptionAuthStatus,
-  xaiAccountLabel,
 } from '@texra/shared/model/subscriptionAuthStatus';
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
@@ -192,7 +190,6 @@ interface SubscriptionProviderBindings<
   'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
 > {
   readonly id: Id;
-  readonly accountLabel: (account: SubscriptionAccountNames) => string;
 }
 
 /** A sign-in that could not finish: no transport this machine can use, or
@@ -207,10 +204,9 @@ class SubscriptionSignInFailed extends Schema.TaggedError<SubscriptionSignInFail
  * Bind one provider's account to the shared sign-in flow. Two callers (the
  * catalog rows below); the flow it closes over is the whole point.
  */
-function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
-  accountLabel,
-  ...descriptor
-}: SubscriptionProviderBindings<Id>): SubscriptionProvider {
+function defineSubscriptionProvider<Id extends SubscriptionProviderId>(
+  descriptor: SubscriptionProviderBindings<Id>,
+): SubscriptionProvider {
   const account: Effect.Effect<
     AccountOf<Id>,
     never,
@@ -324,7 +320,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
         signedIn: true,
         email: session.email,
         accountId: session.accountId,
-        label: accountLabel(session),
+        label: subscriptionAccountLabel(descriptor.id, session),
       } satisfies SubscriptionAccount;
     },
   );
@@ -355,7 +351,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
       Effect.flatMap(account, (coordinator) =>
         Effect.map(coordinator.getStatus(), (status) => ({
           ...status,
-          label: accountLabel(status),
+          label: subscriptionAccountLabel(descriptor.id, status),
         })),
       ),
   });
@@ -372,7 +368,6 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
   sessionName: 'ChatGPT',
   copyTarget: 'ChatGPT',
   modelFamily: 'OpenAI models',
-  accountLabel: (account) => codexAccountLabel(account),
 });
 
 /**
@@ -385,7 +380,6 @@ const GROK_PROVIDER = defineSubscriptionProvider({
   sessionName: 'xAI',
   copyTarget: 'Grok / xAI',
   modelFamily: 'xAI models',
-  accountLabel: (account) => xaiAccountLabel(account),
 });
 
 /** Canonical catalog of OAuth subscription providers, shared by every host. */

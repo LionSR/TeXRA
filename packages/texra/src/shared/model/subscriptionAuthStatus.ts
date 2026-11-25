@@ -35,17 +35,21 @@ export type SubscriptionAccountNames = Pick<
   'email' | 'accountId'
 >;
 
+/** What an account is called when its session names none. */
+const UNNAMED_ACCOUNT = Object.freeze({
+  chatgpt: 'your ChatGPT account',
+  grok: 'your Grok account',
+} satisfies Record<SubscriptionAuthStatus['provider'], string>);
+
 /**
- * How a ChatGPT account is named in user-facing text, from a session, a
+ * How a provider's account is named in user-facing text, from a session, a
  * coordinator status, or the settings wire payload — all of which carry the
  * same optional `email`/`accountId` pair. The email is the identity a user
- * recognizes; the account id is the only other identifier the token carries.
+ * recognizes; the account id is the only other identifier a token may carry.
  */
-export function codexAccountLabel(account: SubscriptionAccountNames): string {
-  return account.email ?? account.accountId ?? 'your ChatGPT account';
-}
-
-/** How a Grok account is named in user-facing text: its email, if known. */
-export function xaiAccountLabel(account: SubscriptionAccountNames): string {
-  return account.email ?? 'your Grok account';
+export function subscriptionAccountLabel(
+  provider: SubscriptionAuthStatus['provider'],
+  account: SubscriptionAccountNames,
+): string {
+  return account.email ?? account.accountId ?? UNNAMED_ACCOUNT[provider];
 }
