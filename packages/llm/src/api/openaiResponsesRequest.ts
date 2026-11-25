@@ -17,6 +17,13 @@ import type { ResponseOrigin } from './openaiResponsesCodec.js';
 import type { UploadCache } from './uploadCache.js';
 import type { SessionToken } from '../node.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
+import { refuseAmbientHeaders } from './transport.js';
+
+/** Both Responses transports refuse an ambient header override the same way. */
+export const refuseAmbientOpenAiHeaders = refuseAmbientHeaders(
+  'OPENAI_CUSTOM_HEADERS',
+  'Ambient OpenAI headers cannot override the selected deployment.',
+);
 
 /** Resolves controls before the request is built; a route with no output limit
  *  ignores the request's, and the lowering refuses a continuation on a
