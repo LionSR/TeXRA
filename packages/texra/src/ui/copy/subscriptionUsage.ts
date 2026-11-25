@@ -72,7 +72,7 @@ export function formatSubscriptionUsageUpdated(
   now: number,
 ): string {
   return now - fetchedAt >= STALE_AFTER_MS
-    ? `stale · updated ${formatRelativeTime(fetchedAt, now)}`
+    ? joinFacts(['stale', `updated ${formatRelativeTime(fetchedAt, now)}`])
     : 'updated just now';
 }
 

@@ -27,7 +27,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { ToolRegistry } from '@tools/toolTable';
 import type { AppNamespace } from '@utils/system/appNamespace';
-import { meansAbsent } from '@utils/files/fsEntryExists';
+import { meansAbsent, pathExists } from '@utils/files/fsEntryExists';
 
 import { databaseLayer } from './databaseLayer';
 import { projectStores } from './projectDatabase';
@@ -50,7 +50,7 @@ const absent = (
   if (meansAbsent(error.cause)) return Effect.succeed(true);
   if (!cannotOpen(Cause.fail(error))) return Effect.succeed(false);
   return FileSystem.FileSystem.pipe(
-    Effect.flatMap((fs) => fs.exists(error.path)),
+    Effect.flatMap((fs) => pathExists(fs, error.path)),
     Effect.map((exists) => !exists),
     // Unknown: the open's own failure stands.
     Effect.catch((cause) =>

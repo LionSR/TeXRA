@@ -222,11 +222,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
             setTransientNotice(result.reason);
             return null;
           }
-          const pasted = withPastedImage(readDraft(), {
-            path: result.path,
-            mediaType: result.mediaType,
-            displayName: result.displayName,
-          });
+          const pasted = withPastedImage(readDraft(), result.path);
           writeDraft(pasted.draft);
           return pasted.chip;
         }),

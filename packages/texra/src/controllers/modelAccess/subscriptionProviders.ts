@@ -32,7 +32,11 @@ import {
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
-import { ACCOUNT_OUTCOME, SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
+import {
+  ACCOUNT_OUTCOME,
+  SIGN_IN_PROMPT,
+  SUBSCRIPTION_AUTH_COPY,
+} from '@ui/copy/accountAuth';
 import {
   emitAppSignal,
   logFailure,
@@ -109,7 +113,8 @@ interface SubscriptionSignInOptions {
 /** One OAuth subscription provider, as every host consumes it. */
 export interface SubscriptionProvider {
   readonly id: SubscriptionProviderId;
-  /** Name used verbatim in prompts, titles, and errors. */
+  /** Name used verbatim in prompts, titles, and errors: the account copy's
+   *  `label`. */
   readonly displayName: string;
   /** Account the browser session belongs to ('ChatGPT', 'xAI'). */
   readonly sessionName: string;
@@ -181,17 +186,6 @@ export interface SubscriptionSignOutResult {
 type AccountOf<Id extends SubscriptionProviderId> =
   SubscriptionAccounts['Service'][(typeof SUBSCRIPTION_ROUTES)[Id]];
 
-/** A row's descriptor fields pass through to the provider unchanged; its
- *  account runs the sign-in itself. */
-interface SubscriptionProviderBindings<
-  Id extends SubscriptionProviderId,
-> extends Pick<
-  SubscriptionProvider,
-  'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
-> {
-  readonly id: Id;
-}
-
 /** A sign-in that could not finish: no transport this machine can use, or
  *  an account signed in whose subscription could not be turned on. The
  *  message is the user-facing text. */
@@ -205,8 +199,17 @@ class SubscriptionSignInFailed extends Schema.TaggedError<SubscriptionSignInFail
  * catalog rows below); the flow it closes over is the whole point.
  */
 function defineSubscriptionProvider<Id extends SubscriptionProviderId>(
-  descriptor: SubscriptionProviderBindings<Id>,
+  id: Id,
 ): SubscriptionProvider {
+  const { label, sessionName, copyTarget, modelFamily } =
+    SUBSCRIPTION_AUTH_COPY[id];
+  const descriptor = {
+    id,
+    displayName: label,
+    sessionName,
+    copyTarget,
+    modelFamily,
+  };
   const account: Effect.Effect<
     AccountOf<Id>,
     never,
@@ -362,25 +365,13 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>(
  * ChatGPT plan instead of an OpenAI API key, through OpenAI's token sharing.
  * The sign-in is browser-only: OpenAI's flow has no device code.
  */
-const CHATGPT_PROVIDER = defineSubscriptionProvider({
-  id: 'chatgpt',
-  displayName: 'ChatGPT',
-  sessionName: 'ChatGPT',
-  copyTarget: 'ChatGPT',
-  modelFamily: 'OpenAI models',
-});
+const CHATGPT_PROVIDER = defineSubscriptionProvider('chatgpt');
 
 /**
  * Experimental "Sign in with Grok": xAI models then run on the user's
  * SuperGrok / xAI account OAuth token instead of an xAI API key.
  */
-const GROK_PROVIDER = defineSubscriptionProvider({
-  id: 'grok',
-  displayName: 'Grok',
-  sessionName: 'xAI',
-  copyTarget: 'Grok / xAI',
-  modelFamily: 'xAI models',
-});
+const GROK_PROVIDER = defineSubscriptionProvider('grok');
 
 /** Canonical catalog of OAuth subscription providers, shared by every host. */
 const SUBSCRIPTION_PROVIDERS: Readonly<

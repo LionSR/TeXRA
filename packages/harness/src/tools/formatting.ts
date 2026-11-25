@@ -48,22 +48,6 @@ export type LineRange = typeof LineRangeSchema.Type;
 /** Maximum lines returned in a single file view before truncation. */
 const READ_FILE_MAX_LINES = 2000;
 
-/**
- * Format lines with line numbers for display in tool output.
- * @param startingLine - 1-based line number for the first line (default: 1)
- * @returns Array of formatted lines with line number prefix and tab separator
- */
-export function formatLinesWithNumbers(
-  lines: string[],
-  startingLine: number = 1,
-): string[] {
-  return lines.map((line, index) => {
-    const lineNumber = startingLine + index;
-    const prefix = lineNumber.toString().padStart(6, ' ');
-    return `${prefix}\t${line}`;
-  });
-}
-
 // ============================================================================
 // Shared file-view formatting
 // ============================================================================
@@ -80,8 +64,6 @@ interface FileViewOptions {
   range?: LineRange | null;
   /** Max visible lines before truncation. Defaults to READ_FILE_MAX_LINES (2000). */
   maxLines?: number;
-  /** Optional suffix appended to the summary (e.g., memory metadata). */
-  summarySuffix?: string;
 }
 
 interface FileViewResult {
@@ -94,15 +76,14 @@ interface FileViewResult {
 
 /**
  * Shared pipeline for displaying file content with line numbers, truncation,
- * and a standardised "Read …" summary.  Used by read_file, memory view, and
- * executions readFile.
+ * and a standardised "Read …" summary: read_file's, and the executions
+ * tool's file reads.
  */
 export function formatFileView({
   path: filePath,
   lines,
   range,
   maxLines = READ_FILE_MAX_LINES,
-  summarySuffix = '',
 }: FileViewOptions): FileViewResult {
   const totalLines = lines.length;
   const rangeProvided = range != null;
@@ -119,7 +100,13 @@ export function formatFileView({
   // -- output ---------------------------------------------------------------
   const segments: string[] = [];
   if (visibleCount > 0) {
-    segments.push(formatLinesWithNumbers(visibleLines, startLine).join('\n'));
+    segments.push(
+      visibleLines
+        .map(
+          (line, index) => `${String(startLine + index).padStart(6)}\t${line}`,
+        )
+        .join('\n'),
+    );
   }
   if (truncated) {
     segments.push(`...(truncated, ${rangeSize - maxLines} more lines)`);
@@ -153,7 +140,6 @@ export function formatFileView({
 
   if (range?.end != null && range.end > totalLines)
     summary += ` (requested end ${range.end} exceeds file length ${totalLines})`;
-  summary += summarySuffix;
 
   return { status: 'executed', output: segments.join('\n'), summary };
 }

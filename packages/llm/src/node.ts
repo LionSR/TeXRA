@@ -237,6 +237,7 @@ export const transcribeAudio = (
           kind: 'transport',
           message: `The transcription module failed to load: ${cause instanceof Error ? cause.message : String(cause)}`,
           retryable: false,
+          cause,
         }),
     }),
     (module) => module.transcribeAudio(audioPath, credential),

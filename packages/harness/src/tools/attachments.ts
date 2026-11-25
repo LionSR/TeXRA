@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem, Schema, ScopedRef } from 'effect';
+import { Effect, FileSystem, Result, ScopedRef } from 'effect';
 import { imageSize } from 'image-size';
 import { IMAGE_LIMITS } from '@texra-ai/llm';
 import { ToolContext } from '@tools/core/ToolTypes';
@@ -33,24 +33,14 @@ export interface BuildFileAttachmentOptions {
 /** The largest file read as an attachment or parsed as an email: 15 MiB. */
 export const ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024;
 
-/** Bytes image-size cannot read: an unrecognized format or truncated data. */
-class UnreadableImage extends Schema.TaggedError<UnreadableImage>()(
-  'UnreadableImage',
-  {},
-) {}
-
-/** Returns true if buffer is an image with a side longer than `limit`. */
-function isOversizedImage(
-  buffer: Buffer | Uint8Array,
-  limit: number,
-): Effect.Effect<boolean> {
-  return Effect.try({
-    try: () => imageSize(buffer),
-    catch: () => new UnreadableImage(),
-  }).pipe(
-    Effect.map(({ width, height }) => width > limit || height > limit),
-    // Bytes with no dimensions are not oversized.
-    Effect.catchTag('UnreadableImage', () => Effect.succeed(false)),
+/** Whether `bytes` are an image with a side longer than `limit`. Bytes
+ *  image-size cannot read (an unrecognized format, truncated data) have no
+ *  dimensions, so they are not oversized. */
+function isOversizedImage(bytes: Uint8Array, limit: number): boolean {
+  const size = Result.try(() => imageSize(bytes));
+  return (
+    Result.isSuccess(size) &&
+    (size.success.width > limit || size.success.height > limit)
   );
 }
 
@@ -102,7 +92,7 @@ export const buildBytesAttachment = Effect.fn('buildBytesAttachment')(
         (yield* ToolContext).env.run.model,
       );
       const limit = IMAGE_LIMITS[origin.protocol].manyImageMaxDimension;
-      if (yield* isOversizedImage(bytes, limit))
+      if (isOversizedImage(bytes, limit))
         return {
           path,
           mimeType,

@@ -18,6 +18,7 @@ import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   attentionOf,
   formatResultCount,
+  RUN_OUTCOME,
   type AgentConfig,
   type FileLocation,
   type RunId,
@@ -607,7 +608,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         // A failed or stopped task is no chime.
         if (
           finished.some(
-            (run) => isDocumentTaskRun(run) && run.outcome === 'completed',
+            (run) =>
+              isDocumentTaskRun(run) && run.outcome === RUN_OUTCOME.COMPLETED,
           )
         )
           this.chime();

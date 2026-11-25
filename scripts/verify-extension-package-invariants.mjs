@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  assert,
   extensionManifestSnapshot,
   readJson,
   REQUIRED_PACKAGED_PATHS,
@@ -58,10 +59,6 @@ function manifestAssetReferences(packageJson) {
       ),
     ),
   ].sort();
-}
-
-function assert(condition, message, failures) {
-  if (!condition) failures.push(message);
 }
 
 function relativeExists(relativePath) {

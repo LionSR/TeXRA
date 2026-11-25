@@ -29,10 +29,10 @@ interface CliRuntimeHost {
     session: Session,
     runId: RunId,
   ): Effect.Effect<void, never, Scope.Scope>;
-  prepareInteractivePrompt?: () => void;
+  prepareInteractivePrompt(): void;
   /** {@link prepareInteractivePrompt}, held until the returned release is
    *  called: for a prompt, which owns the terminal while it is open. */
-  holdForPrompt?: () => (() => void) | undefined;
+  holdForPrompt(): (() => void) | undefined;
   close(): Effect.Effect<void>;
 }
 

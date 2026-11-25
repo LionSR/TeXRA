@@ -5,8 +5,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { COMPACTION_ACTIVITY_TONE, statusGlyph } from '@ui/copy/runStatus';
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
-import { waSpinner } from '@ui/wa/spinner';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { renderIconOrSpinner } from '@ui/progress/formatters/htmlBuilders';
 import type { CompactionActivityStatus } from '@texra-ai/worldline/transcript';
 
 /** Non-collapsible transcript activity row for one context compaction. */
@@ -60,11 +59,7 @@ export class CompactionActivity extends TexraElement {
       role="status"
       aria-live="polite"
     >
-      ${
-        this.status === 'running'
-          ? waSpinner('icon')
-          : waIcon(statusGlyph({ tone }), { className: 'icon' })
-      }
+      ${renderIconOrSpinner(this.status === 'running', statusGlyph({ tone }), 'icon')}
       <span class="label">${this.label}</span>
     </div>`;
   }

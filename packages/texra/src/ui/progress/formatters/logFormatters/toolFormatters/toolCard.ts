@@ -33,6 +33,7 @@ export function buildToolUseDetails(opts: {
   const classes: ClassInfo = {
     'tool-use-details': true,
     'tool-use-error': opts.isError,
+    'tone-danger': opts.isError,
     ...opts.extraClasses,
   };
   // The failure icon is decorative and hidden from assistive technology.

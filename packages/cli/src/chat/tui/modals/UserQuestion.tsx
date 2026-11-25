@@ -9,7 +9,7 @@ import {
 } from '@cli/tui/overflowText';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, type KeyHint, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
-import { Select } from '@cli/tui/ui/Select';
+import { Select, selectHotkeyRangeLabel } from '@cli/tui/ui/Select';
 import { COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { clampModalWidth, confirmCardContentWidth } from '@cli/tui/ui/theme';
@@ -81,15 +81,7 @@ function userQuestionInlineClipIndicator({
   };
 }
 
-function userQuestionChoiceHints({
-  optionCount,
-  shortcutAction,
-}: {
-  readonly optionCount: number;
-  readonly shortcutAction: string;
-}): KeyHint[] {
-  return [NAVIGATE_HINT, { key: `1-${optionCount}`, action: shortcutAction }];
-}
+const SKIP_HINT: KeyHint = { key: 'Esc', action: 'skip' };
 
 function isCompactUserQuestionRows(availableRows: number): boolean {
   return availableRows <= COMPACT_USER_QUESTION_MAX_ROWS;
@@ -324,13 +316,14 @@ function ChoiceQuestion(props: QuestionVariantProps): React.JSX.Element {
       question={props.question}
       index={props.index}
       hints={[
-        ...userQuestionChoiceHints({
-          optionCount: options.length,
-          shortcutAction: multi ? 'toggle' : 'select now',
-        }),
+        NAVIGATE_HINT,
+        {
+          key: selectHotkeyRangeLabel(options.length) ?? '1',
+          action: multi ? 'toggle' : 'select now',
+        },
         ...(multi ? [{ key: 'Space', action: 'toggle' }] : []),
         { key: 'Enter', action: multi ? 'submit' : 'select' },
-        { key: 'Esc', action: 'skip' },
+        SKIP_HINT,
       ]}
     >
       <Select
@@ -389,7 +382,7 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
           ? [{ key: '1,2', action: 'pick options' }]
           : []),
         { key: 'Enter', action: 'submit answer' },
-        { key: 'Esc', action: 'skip' },
+        SKIP_HINT,
       ]}
     >
       <Box flexDirection="column">

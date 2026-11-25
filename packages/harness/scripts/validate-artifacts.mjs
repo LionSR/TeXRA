@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { build } from 'esbuild';
 
+import { tsconfigPaths } from '../../../scripts/aliases.mjs';
 import { walkFiles } from '../../../scripts/walkFiles.mjs';
 import { checkForgottenExports } from './forgotten-exports.mjs';
 import {
@@ -10,7 +11,7 @@ import {
   moduleSpecifier,
   reachableDeclarations,
   readDeclaration,
-} from './fsWalk.mjs';
+} from './declarations.mjs';
 
 // The built package to check: this package, or the one a build names (the
 // llm build passes its own root). Each is checked against what it publishes:
@@ -22,9 +23,6 @@ const repositoryRoot = path.resolve(packageRoot, '../..');
 const distRoot = path.join(packageRoot, 'dist');
 const manifest = JSON.parse(
   await readFile(path.join(packageRoot, 'package.json'), 'utf8'),
-);
-const rootTsconfig = JSON.parse(
-  await readFile(path.join(repositoryRoot, 'tsconfig.json'), 'utf8'),
 );
 
 // The code entries: `./package.json` exports the manifest itself.
@@ -60,7 +58,7 @@ const declarationFiles = allFiles.filter((file) => /\.d\.m?ts$/u.test(file));
 const declarationText = (
   await Promise.all(declarationFiles.map(readDeclaration))
 ).join('\n');
-const internalAliases = Object.entries(rootTsconfig.compilerOptions.paths)
+const internalAliases = Object.entries(tsconfigPaths)
   .filter(([, targets]) =>
     targets.some(
       (target) => !target.replace(/^\.\//u, '').startsWith('node_modules/'),

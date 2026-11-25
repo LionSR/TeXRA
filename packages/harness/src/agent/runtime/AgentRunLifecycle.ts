@@ -128,7 +128,7 @@ export const commitEnd = Effect.fn('commitEnd')(function* (
       }),
     ),
   );
-  const resolved = ended.end?.outcome ?? ending.outcome;
+  const resolved = ended?.outcome ?? ending.outcome;
   yield* Effect.logDebug(`Task completed with outcome: ${resolved}`).pipe(
     withLogChannel(RUN_LIFECYCLE_CHANNEL),
   );

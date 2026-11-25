@@ -41,14 +41,11 @@ export const updateCliModelAccess = Effect.fn(
     selection.state === 'on',
   );
   if (isSubscriptionAuthProvider(provider)) {
-    const { displayName, modelFamily, getStatus } =
-      subscriptionProvider(provider);
+    const { modelFamily, getStatus } = subscriptionProvider(provider);
+    const { subscriptionLabel } = SUBSCRIPTION_AUTH_COPY[provider];
     if (outcome === 'disabled') {
       return {
-        message: ACCOUNT_OUTCOME.planDisabled(
-          SUBSCRIPTION_AUTH_COPY[provider].subscriptionLabel,
-          modelFamily,
-        ),
+        message: ACCOUNT_OUTCOME.planDisabled(subscriptionLabel, modelFamily),
       };
     }
     // Signing in turns the preference on.
@@ -68,7 +65,7 @@ export const updateCliModelAccess = Effect.fn(
           )
         : yield* getStatus();
     return {
-      message: `${displayName} subscription enabled for ${modelFamily} (${account.label}).`,
+      message: `${subscriptionLabel} enabled for ${modelFamily} (${account.label}).`,
     };
   }
   const plan = CODING_PLAN_SUBSCRIPTIONS.find(({ id }) => id === provider);

@@ -13,7 +13,6 @@ import type {
   DispatchFacts,
   StepAfterFailure,
   InvocationRef,
-  RequestDecision,
   ModelFailure,
   ScriptCallPayload,
   ToolResultPayload,
@@ -170,13 +169,11 @@ function movedBy(
   }
 }
 
-/** The credentials a person's retry is sent on, and the route it declines:
- *  personal credentials decline the route its request offered to switch
- *  off. */
+/** The credentials a person's retry is sent on: the user's own key, which
+ *  also declines the route its request offered to switch off, or the
+ *  configured ones. */
 export interface RetryCredentials {
-  readonly credentials: NonNullable<
-    Extract<RequestDecision, { action: 'retry' }>['credentials']
-  >;
+  readonly personal: boolean;
   readonly declines: DeclinableUsageRoute | null;
 }
 
@@ -236,7 +233,7 @@ export function nextAttempt(
       if (decided === null) return { kind: 'await', requestId };
       const { decision } = decided;
       if (decision.action === 'retry') {
-        const credentials = decision.credentials ?? 'configured';
+        const personal = decision.credentials === 'personal';
         const offer =
           request?.payload.kind === 'retry'
             ? request.payload.data.credentialSwitch
@@ -244,11 +241,9 @@ export function nextAttempt(
         return {
           kind: 'send',
           retry: {
-            credentials,
+            personal,
             declines:
-              credentials === 'personal' && offer?.kind === 'decline-route'
-                ? offer.route
-                : null,
+              personal && offer?.kind === 'decline-route' ? offer.route : null,
           },
         };
       }
@@ -306,7 +301,7 @@ export function failedNext(
 /** A call's result, as its `tool.result` row records it. */
 export type ToolCallResult = Pick<
   ToolResultPayload,
-  'attempt' | 'disposition' | 'duplicateOf' | 'result' | 'attachments'
+  'attempt' | 'disposition' | 'result' | 'attachments'
 >;
 
 /** How far one call got, as its rows say: `issued`, no body started;

@@ -65,6 +65,7 @@ import {
   renameWorkbenchTab,
   setSidebarWidth,
   toggleSidebar,
+  WORKBENCH_KIND_META,
   type DesktopShellState,
 } from '../shared/desktopShellState';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
@@ -437,8 +438,8 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
       <nav class="shell-view-switch" aria-label="Project views">
         ${renderLabeledActionButton({
           id: 'shellToggleAgent',
-          text: 'Agent',
-          icon: 'comment',
+          text: WORKBENCH_KIND_META.agent.label,
+          icon: WORKBENCH_KIND_META.agent.icon,
           kind: 'ghost',
           className: 'is-compact',
           disabled: !hasWorkspace(),
@@ -448,8 +449,8 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
       <div class="shell-workspace-tools">
         ${renderLabeledActionButton({
           id: 'shellToggleSidePanel',
-          icon: 'folder-tree',
-          text: 'Files',
+          icon: WORKBENCH_KIND_META.files.icon,
+          text: WORKBENCH_KIND_META.files.label,
           kind: 'ghost',
           className: 'is-compact',
           disabled: !hasWorkspace(),
@@ -457,8 +458,8 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
         })}
         ${renderLabeledActionButton({
           id: 'shellToggleTerminalPanel',
-          icon: 'terminal',
-          text: 'Terminal',
+          icon: WORKBENCH_KIND_META.terminal.icon,
+          text: WORKBENCH_KIND_META.terminal.label,
           kind: 'ghost',
           className: 'is-compact',
           disabled: !hasWorkspace(),

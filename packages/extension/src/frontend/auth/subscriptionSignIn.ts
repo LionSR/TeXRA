@@ -19,7 +19,7 @@ import {
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
+import { SIGN_IN_PROMPT, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import type { AppSignals, SettingsStores } from '@texra-ai/worldline/plugins';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
@@ -78,7 +78,7 @@ function vscodePresenter(
         // link they can paste there instead.
         const choice = yield* vscodeUi.ask(
           'info',
-          `Sign in with ${displayName}. ${SIGN_IN_PROMPT.otherBrowser(sessionName)}`,
+          `${SUBSCRIPTION_AUTH_COPY[provider.id].signInLabel}. ${SIGN_IN_PROMPT.otherBrowser(sessionName)}`,
           {
             modal: true,
             items: [OPEN_DEFAULT_BROWSER, SIGN_IN_PROMPT.copyLinkLabel],
@@ -120,7 +120,7 @@ export function signInWithSubscription(
   return withVSCodeProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Signing in with ${provider.displayName}...`,
+      title: SIGN_IN_PROMPT.inProgress(provider.displayName),
       cancellable: false,
     },
     () =>

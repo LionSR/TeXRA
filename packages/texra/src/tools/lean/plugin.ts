@@ -73,10 +73,12 @@ export const lean4: TexraPlugin = texraPlugin({
           : [];
         const available = (yield* findCommand('lake')) !== null;
         const activeCount = servers.filter(isLeanServerActive).length;
-        let statusLabel: string | undefined;
-        if (!available) statusLabel = 'Needs setup';
-        else if (activeCount > 0)
-          statusLabel = `${formatResultCount(activeCount, 'server')} active`;
+        // A missing `lake` reads as every unavailable plugin does
+        // (`toolDependencyStatusLabel`); a ready one names its servers.
+        const statusLabel =
+          available && activeCount > 0
+            ? `${formatResultCount(activeCount, 'server')} active`
+            : undefined;
         const lines = [
           available
             ? '`lake` found on PATH: each Lake project gets its own Lean language server.'

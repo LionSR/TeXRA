@@ -15,7 +15,7 @@ export function createDiscardChangesDialog(appRoot: HTMLElement) {
   const message = document.createElement('p');
   message.classList.add('desktop-discard-message');
   const actions = document.createElement('div');
-  actions.classList.add('desktop-discard-actions');
+  actions.classList.add('desktop-overlay-actions');
   const content = document.createElement('div');
   content.append(message, actions);
 

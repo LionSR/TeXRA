@@ -102,8 +102,9 @@ import type { PlatformError } from 'effect/PlatformError';
 
 const CHANNEL = 'ChildProcesses';
 
-/** Upstream's wait after each signal (`processGroupGraceMillis` in the
- *  4.0.0 `NodeChildProcessSpawner`); recheck it on an Effect bump. */
+/** Upstream's wait after each signal (`processGroupGraceMillis` in
+ *  `@effect/platform-node-shared`'s `NodeChildProcessSpawner`, 1 s at 4.1.5);
+ *  recheck it on an Effect bump. */
 const UPSTREAM_GRACE_MILLIS = 1_000;
 /** Slack over upstream's bounded tail before a teardown counts as stuck.
  *  Wider on Windows, where upstream's teardown awaits a `taskkill` spawn

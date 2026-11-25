@@ -37,6 +37,7 @@ import {
 
 // Local imports - shared schemas and model
 import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
+import type { IconName } from '@ui/wa/iconNames';
 
 // Local imports - TUI state
 import { type ScriptPopupView } from '../state/cliState';
@@ -48,12 +49,11 @@ import type { RuntimeCommand, RunId } from '@texra-ai/worldline/schemas';
 /** Rows the popup paints besides its list: the focused call's facts. */
 const POPUP_EXTRA_ROWS = 1;
 
-/** The terminal markers of the statuses whose look carries a glyph of its
- *  own (`scriptCallLook`): a queued call has not started and a
- *  reused one ran nothing this time, so neither shows its tone's marker. */
-const OWN_MARKER: Partial<Record<ScriptCallView['status'], string>> = {
-  queued: HOLLOW_DOT,
-  reused: REUSED,
+/** The terminal marker of each glyph a call's look carries of its own
+ *  (`scriptCallLook`); any other look shows its tone's marker. */
+const GLYPH_MARKER: Partial<Record<IconName, string>> = {
+  'circle-dot': HOLLOW_DOT,
+  'clock-rotate-left': REUSED,
 };
 
 /** One list entry: a section heading, or a call. */
@@ -78,7 +78,7 @@ function CallRow({
       <Box flexShrink={0}>
         <Text aria-hidden color={paint.color}>
           {fillRows(
-            ` ${look.glyph === undefined ? paint.marker : (OWN_MARKER[call.status] ?? paint.marker)}`,
+            ` ${(look.glyph && GLYPH_MARKER[look.glyph]) ?? paint.marker}`,
             3,
           )}
         </Text>

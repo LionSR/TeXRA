@@ -27,12 +27,9 @@ interface PastedTextEntry {
 }
 
 interface PastedImageEntry {
-  readonly id: number;
   readonly kind: 'image';
   /** Absolute path to the on-disk image (under the run/chat storage dir). */
   readonly path: string;
-  readonly mediaType: string;
-  readonly displayName: string;
 }
 
 type DraftAttachment = PastedTextEntry | PastedImageEntry;
@@ -120,11 +117,11 @@ export function withText(draft: InputDraft, text: string): InputDraft {
 
 function withAttachment(
   draft: InputDraft,
-  attachment: (id: number) => DraftAttachment,
+  attachment: DraftAttachment,
 ): { readonly draft: InputDraft; readonly id: number } {
   const id = draft.nextId;
   const attachments = new Map(draft.attachments);
-  attachments.set(id, attachment(id));
+  attachments.set(id, attachment);
   return { draft: { ...draft, attachments, nextId: id + 1 }, id };
 }
 
@@ -133,7 +130,7 @@ export function withPastedText(
   draft: InputDraft,
   content: string,
 ): { readonly draft: InputDraft; readonly chip: string } {
-  const next = withAttachment(draft, () => ({ kind: 'text', content }));
+  const next = withAttachment(draft, { kind: 'text', content });
   const numLines = pastedNewlineCount(content);
   return {
     draft: next.draft,
@@ -147,9 +144,9 @@ export function withPastedText(
 /** Keep a pasted image; returns the draft and the chip to insert in its text. */
 export function withPastedImage(
   draft: InputDraft,
-  image: Omit<PastedImageEntry, 'id' | 'kind'>,
+  path: string,
 ): { readonly draft: InputDraft; readonly chip: string } {
-  const next = withAttachment(draft, (id) => ({ id, kind: 'image', ...image }));
+  const next = withAttachment(draft, { kind: 'image', path });
   return { draft: next.draft, chip: `[Image #${next.id}]` };
 }
 
@@ -233,9 +230,7 @@ export function restoreDraft(
   for (const match of matchChips(returned.text)) {
     const entry = returned.attachments.get(match.id);
     if (entry === undefined || renumbered.has(match.id)) continue;
-    const added = withAttachment(next, (id) =>
-      entry.kind === 'image' ? { ...entry, id } : entry,
-    );
+    const added = withAttachment(next, entry);
     next = added.draft;
     renumbered.set(match.id, added.id);
   }

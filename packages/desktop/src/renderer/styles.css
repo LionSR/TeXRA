@@ -40,20 +40,6 @@ wa-button[hidden] {
   display: none !important;
 }
 
-/* The one spinner keyframe the light-DOM shell uses. */
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.spin {
-  animation: spin 2s linear infinite;
-}
-
 /* =====================================================================
    Overlay dialogs (overlayDialog.ts): the text/password prompt, the
    discard-changes confirmation and the Settings popup share one shell
@@ -110,8 +96,7 @@ wa-dialog.desktop-overlay::part(body) {
   color: var(--wa-color-text-normal);
 }
 
-.desktop-prompt-actions,
-.desktop-discard-actions {
+.desktop-overlay-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--wa-space-xs);

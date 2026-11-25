@@ -119,7 +119,7 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   // prettier-ignore
   const summaryTemplate = html`<div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}</span>${timestampLabel}${copyButton}</div>`;
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--error message-disclosure">${summaryTemplate}${contentTemplate}</wa-details>`;
+  return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--error tone-danger message-disclosure">${summaryTemplate}${contentTemplate}</wa-details>`;
 }
 
 /** Format a plain log line as TemplateResult. */

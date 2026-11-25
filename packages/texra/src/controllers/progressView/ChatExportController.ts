@@ -69,10 +69,10 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
   // export's preamble.
   const resourcesRoot = yield* ResourcesRoot;
   if (resourcesRoot === undefined) {
-    const cause = new Error(
-      'Export assets are missing in this build, so this conversation cannot be exported.',
-    );
-    return yield* new TranscriptExportFailed({ message: cause.message, cause });
+    return yield* new TranscriptExportFailed({
+      message:
+        'Export assets are missing in this build, so this conversation cannot be exported.',
+    });
   }
   if (format === 'html') {
     const { html, trace, record } = yield* traceHtml(
@@ -91,14 +91,13 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
                 }[error.status],
               }),
             );
-          if (error instanceof TraceViewerMissing) {
-            const cause = new Error(
-              `HTML export template is missing (${error.path}). Reinstall or rebuild TeXRA.`,
-            );
+          if (error instanceof TraceViewerMissing)
             return Effect.fail(
-              new TranscriptExportFailed({ message: cause.message, cause }),
+              new TranscriptExportFailed({
+                message: `HTML export template is missing (${error.path}). Reinstall or rebuild TeXRA.`,
+                cause: error,
+              }),
             );
-          }
           return Effect.fail(
             new TranscriptExportFailed({
               message: toErrorMessage(error),
@@ -111,13 +110,10 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     // The first row, the creation row when the run has one, carries the
     // launch time the filename is stamped with.
     const firstEvent = trace.events.at(0);
-    if (firstEvent === undefined) {
-      const cause = new Error(`The assembled trace of run ${runId} is empty.`);
+    if (firstEvent === undefined)
       return yield* new TranscriptExportFailed({
-        message: cause.message,
-        cause,
+        message: `The assembled trace of run ${runId} is empty.`,
       });
-    }
     const filename = generateExportFilename(
       {
         timestamp: new Date(firstEvent.at).toISOString(),

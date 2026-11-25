@@ -270,7 +270,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     const current = effective(entry);
     return (
       <ListForm
-        title={`/config · ${entry.title}`}
+        title={joinFacts(['/config', entry.title])}
         availableRows={props.availableRows}
         items={buildEnumItems(entry)}
         activeValue={typeof current === 'string' ? current : undefined}
@@ -292,7 +292,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     return (
       <TextEntryForm
         key={entry.key}
-        title={`/config · ${entry.title}`}
+        title={joinFacts(['/config', entry.title])}
         initialValue={current == null ? '' : String(current)}
         placeholder={isNumber ? 'Enter a number' : 'Enter a value'}
         masked={false}
@@ -383,7 +383,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
 
   return (
     <ListForm
-      title={`/config · ${configCategoryLabel(category)}`}
+      title={joinFacts(['/config', configCategoryLabel(category)])}
       availableRows={props.availableRows}
       items={items}
       action="toggle / edit / open"

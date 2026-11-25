@@ -15,10 +15,12 @@ import type {
 } from '@shared/schemas';
 import { formatScriptTally, tallyTotal } from '@shared/transcript/scriptCall';
 import {
+  FACT_SEPARATOR,
   formatCompactDuration,
   formatCostUsd,
   formatResultCount,
   formatWallTime,
+  joinFacts,
   stripControlCharacters,
 } from '@utils/text/stringUtils';
 
@@ -70,7 +72,7 @@ function formatScriptDeliverySummary(summary: ScriptDeliverySummary): string {
     return `  ${file.path}${diffstat}`;
   });
   return [
-    `${marker} ${summary.name} ${summary.outcome} · ${facts.join(' · ')}`,
+    joinFacts([`${marker} ${summary.name} ${summary.outcome}`, ...facts]),
     ...(summary.outcome === 'failed' && summary.errorCause
       ? [truncatedResultResponsePreview(summary.errorCause)]
       : []),
@@ -111,21 +113,19 @@ function deliverySummary(delivery: ChildRunDelivery): string {
     if (exit?.timedOut) outcome = 'timed out';
     else if (exit?.code === null) outcome = 'no exit code';
     else if (exit !== undefined) outcome = `exit ${exit.code}`;
-    const head = [
+    const head = joinFacts([
       `${failed ? '✗' : '✓'} ${label('description') || `$ ${label('command') || 'background command'}`}`,
       ...(failed && outcome !== undefined ? [outcome] : []),
       ...(message === undefined ? [] : ['failed']),
       wallTime,
-    ]
-      .filter(Boolean)
-      .join(' · ');
+    ]);
     return message ? `${head}\n${stripControlCharacters(message, ' ')}` : head;
   }
 
   // Results and errors share one shape across families (`formatDelivery`);
   // one without an `agent` attribute is named by its family.
   const name = attribute('agent') ?? delivery.family;
-  const wall = wallTime ? ` · ${wallTime}` : '';
+  const wall = wallTime ? `${FACT_SEPARATOR}${wallTime}` : '';
   if (message === undefined) {
     const head = `✓ ${name} ${attribute('status') ?? 'completed'}${wall}`;
     const preview = truncatedResultResponsePreview(

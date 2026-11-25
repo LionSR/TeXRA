@@ -5,6 +5,7 @@ import process from 'node:process';
 import { isDeepStrictEqual } from 'node:util';
 
 import {
+  assert,
   collectRelativeFiles,
   extensionManifestSnapshot,
   readJson,
@@ -36,10 +37,6 @@ function listVsixEntries(vsixPath) {
 
 function readVsixEntry(vsixPath, entryPath) {
   return unzip(['-p', vsixPath, entryPath], { encoding: 'buffer' });
-}
-
-function assert(condition, message, failures) {
-  if (!condition) failures.push(message);
 }
 
 function assertEntryExists(entries, entryPath, failures) {

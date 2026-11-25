@@ -6,6 +6,7 @@ import {
   toErrorMessage,
   isRunId,
   programOf,
+  RUN_OUTCOME,
   type RunId,
   type RunOutcome,
   serializeFilteredConfig,
@@ -332,7 +333,7 @@ export function formatCliHistoryNotFoundText(id: RunId, cwd?: string): string {
 /** What a run that continues can take: a finished conversation another
  *  message, anything else (interrupted, failed, cancelled) a resume. */
 function continueNote(outcome: RunOutcome | null): string {
-  return outcome === 'completed' ? 'can continue' : 'can resume';
+  return outcome === RUN_OUTCOME.COMPLETED ? 'can continue' : 'can resume';
 }
 
 /** How a listed run stands in `texra history`'s text and the `/resume`

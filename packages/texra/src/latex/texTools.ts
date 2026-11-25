@@ -126,13 +126,14 @@ const latexInputEnv = Effect.fn('texTools.latexInputEnv')(function* (
  */
 function buildLatexSearchParts(input: {
   documentDir: string;
-  extraInputDirs?: readonly string[];
-  workspaceRoot?: string | null;
-  tikzInputDirectory?: string | null;
+  extraInputDirs: readonly string[];
+  /** The workspace root, when the settings put it on the search path. */
+  workspaceRoot: string | undefined;
+  tikzInputDirectory: string | undefined;
 }): { texInputParts: string[]; bibSearchParts: string[] } {
   const { documentDir, extraInputDirs, workspaceRoot, tikzInputDirectory } =
     input;
-  const sourceDirs = [documentDir, ...(extraInputDirs ?? [])];
+  const sourceDirs = [documentDir, ...extraInputDirs];
   const workspaceParts = workspaceRoot ? [workspaceRoot] : [];
   const tikzParts = tikzInputDirectory?.trim() ? [tikzInputDirectory] : [];
   return {
@@ -248,7 +249,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({
       documentDir,
       extraInputDirs,
-      workspaceRoot: includeWorkspace ? workspaceRoot : null,
+      workspaceRoot: includeWorkspace ? workspaceRoot : undefined,
       tikzInputDirectory,
     });
 

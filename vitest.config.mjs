@@ -1,9 +1,8 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, globSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import process from 'node:process';
 
-import { globSync } from 'glob';
 import { defineConfig } from 'vitest/config';
 
 import { aliases, rootDir } from './scripts/aliases.mjs';
@@ -136,7 +135,12 @@ const SUITES = [
   'src/test-kernel/**/*.vitest.ts',
   'packages/*/test/**/*.vitest.ts',
 ];
-for (const file of globSync(SUITES, { cwd: rootDir, posix: true }).sort()) {
+// Node's glob answers with the platform separator; every pattern below is
+// written with `/`.
+const suiteFiles = globSync(SUITES, { cwd: rootDir })
+  .map((file) => file.replaceAll(sep, '/'))
+  .sort();
+for (const file of suiteFiles) {
   const parts = file.split('/');
   const dir = parts[0] === 'packages' ? parts[3] : parts[2];
   const path = resolve(rootDir, file);
