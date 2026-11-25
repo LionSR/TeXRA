@@ -18,6 +18,7 @@ import {
   type Scope,
 } from 'effect';
 
+import { pathExists } from '@texra-ai/worldline/node';
 import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
@@ -216,7 +217,7 @@ const prepareFileForDisplay = Effect.fn('openBuild.prepareFileForDisplay')(
     const absolutePath = fileLocation.absolutePath;
 
     const fs = yield* FileSystem.FileSystem;
-    if (!(yield* fs.exists(absolutePath))) {
+    if (!(yield* pathExists(fs, absolutePath))) {
       yield* showLoggedMessage(`File not found: ${absolutePath}`);
       return false;
     }
@@ -292,7 +293,7 @@ const PDF_POLL_INTERVAL = Duration.millis(250);
 const openViewer = Effect.fn('openBuild.openViewer')(
   function* (pdfPath: string) {
     const fs = yield* FileSystem.FileSystem;
-    yield* fs.exists(pdfPath).pipe(
+    yield* pathExists(fs, pdfPath).pipe(
       Effect.repeat({
         schedule: Schedule.spaced(PDF_POLL_INTERVAL),
         until: (exists) => exists,

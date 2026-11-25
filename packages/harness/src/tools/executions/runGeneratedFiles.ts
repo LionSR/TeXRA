@@ -20,7 +20,11 @@ import type { RunId } from '@shared/schemas';
 // swap; safe here since the input is a storage-relative path produced by the
 // walk below, not raw user input.
 import { toPosixPath } from '@utils/core/pathCore';
-import { listedEntryGone, meansAbsent } from '@utils/files/fsEntryExists';
+import {
+  listedEntryGone,
+  meansAbsent,
+  pathExists,
+} from '@utils/files/fsEntryExists';
 
 const CHANNEL = 'runGeneratedFiles';
 
@@ -54,7 +58,7 @@ export const listRunGeneratedFiles = Effect.fn('listRunGeneratedFiles')(
   > {
     const fs = yield* FileSystem.FileSystem;
     const runDir = runDirUnder(storage, runId);
-    if (!(yield* fs.exists(runDir))) return [];
+    if (!(yield* pathExists(fs, runDir))) return [];
     const files = yield* walkRunStorage(runDir, '', RUN_FILE_SCAN_DEPTH);
     return files.toSorted((a, b) => a.path.localeCompare(b.path));
   },
