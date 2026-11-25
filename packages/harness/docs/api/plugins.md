@@ -860,11 +860,6 @@ interface FactKind {
    *  starts with of the run's row of the kind: `copy` the row the run held
    *  at the cut, `drop` none. */
   readonly fork: 'copy' | 'drop';
-  /** The workspace files a row of the kind says its run wrote past the
-   *  editor's own write path: every process that folds the run announces
-   *  them (`workspaceFilesWritten`), a window hearing a service task's
-   *  write as it hears its own. */
-  readonly writes?: (value: Schema.Json) => readonly string[];
 }
 ```
 
