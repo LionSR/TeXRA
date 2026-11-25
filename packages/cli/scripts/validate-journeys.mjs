@@ -2,7 +2,7 @@
 
 /**
  * Live journey checks: the fitness function for the theorist bundle. The
- * compile-graded journeys (edit, a compile fix, latexdiff, citations, and prove
+ * compile-graded journeys (edit, annotate, a compile fix, latexdiff, citations, and prove
  * over a Lake project) run end to end through the real
  * `texra run ... --output-format ndjson` against each cheap model in
  * `MODEL_KEYS`, over the fixtures in `src/test-kernel/cli/fixtures/journeys/`.
@@ -116,61 +116,33 @@ const POLISH_PROMPT =
 const JOURNEYS = {
   edit: {
     fixture: 'polish',
-    args: ['edit', '--input', 'paper.tex', '--output', 'paper.polished.tex'],
-    // The program's result, kept with its diff against the input.
-    keep: { from: 'paper.tex', to: 'paper.polished.tex' },
-    instruction: POLISH_PROMPT,
-    approval: 'never',
+    args: ['chat'],
+    instruction: `In paper.tex: ${POLISH_PROMPT}`,
+    approval: 'yolo',
     check(dir) {
-      const out = read(dir, 'paper.polished.tex');
+      const out = read(dir, 'paper.tex');
       assertPolished(out);
       assert(out.includes('\\ldots'), 'no \\ldots in the output');
-      compile(dir, 'paper.polished.tex');
+      compile(dir, 'paper.tex');
     },
   },
-  // A script chains two `edit` programs: the second must read the first's
-  // last round, and the result keeps the first's edits.
-  imports: {
+  // The theory plugin's annotate program: it reviews the file in place, and
+  // its own check keeps the text outside the annotations as it was.
+  annotate: {
     fixture: 'polish',
-    args: ['chat'],
-    instruction: [
-      'Make exactly one `script` call with this code, unchanged, and then report what it returned:',
-      '```js',
-      `const polished = await program('edit', { prompt: ${JSON.stringify(POLISH_PROMPT)}, inputFiles: ['paper.tex'] });`,
-      'const latest = new Map(polished.changes.map((change) => [change.path, change.absolutePath]));',
-      "const corrected = await program('edit', { prompt: 'Fix only outright typos. Change nothing else.', inputFiles: [...latest.values()] });",
-      'return { polished: [...latest.values()], corrected: [...new Map(corrected.changes.map((change) => [change.path, change.absolutePath])).values()] };',
-      '```',
-    ].join('\n'),
+    args: ['annotate', '--input', 'paper.tex'],
+    instruction: 'Referee the mathematics.',
     approval: 'yolo',
-    check(dir, records) {
-      const value = records
-        .filter((r) => r.kind === 'progress' && r.event === 'tool.end')
-        .map((r) => r.payload.result?.value)
-        .find((returned) => returned?.corrected !== undefined);
-      assert(value, 'the script returned no { polished, corrected }');
-      // Run storage paths, compared below `executions/`: macOS spells the
-      // temp dir with /private in one and not the other.
-      const tail = (file) => file.split('/executions/')[1];
-      const inputs = records
-        .filter(
-          (r) => r.event === 'run.config' && r.payload.config.agent === 'edit',
-        )
-        .map((r) => r.payload.config.inputFiles.map(tail))
-        // The second program is the one whose input is in run storage: the
-        // first reads the workspace's paper.tex, and a program's own
-        // revision runs name no input files.
-        .filter((files) => files.length > 0 && files.every(Boolean));
-      assert(
-        inputs.length > 0 &&
-          inputs.every(
-            (files) =>
-              files.length === 1 && files[0] === tail(value.polished.at(-1)),
-          ),
-        `the second edit read ${JSON.stringify(inputs)}, not the first's last round`,
-      );
-      assertPolished(readFileSync(value.corrected.at(-1), 'utf8'));
-      unchanged(dir, 'polish', 'paper.tex');
+    check(dir) {
+      const out = read(dir, 'paper.tex');
+      assert(out.includes('\\criticize{'), 'no \\criticize annotation');
+      for (const kept of [
+        '\\label{eq:energy}',
+        '\\begin{equation}',
+        '% We set $J=1$',
+      ])
+        assert(out.includes(kept), `the review dropped ${kept}`);
+      compile(dir, 'paper.tex');
     },
   },
   latexFixer: {
@@ -341,15 +313,6 @@ function runJourney(name, model, outDir, attempt) {
       `run outcome is ${final.result.outcome}`,
     );
 
-    if (journey.keep) {
-      const { from, to } = journey.keep;
-      cpSync(path.join(dir, to), `${stem}.${to}`);
-      const diff = spawnSync('diff', ['-u', from, to], {
-        cwd: dir,
-        encoding: 'utf8',
-      });
-      writeFileSync(`${stem}.diff`, diff.stdout ?? '');
-    }
     journey.check(dir, records);
     const usage = final.result.usage;
     // The run's tool calls, by name, from the `tool.start` rows the progress

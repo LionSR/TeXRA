@@ -212,17 +212,6 @@ const diagnostics = ({ results, call }: GoldenTurn) =>
       : text('The diagnostics read came back.'),
   );
 
-/** A service task accepting a file from the run its instruction names. */
-function accept({ said, results, call }: GoldenTurn) {
-  const source = /\b([0-9a-f]{12})\b/.exec(said)?.[1];
-  const files = [{ path: 'draft.tex', original: 'accepted.tex' }];
-  return Effect.succeed(
-    results.length > 0 || source === undefined
-      ? text('Accepted.')
-      : [call('accept_run_files', { execution_id: source, files })],
-  );
-}
-
 /** The golden parent's child: it looks its parent up and messages it. */
 function child({ said, results, call }: GoldenTurn) {
   // Messaging its waiting headless parent is refused (it never reads).
@@ -601,7 +590,6 @@ const GOLDEN_SCENARIOS: ReadonlyArray<{
 }> = [
   { marker: 'GOLDEN-APPROVAL', play: approval },
   { marker: 'GOLDEN-DIAGNOSTICS', play: diagnostics },
-  { marker: 'GOLDEN-ACCEPT', play: accept },
   { marker: 'GOLDEN-CHILD', play: child },
   { marker: 'GOLDEN-CHAT', play: chat },
   { marker: 'GOLDEN-SCRIPT', play: script },
@@ -753,9 +741,7 @@ function cannedTurn(
     const what = scriptFanout ? 'Script' : 'History query';
     return text(`${what} result: ${JSON.stringify(results)}`);
   }
-  return text(
-    `<documents><document name="paper.polished.tex">${VALIDATION_OUTPUT}</document></documents>`,
-  );
+  return text(VALIDATION_OUTPUT);
 }
 
 /**

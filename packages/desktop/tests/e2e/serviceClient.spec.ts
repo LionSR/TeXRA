@@ -2,7 +2,7 @@
 // starts the service from the bundle it ships and stays its client while it
 // runs. A CLI of the same build shares that service; a CLI of a newer build
 // retires it, and the open app reaches the newer one and lists its tasks
-// again. A file a service task accepts into the project shows in the app's
+// again. A file a service task writes into the project shows in the app's
 // file tree, heard from the run's rows. The service outlives the app. Every host stamps the same build
 // identity, so "newer" means the same thing to all of them. A tool edit a
 // service task asks for is one request every window answers: changes made
@@ -52,13 +52,13 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
     label: 'park_validation',
     system: 'GOLDEN-PARK',
   });
-  // A task that accepts `draft.tex` into the project as `accepted.tex`.
+  // A task that writes `accepted.tex` into the project.
+  const draft = 'Accepted by a task in the service.\n';
   const acceptRun = validationRun({
     label: 'accept_validation',
-    system: 'GOLDEN-ACCEPT',
-    tools: ['accept_run_files'],
+    system: `GOLDEN-APPROVAL write_file ${JSON.stringify({ path: 'accepted.tex', content: draft })}`,
+    tools: ['write_file'],
   });
-  const draft = 'Accepted by a task in the service.\n';
   writeFileSync(join(work, 'draft.tex'), draft);
   const scripted = scriptedModel(work);
   const thisBuild = join(home, 'bin', 'texra.js');
@@ -123,7 +123,7 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
       await launched.page.screenshot({
         path: test.info().outputPath('desktop-reconnected.png'),
       });
-      // A task in the service accepts a file into the project. The app hears
+      // A task in the service writes a file into the project. The app hears
       // it from the run's rows, as every process that folds the run does,
       // and lists the file without a refresh.
       const treeRow = (path: string) =>
@@ -133,7 +133,7 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
       await expect(treeRow('accepted.tex')).toHaveCount(0);
       // The service follows the project's own approval policy, which a
       // client can narrow but never widen: auto-approve it, as a window's
-      // settings view would, so the acceptance needs no answer.
+      // settings view would, so the write needs no answer.
       const storage = join(dataRoot, 'v1', 'workspace-storage');
       const project = readdirSync(storage).find((name) =>
         name.startsWith('project-'),
@@ -153,7 +153,7 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
             '--model',
             'openai/gpt-5.6-sol',
             '--instruction',
-            `Accept draft.tex from ${task.runId}`,
+            'Write accepted.tex',
             '--output-format',
             'json',
             '--cwd',

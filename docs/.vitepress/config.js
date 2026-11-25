@@ -78,7 +78,6 @@ const guideSidebar = [
         link: '/guide/working-with-figures',
       },
       { text: 'TikZ Figures', link: '/guide/tikz-figures' },
-      { text: 'Multiple Output', link: '/guide/multiple-output' },
     ],
   },
   {

@@ -110,7 +110,7 @@ When you provide media files, they are handed to the model according to its capa
 
 Common use cases:
 
-- <wa-icon library="texra" name="pencil"></wa-icon> Write captions for images (a chat agent, or the `edit` program)
+- <wa-icon library="texra" name="pencil"></wa-icon> Write captions for images (ask the assistant)
 - <wa-icon library="texra" name="check"></wa-icon> Verify text matches figures (ask the assistant, or run the `annotate` program)
 - <wa-icon library="texra" name="file-text"></wa-icon> Turn handwriting or scans into LaTeX (the `transcribe` program)
 - <wa-icon library="texra" name="unmute"></wa-icon> Transcribe audio (the `transcribe` program)
