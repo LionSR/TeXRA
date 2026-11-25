@@ -73,11 +73,9 @@ export const HostSnapshotSchema = Schema.Struct({
   project: ProjectDisplaySchema,
   modelOptions: Schema.Array(ModelOptionDataSchema),
   /** How a tool call is painted, from what the process's plugins declare
-   *  (`TexraPlugin`): its icon by normalized tool name, and the tools whose
-   *  output reads as a terminal session. */
+   *  (`TexraPlugin`): its icon by normalized tool name. */
   tools: Schema.Struct({
     icons: Schema.Record(Schema.String, Schema.String),
-    terminalOutput: Schema.Array(Schema.String),
   }),
   workspaceRoots: Schema.Array(WorkspaceRootOptionDataSchema),
   /** The project's configured policy, shown before a task is launched. */
@@ -119,7 +117,7 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
   return {
     project,
     modelOptions: [],
-    tools: { icons: {}, terminalOutput: [] },
+    tools: { icons: {} },
     workspaceRoots: [],
     approvalPolicy: APPROVAL_POLICY_DEFAULT,
     recording: null,

@@ -100,7 +100,6 @@ import {
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
 import { openWindowSetup } from '@texra/controllers/onboarding/setupLaunch';
-import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
 import {
   hostFailure,
   openLink,
@@ -260,13 +259,6 @@ interface GuiWindowPorts {
   >;
 }
 
-/** The settings body's verbs on a window's runs: its own session's, never
- *  those of another project its host happens to show. */
-export type GuiWindowSettingsRuns = Pick<
-  SettingsHostBindings,
-  'revealRun' | 'runLabel'
->;
-
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
 /**
@@ -302,7 +294,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       icons: Object.fromEntries(
         plugins.flatMap((plugin) => Object.entries(plugin.icons ?? {})),
       ),
-      terminalOutput: plugins.flatMap((plugin) => plugin.terminalOutput ?? []),
     },
     root: roots.workspace,
     stores: roots,
@@ -722,28 +713,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     );
   }
 
-  const settingsRuns: GuiWindowSettingsRuns = {
-    revealRun: (runId) =>
-      session.view.current().runs.has(runId)
-        ? host.runs
-            .showRunView()
-            .pipe(
-              Effect.andThen(
-                Effect.sync(() =>
-                  bridge.surfaceAction({ kind: 'select', runId }),
-                ),
-              ),
-              Effect.as('revealed' as const),
-            )
-        : Effect.succeed('missing' as const),
-    runLabel: (runId) => session.view.current().runs.get(runId)?.label,
-  };
-
   return {
     bridge,
     snapshot,
     runValidated: runActions.runValidated,
     runSetup,
-    settingsRuns,
   };
 });

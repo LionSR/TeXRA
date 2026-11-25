@@ -288,8 +288,6 @@ export class SettingsApp extends TexraSignalElement {
           ? html`
               <git-tab
                 .toggleDisabled=${settingsSnapshotRevisions.get()['git-author'] === undefined}
-                .githubTokenStatus=${host.githubToken?.status ?? 'none'}
-                .prSubscriptions=${host.prSubscriptions?.subscriptions ?? []}
               ></git-tab>
             `
           : html`<privacy-tab></privacy-tab>`;

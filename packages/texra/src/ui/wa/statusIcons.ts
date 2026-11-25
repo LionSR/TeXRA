@@ -108,10 +108,10 @@ export function renderKeyStatusIcon(
   return renderSetStatusIcon({
     status,
     success: 'secret',
-    title: credentialOriginLabel('secret', 'key'),
+    title: credentialOriginLabel('secret'),
     fallbacks: {
-      env: { label: credentialOriginLabel('env', 'key') },
-      none: { label: credentialOriginLabel('none', 'key') },
+      env: { label: credentialOriginLabel('env') },
+      none: { label: credentialOriginLabel('none') },
     },
   });
 }

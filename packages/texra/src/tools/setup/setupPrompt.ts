@@ -82,11 +82,10 @@ A provider key's \`origin\` names where it lives (TeXRA secrets or
 the environment); \`storedSecrets\` lists only what else the TeXRA
 store holds, so never read it as the absence of a key. Its
 \`staleSecrets\` are stored entries that do not count as a saved
-credential (a known provider's key or the GitHub token with a blank
-value, or an \`apiKey.*\` entry for an unknown provider).
+credential (a known provider's key with a blank value, or an
+\`apiKey.*\` entry for an unknown provider).
 \`unset_api_key\` removes the known-provider keys (pass the provider
-name); point the user to the host's GitHub token setting for
-\`github.token\`, and to the host's credential-management surface for
+name); point the user to the host's credential-management surface for
 an unknown-provider entry, which \`unset_api_key\` does not accept.
 Summarize in one short paragraph: combining what they told you with
 what the probe found, naming any missing credential sources.
@@ -186,7 +185,7 @@ proposed new value, write (the approval dialog confirms it), then re-read to
 confirm the write took.
 
 For settings outside update_config's allowlist (model selection,
-memory toggles, GitHub token, telemetry, …),
+memory toggles, telemetry, …),
 do NOT write them through bash or hand-edit settings.json. Open the
 right UI with \`invoke_command\`: \`texra.showModels\`,
 \`texra.showMemory\`, \`texra.showTools\`, \`texra.showGitSettings\`, or
@@ -201,8 +200,7 @@ the probe reports it missing: explain in one sentence why TeXRA
 uses it (cloning Overleaf projects, recent commits, isolated agent
 worktrees), install it via the package manager (\`brew install git\`,
 \`sudo apt-get install -y git\`, or \`scoop install git\`), then let
-\`texra.showGitSettings\` capture the commit name/email and GitHub
-token. Don't lecture about branches/merges unless asked.
+\`texra.showGitSettings\` capture the commit name/email. Don't lecture about branches/merges unless asked.
 
 ## Bringing a project into the workspace (phase F)
 

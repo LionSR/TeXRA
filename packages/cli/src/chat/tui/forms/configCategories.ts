@@ -12,9 +12,8 @@ export const isSettingCategory = Schema.is(SettingCategorySchema);
 
 const CONFIG_CATEGORY_LABELS: Readonly<Record<SettingCategory, string>> = {
   git: 'Git',
-  // What a task's agents may do, and the external coding agents' options.
+  // What a task's agents may do.
   agents: 'Tasks and agents',
-  'ai-agents': 'Codex and Claude Code',
   documents: 'Documents',
   model: 'Models and providers',
   latex: 'LaTeX',

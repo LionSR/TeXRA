@@ -2,23 +2,19 @@
  * The notices with buttons a GUI window shows, worded and wired once for the
  * extension and the desktop: a request's failure, an instruction (its key's
  * actions, plus "Never
- * remind again" where the key allows it), and a GitHub token GitHub
- * rejected. A host supplies only its message with buttons; the verbs the
+ * remind again" where the key allows it). A host supplies only its message with buttons; the verbs the
  * buttons run are the ones the window's requests run (`openGuiWindow`).
  */
 
 // Third-party imports
-import { Effect, Schema, Stream } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import type {
   HostPresentation,
   RuntimePresentationEventPayloads,
 } from '@texra-ai/worldline';
-import {
-  appSignalStream,
-  type PresentationEventHandlers,
-} from '@texra-ai/worldline/host';
+import type { PresentationEventHandlers } from '@texra-ai/worldline/host';
 import {
   Settings,
   withLogChannel,
@@ -30,8 +26,6 @@ import {
   type StateKey,
 } from '@texra-ai/worldline/schemas';
 import type { HostFailed, NoticeLevel } from '@texra/hosts/uiHosts';
-import { settingsTabByCommand } from '@texra/shared/commands/catalog';
-import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import {
   INSTRUCTION_ACTION,
   INSTRUCTION_ACTION_BUTTON_LABELS,
@@ -44,7 +38,6 @@ import { shownFailureText } from '@ui/copy/modelAccess';
 const CHANNEL = 'windowNotices';
 
 const NEVER_REMIND = 'Never remind again';
-const OPEN_GIT_SETTINGS = 'Open Git settings';
 
 /** A message with one button per label: the label chosen, or `undefined`
  *  when the person dismissed it. */
@@ -161,33 +154,3 @@ export function windowNotices(
     },
   };
 }
-
-/**
- * Tell the person each time GitHub rejects the stored token, with a button
- * to the Git settings where they replace it, until the caller interrupts.
- * Each notice waits on a fiber of its own, so a second rejection does not
- * wait behind an unanswered one, and the interrupt closes any still open.
- */
-export const followGitHubTokenRejections = <R>(
-  ask: AskNotice,
-  openSettings: (target: SettingsTarget) => Effect.Effect<void, Error, R>,
-) =>
-  appSignalStream('githubTokenInvalid').pipe(
-    Stream.runForEach(({ message }) =>
-      ask('error', `GitHub token rejected: ${message}`, [
-        OPEN_GIT_SETTINGS,
-      ]).pipe(
-        Effect.flatMap((choice) =>
-          choice === OPEN_GIT_SETTINGS
-            ? openSettings(settingsTabByCommand['texra.showGitSettings'])
-            : Effect.void,
-        ),
-        Effect.ignore({
-          log: 'Warn',
-          message: 'The rejected GitHub token notice failed',
-        }),
-        withLogChannel(CHANNEL),
-        Effect.forkChild,
-      ),
-    ),
-  );

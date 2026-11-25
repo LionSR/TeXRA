@@ -104,13 +104,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         openPath: (filePath) => previewHost.openPath(filePath),
         revealPath: (filePath) =>
           Effect.sync(() => shell.showItemInFolder(filePath)),
-        // The run verbs of the project these settings belong to, even while
-        // the window is switching to another; a released binding's bridge
-        // has no port left, so a late verb reaches no surface.
-        ...(documentBinding?.settingsRuns ?? {
-          revealRun: () => Effect.succeed('unavailable' as const),
-          runLabel: () => undefined,
-        }),
         runInTerminal: (_name, command) =>
           Effect.sync(() => {
             if (bindings.get(project.key) !== documentBinding) return;

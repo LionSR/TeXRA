@@ -96,7 +96,6 @@ interface SettingWriteEffects {
 export const SettingCategorySchema = Schema.Literals([
   'git',
   'agents',
-  'ai-agents',
   'documents',
   'model',
   'latex',

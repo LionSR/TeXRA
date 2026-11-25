@@ -475,25 +475,6 @@ rate-limit headers.
 const isAuthFailureStatus: (status: number | undefined) => boolean
 ```
 
-## isClaudeCodeModel
-
-Whether the Claude Code CLI runs `config` for TeXRA: an Anthropic model
-TeXRA serves. The Claude Code CLI's model choices are these.
-
-```ts
-function isClaudeCodeModel(config: ModelConfig): boolean
-```
-
-## isCodexModel
-
-Whether the Codex backend runs `config` for TeXRA: an OpenAI model it
-serves on a ChatGPT subscription that TeXRA serves too. The Codex CLI's
-model choices are these.
-
-```ts
-function isCodexModel(config: ModelConfig): boolean
-```
-
 ## isUnservedModel
 
 Whether TeXRA serves no run on `config`: llm-zoo retired the model, only

@@ -246,10 +246,19 @@ function child({ said, results, call }: GoldenTurn) {
 /** The interactive chat: a plan run as a goal, its round and result, and
  *  replies after a `/model` and a `/compact`, told apart by what they say. */
 function chat({ turn, said, results, call, gate }: GoldenTurn) {
-  // A Codex child held until a stop; what is typed behind stays queued.
+  // A background command held until a stop; what is typed behind stays
+  // queued. The command ends when `command.release` appears beside the
+  // project, or when a failed generation has removed the project.
   if (said.includes('Hold this turn.'))
     return results.length === 0
-      ? Effect.succeed([call('codex', { prompt: 'Answer the Codex task.' })])
+      ? Effect.succeed([
+          call('bash', {
+            command:
+              'until [ -e ../command.release ] || [ ! -e notes.tex ]; do sleep 0.05; done; echo Released.',
+            description: 'Held command',
+            run_in_background: true,
+          }),
+        ])
       : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
   if (said.includes('The golden chat so far.'))
     return Effect.succeed(text('Answered after the compaction.'));
@@ -298,7 +307,9 @@ function script({ turn, said, results, call }: GoldenTurn) {
   // the task once more. The wait is Node's, not a shell loop: the bash
   // tool runs a command in cmd.exe on Windows, which has no `until`.
   if (said.includes('Run in the background.')) {
-    const last = turn.messages.at(-1);
+    // A plugin's prompt section may change between the launch and the first
+    // step (its probe answering), which appends a system message.
+    const last = turn.messages.findLast(({ role }) => role !== 'system');
     if (last?.role === 'tool')
       return Effect.succeed(text('Sent to the background.'));
     return Effect.succeed(

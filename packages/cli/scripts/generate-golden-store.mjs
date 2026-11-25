@@ -26,8 +26,8 @@
  * - an `annotate` program run: a program's script run, the child its
  *   round starts, and the files it reads to check that round.
  * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
- *   Codex switched on in `/plugins`, and a plugin's `PostToolUse` hooks on
- *   `plan` and `codex` enabled: a plan the user runs as a goal
+ *   a plugin's `PostToolUse` hooks on `plan` and `bash` enabled: a plan
+ *   the user runs as a goal
  *   (`r` on the approval), which runs the default goal strategy as a background
  *   script of the chat whose one round, a fork of the chat (`self()`),
  *   runs a command under the goal's grant, unasked, and submits its
@@ -38,12 +38,13 @@
  *   `/model` and a message, so the switch is recorded at the run's
  *   next model boundary; then `/compact`, whose turn commits a
  *   `context.edit` replacing the history; then a turn whose approved
- *   `codex` call runs the hook (`hook.outcome`) and launches a Codex child,
- *   on a stand-in Codex CLI first on PATH, whose turn is held; then the
- *   chat's turn held, a message typed behind it, the child's turn released
- *   so it ends on its own (`run.end`, `run.report`), and the user's stop,
- *   so that follow-up and the child's report stay queued. The `codex` call
- *   is approved with `a`, which records the grant (`approval.policy`). The stand-in is a POSIX script, so the
+ *   background `bash` call runs the hook (`hook.outcome`) and launches a
+ *   command child, which waits for a file; then the
+ *   chat's turn held, a message typed behind it, the child's command released
+ *   so it ends on its own, and the user's stop, so that follow-up and the
+ *   child's report stay queued. A later open removes the ended command's
+ *   run (`sweepLeftoverRuns`); its report stays. The `bash` call
+ *   is approved with `a`, which records the grant (`approval.policy`). The command is POSIX shell, so the
  *   generator runs on macOS and Linux. Only the chat
  *   makes a goal: the headless policy approves a plan without one. Each
  *   keystroke
@@ -221,33 +222,7 @@ function scenario(root) {
     path.join(project, 'paper.tex'),
     '\\section{Input}\nThe golden annotate program reviews this file.\n',
   );
-  // The Codex CLI the Codex child runs: first on PATH, with an empty global
-  // npm prefix so no installed Codex is found first. Its one turn answers
-  // once it has read its prompt and `codex.release` appears beside the flag.
-  const bin = path.join(root, 'bin');
-  mkdirSync(bin);
-  writeFileSync(
-    path.join(bin, 'codex'),
-    `#!/usr/bin/env node
-const { existsSync } = require('node:fs');
-const release = require('node:path').join(__dirname, '..', 'codex.release');
-const events = [
-  { type: 'thread.started', thread_id: 'golden-codex-thread' },
-  { type: 'turn.started' },
-  { type: 'item.completed', item: { id: 'item_0', type: 'agent_message', text: 'Codex answered.' } },
-  { type: 'turn.completed', usage: { input_tokens: 10, cached_input_tokens: 0, output_tokens: 5, reasoning_output_tokens: 0 } },
-];
-process.stdin.resume();
-process.stdin.on('end', function answer() {
-  // A generation that failed removed its root: there is no turn to answer.
-  if (!existsSync(release))
-    return existsSync(__dirname) ? setTimeout(answer, 20) : process.exit(1);
-  for (const event of events) console.log(JSON.stringify(event));
-});
-`,
-    { mode: 0o755 },
-  );
-  // A plugin whose \`PostToolUse\` hooks see each \`codex\` call and hold each
+  // A plugin whose \`PostToolUse\` hooks see each \`bash\` call and hold each
   // \`plan\` call until \`plan.release\` appears beside the project, the
   // hooks' working directory.
   const hooks = path.join(root, 'golden-hooks');
@@ -263,7 +238,7 @@ process.stdin.on('end', function answer() {
       hooks: {
         PostToolUse: [
           {
-            matcher: 'codex',
+            matcher: 'bash',
             hooks: [
               {
                 type: 'command',
@@ -303,8 +278,6 @@ process.stdin.on('end', function answer() {
     OPENAI_API_KEY: FAKE_KEY,
     // The helper model's provider: a run's session label (`run.description`).
     DEEPSEEK_API_KEY: FAKE_KEY,
-    PATH: [bin, process.env.PATH].join(path.delimiter),
-    npm_config_prefix: path.join(root, 'npm'),
     ...testLaunchEnv(home),
     // The system prompt names the shell (normalized away, but named on
     // every machine) and dates in this zone.
@@ -585,12 +558,12 @@ async function generate(root) {
     '--print',
   ]);
 
-  // The chat's Codex call runs the hook plugin's `PostToolUse` hook.
+  // The chat's background command runs the hook plugin's `PostToolUse` hook.
   cli.run(['plugin', 'install', cli.hooks, '--print']);
   cli.run(['plugin', 'enable', 'golden-hooks', '--print'], 'y\n');
 
   // The interactive chat: each keystroke waits for the step before it.
-  // The chat exercises both plan approval (`r`) and Codex approval (`a`), so
+  // The chat exercises both plan approval (`r`) and command approval (`a`), so
   // it runs under `ask` rather than the `yolo` default.
   const tty = await cli.chat([
     'chat',
@@ -641,34 +614,6 @@ async function generate(root) {
       },
       tty,
     );
-  /** Press the hotkey the open list shows for `label`. */
-  const pick = async (label) => {
-    const pattern = new RegExp(`(\\w)\\. ${label}`);
-    const [, key] = await until(
-      `the ${label} row`,
-      () => pattern.exec(tty.screen()),
-      tty,
-    );
-    tty.write(key);
-  };
-  // Codex on, in `/plugins`, before the chat's first turn binds its tools.
-  await send('/plugins');
-  await shows('the plugin list', 'Switch plugins on or off');
-  // The list shows a window around its cursor: walk down to Codex's row.
-  await until(
-    'the OpenAI Codex CLI row in view',
-    () =>
-      /\w\. OpenAI Codex CLI/.test(tty.screen()) || void tty.write('\x1b[B'),
-    tty,
-  );
-  await pick('OpenAI Codex CLI');
-  await shows('Codex on', 'OpenAI Codex CLI — on');
-  tty.write('\x1b');
-  await until(
-    'the closed /plugins',
-    () => !tty.screen().includes('/plugins'),
-    tty,
-  );
   await send('Start the golden chat.');
   await until(
     'the plan approval',
@@ -715,19 +660,28 @@ async function generate(root) {
   await send('/compact');
   await shows('the compaction notice', 'Context compaction requested');
   await waitingAfter('the chat waiting after the compaction', turn);
-  // A turn that launches a Codex child, approved with `a` (approve and stop
+  // A turn that launches a background command, approved with `a` (approve and stop
   // asking: the grant's `approval.policy` row), and is then held; a message
   // typed behind it; the child's turn released, so it ends on its own and
   // reports to the held chat; and the user's stop, which leaves the typed
   // message and the report queued on the stopped run.
   await send('Hold this turn.');
-  await shows('the Codex call approval', 'y approve');
+  await shows('the command approval', 'y approve');
   tty.write('a');
   const chatRows = (sql) => rowsOf(chatRun(), sql);
-  const codexRows = (sql) =>
-    rowsOf(query(cli.store(), RUN_OF_AGENT, ['codex'])[0]?.id, sql);
-  // The held model call, after the Codex call's result: the Codex turn
-  // answers only then, so its rows commit after the chat's.
+  const commandRows = (sql) =>
+    rowsOf(
+      query(
+        cli.store(),
+        `SELECT s.logical_id AS id FROM event e
+         JOIN event_sequence s ON s.id = e.aggregate
+         WHERE e.type = 'run.start'
+           AND json_extract(e.data, '$.identity.kind') = 'process'`,
+      )[0]?.id,
+      sql,
+    );
+  // The held model call, after the command call's result: the command
+  // ends only then, so its rows commit after the chat's.
   await until(
     'the held model call',
     () =>
@@ -735,7 +689,7 @@ async function generate(root) {
         AND json_extract(e.data, '$.payload.kind') = 'attempt'
         AND e."commit" > (SELECT r."commit" FROM event r
           WHERE r.aggregate = e.aggregate AND r.type = 'tool.result'
-            AND json_extract(r.data, '$.payload.callId') LIKE 'validation-codex-%')`) >
+            AND json_extract(r.data, '$.payload.callId') LIKE 'validation-bash-%')`) >
         0 && tty.screen().includes('Ctrl-C stop'),
     tty,
   );
@@ -750,10 +704,10 @@ async function generate(root) {
         AND json_extract(e.data, '$.content.control') IS NULL`) === 4,
     tty,
   );
-  writeFileSync(path.join(root, 'codex.release'), '');
+  writeFileSync(path.join(root, 'command.release'), '');
   await until(
-    'the ended Codex child',
-    () => codexRows(`e.type = 'run.end'`) > 0,
+    'the ended command child',
+    () => commandRows(`e.type = 'run.end'`) > 0,
     tty,
   );
   tty.write('\x03');
@@ -1207,6 +1161,14 @@ async function normalize(file, root) {
         }),
       );
   }
+
+  // A background command a later open swept left its run id in the result
+  // its parent holds queued; it has no sequence, so it is named here.
+  for (const row of rows)
+    if (row.type === 'followup.queued') {
+      const swept = row.value.content?.delivery?.runId;
+      if (swept !== undefined) ids.get(swept);
+    }
 
   const replacements = [
     ...paths,

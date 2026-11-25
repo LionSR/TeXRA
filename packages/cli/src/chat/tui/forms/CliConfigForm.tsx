@@ -15,16 +15,10 @@ import {
   settingWriteFailure,
 } from '@texra/controllers/settingsView/stateSettingWrite';
 import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
-import {
-  removeGitHubToken,
-  resolveGitHubTokenSource,
-  saveGitHubToken,
-} from '@texra/tools/github/githubAuth';
 
 import { ConfigForm } from './ConfigForm';
 import { useAsyncListForm, useAsyncResource } from './_shared/useAsyncListForm';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
-import { formatGitHubTokenSummary, GitHubTokenForm } from './GitHubTokenForm';
 import {
   formatProviderApiKeySummary,
   ProviderApiKeyForm,
@@ -46,10 +40,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const { roots } = useChatProcess();
   const apiKeys = useAsyncResource({
     load: () => Effect.flatMap(Secrets, apiKeyOrigins),
-    onError: props.onError,
-  });
-  const githubToken = useAsyncResource({
-    load: () => Effect.flatMap(Secrets, resolveGitHubTokenSource),
     onError: props.onError,
   });
 
@@ -107,11 +97,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
           label: 'API keys',
           description: formatProviderApiKeySummary(apiKeys),
         },
-        {
-          name: 'github-token',
-          label: 'GitHub token',
-          description: formatGitHubTokenSummary(githubToken),
-        },
       ]}
       formRenderers={{
         'api-keys': (onBack) => (
@@ -126,27 +111,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
                   (current) => current && { ...current, [provider]: 'secret' },
                 );
                 yield* apiKeys.refresh();
-              })
-            }
-            onDone={onBack}
-            onCancel={onBack}
-          />
-        ),
-        'github-token': (onBack) => (
-          <GitHubTokenForm
-            availableRows={props.availableRows}
-            status={githubToken}
-            onSave={(token) =>
-              Effect.gen(function* () {
-                yield* saveGitHubToken(token);
-                githubToken.setData(() => 'secret');
-                yield* githubToken.refresh();
-              })
-            }
-            onRemove={() =>
-              Effect.gen(function* () {
-                yield* removeGitHubToken;
-                yield* githubToken.refresh();
               })
             }
             onDone={onBack}
