@@ -202,7 +202,7 @@ interface DecidedModel {
  * again, so no model is charged a second read (or a second warning) for it.
  * A failed read is that provider's `unreadable` status, never "no key"
  * (which would send a user with a working key to enter it again), and warns
- * once for the provider, never once per model that consults it (#11508).
+ * once for the provider, never once per model that consults it.
  */
 const decideVerdicts = Effect.fn('decideVerdicts')(function* (
   routed: RoutedModels,

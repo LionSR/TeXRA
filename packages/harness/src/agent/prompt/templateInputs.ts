@@ -30,11 +30,7 @@ export interface TemplateOpening {
   readonly activated: readonly string[];
 }
 
-/**
- * Build what a launch renders its prompts from.
- *
- * @param options.workspaceRoot - Workspace root of the run's session.
- */
+/** Build what a launch renders its prompts from. */
 export function buildTemplateInputs(
   agentConfig: AgentConfig,
   options: BuildTemplateInputsOptions,

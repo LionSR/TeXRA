@@ -6,7 +6,7 @@
  * byte buffer) and are routed: responses complete the `Deferred` registered
  * per request id, notifications go to the owner's handler, and a request the
  * peer sends us is answered by the owner's `onRequest` or refused with
- * `MethodNotFound`. Outbound frames are queued to the sink by a writer
+ * JSON-RPC's method-not-found error. Outbound frames are queued to the sink by a writer
  * fiber. Both fibers live in the connection's scope.
  *
  * The connection has one terminal state: `close(reason)` fails every pending

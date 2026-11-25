@@ -25,11 +25,8 @@ interface ExtractedToolAttachments {
  * Binary data (base64Data, bytes) is stripped from the result.
  *
  * Uses the source-level `ToolResultSchema` discriminator; tools declare
- * success vs error before this projection sees the result.
- *
- * @param result - Raw tool result, possibly containing binary data.
- * @param checkFacts - Throws on a fact the calling tool may not state.
- * @returns Extracted attachments and typed payload without binary data.
+ * success vs error before this projection sees the result. `checkFacts`
+ * throws on a fact the calling tool may not state.
  */
 export function extractToolAttachments(
   result: ToolResult,
