@@ -77,6 +77,27 @@ None can land as a net win in a scheduled run.
    `jsr:@std/encoding` import-map change nor `hono/cors` (which follows moving
    the non-Hono functions to Hono first) can be verified here.
 
+## Checked and declined
+
+- **A `toneClass(tone)` owner for the `tone-${tone}` class-name contract.** The
+  UI sweep's widest find was the `tone-${tone}` class string hand-built at ~15
+  render sites across ~13 components (`desktopShell.ts`, the progress
+  components' `classMap`s, `UsagePanel`, `FileList`, `SubscriptionUsageRow`, …),
+  while `toneStyles.ts` owns the `--tone-color` sheet. It is the only pattern
+  that clears the instance bar, but a `toneClass(t) => \`tone-${t}\``helper is a
+  shallow forwarding function — the "a module that only forwards" red flag the
+  root`AGENTS.md`names — and saves ~0 lines (an inline template literal
+  becomes a call). In an idiomatic Lit codebase`tone-${t}`reads fine at each
+  site, each already reading`tone`from a`copy/*`owner. Declined: the fix
+  would add indirection rather than remove it. Worth revisiting only if the team
+  wants the`tone-` prefix spelled in exactly one place as a deliberate
+  contract.
+- **Merging other same-shaped literal unions.** `WaVariant` was the only
+  five-member union genuinely duplicated as the same fact. The tree holds many
+  string-literal union aliases, but they are distinct facts that happen to share
+  members; folding coincidentally-equal unions into one owner would conflate
+  decisions, which the owner rule forbids.
+
 ## Complex functions: each reduces to the refused shape or is already done
 
 The functions still catalogued in the 2026-11-24 scan were read directly. Their
