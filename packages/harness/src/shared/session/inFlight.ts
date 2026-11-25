@@ -306,7 +306,7 @@ export function failedNext(
 /** A call's result, as its `tool.result` row records it. */
 export type ToolCallResult = Pick<
   ToolResultPayload,
-  'attempt' | 'disposition' | 'duplicateOf' | 'result' | 'attachments'
+  'attempt' | 'disposition' | 'result' | 'attachments'
 >;
 
 /** How far one call got, as its rows say: `issued`, no body started;
