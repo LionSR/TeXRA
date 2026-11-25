@@ -132,16 +132,13 @@ function launchOn(
  * owns the common request lifecycle, so document task and chat runs
  * cannot drift on validation, run ids, host lifecycle or outcome handling.
  *
- * A classified run failure (AgentRunLifecycle already ran it through
- * `classifyAgentError` and wrote the terminal outcome before rethrowing an
- * `AgentError` for the extension host) is consumed here into a non-zero exit
- * code instead of being rethrown — otherwise it reaches `bin/texra.ts`'s
- * crash handler and gets misreported as an unexpected crash, printed a
- * second time alongside a "please report it" line (issue #7645). Only
- * `AgentError` — the classified, already-handled shape — takes this path;
- * any other rejection (e.g. `registerRun` disk I/O, `workspaceState.update`
- * failures) is genuinely unexpected and is rethrown so the crash handler
- * still reports it.
+ * A run that opened never fails its launch: its end is its `run.end` row's,
+ * and the exit code follows that outcome. A launch that failed before the
+ * run opened with an `AgentError` or `LaunchRefused` (a classified, worded
+ * failure) is presented once and exits non-zero, so the crash handler in
+ * `bin/texra.ts` does not report it a second time as a bug. Any other
+ * failure (a `registerRun` write that failed, a defect) is unexpected and
+ * reaches that handler.
  */
 export const executeCliConfig: (
   config: AgentConfigPayload,
@@ -329,10 +326,9 @@ export const executeCliConfig: (
       // The session words a launch's failure as a `RunFailure` (what it
       // failed with is its cause), or a refused one as `LaunchRefused`.
       const err = failure instanceof RunFailure ? failure.cause : failure;
-      // Only a refused launch or a classified, already-handled AgentError
-      // resolves to a non-zero exit code here; anything else (e.g.
-      // registerRun disk I/O, workspaceState.update failures) is unexpected
-      // and must keep propagating to bin/texra.ts's crash handler.
+      // Only a refused resume, a refused launch or a classified AgentError
+      // resolves to a non-zero exit code here; anything else is unexpected
+      // and keeps propagating to the crash handler.
       if (err instanceof CliUsageError) {
         refusal = err; // a refused resume: the caller's usage exit
       } else {
