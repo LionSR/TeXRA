@@ -79,14 +79,7 @@ function launchNotice(config: AgentConfig): string {
   const inputName = primaryInput
     ? path.basename(primaryInput)
     : 'selected input';
-  const { outputFiles } = config;
-  let outputPart = '';
-  if (outputFiles.length > 1) {
-    outputPart = ` (to ${outputFiles.length} files)`;
-  } else if (outputFiles[0]) {
-    outputPart = ` (to ${path.basename(outputFiles[0])})`;
-  }
-  return `"${config.label}" is processing ${inputName} with ${config.model}${outputPart}.`;
+  return `"${config.label}" is processing ${inputName} with ${config.model}.`;
 }
 
 /** Focus the sidebar view. */

@@ -520,7 +520,6 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
           inputFiles: ['/paper/section2.tex'],
           contextFiles: [],
           mediaFiles: [],
-          outputFiles: [],
         },
       },
       answeredBy: 'superYolo',

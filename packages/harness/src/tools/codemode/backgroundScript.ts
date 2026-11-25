@@ -74,9 +74,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
       inputFiles: [],
       contextFiles: [],
       mediaFiles: [],
-      outputFiles: [],
       outputSchema: undefined,
-      launch: undefined,
       workingDirectory,
       script: {
         code: input.code,

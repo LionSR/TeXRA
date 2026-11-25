@@ -14,7 +14,6 @@ const CONFIG_CATEGORY_LABELS: Readonly<Record<SettingCategory, string>> = {
   git: 'Git',
   // What a task's agents may do.
   agents: 'Tasks and agents',
-  documents: 'Documents',
   model: 'Models and providers',
   latex: 'LaTeX',
   latexdiff: 'latexdiff',

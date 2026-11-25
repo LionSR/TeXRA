@@ -114,7 +114,6 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         inputFiles,
         mediaFiles,
         contextFiles,
-        outputFiles: [],
         instruction,
         workingDirectory: context.cwd,
       };

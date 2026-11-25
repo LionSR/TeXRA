@@ -182,7 +182,6 @@ function formEdits(
       instruction !== proposal.instruction && { instruction }),
     ...(changed(inputFiles, proposal.inputFiles) && {
       inputFiles: [...inputFiles],
-      outputFiles: [],
     }),
     ...(changed(contextFiles, proposal.contextFiles) && {
       contextFiles: [...contextFiles],

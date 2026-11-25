@@ -3,16 +3,9 @@ import { WORKSPACE_DIFF_SUFFIX } from '@latex/latexdiff/diffFileNameManager';
 /** The folder beside a document that TeXRA compiles it into. */
 export const LATEX_BUILD_DIRECTORY = 'build';
 
-/** The folder earlier versions copied a packed run's files into. */
-const PACKED_RUNS_DIRECTORY = 'History';
-
-/** The folder beside an input that earlier versions moved its diffs into. */
-const PACKED_DIFFS_DIRECTORY = 'Diffs';
-
 /**
  * Directories that never hold a source the user works on: build output,
- * package and environment trees, and the folders TeXRA writes its own
- * versions, history and diffs into. Every listing and every bulk operation
+ * package and environment trees. Every listing and every bulk operation
  * skips them, so each list below starts from this one. Lowercase; a
  * directory name is compared case-insensitively.
  */
@@ -22,8 +15,6 @@ const MANAGED_DIRECTORIES = Object.freeze([
   '__pycache__',
   'venv',
   'versions',
-  PACKED_RUNS_DIRECTORY.toLowerCase(),
-  PACKED_DIFFS_DIRECTORY.toLowerCase(),
 ]);
 
 /** Built-in file discovery rules. These are product behavior, not settings. */

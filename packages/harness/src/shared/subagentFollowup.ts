@@ -65,13 +65,7 @@ function formatScriptDeliverySummary(summary: ScriptDeliverySummary): string {
     formatCostUsd(summary.costUsd),
     formatCompactDuration(summary.durationMs),
   ];
-  const fileLines = summary.files.map((file) => {
-    const diffstat =
-      file.added != null && file.removed != null
-        ? ` (+${file.added} -${file.removed})`
-        : '';
-    return `  ${file.path}${diffstat}`;
-  });
+  const fileLines = summary.files.map((file) => `  ${file}`);
   return [
     joinFacts([`${marker} ${summary.name} ${summary.outcome}`, ...facts]),
     ...(summary.outcome === 'failed' && summary.errorCause

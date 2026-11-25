@@ -234,20 +234,14 @@ describe('the golden 1.0 store', () => {
         expect(events).toHaveLength(rows.length);
         const types = new Set<string>(events.map((event) => event.type));
         // Every row kind is in the fixture, the decode test of a released
-        // store, but what only a plugin's own trace writes: a stage, a
-        // card it closes itself, and the usage it reports. No listed
-        // plugin writes one.
+        // store, but what only a plugin's own trace writes: a card it
+        // closes itself, and the usage it reports. No listed plugin writes
+        // one.
         expect(
           Object.keys(ROW_KINDS)
             .filter((kind) => !types.has(kind))
             .toSorted(),
-        ).toEqual([
-          'stage.end',
-          'stage.start',
-          'tool.end',
-          'tool.start',
-          'usage',
-        ]);
+        ).toEqual(['tool.end', 'tool.start', 'usage']);
         for (const type of [
           'tool.result',
           'request.decided',

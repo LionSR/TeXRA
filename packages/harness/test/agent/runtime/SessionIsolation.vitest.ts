@@ -122,10 +122,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             yield* publishTestRunStart(session, runId);
             yield* publishTestRows(session, [
               {
-                type: 'stage.start',
+                type: 'log',
                 aggregateId: runId,
-                id: `stage:${runId}`,
-                label: 'Running stage',
+                level: 'info',
+                message: 'Running',
               },
             ]);
             yield* Context.get(session, SessionLog).drained;

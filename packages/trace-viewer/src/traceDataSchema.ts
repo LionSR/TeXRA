@@ -30,7 +30,7 @@ export function parseTraceData(raw: unknown): TraceDocument {
   if (!Result.isSuccess(result))
     throw new Error(INCOMPATIBLE + result.failure.message);
   try {
-    return readTraceFacts(result.success, []);
+    return readTraceFacts(result.success);
   } catch (error) {
     throw new Error(INCOMPATIBLE + toErrorMessage(error), { cause: error });
   }

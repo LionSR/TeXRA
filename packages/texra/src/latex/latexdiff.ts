@@ -32,7 +32,7 @@ import {
   LATEXDIFF_CHANGES_ONLY_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
   LATEXDIFF_TIMEOUT_SETTING,
-} from '@texra/shared/settings/documentsSettings';
+} from '@texra/shared/settings/latexdiffSettings';
 
 /** One latexdiff or latexdiff-vc run that did not succeed. Its `stderr` is
  *  scrubbed of secrets on the way in: a run writes the message verbatim into

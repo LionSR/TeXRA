@@ -60,7 +60,7 @@ export const LATEXDIFF_CHANGES_ONLY_SETTING = Object.freeze({
 } as const satisfies TexraSettingRow<boolean>);
 
 /** The latexdiff rows, in catalog order. */
-export const DOCUMENTS_SETTINGS: readonly TexraSettingRow[] = Object.freeze([
+export const LATEXDIFF_SETTINGS: readonly TexraSettingRow[] = Object.freeze([
   LATEXDIFF_TIMEOUT_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
   LATEXDIFF_CHANGES_ONLY_SETTING,

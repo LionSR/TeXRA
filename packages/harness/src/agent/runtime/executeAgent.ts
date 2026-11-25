@@ -277,7 +277,6 @@ const openAgent = Effect.fn('executeAgent.open')(function* (
           agent: launch.config.label,
           model: launch.config.model,
           input: launch.config.inputFiles[0] ?? '(none)',
-          outputs: launch.config.outputFiles.length,
         },
       }),
       withLogChannel(CHANNEL),

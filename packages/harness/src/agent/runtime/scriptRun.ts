@@ -86,7 +86,7 @@ const EnvelopeFilesSchema = Schema.Struct({
 });
 
 /** The files the calls' children wrote, each once, in the order first
- *  written. Nothing counts their lines. */
+ *  written. */
 function deliveredFiles(
   calls: readonly ScriptCallCard[],
 ): ScriptDeliverySummary['files'] {
@@ -100,13 +100,13 @@ function deliveredFiles(
     if (Result.isSuccess(envelope))
       for (const path of envelope.success.files) paths.add(path);
   }
-  return [...paths].map((path) => ({ path, added: null, removed: null }));
+  return [...paths];
 }
 
 /**
  * The summary line of a script run, applied from its rows: the tally of its
  * calls, what the runs under it spent, how long it has run, the files its
- * agent calls wrote with their diffstat, and the cause when it failed.
+ * agent calls wrote, and the cause when it failed.
  */
 const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
   runId: RunId,

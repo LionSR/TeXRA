@@ -363,7 +363,6 @@ export function buildScenario({ proposal = false } = {}) {
           inputFiles: ['draft.tex'],
           contextFiles: ['refs.bib'],
           mediaFiles: [],
-          outputFiles: [],
           script: {
             title: 'review',
             source: [
