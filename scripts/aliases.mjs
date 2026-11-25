@@ -21,7 +21,12 @@ function loadTsconfigPaths() {
   if (error) {
     throw new Error(ts.flattenDiagnosticMessageText(error.messageText, '\n'));
   }
-  return tsconfig.compilerOptions.paths;
+  return Object.fromEntries(
+    Object.entries(tsconfig.compilerOptions.paths).map(([key, targets]) => [
+      key,
+      Object.freeze(targets),
+    ]),
+  );
 }
 
 export const tsconfigPaths = Object.freeze(loadTsconfigPaths());
