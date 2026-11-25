@@ -18,7 +18,6 @@ import {
   type SkillSourceOptions,
 } from '@texra-ai/worldline';
 import { Settings, type ConfigProvider } from '@texra-ai/worldline/plugins';
-import { modelConfig } from '@texra-ai/llm';
 import {
   meansAbsent,
   approvalPolicyEnv,
@@ -40,7 +39,7 @@ import {
 } from '@texra/shared/cliOutputFormat';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 
-import { loadCliStartupConfig } from './cliConfig';
+import { loadCliStartupConfig, resolveKnownCliModelId } from './cliConfig';
 import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
 import {
   CLI_OUTPUT_FORMAT_SETTING,
@@ -433,9 +432,10 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       storageRoot,
     );
     const configWarnings = [...warnings];
+    // The spellings `--model` and `texra.model` take, not a second rule.
     const envModel = yield* pickEnv(
       'TEXRA_MODEL',
-      (model) => (modelConfig(model) ? model : undefined),
+      resolveKnownCliModelId,
       configWarnings,
     );
     // `--no-color` is an explicit force-disable: layer it onto the ambient
