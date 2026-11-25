@@ -13,11 +13,11 @@ import { boundTurn, resolveTurn } from './turnInput.js';
 import { onOpenAiEndpoint } from './responsesConfiguration.js';
 import { ModelError } from '../errors.js';
 import { responseInput } from './openaiResponsesLower.js';
+import { refuseAmbientHeaders } from './transport.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
 import type { UploadCache } from './uploadCache.js';
 import type { SessionToken } from '../node.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
-import { refuseAmbientHeaders } from './transport.js';
 
 /** Both Responses transports refuse an ambient header override the same way. */
 export const refuseAmbientOpenAiHeaders = refuseAmbientHeaders(
