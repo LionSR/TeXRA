@@ -50,7 +50,7 @@ const QUOTA_REFRESH = '30 seconds';
 interface StatusBarProps {
   /** True when the focused stream has a composer for slash commands and text. */
   readonly chatInputAvailable: boolean;
-  readonly commandName?: string;
+  readonly commandName: string;
   readonly foregroundInputActive: boolean;
   /** The active run's transcript holds a script's calls (Ctrl-O). */
   readonly scriptAvailable: boolean;
@@ -217,7 +217,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     approvalPolicy: sessionMeta.approvalPolicy,
     width: columns,
     ctrlCAction: target.ctrlCAction,
-    location: focusedLabel === undefined ? undefined : { label: focusedLabel },
+    locationLabel: focusedLabel,
     foreground: {
       inputActive: props.foregroundInputActive,
     },
