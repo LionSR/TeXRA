@@ -340,11 +340,12 @@ process's with its project's `.env` variables over it (`environment`),
 minus every provider API-key variable the harness reads as its own credential
 ({@link API_KEY_ENV_NAMES}) and the requested approval policy
 ({@link approvalPolicyEnv}). What a child prints lands in tool results and
-the transcript, so the key is never there to print. Windows
+the transcript, so the key is never there to print. `keep` names the one
+provider whose key a child agent CLI authenticates with itself. Windows
 matches variable names case-insensitively, as its environment does.
 
 ```ts
-const inheritedEnv: () => Effect<Record<string, string>, never, never>
+const inheritedEnv: (keep?: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode" | undefined) => Effect<Record<string, string>, never, never>
 ```
 
 ## INPUT_HISTORY_LIMIT
