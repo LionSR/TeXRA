@@ -13,19 +13,12 @@ pointer prompt row and render-error line onto the kit.
 
 ## Open
 
-1. **Raw `<wa-button class="btn-…">` the helpers cannot express yet.**
-   Each needs one more option on `renderLabeledActionButton`, so each is
-   a decision about that option, not a mechanical swap:
-   - `OnboardingWelcomeCard.ts` (two buttons at `size="m"`; the helper
-     always renders `size="s"`) and its local `wa-button::part(base)` height;
-   - `desktopShell.ts` project rows (`@dblclick`, `@keydown`) and
-     `reviewPane.ts` file rows (`aria-current`, `style`);
-   - `SessionComposer.ts` chip trigger (the `.chip-label` span).
-2. **Row buttons that mark the current row.** `desktopShell.ts` project rows
-   and `reviewPane.ts` file rows are the two raw `btn-ghost is-row` buttons
-   with `aria-current`; `SettingsCatalog.ts` writes the same on a native
-   `<button>`. One `current` option on the helper would cover the first two
-   once the project row's rename gestures move to its enclosing item.
+1. **Closed.** The helper takes a template label, `current` and
+   `expanded`, and the onboarding choices, project rows, review rows and
+   composer chips are built through it.
+2. **One row button outside the helper.** `SettingsCatalog.ts` writes a
+   native `<button>` with `aria-current` for its row, because the row holds
+   a two-line text block and a badge slot.
 3. **Hard-coded row heights** beside `--row-height` and `--height-control*`:
    `ScriptStage.ts` (32px), `logEntryStyles.ts` (26px), `NewTaskHero.ts`
    (24px), `progressAppStyles.ts` (44px), and the desktop's `styles.css` and
@@ -33,7 +26,10 @@ pointer prompt row and render-error line onto the kit.
    both hosts before it takes a token.
 4. **The desktop's no-project panel** (`packages/desktop/src/renderer/main.ts`)
    builds the icon surface, heading and paragraph that `renderEmptyState`
-   renders, as `workbenchController.ts` already does.
+   renders. It also holds a capabilities list and a primary action, which
+   the helper has no slot for; `workbenchController.ts` puts its actions
+   beside the empty state, and the panel could do the same and keep only
+   the list and its card frame.
 5. **`TerminalOutput.ts`'s focus ring** restates the inset ring under a
    `:has(.xterm-helper-textarea:focus-visible)` selector; the rule belongs in
    `focusRingStyles` if a second canvas widget needs it.
@@ -59,6 +55,10 @@ script stage's Log toggle take their chevron from the button helper
 scan of the three hosts found no custom SVG or glyph icon in the web UI,
 no color literal outside the palettes, and no TUI glyph, color or bordered
 box outside `packages/cli/src/tui/ui/`.
+
+The 2026-11-25 run rewrote entries 1, 2 and 4 to what the code holds now.
+What it found and left open is in
+`.agents/docs/proposed/simplification/2026-11-25-ui-kit-bypasses-left-open.md`.
 
 ## Checked and declined
 
