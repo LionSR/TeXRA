@@ -90,9 +90,10 @@ export {
 } from '@agent/runtime/modelAccess/planQuotas';
 // The canned model a package-validation build provides beneath the process.
 export { ValidationModel } from '@agent/runtime/modelAccess/routeDecision';
-// The models a host offers: each visible model's option, the enabled list and
-// its writer, run-model precedence, the reasoning policy, the helper model.
+// The models a host offers: each visible model's option, the models a person
+// can enable, the enabled list and its writer, run-model precedence, the reasoning policy, the helper model.
 export {
+  enableableModels,
   getEnabledModels,
   MODEL_SELECTION_KEY,
   readModelOptions,
