@@ -143,12 +143,15 @@ function loginShellEnvironment(): Effect.Effect<
  * already has a minimal one, so the login shell's entries come first and
  * the process's own follow where the shell's lack them. Children this
  * process spawns inherit the result. Says once which PATH it runs with.
+ * Does nothing on Windows, which has no login shell and hands every process
+ * the user's environment.
  */
 export function adoptLoginShellEnvironment(): Effect.Effect<
   void,
   LoginShellUnread,
   ChildProcessSpawner
 > {
+  if (process.platform === 'win32') return Effect.void;
   return loginShellEnvironment().pipe(
     Effect.flatMap((login) =>
       Effect.suspend(() => {

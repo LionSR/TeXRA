@@ -19,7 +19,7 @@ import {
 } from '@texra-ai/worldline/schemas';
 import { RpcClientMessageSchema } from '@texra/shared/rpcOverMessages';
 import { ManualCriticismEntrySchema } from '@texra/tools/editorHost';
-import { GenericDiagnosticSchema } from '@texra/utils/diagnostics/diagnosticFormatting';
+import { GenericDiagnosticSchema } from '@texra/tools/diagnosticFormatting';
 
 /** The runtime's notices, by event, as a window presents them: the one a
  *  refused launch carries among them. */

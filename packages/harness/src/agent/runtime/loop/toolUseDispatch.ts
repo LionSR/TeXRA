@@ -70,7 +70,7 @@ import {
   scriptCallId,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
-import { readCause } from '@shared/session/causeReading';
+import { readCause } from '@agent/runtime/causeReading';
 import { SessionLog, type RunCell } from '@shared/session/runHistory';
 import { consumedRow } from '@shared/session/runFacts';
 import { type RunHistoryDraft, type RunState } from '@shared/session/runState';

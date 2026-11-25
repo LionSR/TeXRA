@@ -5,8 +5,8 @@
  * failure; does not retry the clone itself). It reaches secret storage, the
  * token prompt and the host's progress display through `ports`, the
  * destination and `git clone` through the process's filesystem and spawner,
- * and returns one {@link OverleafCloneOutcome}, which
- * {@link overleafCloneNotice} words for every host.
+ * and returns one {@link OverleafCloneOutcome}, which `overleafCloneNotice`
+ * (`ui/copy/clone.ts`) words for every host.
  *
  * Every port is an Effect: the workflow is one program the host runs at its
  * own entry, so a cancelled clone interrupts the prompt and the subprocess
@@ -20,16 +20,12 @@ import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { executeCommand, machineGit } from '@texra-ai/worldline/node';
 import { ensureError } from '@texra-ai/worldline/schemas';
 import {
-  OVERLEAF_GIT_TOKEN_URL,
-  OVERLEAF_TOKEN_DOCS_URL,
   overleafGitClone,
   overleafTokenSpec,
   type OverleafGitClone,
   type OverleafRemote,
   type OverleafTokenSpec,
 } from '@latex/overleafProject';
-import type { OsPlatform } from '@texra/shared/osPlatform';
-import { CLONE_COPY } from '@ui/copy/clone';
 import type { CredentialStore } from '@texra-ai/llm';
 import type { PlatformError } from 'effect/PlatformError';
 
@@ -74,74 +70,6 @@ export type OverleafCloneOutcome =
   | { readonly _tag: 'WorkspaceNotEmpty'; readonly destination: string }
   | { readonly _tag: 'AuthFailure'; readonly error: string }
   | { readonly _tag: 'CloneFailed'; readonly error: string };
-
-/**
- * What a clone's outcome tells the user, the same on every host: a
- * sentence, the pages that help with the next step (buttons in the editor,
- * lines in the terminal) and git's own words where it failed. A host adds
- * only its own next step, and its own buttons for a missing git.
- */
-export interface OverleafCloneNotice {
-  readonly level: 'info' | 'warning' | 'error';
-  readonly message: string;
-  readonly links: readonly { readonly label: string; readonly url: string }[];
-  /** git's message, which follows the sentence where a host shows it. */
-  readonly gitError?: string;
-}
-
-const TOKEN_GUIDE_LINK = Object.freeze({
-  label: 'How to get a token',
-  url: OVERLEAF_TOKEN_DOCS_URL,
-});
-
-/** The notice for `outcome` of cloning `remote`. */
-export function overleafCloneNotice(
-  remote: OverleafRemote,
-  outcome: OverleafCloneOutcome,
-  platform: OsPlatform,
-): OverleafCloneNotice {
-  const error = (
-    message: string,
-    links: OverleafCloneNotice['links'] = [],
-  ): OverleafCloneNotice => ({ level: 'error', message, links });
-  switch (outcome._tag) {
-    case 'Cloned':
-      return {
-        level: 'info',
-        message: CLONE_COPY.cloned(remote, outcome.destination),
-        links: [],
-      };
-    case 'Cancelled':
-      return { level: 'warning', message: CLONE_COPY.cancelled, links: [] };
-    case 'InvalidToken':
-      // The token guide is Overleaf's; a ShareLaTeX host has its own.
-      return error(
-        outcome.message,
-        remote.isOverleaf ? [TOKEN_GUIDE_LINK] : [],
-      );
-    case 'GitMissing':
-      return error(CLONE_COPY.gitMissing(platform));
-    case 'WorkspaceUnreadable':
-      return error(CLONE_COPY.unreadable(outcome.message));
-    case 'WorkspaceNotEmpty':
-      return error(CLONE_COPY.notEmpty(outcome.destination));
-    case 'AuthFailure':
-      return {
-        ...error(
-          `${CLONE_COPY.authFailed} ${CLONE_COPY.authDetail(remote)}`,
-          remote.isOverleaf
-            ? [
-                { label: 'Get new token', url: OVERLEAF_GIT_TOKEN_URL },
-                TOKEN_GUIDE_LINK,
-              ]
-            : [],
-        ),
-        gitError: outcome.error,
-      };
-    case 'CloneFailed':
-      return { ...error(CLONE_COPY.failed), gitError: outcome.error };
-  }
-}
 
 type TokenResolution =
   | { readonly _tag: 'Ready'; readonly token: string }

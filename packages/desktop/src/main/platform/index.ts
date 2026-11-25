@@ -89,17 +89,14 @@ export const initializeElectronPlatform = Effect.fn(
     ProcessServices
   > = Effect.gen(function* () {
     // A Dock- or Finder-launched app inherits a minimal environment, so it
-    // reads the user's login shell first, before any command runs. Windows
-    // hands a GUI app the user's environment and has no login shell.
-    if (process.platform !== 'win32') {
-      yield* adoptLoginShellEnvironment().pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(
-            `${error.message}; commands run with the PATH the app was started with, plus TeXRA's own tool directories`,
-          ).pipe(withLogChannel('desktop')),
-        ),
-      );
-    }
+    // reads the user's login shell first, before any command runs.
+    yield* adoptLoginShellEnvironment().pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `${error.message}; commands run with the PATH the app was started with, plus TeXRA's own tool directories`,
+        ).pipe(withLogChannel('desktop')),
+      ),
+    );
     // The process roots are the no-workspace roots. Each open project gets
     // its own roots (desktopProjects.ts); these only back the window before
     // a folder is open.

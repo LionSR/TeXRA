@@ -2,12 +2,12 @@ import { Cause, Result } from 'effect';
 
 import { outcomeFromCause, RUN_OUTCOME, type RunId } from '@shared/schemas';
 
-import type { DatabaseWriteFailed } from './database';
+import type { DatabaseWriteFailed } from '@shared/session/database';
 import {
   findStorageRefusal,
   runRefusal,
   type RunHistoryRefused,
-} from './runHistory';
+} from '@shared/session/runHistory';
 
 /**
  * What a failed cause of run `runId`'s work means for the run, asked in one
