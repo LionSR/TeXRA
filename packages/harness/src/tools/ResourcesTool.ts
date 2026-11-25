@@ -18,6 +18,7 @@ import {
   type PlanQuota,
 } from '@agent/runtime/modelAccess/planQuotas';
 import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
+import { formatSpendUsd } from '@agent/runtime/spendCap';
 import { readModelOptions } from '@model/computeModelOptions';
 import { readModelSettings } from '@model/modelSettings';
 import {
@@ -203,7 +204,7 @@ const spendNow = Effect.fn('resources.spend')(function* (call: RunToolCall) {
 
 /** The answer as lines. */
 const text = (now: string, parts: Parts): string => {
-  const usd = (n: number) => `$${Number(n.toPrecision(4))}`;
+  const usd = formatSpendUsd;
   const lines = [`Now: ${now}`];
   if (Result.isSuccess(parts.models))
     lines.push(
