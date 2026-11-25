@@ -101,6 +101,8 @@ export const RETIRED_ROW_KINDS: ReadonlyMap<string, 'display' | 'execution'> =
  *  unavailable, since its plugin is loaded. */
 export const RETIRED_PLUGIN_FACTS: ReadonlySet<string> = new Set([
   'goal/state',
+  'theory/output',
+  'theory/accepted',
 ]);
 
 /** Why a plugin fact is read uninterpreted: no plugin of this process
