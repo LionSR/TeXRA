@@ -499,7 +499,12 @@ export const connectJsonRpcProcess = Effect.fn('JsonRpc.process')(function* (
           ),
         ),
       ),
-      Effect.ignore,
+      Effect.ignore({
+        log: 'Warn',
+        message:
+          "A JSON-RPC server's stderr could not be read; its tail ends here",
+      }),
+      withLogChannel(CHANNEL),
     ),
   );
   const { connection, inputEnded } = yield* makeJsonRpcConnection({
