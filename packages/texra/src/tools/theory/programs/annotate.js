@@ -87,8 +87,10 @@ const original = (text) =>
   ).replace(/\s+/g, '');
 
 export default async (args, { instruction, inputFiles, contextFiles }) => {
-  const files = inputFiles.filter((file) => file.endsWith('.tex'));
-  const skipped = inputFiles.filter((file) => !file.endsWith('.tex'));
+  // `main.TEX` is a LaTeX file too.
+  const isTex = (file) => /\.tex$/i.test(file);
+  const files = inputFiles.filter(isTex);
+  const skipped = inputFiles.filter((file) => !isTex(file));
   if (files.length === 0)
     throw new Error(
       'annotate works on .tex files: pass the documents to review as inputFiles.',
