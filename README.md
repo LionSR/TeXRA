@@ -43,8 +43,8 @@ subscriptions, and requests go straight from your machine to the provider.
   PDF.
 - **One assistant, parallel scripts, autonomous goals.** Describe the problem
   and files; there is no agent menu. For large jobs, the assistant writes sandboxed
-  JavaScript to fan out helper agents in parallel, runs Codex or
-  Claude Code from the shell, or runs multi-round goals checked by an independent judge.
+  JavaScript to fan out helper agents in parallel, delegates coding to Codex or
+  Claude Code, or runs multi-round goals checked by an independent judge.
 - **Built for multi-hour problems.** Tasks persist to SQLite, resume after a
   crash without repeating finished work, fork at any turn, and stay alive in a
   shared background service across Desktop, VS Code, and CLI.

@@ -47,7 +47,7 @@ and Linux.
 
 There is one assistant and no agent menu. Tell it what you need and which files
 to work on; it runs shell commands, searches arXiv and Zotero, drives Lean 4,
-runs Codex or Claude Code from the shell, fans large jobs out across parallel
+delegates coding to Codex or Claude Code, fans large jobs out across parallel
 helper agents, and runs autonomous multi-round goals verified by an independent
 judge. Interrupted tasks resume from SQLite without repeating finished work, and
 any task or message can be forked.
