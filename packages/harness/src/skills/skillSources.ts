@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
-import { bundledPluginSkillsDir } from '@common/storage/storageLayout';
 
 import type { SkillSource, SkillSourceTier } from './loadSkills';
 
@@ -155,9 +154,12 @@ export function skillTiers(call: SkillSourceCall): SkillSourceTier[] {
           path: path.join(resourcesPath, 'skills'),
           label: 'bundled',
         },
+        // A tool plugin's bundled skills ship beside the host's own, under
+        // `plugins/<id>/skills`; a plugin that ships none has no such
+        // directory, which reads as none.
         ...call.pluginIds.map((pluginId): SkillSource => ({
           scope: 'bundled',
-          path: bundledPluginSkillsDir(resourcesPath, pluginId),
+          path: path.join(resourcesPath, 'plugins', pluginId, 'skills'),
           label: 'bundled',
           plugin: { kind: 'tool', id: pluginId },
         })),

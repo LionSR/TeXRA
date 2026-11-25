@@ -1,6 +1,6 @@
 // Node imports
 import * as path from 'node:path';
-import { Effect, Result } from 'effect';
+import { Array as Arr, Effect, Order, Result } from 'effect';
 
 // Local imports
 import { ToolError } from '@shared/schemas';
@@ -9,12 +9,7 @@ import type { SettingsStores, StateReadFailed } from '@shared/config/settings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
-import {
-  canonicalizePath,
-  findExternalRoot,
-  type MatchedExternalRoot,
-  type StepRoot,
-} from '@utils/files/externalRoots';
+import { canonicalizePath, type StepRoot } from '@utils/files/externalRoots';
 import {
   getPathSegments,
   isPathWithin,
@@ -44,6 +39,47 @@ export interface WorkspacePathResolution {
     readonly writable: boolean;
     readonly label: string;
   };
+}
+
+/** The root a path falls in, as a tool's permission check reads it. */
+interface MatchedExternalRoot extends StepRoot {
+  readonly writable: boolean;
+}
+
+/**
+ * Return the step root that contains `absolutePath`, or null when none
+ * matches or the path cannot be canonicalised (fail closed). `stepRoots` are
+ * the read-only roots the asking call's step accepts; a call outside a run
+ * has none. The most specific root wins.
+ */
+function findExternalRoot(
+  absolutePath: string,
+  stepRoots: readonly StepRoot[] = [],
+): MatchedExternalRoot | null {
+  if (!path.isAbsolute(absolutePath)) return null;
+  // Checked before canonicalisation so a lookup with nothing to match pays
+  // no realpath syscall.
+  if (stepRoots.length === 0) return null;
+
+  let resolved: string;
+  try {
+    resolved = canonicalizePath(absolutePath);
+  } catch {
+    // Permission error or unexpected failure — refuse to accept the path
+    // rather than approve something we cannot verify.
+    return null;
+  }
+
+  const within = stepRoots.filter((root) =>
+    isPathWithin(root.absolutePath, resolved),
+  );
+  if (!Arr.isReadonlyArrayNonEmpty(within)) return null;
+  // The deepest root that holds the path, the first of several as deep.
+  const best = Arr.max(
+    within,
+    Order.mapInput(Order.Number, (root: StepRoot) => root.absolutePath.length),
+  );
+  return { ...best, writable: best.writable ?? false };
 }
 
 interface OutsideRootCandidate {

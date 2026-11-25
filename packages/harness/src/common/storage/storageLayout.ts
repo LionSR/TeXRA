@@ -30,16 +30,6 @@ export const WORKSPACE_STORAGE_LAYOUT = Object.freeze({
   runs: 'executions',
 } as const);
 
-/** Where a tool plugin's bundled skills ship under a host's packaged
- *  resources root: `<resources>/plugins/<id>/skills`. A plugin that ships
- *  none has no such directory, which reads as none. */
-export function bundledPluginSkillsDir(
-  resourcesPath: string,
-  pluginId: string,
-): string {
-  return path.join(resourcesPath, 'plugins', pluginId, 'skills');
-}
-
 /** A storage-relative (POSIX) path under the runs directory. */
 function resolveRunStoragePath(...segments: string[]): string {
   return path.posix.join(WORKSPACE_STORAGE_LAYOUT.runs, ...segments);
