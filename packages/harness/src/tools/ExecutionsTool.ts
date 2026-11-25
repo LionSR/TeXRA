@@ -226,35 +226,35 @@ const EXECUTION_ROUTES: ReadonlyArray<{
     path: '/executions/{id}/config',
     summary: 'Agent configuration JSON',
     kinds: ALL_KINDS,
-    actions: { view: ({ context, runId }) => showConfig(context, runId) },
+    actions: { view: ({ runId }) => showConfig(runId) },
   },
   {
     path: '/executions/{id}/conversation',
     summary: 'Full message history (subagents)',
     kinds: ['agent', 'task', 'script'],
     actions: {
-      view: ({ context, input, runId }) =>
+      view: ({ input, runId }) =>
         input.view_range
           ? Effect.fail(
               new ToolError(
                 'Conversation pagination is message-based. Use offset and limit; view_range applies only to file and background-command output.',
               ),
             )
-          : showConversation(context, runId, input.offset, input.limit),
+          : showConversation(runId, input.offset, input.limit),
     },
   },
   {
     path: '/executions/{id}/report',
     summary: 'Result report (persists after context compaction)',
     kinds: ALL_KINDS,
-    actions: { view: ({ context, runId }) => showReport(context, runId) },
+    actions: { view: ({ runId }) => showReport(runId) },
   },
   {
     path: '/executions/{id}/result',
     summary:
       'Final result envelope (JSON) for chaining; process result for background commands',
     kinds: ALL_KINDS,
-    actions: { view: ({ context, runId }) => showResultMeta(context, runId) },
+    actions: { view: ({ runId }) => showResultMeta(runId) },
   },
   {
     path: '/executions/{id}/output',
@@ -276,8 +276,8 @@ const EXECUTION_ROUTES: ReadonlyArray<{
     path: '/executions/{id}/files/{path}',
     summary: 'Read specific generated file (task runs only)',
     actions: {
-      view: ({ context, input, runId, rest }) =>
-        readFile(context, runId, rest, input.view_range ?? undefined),
+      view: ({ input, runId, rest }) =>
+        readFile(runId, rest, input.view_range ?? undefined),
     },
   },
   {
@@ -285,15 +285,15 @@ const EXECUTION_ROUTES: ReadonlyArray<{
     summary: 'Workspace files edited by tool-use runs',
     kinds: ['agent'],
     actions: {
-      view: ({ context, runId }) => listWorkspaceFiles(context, runId),
+      view: ({ runId }) => listWorkspaceFiles(runId),
     },
   },
   {
     path: '/executions/{id}/workspace-files/{path}',
     summary: 'Read a workspace file edited by a tool-use run',
     actions: {
-      view: ({ context, input, runId, rest }) =>
-        readWorkspaceFile(context, runId, rest, input.view_range ?? undefined),
+      view: ({ input, runId, rest }) =>
+        readWorkspaceFile(runId, rest, input.view_range ?? undefined),
     },
   },
 ];
@@ -491,7 +491,6 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
 });
 
 const showReport = Effect.fn('ExecutionsTool.showReport')(function* (
-  context: RunToolContext,
   runId: RunId,
 ) {
   const report = yield* getRunRecords(runId).readReport();
@@ -508,7 +507,6 @@ const showReport = Effect.fn('ExecutionsTool.showReport')(function* (
  * later stage without parsing the prose report.
  */
 const showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(function* (
-  context: RunToolContext,
   runId: RunId,
 ) {
   const result = yield* getRunRecords(runId).readResult();
@@ -521,7 +519,6 @@ const showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(function* (
 });
 
 const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
-  context: RunToolContext,
   runId: RunId,
 ) {
   const records = getRunRecords(runId);
@@ -545,12 +542,7 @@ const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
 });
 
 const showConversation = Effect.fn('ExecutionsTool.showConversation')(
-  function* (
-    context: RunToolContext,
-    runId: RunId,
-    offset: number,
-    limit: number,
-  ) {
+  function* (runId: RunId, offset: number, limit: number) {
     const records = getRunRecords(runId);
     const conversation = yield* readCompletedRunConversation(
       runId,
@@ -604,7 +596,6 @@ const listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
 });
 
 const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
-  context: RunToolContext,
   runId: RunId,
   filePath: string,
   viewRange?: LineRange,
@@ -637,7 +628,7 @@ const readRecordAndWorkspaceFiles = (runId: RunId) => {
 };
 
 const listWorkspaceFiles = Effect.fn('ExecutionsTool.listWorkspaceFiles')(
-  function* (context: RunToolContext, runId: RunId) {
+  function* (runId: RunId) {
     const [record, paths] = yield* readRecordAndWorkspaceFiles(runId);
     const entries = yield* listRunWorkspaceFiles(record, paths);
 
@@ -655,12 +646,7 @@ const listWorkspaceFiles = Effect.fn('ExecutionsTool.listWorkspaceFiles')(
 );
 
 const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
-  function* (
-    context: RunToolContext,
-    runId: RunId,
-    filePath: string,
-    viewRange?: LineRange,
-  ) {
+  function* (runId: RunId, filePath: string, viewRange?: LineRange) {
     const [record, paths] = yield* readRecordAndWorkspaceFiles(runId);
     const recordedPaths = new Set(
       paths.flatMap((candidate) => {
