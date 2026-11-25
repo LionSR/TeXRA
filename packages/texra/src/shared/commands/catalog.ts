@@ -2,13 +2,13 @@ import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 
 /** A command's default key chord, in VS Code's tokens (`ctrl+alt+m`); `mac`
  *  replaces `key` on macOS. Each host translates it for itself. */
-/** The palette group of TeXRA's commands on every host that has a palette. */
-export const COMMAND_CATEGORY = 'TeXRA';
-
 export interface CommandKeybinding {
   readonly key: string;
   readonly mac?: string;
 }
+
+/** The palette group of TeXRA's commands on every host that has a palette. */
+export const COMMAND_CATEGORY = 'TeXRA';
 
 /** What a TeXRA command is, whichever host offers it. */
 export interface CommandCatalogEntry {
