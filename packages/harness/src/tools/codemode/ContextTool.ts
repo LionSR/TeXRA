@@ -34,7 +34,10 @@ import {
 import type { HistoryMessage } from '@shared/session/historyTurns';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { formatCompactTokenCount } from '@utils/text/stringUtils';
+import {
+  collapseWhitespace,
+  formatCompactTokenCount,
+} from '@utils/text/stringUtils';
 
 const ContextInputSchema = Schema.Union([
   Schema.Struct({
@@ -131,7 +134,7 @@ const view = Effect.fn('context.view')(function* (
   const bound = yield* ScopedRef.get(call.run.model);
   const messages = state.messages.map((message, index) => {
     const text = messageText(message);
-    const flat = text.replaceAll(/\s+/g, ' ').trim();
+    const flat = collapseWhitespace(text);
     return {
       index,
       role: message.role,

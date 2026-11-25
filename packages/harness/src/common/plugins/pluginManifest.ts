@@ -240,11 +240,7 @@ export function readPluginManifests(dir: string) {
     PLUGIN_MANIFEST_FILES,
     (file) => readJsonFile(path.join(dir, file), PluginManifestSchema),
     { concurrency: 'unbounded' },
-  ).pipe(
-    Effect.map((found) =>
-      found.filter((manifest): manifest is PluginManifest => !!manifest),
-    ),
-  );
+  ).pipe(Effect.map((found) => found.filter(Predicate.isNotUndefined)));
 }
 
 /**
