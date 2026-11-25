@@ -79,7 +79,6 @@ export const seedEditedFiles = (
           attempt: 1,
           logId: null,
           disposition: 'executed',
-          duplicateOf: null,
           result: {
             status: 'executed',
             output: 'written',

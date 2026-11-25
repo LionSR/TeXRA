@@ -21,29 +21,24 @@ import { safeTerminalText } from '../terminal/terminalText';
 
 const CHANNEL = 'cli.approval';
 
-export interface CliApprovalPromptHooks {
-  /** Called as a prompt opens, before anything is written for it; what it
-   *  returns is called once the prompt is answered. The headless renderer
-   *  holds its live status line off the terminal in between. */
-  readonly prompting?: () => (() => void) | undefined;
-}
+/** Called as a prompt opens, before anything is written for it; what it
+ *  returns is called once the prompt is answered. The headless renderer
+ *  holds its live status line off the terminal in between. */
+export type PromptHold = () => (() => void) | undefined;
 
 /**
- * Run `ask` as the one prompt open under `hooks`: the hook's hold is taken
- * first and released however `ask` ends. The hook prepares the terminal, so
- * it can throw; `Effect.try` puts that in the failure channel, where the
- * caller's `Effect.catch` handles it, instead of a defect that would abort
- * the tool and the session.
+ * Run `ask` as the one prompt open under `hold`: the hold is taken first
+ * and released however `ask` ends. It prepares the terminal, so it can
+ * throw; `Effect.try` puts that in the failure channel, where the caller's
+ * `Effect.catch` handles it, instead of a defect that would abort the tool
+ * and the session.
  */
 export const whilePrompting = <A, E, R>(
-  hooks: CliApprovalPromptHooks,
+  hold: PromptHold,
   ask: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | CliPromptFailed, R> =>
   Effect.acquireUseRelease(
-    Effect.try({
-      try: () => hooks.prompting?.(),
-      catch: CliPromptFailed.from,
-    }),
+    Effect.try({ try: hold, catch: CliPromptFailed.from }),
     () => ask,
     (release) => Effect.sync(() => release?.()),
   );
@@ -64,38 +59,22 @@ const askCliApprovalQuestion = (request: CliPromptRequest) =>
     request.summary ? `${request.summary}\n${request.prompt}` : request.prompt,
   );
 
-interface ParsedApprovalAnswer {
-  readonly accepted: boolean;
-  readonly feedback?: string;
-  readonly shouldPromptForFeedback: boolean;
-}
+type PromptDecision = Extract<
+  RequestDecision,
+  { action: 'approve' | 'reject' }
+>;
 
-function parseApprovalAnswer(answer: string): ParsedApprovalAnswer {
+/** What a typed answer decides, or that a bare "no" is asked for a note. */
+function parseApprovalAnswer(answer: string): PromptDecision | 'askFeedback' {
   const trimmed = answer.trim();
   const normalized = trimmed.toLowerCase();
-  if (normalized === 'y' || normalized === 'yes') {
-    return { accepted: true, shouldPromptForFeedback: false };
-  }
-
-  if (normalized === '') {
-    return { accepted: false, shouldPromptForFeedback: false };
-  }
+  if (normalized === 'y' || normalized === 'yes') return { action: 'approve' };
+  if (normalized === '') return { action: 'reject' };
 
   const rejectMatch = /^(?:n|no)(?:\s+(.+))?$/i.exec(trimmed);
-  if (rejectMatch) {
-    const feedback = rejectMatch[1]?.trim();
-    return {
-      accepted: false,
-      ...(feedback ? { feedback } : {}),
-      shouldPromptForFeedback: feedback == null,
-    };
-  }
-
-  return {
-    accepted: false,
-    feedback: trimmed,
-    shouldPromptForFeedback: false,
-  };
+  if (rejectMatch === null) return { action: 'reject', feedback: trimmed };
+  const feedback = rejectMatch[1]?.trim();
+  return feedback ? { action: 'reject', feedback } : 'askFeedback';
 }
 
 function isViewDetailsAnswer(answer: string): boolean {
@@ -117,7 +96,7 @@ export const queueCliApprovalQuestion = (request: CliPromptRequest) =>
 export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
   kind: RequestPayload['kind'],
   content: CliApprovalContent,
-  hooks: CliApprovalPromptHooks = {},
+  hold: PromptHold,
 ) {
   const { onPromptLane } = yield* CliInvocation;
   return yield* onPromptLane(
@@ -128,7 +107,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
           : '[y/N, or n <feedback>] '
       }`;
       const answer = yield* whilePrompting(
-        hooks,
+        hold,
         askCliApprovalQuestion({ summary: content.summary, prompt }),
       ).pipe(
         Effect.repeat({
@@ -146,22 +125,19 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
       );
 
       const parsed = parseApprovalAnswer(answer);
-      let feedback = parsed.feedback;
-      if (!parsed.accepted && parsed.shouldPromptForFeedback) {
-        const feedbackAnswer = yield* whilePrompting(
-          hooks,
-          askCliApprovalQuestion({
-            summary: '',
-            prompt: `${REJECTION_NOTE_PROMPT} (optional, Enter to skip) `,
-          }),
-        );
-        feedback = feedbackAnswer.trim() || undefined;
-      }
-
-      const decision: RequestDecision = parsed.accepted
-        ? { action: 'approve' }
-        : { action: 'reject', ...(feedback !== undefined && { feedback }) };
-      return decision;
+      if (parsed !== 'askFeedback') return parsed;
+      const feedback = (yield* whilePrompting(
+        hold,
+        askCliApprovalQuestion({
+          summary: '',
+          prompt: `${REJECTION_NOTE_PROMPT} (optional, Enter to skip) `,
+        }),
+      )).trim();
+      const rejected: PromptDecision = {
+        action: 'reject',
+        ...(feedback && { feedback }),
+      };
+      return rejected;
     }),
   ).pipe(
     Effect.catch((error) => {

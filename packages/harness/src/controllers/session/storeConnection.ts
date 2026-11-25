@@ -89,7 +89,6 @@ export interface StoreConnection {
   readonly snapshot: <A, E>(
     read: Effect.Effect<A, E>,
   ) => Effect.Effect<A, DatabaseReadFailed>;
-  readonly readFailed: (cause: unknown) => DatabaseReadFailed;
   readonly writeFailed: (cause: unknown) => DatabaseWriteFailed;
   readonly afterCommit: Sql['afterCommit'];
 }
@@ -139,7 +138,6 @@ export function storeConnection(
       ),
     query: (read) => retryBusy(read).pipe(mapDatabaseFailure(readFailed)),
     snapshot: (read) => transaction(read, readFailed),
-    readFailed,
     writeFailed,
     afterCommit: sql.afterCommit,
   };

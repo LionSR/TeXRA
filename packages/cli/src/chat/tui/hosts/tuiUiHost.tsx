@@ -12,7 +12,6 @@
 
 // Third-party imports
 import { Effect } from 'effect';
-import { Text } from 'ink';
 
 // Local imports
 import type {
@@ -75,7 +74,7 @@ function chooseItem(
       title={title}
       availableRows={availableRows}
       items={labels.map((label) => ({ value: label, label }))}
-      description={detail ? <Text dimColor>{detail}</Text> : undefined}
+      description={detail}
       action="select"
       escape={{ key: 'Esc', action: 'dismiss' }}
       onSelect={answer}

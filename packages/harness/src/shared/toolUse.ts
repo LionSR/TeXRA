@@ -1,6 +1,6 @@
 // Host-neutral normalization for tool cards.
 //
-// Both the VS Code progress view and the CLI TUI read the same tool card
+// The progress view and the CLI TUI read the same tool card
 // (`ToolCallLog`) off a transcript row: this module derives the texts a card
 // states and its output, once, so hosts don't drift.
 

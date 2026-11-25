@@ -200,12 +200,9 @@ export interface RunEnding {
   readonly leading?: readonly UnfoldedDraft[];
 }
 
-/** The `run.end` the store holds once the transaction committed, and
- *  whether this call wrote it (an earlier end of the lifecycle stands). */
-interface EndedRun {
-  readonly end: Omit<RunEnd, 'usage'> | null;
-  readonly wrote: boolean;
-}
+/** The `run.end` the store holds once the transaction committed (an
+ *  earlier end of the lifecycle stands), or null for a run never created. */
+type EndedRun = Omit<RunEnd, 'usage'> | null;
 
 /** What a run's end reads of its session. */
 type EndServices = SessionLog | Inbox | RunHistory;
@@ -320,7 +317,7 @@ const endIn = Effect.fn('endIn')(function* (
   const { runId, outcome, error } = input;
   const log = yield* SessionLog;
   const facts = yield* log.facts(runId);
-  if (facts === null) return { end: null, wrote: false };
+  if (facts === null) return null;
   const ahead = [...leading, ...(input.leading ?? [])];
   if (facts.end !== null) {
     if (error !== undefined)
@@ -328,7 +325,7 @@ const endIn = Effect.fn('endIn')(function* (
         `Run ${runId} had ended: ${runEndErrorMessage(error)}`,
       );
     if (ahead.length > 0) yield* append(ahead);
-    return { end: endOf(facts.end), wrote: false };
+    return endOf(facts.end);
   }
   // Why a cancelled run stopped is its `run.stop` row, not its end's.
   const end = {
@@ -378,7 +375,7 @@ const endIn = Effect.fn('endIn')(function* (
     );
     yield* append(beside);
   }
-  return { end: endOf(end), wrote: true };
+  return endOf(end);
 });
 
 /**

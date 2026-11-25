@@ -19,7 +19,7 @@ import { Schema } from 'effect';
 import { ModelFailureSchema } from './errors';
 import { Sha256Schema } from './identifiers';
 import { RunInputSchema } from './runInput';
-import { DeclinableUsageRouteSchema, NormalizedUsageSchema } from './usage';
+import { NormalizedUsageSchema } from './usage';
 import {
   StoredMessageSchema,
   StoredOperationSchema,
@@ -421,19 +421,11 @@ export const ToolResultPayloadSchema = Schema.Struct({
   /** How the call ended, read as a fact, never matched from the English
    *  prose of an error message. */
   disposition: Schema.Literals(['executed', 'failed', 'skipped', 'duplicate']),
-  duplicateOf: Schema.NullOr(CallIdSchema),
   result: FinishedToolResultSchema,
   attachments: Schema.Array(FinishedAttachmentSchema),
 }).check(
   Schema.makeFilter((p) => {
     const issues: Schema.FilterIssue[] = [];
-    if ((p.disposition === 'duplicate') !== (p.duplicateOf != null)) {
-      issues.push({
-        path: ['duplicateOf'],
-        issue:
-          'A duplicate settlement names its primary, and only a duplicate does.',
-      });
-    }
     // Both directions. The provider-facing status of the delivered tool group
     // is derived from `result.status` alone, so a call the run recorded as
     // failed or skipped carrying an executed result is delivered to

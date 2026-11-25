@@ -1,5 +1,6 @@
 /**
- * The `ALLOW_ORCHESTRATOR_KILL` permission gate for `/executions/{id}` kills.
+ * The `ALLOW_ORCHESTRATOR_KILL_SETTING` permission gate for `/executions/{id}`
+ * kills.
  */
 
 // Third-party imports

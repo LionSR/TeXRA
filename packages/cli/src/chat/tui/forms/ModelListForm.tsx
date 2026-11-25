@@ -42,11 +42,9 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
       availableRows={props.availableRows}
       activeValue={props.currentModel}
       description={
-        <Text dimColor>
-          {props.selectable
-            ? 'Choose the model for future turns.'
-            : 'Available models. Finish the active response before switching models.'}
-        </Text>
+        props.selectable
+          ? 'Choose the model for future turns.'
+          : 'Available models. Finish the active response before switching models.'
       }
       compactDetail={<Text dimColor>Available models</Text>}
       emptyClosesOnEnter

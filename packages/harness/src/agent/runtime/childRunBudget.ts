@@ -25,7 +25,7 @@ import {
  * bound, so the core count is a floor for useful parallelism rather than a
  * ceiling, which is why the setting stays overridable up to `max`. This is
  * the one host-side owner of the number: the session layer sizes its
- * semaphore here. Resolved host-side because `src/shared` is loaded by the
+ * semaphore here. Resolved host-side because `shared/` is loaded by the
  * settings webview and must stay free of `node:os`.
  */
 export const resolveChildRunConcurrencyBudget = Effect.fn(

@@ -22,7 +22,7 @@ import {
 } from '@texra-ai/worldline/schemas';
 import {
   type CliApprovalContent,
-  type CliApprovalPromptHooks,
+  type PromptHold,
   askApproval,
   queueCliApprovalQuestion,
   whilePrompting,
@@ -59,13 +59,14 @@ import type {
 
 const CHANNEL = 'cli.approval';
 
-interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
-  readonly emit?: HostInteractions['emit'];
+interface HeadlessCliHostInteractionHooks {
+  readonly prompting: PromptHold;
+  readonly emit: NonNullable<HostInteractions['emit']>;
 }
 
 const askHeadlessUserQuestion = Effect.fn(
   'approvalAdapter.askHeadlessUserQuestion',
-)(function* (payload: UserQuestionRequest, hooks: CliApprovalPromptHooks) {
+)(function* (payload: UserQuestionRequest, hold: PromptHold) {
   const asked = yield* Effect.result(
     Effect.forEach(
       payload.questions,
@@ -85,7 +86,7 @@ const askHeadlessUserQuestion = Effect.fn(
           catch: CliPromptFailed.from,
         });
         const answer = yield* whilePrompting(
-          hooks,
+          hold,
           queueCliApprovalQuestion({
             summary: payload.context
               ? `${payload.context}\n\n${formatted}`
@@ -122,7 +123,7 @@ const askHeadlessUserQuestion = Effect.fn(
  */
 export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
   session: Pick<Session, 'request'>,
-  hooks: HeadlessCliHostInteractionHooks = {},
+  hooks: HeadlessCliHostInteractionHooks,
 ): Effect.fn.Return<SessionHost, never, CliInvocation> {
   const invocation = yield* CliInvocation;
   /** The prompt content for a tool edit: the session's preview of it, else
@@ -148,7 +149,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
     payload: RequestPayload,
   ): Effect.fn.Return<RequestDecision, Error, CliInvocation> {
     const ask = (content: CliApprovalContent) =>
-      askApproval(payload.kind, content, hooks);
+      askApproval(payload.kind, content, hooks.prompting);
     switch (payload.kind) {
       case 'bash':
         return yield* ask({ summary: formatBashApprovalSummary(payload.data) });
@@ -166,7 +167,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
         // line it displaced cannot repaint between it and the question;
         // `askApproval` holds again inside, which nests.
         const decision = yield* whilePrompting(
-          hooks,
+          hooks.prompting,
           Effect.suspend(() => {
             writeTextStderr(summary);
             return ask({ summary });
@@ -181,7 +182,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
         return declineDecision('retry', note);
       }
       case 'userQuestion':
-        return yield* askHeadlessUserQuestion(payload.data, hooks);
+        return yield* askHeadlessUserQuestion(payload.data, hooks.prompting);
       case 'pluginTrust':
         return yield* ask({ summary: formatPluginTrustSummary(payload.data) });
     }

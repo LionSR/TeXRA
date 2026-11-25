@@ -25,6 +25,7 @@ import {
   type RunId,
   type AgentConfig,
   type ApprovalPolicy,
+  RUN_OUTCOME,
   toErrorMessage,
 } from '@texra-ai/worldline/schemas';
 import { isWorking } from '@texra-ai/worldline/schemas';
@@ -657,7 +658,7 @@ export async function runChat(
           (outcome !== null &&
             outcome !== previous?.outcome &&
             // A stop ends the run cancelled: no "finished" bell for it.
-            outcome !== 'cancelled'))
+            outcome !== RUN_OUTCOME.CANCELLED))
       ) {
         notify(runAttentionLine(rootStanding, runStatus(rootStanding).key));
       }

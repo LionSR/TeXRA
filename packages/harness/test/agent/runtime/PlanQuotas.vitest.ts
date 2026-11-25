@@ -6,6 +6,7 @@ import { afterEach, expect, vi } from 'vitest';
 import { PlanQuotas } from '@agent/runtime/modelAccess/planQuotas';
 import { Secrets } from '@texra-ai/worldline/plugins';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { jsonResponse } from '@test/support/fetchTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import type { HttpClient } from 'effect/http';
 
@@ -19,13 +20,6 @@ const CODING_PLAN_KEYS = {
 };
 
 const stores = makeFakeSettingsStores().stores;
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
 
 /**
  * The suite's one run edge: a read is a program over the process's HTTP

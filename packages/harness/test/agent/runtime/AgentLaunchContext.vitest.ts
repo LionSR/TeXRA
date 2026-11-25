@@ -112,11 +112,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               own: { toolEdit: 'on', bash: 'on' },
               goal: [],
             }));
-            const policies = yield* Context.get(session, SessionLog).history(
+            const policies = (yield* Context.get(session, SessionLog).display(
               EXECUTION_ID,
-              undefined,
-              ['approval.policy'],
-            );
+            )).filter((row) => row.type === 'approval.policy');
             expect(policies).toHaveLength(1);
           }),
       );

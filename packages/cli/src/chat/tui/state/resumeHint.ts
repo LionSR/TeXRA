@@ -29,7 +29,6 @@ interface ResumeCommandOptions {
   readonly skillSourcePaths?: readonly string[];
 }
 
-const DEFAULT_RESUME_COMMAND_NAME = 'texra';
 /** The shell a person pastes the hint into: PowerShell on Windows. */
 const SHELL_FORMAT = IS_WINDOWS ? 'powershell' : 'posix';
 
@@ -38,7 +37,7 @@ const shellArgument = (value: string): string =>
   Result.getOrThrow(CommandLine.quote(value, { format: SHELL_FORMAT }));
 
 export function formatResumeCommand(
-  commandName: string | undefined,
+  commandName: string,
   runId: string,
   options: ResumeCommandOptions = {},
 ): string {
@@ -57,7 +56,7 @@ export function formatResumeCommand(
   const sourceFlags = (options.skillSourcePaths ?? [])
     .map((source) => ` --source ${shellArgument(source)}`)
     .join('');
-  return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${runId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${sourceFlags}`;
+  return `${commandName} resume ${runId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${sourceFlags}`;
 }
 
 /** Why `run`, when it was launched to run once (a headless `texra run`)
@@ -66,13 +65,12 @@ export function formatResumeCommand(
  *  stopped mid-turn (no outcome yet) still resumes to finish it, and any
  *  other run resumes: both read undefined. */
 export function oneShotResumeNotice(
-  commandName: string | undefined,
+  commandName: string,
   runId: RunId,
   run: Pick<RunView, 'takesFollowUps' | 'outcome'> | undefined,
 ): string | undefined {
   if (run?.takesFollowUps !== false || run.outcome === null) return undefined;
-  const name = commandName || DEFAULT_RESUME_COMMAND_NAME;
-  return `Task ${runId} is a one-shot task and cannot accept follow-up messages. View it with \`${name} history show ${runId}\`, or fork it with \`${name} resume ${runId} --fork\`.`;
+  return `Task ${runId} is a one-shot task and cannot accept follow-up messages. View it with \`${commandName} history show ${runId}\`, or fork it with \`${commandName} resume ${runId} --fork\`.`;
 }
 
 /** The task's metered usage: the root run and every descendant. */
@@ -106,8 +104,8 @@ function formatResumeUsage(
  *  root run (a child resumes through its parent). */
 export function formatResumeHint(
   runId: RunId,
-  usage?: TokenUsageStats,
-  commandName?: string,
+  usage: TokenUsageStats | undefined,
+  commandName: string,
   commandOptions?: ResumeCommandOptions,
 ): string {
   return [

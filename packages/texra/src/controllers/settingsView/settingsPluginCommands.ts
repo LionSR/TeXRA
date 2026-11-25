@@ -19,6 +19,7 @@ import {
   type PluginEnv,
   type PluginReview,
 } from '@texra-ai/worldline/host';
+import { pathExists } from '@texra-ai/worldline/node';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 import { PLUGINS_PAGE } from '@ui/copy/plugins';
 
@@ -67,7 +68,7 @@ export function settingsPluginCommands(ports: {
   const openMcpConfig = Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const mcpConfigPath = mcpConfigPathOf(roots.storageRoot);
-    if (yield* fs.exists(mcpConfigPath))
+    if (yield* pathExists(fs, mcpConfigPath))
       return yield* bindings.openPath(mcpConfigPath);
     yield* present.notice(
       `No MCP servers configured yet. Create ${mcpConfigPath} (same format as Claude Code's .mcp.json).`,

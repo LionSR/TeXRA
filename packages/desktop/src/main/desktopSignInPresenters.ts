@@ -3,11 +3,14 @@ import { Effect } from 'effect';
 import type { SubscriptionDeviceCodePrompt } from '@texra-ai/llm/node';
 import { fromHostSync } from '@texra/controllers/session/hostCallFailure';
 import type { SubscriptionProvider } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
+import { SIGN_IN_PROMPT, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { choose } from './desktopDialogs.js';
 
 /** What the dialogs name: the provider and its browser session's account. */
-type SignInNames = Pick<SubscriptionProvider, 'displayName' | 'sessionName'>;
+type SignInNames = Pick<
+  SubscriptionProvider,
+  'id' | 'displayName' | 'sessionName'
+>;
 
 /** A synchronous clipboard throw is a typed failure. Copying the sign-in
  *  link lets it reach the presenter's `onError` and the failure dialog; the
@@ -28,7 +31,7 @@ export function desktopSignInPresenters(
     presentSubscriptionSignInUrl: (url: string, names: SignInNames) =>
       choose(window, {
         type: 'info',
-        message: `Signing in with ${names.displayName}`,
+        message: SIGN_IN_PROMPT.inProgress(names.displayName),
         detail: `Opened your default browser. ${SIGN_IN_PROMPT.otherBrowser(names.sessionName)}`,
         choices: [
           { label: SIGN_IN_PROMPT.copyLinkLabel, value: url, default: true },
@@ -61,7 +64,7 @@ export function desktopSignInPresenters(
         );
         const verificationUrl = yield* choose(window, {
           type: 'info',
-          message: `Sign in with ${displayName}`,
+          message: SUBSCRIPTION_AUTH_COPY[names.id].signInLabel,
           detail: reason === undefined ? steps : `${reason}\n\n${steps}`,
           choices: [
             {
