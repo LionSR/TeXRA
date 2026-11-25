@@ -22,7 +22,7 @@ import {
   meansAbsent,
   canonicalizeWorkspaceRoot,
 } from '@texra-ai/worldline/node';
-import { ensureError, toErrorMessage } from '@texra-ai/worldline/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import {
   AppState,
   StateStores,
@@ -356,7 +356,7 @@ export const openDesktopProjectRegistry: (
             byRoot(root) ? Effect.void : Scope.close(projectScope, Exit.void),
           ),
         );
-      }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
+      }).pipe(withPerKeyLane(lanes, root));
     },
     list: () => current().projects,
     active,
@@ -395,7 +395,7 @@ export const openDesktopProjectRegistry: (
             yield* project.dispose();
           }).pipe(selectionLane.withPermit),
         );
-      }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
+      }).pipe(withPerKeyLane(lanes, root));
     },
     clearRecent: () =>
       records.replaceRecent([]).pipe(
@@ -403,7 +403,6 @@ export const openDesktopProjectRegistry: (
           SubscriptionRef.update(state, (s) => ({ ...s, recent })),
         ),
         selectionLane.withPermit,
-        Effect.mapError(ensureError),
       ),
     dispose: () =>
       Effect.suspend(() =>
@@ -425,4 +424,4 @@ export const openDesktopProjectRegistry: (
         ),
       ),
   } satisfies DesktopProjectRegistry;
-}, Effect.mapError(ensureError));
+});

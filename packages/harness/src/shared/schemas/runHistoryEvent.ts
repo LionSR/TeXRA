@@ -19,7 +19,7 @@ import { Schema } from 'effect';
 import { ModelFailureSchema } from './errors';
 import { Sha256Schema } from './identifiers';
 import { RunInputSchema } from './runInput';
-import { DeclinableUsageRouteSchema, NormalizedUsageSchema } from './usage';
+import { NormalizedUsageSchema } from './usage';
 import {
   StoredMessageSchema,
   StoredOperationSchema,

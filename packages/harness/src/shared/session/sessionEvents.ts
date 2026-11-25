@@ -118,8 +118,8 @@ export class SessionEvents extends Context.Service<
      *  no fiber to wait on (a trace sink, a follow-up's acceptance). The job
      *  has committed, or failed, when the call returns. A refused append is
      *  never retried: the job hears it, `failed` hears the job's own
-     *  failure (a run's trace keeps either for the run's end,
-     *  `RunTrace.lost`), and the publisher logs it. A job given after the
+     *  failure (a run's trace keeps either for the run's end, the session
+     *  log's `lost`), and the publisher logs it. A job given after the
      *  plane closed goes nowhere, and says so. */
     readonly detach: (
       job: (

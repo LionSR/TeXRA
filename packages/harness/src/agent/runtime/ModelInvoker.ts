@@ -177,7 +177,6 @@ export class ModelInvoker extends Context.Service<
      *  Its messages are the history's, media by address; the call resolves
      *  them. */
     readonly call: (
-      cell: RunCell,
       request: Omit<TurnRequest, 'messages'> & {
         readonly messages: readonly HistoryMessage[];
       },
@@ -824,7 +823,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       });
 
       /** A compaction summary on the run's binding; its caller lands it. */
-      const call: ModelInvoker['Service']['call'] = (cell, request) =>
+      const call: ModelInvoker['Service']['call'] = (request) =>
         Effect.flatMap(
           providerMessages(request.messages, log.blobs),
           (messages) =>
