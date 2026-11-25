@@ -43,8 +43,10 @@ routed through their owners (`NESTED_NOUNS`, `RUN_OUTCOME`,
 `getDisplayedInstruction`); the scout found the remaining instances.
 
 - `RUN_OUTCOME` (`shared/schemas/run.ts`) is the single owner of the
-  `{completed, cancelled, failed}` triad (`Schema.Enum(RUN_OUTCOME)`). Ten
-  sites compared a `RunOutcome`-typed value against the bare literal instead.
+  `{completed, cancelled, failed}` triad (`Schema.Enum(RUN_OUTCOME)`).
+  Fourteen edit sites across eight files — eleven `RunOutcome`-typed
+  comparisons and three outcome-constructing sites in `runToolUse` — used the
+  bare literal instead.
   The most telling was inside `runToolUse` (`agent/runtime/loop/runLoop.ts`):
   the file imports `RUN_OUTCOME` and already uses it in six places, yet one
   `if (turn.outcome === 'cancelled')` returned `{ outcome: RUN_OUTCOME.CANCELLED }`
@@ -64,7 +66,11 @@ routed through their owners (`NESTED_NOUNS`, `RUN_OUTCOME`,
   kind would silently drop out of "all agent work." It now spreads
   `APPROVAL_BYPASS_KINDS`, so "all agent work" tracks the owner. `commands:
   ['bash']` is a genuine subset and is left alone. The value is consumed via
-  `grants.goal.includes(kind)`, so the order change is not behavior.
+  `grants.goal.includes(kind)` (a set), so no reader sees a difference. The
+  one effect is that a goal-launched run's `run.start.grants.goal` now
+  serializes its kinds in `APPROVAL_BYPASS_KINDS`'s order rather than the old
+  hand-written one: a new row's element order, with no schema, row-version or
+  digest change, and existing rows untouched.
 
 ## Verified dead-ends (recorded so a later run does not re-chase them)
 
@@ -118,7 +124,9 @@ the design doc rules out ("no flow engine").
 
 ## Verified
 
-- Read `main` at `37a22c5`. The changes are internal identical-value swaps; no
-  public export, no persisted/wire/digest change. (Gate and test results in the
-  PR body.)
+- Read `main` at `37a22c5`. The `RUN_OUTCOME` swaps are identical-value with no
+  persisted change; the bypass-set change alters only the serialized element
+  order of `grants.goal` in new `run.start` rows (behavior-identical, read as a
+  set; no schema, row-version or digest change; existing rows untouched). No
+  public export changes. (Gate and test results in the PR body.)
 - Not run: a live model, the desktop and VS Code e2e.
