@@ -1,4 +1,8 @@
+// Third-party imports
 import { Result, Schema, SchemaGetter } from 'effect';
+
+// Local imports
+import { collapseWhitespace } from '@utils/text/stringUtils';
 
 const SKILL_NAME_MAX_LENGTH = 64;
 
@@ -8,9 +12,7 @@ export const SKILL_FILE_NAME = 'SKILL.md';
 /** Canonical grammar for discovered and persisted skill names. */
 export const SkillNameSchema = Schema.String.pipe(
   Schema.decodeTo(Schema.String, {
-    decode: SchemaGetter.transform((name) =>
-      name.replaceAll(/\s+/g, ' ').trim(),
-    ),
+    decode: SchemaGetter.transform(collapseWhitespace),
     encode: SchemaGetter.passthrough(),
   }),
 )
