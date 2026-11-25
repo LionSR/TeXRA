@@ -19,15 +19,16 @@ later conversations. Read [Memory](./memory.md).
 ## Plugins on and off
 
 **Settings → Plugins** (or `/plugins` in the terminal chat) switches each
-group of tools on or off: web search, Lean, Wolfram, the Codex and
-Claude Code integrations, multi-agent work and more. A plugin that is off
+group of tools on or off: web search, Lean, Wolfram, multi-agent work
+and more. A plugin that is off
 adds nothing to the conversation.
 
 ## Skills
 
 A skill is a folder with a `SKILL.md` that tells the assistant how to do one
-kind of work. TeXRA ships two of its own (`arxiv` and `zotero`, read
-[Research tools](./research-tools.md))
+kind of work. TeXRA ships four of its own (`arxiv` and `zotero`, read
+[Research tools](./research-tools.md); `coding-agents` and `github`, read
+[Agent integrations](./agent-integrations.md))
 and reads more from installed plugins, from `.texra/skills/`
 in the project, from your own skills folder, and, once you switch that
 source on, from the `.agents`, `.claude`, `.codex` and `.gemini` skill folders
