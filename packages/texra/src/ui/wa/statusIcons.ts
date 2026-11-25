@@ -9,12 +9,11 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { credentialOriginLabel } from '@ui/copy/credentials';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-
-type WaTagVariant = 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
+import type { WaVariant } from '@ui/wa/waVariant';
 
 interface SetStatusFallback {
   readonly label: string;
-  readonly variant?: WaTagVariant;
+  readonly variant?: WaVariant;
 }
 
 /** `wa-tag` reads compact and inline; `wa-badge` reads as a filled pill. */

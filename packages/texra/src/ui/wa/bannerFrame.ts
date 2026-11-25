@@ -5,6 +5,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 import type { IconName } from '@ui/wa/iconNames';
+import type { WaVariant } from '@ui/wa/waVariant';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /**
@@ -19,7 +20,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
  */
 export function renderBannerFrame(options: {
   readonly id: string;
-  readonly variant: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
+  readonly variant: WaVariant;
   readonly appearance?: 'accent' | 'filled' | 'outlined' | 'plain';
   readonly size?: 's' | 'm' | 'l';
   readonly icon?: IconName;
