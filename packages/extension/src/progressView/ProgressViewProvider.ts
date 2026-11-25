@@ -18,7 +18,6 @@ import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   attentionOf,
   formatResultCount,
-  RUN_OUTCOME,
   type AgentConfig,
   type FileLocation,
   type RunId,
