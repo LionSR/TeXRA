@@ -36,6 +36,13 @@ export function assertExplicitModelKnown(
   return resolved;
 }
 
+/** The last tier: the model a launch takes when nothing names one, which
+ *  `texra init` also offers as its default. */
+export const CLI_DEFAULT_MODEL_CANDIDATE = Object.freeze({
+  model: CLI_CHEAP_START_MODEL,
+  reason: 'builtin-default',
+} as const satisfies RunModelCandidate);
+
 /**
  * The one four-tier model lookup every `texra` command starts from:
  * `--model` → `TEXRA_MODEL` → the command's `texra.<role>` section over the
@@ -52,7 +59,7 @@ function cliModelCandidates(
     { model: explicit, reason: 'explicit-override' },
     { model: envModel, reason: 'environment' },
     { model: cliCommandDefaults(stores, role).model, reason: 'command-config' },
-    { model: CLI_CHEAP_START_MODEL, reason: 'builtin-default' },
+    CLI_DEFAULT_MODEL_CANDIDATE,
   ];
 }
 
