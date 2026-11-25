@@ -15,7 +15,7 @@ const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;
 
 /**
  * Retrieve linter diagnostics for a file, triggering a LaTeX build first for
- * `.tex` files so the diagnostics are current.
+ * LaTeX files (`isLatexFile`) so the diagnostics are current.
  *
  * `filePath` is already absolute: the diagnostics tool resolves the model's
  * input against its tool root before calling.

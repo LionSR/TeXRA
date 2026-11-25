@@ -117,8 +117,9 @@ on is a message, and belongs in `message`.
   `packages/harness/src/shared/schemas/errors.ts:131-140`.
 - **`AgentErrorKind`** (`packages/harness/src/shared/schemas/runRecords.ts:49-58`):
   `AGENT_ERROR_OUTCOME` went with the `abort` kind (#14641);
-  `agentErrorPresentation` (`packages/harness/src/agent/runtime/agentErrorClassification.ts:54-92`)
-  has four identical branches. The
+  `agentErrorPresentation` had four identical branches (since reduced to
+  two, and on 2026-11-25 inlined into `presentAgentFailure`,
+  `packages/harness/src/agent/runtime/HostInteractions.ts`). The
   "missing key" fact travels `RouteUnavailable.reason` →
   `ProviderErrorClassification.kind` → `AgentErrorKind`, three spellings;
   `RouteUnavailable.reason: 'unavailable'` has seven producers and no branch.
