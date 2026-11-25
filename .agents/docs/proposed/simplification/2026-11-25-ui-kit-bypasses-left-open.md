@@ -101,6 +101,15 @@ lands.
 17. **`App.tsx` tests Ctrl-C and Ctrl-Z itself** where 22 sites use
     `isCtrlInput` (`tui/inputKeys.ts`), which also rejects Meta.
 
+## Every host
+
+18. **Two files still type the fact separator.**
+    `packages/cli/src/runtime/models/modelAccessRoute.ts` (the `On · …` and
+    `Off · …` preference labels) and
+    `packages/texra/src/ui/copy/delegationApproval.ts` (the child agent
+    heading) were left as they are because other open PRs rewrite the same
+    lines; they take `joinFacts` once those land.
+
 ## Checked and declined
 
 - **The shell's log-level colours** (`styles.css`, `logEntryStyles.ts`)

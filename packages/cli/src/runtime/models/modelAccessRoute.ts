@@ -1,7 +1,4 @@
-import {
-  joinFacts,
-  SUBSCRIPTION_AUTH_PROVIDERS,
-} from '@texra-ai/worldline/schemas';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import type { ModelAccessStatus } from '@texra/controllers/modelAccess/modelAccessPreference';
 import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAuthStatus';
 import {
@@ -55,23 +52,22 @@ export function formatCliSubscriptionPreference(
   status: SubscriptionAuthStatus,
 ): string {
   const account = subscriptionAccountLabel(status) ?? 'your account';
-  if (status.preferSubscription && status.signedIn)
-    return joinFacts(['On', account]);
-  if (status.signedIn) return joinFacts(['Off', account]);
+  if (status.preferSubscription && status.signedIn) return `On · ${account}`;
+  if (status.signedIn) return `Off · ${account}`;
   return status.preferSubscription
-    ? joinFacts(['On', 'sign in required'])
-    : joinFacts(['Off', 'select to sign in and turn on']);
+    ? 'On · sign in required'
+    : 'Off · select to sign in and turn on';
 }
 
 function formatCliKeyedSubscriptionPreference(
   preferenceOn: boolean,
   keySet: boolean | undefined,
 ): string {
-  if (preferenceOn && keySet !== true) return joinFacts(['On', 'key required']);
-  if (preferenceOn) return joinFacts(['On', 'key configured']);
+  if (preferenceOn && keySet !== true) return 'On · key required';
+  if (preferenceOn) return 'On · key configured';
   return keySet === true
-    ? joinFacts(['Off', 'select to turn on'])
-    : joinFacts(['Off', 'key required to enable']);
+    ? 'Off · select to turn on'
+    : 'Off · key required to enable';
 }
 
 /** Read one plan from the canonical status map. */
