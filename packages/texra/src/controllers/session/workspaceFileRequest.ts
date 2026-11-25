@@ -138,7 +138,7 @@ const resolveWritable = Effect.fn('workspaceFileRequest.resolveWritable')(
  * `.ts`/`.js`/`.json` exclusions, and hides only known binary media and
  * office formats. A symlink is not listed: its target is either a second
  * entry for a file already in the tree or outside the project. The entries
- * come in directory order: the tree that shows them sorts them.
+ * come as the file system returns them: the tree that shows them sorts them.
  */
 const listDirectory = Effect.fn('workspaceFileRequest.listDirectory')(
   function* (requested: string) {

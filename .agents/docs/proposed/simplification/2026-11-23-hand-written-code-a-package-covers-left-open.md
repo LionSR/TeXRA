@@ -178,7 +178,7 @@ Landed, all small:
 - **One natural-sort collator for the file tree.** The main process sorted
   each directory listing with `localeCompare(…, { numeric, sensitivity })`
   and the renderer sorted it again by the same rule, directories first.
-  The listing now comes in directory order and `editorTree.ts`, the one
+  The listing now comes as the file system returns it and `editorTree.ts`, the one
   place that shows it, compares through one `Intl.Collator` instead of
   building a collator on every comparison.
 - **`collapseWhitespace` for four inline copies** of
@@ -204,7 +204,8 @@ Landed, all small:
   tokenizer, stop words and plural rule would stay; and it is a new
   dependency of the published SDK.
 - **`Intl.NumberFormat` for `formatCompactTokenCount` and
-  `formatCostUsd`.** Compact notation prints `12K`, not `12.0k`, and the
+  `formatCostUsd`.** Compact notation prints `12K` where the code prints `12k`, and
+  `4.1K` for 4097 where it prints `4k`; the
   raw-until-4096 rule stays; the currency style adds group separators and
   moves the minus sign.
 - **An image package for `gifFrameCount`**
