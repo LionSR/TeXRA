@@ -246,19 +246,10 @@ function child({ said, results, call }: GoldenTurn) {
 /** The interactive chat: a plan run as a goal, its round and result, and
  *  replies after a `/model` and a `/compact`, told apart by what they say. */
 function chat({ turn, said, results, call, gate }: GoldenTurn) {
-  // A background command held until a stop; what is typed behind stays
-  // queued. The command ends when `command.release` appears beside the
-  // project, or when a failed generation has removed the project.
+  // A Codex child held until a stop; what is typed behind stays queued.
   if (said.includes('Hold this turn.'))
     return results.length === 0
-      ? Effect.succeed([
-          call('bash', {
-            command:
-              'until [ -e ../command.release ] || [ ! -e notes.tex ]; do sleep 0.05; done; echo Released.',
-            description: 'Held command',
-            run_in_background: true,
-          }),
-        ])
+      ? Effect.succeed([call('codex', { prompt: 'Answer the Codex task.' })])
       : gate('golden-chat.release').pipe(Effect.as(text('Released.')));
   if (said.includes('The golden chat so far.'))
     return Effect.succeed(text('Answered after the compaction.'));
