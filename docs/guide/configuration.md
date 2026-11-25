@@ -29,7 +29,7 @@ The page remembers the sub-tab you last opened while Settings stays open.
   Code, the recommended **VS Code settings**.
 - **General**: **Appearance** (desktop app only), **Approval** (the approval
   policy, project-folder protection, and the goal spend cap), **Privacy**
-  (telemetry), and **Git** (the GitHub token and Git commit attribution).
+  (telemetry), and **Git** (Git commit attribution).
 
 Commands such as **TeXRA: Model Settings**, **TeXRA: Approval Settings**, or **TeXRA: Git Settings**
 open the matching section directly.

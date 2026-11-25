@@ -151,21 +151,32 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   is on. Lean:
   `lean_project`'s `fetch_file_cache` is `fetch_cache`, and `lean_file`
   takes only the file.
+- **The Codex, Claude Code and GitHub plugins are removed.** The `codex`,
+  `claude_code` and `github_subscription` tools, their rows on the Plugins
+  page, the Codex and Claude Code model and effort settings, and the GitHub
+  token (Settings › General › Git, `/config`) are gone; a token TeXRA stored
+  is no longer read. The assistant runs `codex exec`, `claude -p` and `gh`
+  through the shell instead, and follows a pull request by scheduling itself
+  a later turn. Each CLI uses its own sign-in (`codex login`,
+  `claude login`, `gh auth login` or `GH_TOKEN`); TeXRA's saved API keys do
+  not reach it. The bundled `coding-agents` and `github` skills hold the
+  commands, while **Enable skills for agents** is on. The other agent's
+  steps no longer show as cards of their own, and it cannot ask for approval
+  mid-turn. A background shell command may now run for up to 6 hours.
 - **Agent teams and multi-agent presets are removed.** `texra multi-agent`,
   the built-in teams, saved custom teams and the desktop's team dialog are
   gone. Ask the assistant instead: it splits a large job across helper
   agents and programs.
 - **One approval setting.** A run's approval policy (Block, Ask,
-  Auto-approve) decides whether shell commands, file edits, delegations and
-  coding-agent launches ask first; under Ask each asks unless you granted it
+  Auto-approve) decides whether shell commands, file edits and delegations
+  ask first; under Ask each asks unless you granted it
   for the task on a request card. `requireEditApproval`,
   `requireBashApproval`, `codexSandboxMode`, `codexApprovalPolicy` and
-  `claudeAgentPermissionMode` are gone: Codex and Claude Code children take
-  their sandbox from the run that launches them. The policy is read only
+  `claudeAgentPermissionMode` are gone. The policy is read only
   from your own settings: a `.texra/config.json` that sets it is ignored
   with a warning, so a cloned repository cannot loosen your approvals, and
-  `texra init` no longer writes one. Approving an MCP tool, `codex` or
-  `claude_code` call no longer grants later shell commands, and the setup
+  `texra init` no longer writes one. Approving an MCP tool
+  call no longer grants later shell commands, and the setup
   assistant's configuration tools now ask.
 - **Goal mode is a plugin and a script.** Turn it on or off in Settings ›
   Plugins; `texra.goal.enabled` is no longer read. **Run as goal** on a plan
@@ -339,8 +350,7 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
 - **Models.** Claude Sonnet 5.5, Claude Haiku 5.5 and GPT-6.1 Sol (the
   default for new chats) are added; models their vendors shut
   down show as retired. **OpenAI fast mode** sends requests on the fast tier
-  at its prices. The Codex subagent's model is a setting (default GPT-6.1
-  Sol). Long Claude conversations on Anthropic's own API send only the new
+  at its prices. Long Claude conversations on Anthropic's own API send only the new
   messages after the first request, which shortens the wait for the first
   token. Where you add a key, TeXRA points out the API credits Claude and
   ChatGPT plans include.
@@ -403,7 +413,7 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
 - **Security: one project's skill folders no longer open file access in
   another project** (desktop).
 - **Credentials stay out of command output and the transcript.** Shell
-  commands and the Claude Code and Codex agents no longer inherit the
+  commands no longer inherit the
   provider API-key environment variables. An Overleaf clone no longer stores
   your Git token in the remote URL; for a project cloned earlier, run
   `git remote set-url origin https://git@git.overleaf.com/<project-id>`.
@@ -431,7 +441,7 @@ TeXRA 1.0. Everything below is relative to 0.40.10.
   `%` inside `\url` or `\href` no longer hides the rest of the line when
   TeXRA reads citations and included files.
 - **Windows.** Git installed while TeXRA runs is found without a restart,
-  Codex installs where TeXRA looks for it, Memory previews show, and the
+  Memory previews show, and the
   resume command the CLI prints pastes into PowerShell.
 - **VS Code.** A hidden TeXRA view comes forward for every request, another
   extension's error is no longer reported as TeXRA's, diff previews for

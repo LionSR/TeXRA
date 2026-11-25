@@ -100,5 +100,5 @@ Read [The assistant and programs](./programs.md) for the full list.
 
 - [Lean 4 proofs](./lean.md): formalize proofs, inspect goal states, and search Mathlib
 - [LaTeX tools](./latex-tools.md): formatting, diffs, document statistics, figures, bibliography
-- [Agent integrations](./agent-integrations.md): delegate long-running code tasks to Codex or Claude Code
+- [Agent integrations](./agent-integrations.md): hand code tasks to Codex or Claude Code, follow GitHub activity, MCP servers
 - [Working with figures](./working-with-figures.md): feed figures and PDFs to vision models

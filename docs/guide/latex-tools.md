@@ -102,4 +102,4 @@ For formatter paths, TikZ templates, and compile settings, read the [configurati
 - [TikZ figures](./tikz-figures.md): advanced TikZ workflows
 - [LaTeX Diff](./latex-diff.md): version comparison in detail
 - [Research tools](./research-tools.md): arXiv, Zotero, and web search
-- [Agent integrations](./agent-integrations.md): one-click setup for the Codex and Claude Code agents
+- [Agent integrations](./agent-integrations.md): Codex, Claude Code, GitHub activity and MCP servers
