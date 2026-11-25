@@ -158,3 +158,84 @@ policy); release dates are from `registry.npmjs.org`.
 - **`minimatch.braceExpand` in `scripts/check-guidance-refs.mjs`** and
   **`pretty-bytes` in `scripts/verify-desktop.mjs`**: neither package is a
   root dependency, and each helper is under fifteen lines.
+
+## The 2026-11-25 run
+
+Two read-only sweeps (the harness and llm; the app, the hosts, `scripts/`
+and `supabase/functions/`) over the families the first run did not name:
+fuzzy matching and edit distance, natural sort, plural and list wording,
+number, percent and date formatting, grapheme segmentation, regex escaping,
+stream collection, ids and hashes, deep merge and clone, `.env` and XML
+parsing, git output, process trees, executable lookup, file watching,
+debounce and polling, line diffs, templates, URL and header parsing, array
+grouping and chunking, caches, key parsing, colour maths, DOM helpers,
+syntax highlighting, shell completion, opening URLs and temp directories.
+Each is on a builtin, `Intl`, Effect or an installed package already. The
+paths #15229 and #15230 delete were left out.
+
+Landed, all small:
+
+- **One natural-sort collator for the file tree.** The main process sorted
+  each directory listing with `localeCompare(…, { numeric, sensitivity })`
+  and the renderer sorted it again by the same rule, directories first.
+  The listing now comes in directory order and `editorTree.ts`, the one
+  place that shows it, compares through one `Intl.Collator` instead of
+  building a collator on every comparison.
+- **`collapseWhitespace` for four inline copies** of
+  `replaceAll(/\s+/g, ' ').trim()` in the harness.
+- **The run listing sorts on `launchedAt`** before it reads each run,
+  instead of parsing the ISO text it had just written, twice per
+  comparison.
+- **The quota percentage is the rounded number.** A value rounded to one
+  decimal already prints as `toFixed(1)` would, so the integer check and
+  its two branches were one template.
+
+### Checked and declined on 2026-11-25
+
+- **`JsonPointer.parseUriFragment` (Effect) for the `$ref` walk in
+  `typeOf`** (`packages/harness/src/tools/codemode/declarations.ts`). It
+  decodes `~1` and `%XX`, which the `split('/')` does not, but it returns
+  `undefined` for a fragment holding a character that should have been
+  percent-encoded, and a third-party tool's `#/$defs/Some Name` resolves
+  today.
+- **minisearch for the BM25 ranker in `searchTools`**
+  (`packages/harness/src/tools/codemode/discovery.ts`, about 49 lines).
+  It scores with BM25+ under other constants, so rankings change; the
+  tokenizer, stop words and plural rule would stay; and it is a new
+  dependency of the published SDK.
+- **`Intl.NumberFormat` for `formatCompactTokenCount` and
+  `formatCostUsd`.** Compact notation prints `12K`, not `12.0k`, and the
+  raw-until-4096 rule stays; the currency style adds group separators and
+  moves the minus sign.
+- **An image package for `gifFrameCount`**
+  (`packages/llm/src/api/openaiResponsesCodec.ts`). llm has none, and
+  `image-size` in the harness reports dimensions only.
+- **`diff` or `node-diff3` for `mergeEditOnto`**
+  (`packages/harness/src/tools/unifiedDiff.ts`). jsdiff 9 has no `merge`,
+  and neither applies the rule that touching edits conflict.
+- **The string case of `toUint8Array`**
+  (`packages/harness/src/tools/emlParser.ts`). postal-mime's default
+  returns an `ArrayBuffer`, so the base64 line never runs, but its type is
+  still the three-way union and the narrowing would stay.
+- **`cli-truncate` with `position: 'start'` for `leadingEllipsisDisplay`**
+  (`packages/cli/src/chat/tui/input/textInputDisplay.ts`). The marker is
+  shown even when the text fits, and the caller needs the count of code
+  units removed, so both ends stay hand-written.
+- **highlight.js's `diff` grammar for `getDiffLineClass`**
+  (`packages/texra/src/ui/progress/formatters/htmlBuilders.ts`). About 25
+  lines against a new grammar in the webview bundle and restyled classes.
+- **The `open` package for `packages/cli/src/runtime/models/browser.ts`.**
+  It spawns outside Effect's `ChildProcess`, the reason `cross-spawn` was
+  declined.
+- **`disposable-email-domains-js` for the sign-up blocklist**
+  (`supabase/functions/before-user-created/emailPolicy.ts`). The list is
+  the 32 domains seen farming accounts; the package's tens of thousands
+  would change who can sign up, which is a policy decision.
+- **`nanoid`'s `customAlphabet` for `randomUserCode` and `jsr:@std/html`
+  for `escapeHtml`** (`supabase/functions/auth-device/`,
+  `supabase/functions/auth-bridge/`). They join open item 3: no Deno runs
+  in these sessions to check an import map change.
+
+This theme has now been read three days running and the last two runs
+found under a hundred lines between them. What is left is items 2 to 4
+above, each waiting on a decision or a Deno runtime.
