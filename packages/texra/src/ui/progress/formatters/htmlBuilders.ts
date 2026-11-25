@@ -107,7 +107,7 @@ export function buildCopyButton(
 }
 
 /** A `<wa-icon>`, or a `<wa-spinner>` in its place while `running`. */
-function renderIconOrSpinner(
+export function renderIconOrSpinner(
   running: boolean,
   iconName: IconName,
   className?: string,

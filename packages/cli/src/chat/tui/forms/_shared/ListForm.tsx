@@ -1,6 +1,7 @@
 import { Box, Text, useWindowSize } from 'ink';
 import type { ReactNode } from 'react';
 
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   CLOSE_HINT,
@@ -10,7 +11,11 @@ import {
   type KeyHint,
   NAVIGATE_HINT,
 } from '@cli/tui/ui/KeyHints';
-import { Select, type SelectItem } from '@cli/tui/ui/Select';
+import {
+  Select,
+  selectHotkeyRangeLabel,
+  type SelectItem,
+} from '@cli/tui/ui/Select';
 
 import {
   FormFrame,
@@ -27,16 +32,16 @@ const COMPACT_FORM_MAX_ROWS = 9;
 
 /**
  * How many list rows the form's `Select` may show and whether to spend rows
- * on overflow markers. The frame (`frameRows`), description and detail rows
- * come off the budget first; on a very short terminal (fewer than 3 list
- * rows) the active choice stays visible instead of the whole budget going to
- * overflow markers.
+ * on overflow markers. The frame (`frameRows`), the wrapped description
+ * (`descriptionRows`) and detail rows come off the budget first; on a very
+ * short terminal (fewer than 3 list rows) the active choice stays visible
+ * instead of the whole budget going to overflow markers.
  */
 function listFormSelectWindow(args: {
   readonly availableRows: number;
   readonly itemCount: number;
   readonly frameRows: number;
-  readonly hasDescription?: boolean;
+  readonly descriptionRows: number;
   readonly detailRows?: number;
   readonly selectMarginTop?: number;
 }): {
@@ -45,7 +50,7 @@ function listFormSelectWindow(args: {
 } {
   const chromeRows =
     args.frameRows +
-    (args.hasDescription ? 1 : 0) +
+    args.descriptionRows +
     Math.max(0, args.detailRows ?? 0) +
     Math.max(0, args.selectMarginTop ?? 0);
   const selectRows = Math.max(1, args.availableRows - chromeRows);
@@ -64,7 +69,10 @@ interface ListFormProps<T> {
   readonly availableRows: number;
   readonly items: ReadonlyArray<SelectItem<T>>;
   readonly activeValue?: T;
-  readonly description?: ReactNode;
+  /** One dim line of guidance under the title. The form paints it and
+   *  counts the rows it wraps to, so a long line never pushes the list out
+   *  of the frame. */
+  readonly description?: string;
   readonly detail?: ReactNode;
   readonly detailRows?: number;
   readonly compactDetail?: ReactNode;
@@ -100,8 +108,9 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
     );
   }
 
+  const hotkeys = selectHotkeyRangeLabel(props.items.length);
   const primary = {
-    key: listFormShortcutLabel(props.items.length),
+    key: hotkeys === undefined ? 'Enter' : `${hotkeys}/Enter`,
     action: props.action,
   };
   const escape = props.escape ?? CLOSE_HINT;
@@ -127,21 +136,20 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
   }
 
   const hints = [NAVIGATE_HINT, primary, ...(props.extraHints ?? []), escape];
+  const contentWidth = formFrameContentWidth(columns);
   const selectWindow = listFormSelectWindow({
     availableRows: props.availableRows,
     itemCount: props.items.length,
-    frameRows: formFrameChromeRows(
-      props.title,
-      hints,
-      formFrameContentWidth(columns),
-    ),
-    hasDescription: props.description !== undefined,
+    frameRows: formFrameChromeRows(props.title, hints, contentWidth),
+    descriptionRows: props.description
+      ? wrappedRowCount(props.description, contentWidth)
+      : 0,
     detailRows: props.detailRows,
     selectMarginTop: props.selectMarginTop,
   });
   return (
     <FormFrame title={props.title} hints={hints}>
-      {props.description}
+      {props.description ? <Text dimColor>{props.description}</Text> : null}
       {props.detail}
       <Box
         flexDirection="column"
@@ -158,13 +166,6 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
       </Box>
     </FormFrame>
   );
-}
-
-function listFormShortcutLabel(itemCount: number): string {
-  if (itemCount <= 0) return 'Enter';
-  if (itemCount === 1) return '1/Enter';
-  if (itemCount <= 9) return `1-${itemCount}/Enter`;
-  return '1-9/a-z/Enter';
 }
 
 interface AsyncListFormControls<TData> {

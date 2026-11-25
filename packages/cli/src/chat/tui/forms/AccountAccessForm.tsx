@@ -212,11 +212,9 @@ export function AccountAccessForm(
       items={items}
       compactVisibleItems={items.length}
       description={
-        <Text dimColor>
-          {props.connecting === true
-            ? 'TeXRA needs a model to answer. Sign in to a subscription or add an API key.'
-            : CLI_ACCOUNT_ACCESS_DESCRIPTION}
-        </Text>
+        props.connecting === true
+          ? 'TeXRA needs a model to answer. Sign in to a subscription or add an API key.'
+          : CLI_ACCOUNT_ACCESS_DESCRIPTION
       }
       detail={
         props.connecting === true ? undefined : (

@@ -54,7 +54,7 @@ export const toolUseStyles = css`
   }
 
   :is(.tool-use-error, .banner-details--error) > .details-summary > wa-icon {
-    color: var(--color-error);
+    color: var(--tone-color);
   }
 
   .banner-details--error .label {
@@ -66,7 +66,7 @@ export const toolUseStyles = css`
   }
 
   .banner-details--error .message-label > .icon {
-    color: var(--color-error);
+    color: var(--tone-color);
   }
 
   wa-details.banner-details--error::part(base) {

@@ -4,6 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
+import { joinFacts } from '@texra-ai/worldline/schemas';
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import {
   formatSubscriptionUsageReset,
@@ -139,7 +140,7 @@ export class SubscriptionUsageRow extends TexraElement {
           <div class="settings-row-text">
             <wa-details
               class="panel-collapsible"
-              summary="Plan usage · unavailable"
+              summary=${joinFacts(['Plan usage', 'unavailable'])}
             >
               <span class="usage-unavailable-detail">
                 ${unavailableDetail(snapshot.reason)}
