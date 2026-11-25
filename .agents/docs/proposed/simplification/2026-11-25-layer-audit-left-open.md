@@ -125,9 +125,8 @@ the groups, the lock and the helper choices. The wire shape is
 
 - **The desktop editor tree's order.** `listDirectory`
   (`workspaceFileRequest.ts`) sorts by name and the renderer sorts again,
-  directories first. Directories-first is the tree view's presentation, and
-  the listing's order is what any other reader would get; neither is the
-  other's copy.
+  directories first. #15232, opened the same morning, gives the tree one
+  sort, so this audit did not touch either file.
 - **Harness import directions.** No module imports a higher layer than
   `packages/harness/AGENTS.md` "Layer order" allows, and no string the
   harness or llm sends a model or shows a user carries the app's vocabulary.
