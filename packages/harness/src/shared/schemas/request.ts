@@ -82,7 +82,7 @@ export const RequestDecisionSchema = Schema.Union([
   Schema.Struct({
     action: Schema.Literal('retry'),
     feedback: Schema.optional(Schema.String),
-    credentials: Schema.optional(Schema.Literals(['configured', 'personal'])),
+    credentials: Schema.optional(Schema.Literal('personal')),
   }),
   Schema.Struct({
     action: Schema.Literal('reject'),
