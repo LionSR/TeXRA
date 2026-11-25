@@ -95,7 +95,6 @@ export type {
   DispatchFacts,
   DisplayRow,
   ExternalFileLocation,
-  FileListEntry,
   FileLocation,
   FinishedToolResult,
   FollowUpContent,
@@ -103,7 +102,6 @@ export type {
   FollowUpSender,
   HookEvent,
   HarnessInstructionKey,
-  LoadedMediaMetadata,
   LocalRuntimeState,
   LogLevel,
   MediaAttachmentKind,
@@ -201,7 +199,6 @@ export {
   TraceMissingSchema,
   type AssembleTraceResult,
   type TraceDocument,
-  type TraceFactKind,
 } from '@shared/schemas/traceDocument';
 // Path basics that hold in a browser: forward slashes, a path's base name,
 // its base name without the extension, and a case-free extension check.

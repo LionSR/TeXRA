@@ -127,11 +127,6 @@ export function statusGlyph(look: StatusLook): IconName {
   return look.glyph ?? TONE_GLYPH[look.tone];
 }
 
-/** The tone of a file the run tried to read: loaded, or not. */
-export function fileLoadTone(ok: boolean): RunTone {
-  return ok ? 'success' : 'danger';
-}
-
 /** How a tool call's status reads: in a card's status section, and as the
  *  card's own state, where an open call of an interrupted run reads as its
  *  run does. */

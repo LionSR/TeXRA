@@ -20,7 +20,6 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatBannerContentTemplate } from './logFormatters/bannerFormatters';
 import { formatCompactionActivityTemplate } from './logFormatters/compactionActivityFormatter';
 import { formatContextManagementTemplate } from './logFormatters/contextManagementFormatters';
-import { formatFileListTemplate } from './logFormatters/dataFormatters';
 import {
   formatDefaultLogMessageTemplate,
   formatErrorTemplate,
@@ -54,7 +53,6 @@ const ROW_FORMATTERS: RowFormatters = {
   error: formatErrorTemplate,
   tool: formatToolUseTemplate,
   webSearch: formatWebSearchTemplate,
-  fileList: formatFileListTemplate,
   contextManagement: formatContextManagementTemplate,
   progressStatus: formatProgressStatusTemplate,
   compactionActivity: formatCompactionActivityTemplate,

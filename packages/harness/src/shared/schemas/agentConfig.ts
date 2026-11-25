@@ -6,7 +6,7 @@ import { ActivatedSkillsSchema } from './activeSkills';
 import { FileFieldsSchema } from './fileFields';
 
 /** A run's launch configuration, as its `run.config` row records it. */
-const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
+export const AgentConfigSchema = FileFieldsSchema.mapFields(
   Struct.assign({
     /** The run's display name: what its card, the listings and its run
      *  directory show. The launch names it; nothing resolves it. */
@@ -44,13 +44,6 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
     skills: Schema.optional(ActivatedSkillsSchema),
     /** Working directory override for subagent tool calls (e.g. a git worktree). */
     workingDirectory: Schema.optional(Schema.String),
-    /**
-     * What the launching app records about its own launch (where a command
-     * line copies the output) and reads back on resume. The harness never
-     * reads it, and a child run does not inherit it; each owner decodes its
-     * own keys.
-     */
-    launch: Schema.optional(Schema.Record(Schema.String, Schema.Json)),
     /**
      * JSON Schema (a plain object) describing a structured output the agent must
      * submit through the synthetic `submit_output` terminal tool. Serializable by
@@ -92,24 +85,7 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
   }),
 );
 
-/** Canonical configuration: at most as many outputs as text/media inputs. */
-export const AgentConfigSchema = AgentConfigObjectSchema.check(
-  Schema.makeFilter((config) => {
-    const issues: Schema.FilterIssue[] = [];
-    if (
-      config.outputFiles.length >
-      config.inputFiles.length + config.mediaFiles.length
-    ) {
-      issues.push({
-        path: ['outputFiles'],
-        issue:
-          'Number of output files must not exceed the number of text and media input files.',
-      });
-    }
-    return issues;
-  }),
-);
-export type AgentConfigInput = typeof AgentConfigObjectSchema.Encoded;
+export type AgentConfigInput = typeof AgentConfigSchema.Encoded;
 
 export type AgentConfig = typeof AgentConfigSchema.Type;
 

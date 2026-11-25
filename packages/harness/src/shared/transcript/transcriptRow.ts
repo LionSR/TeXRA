@@ -13,7 +13,6 @@ import { absurd } from 'effect';
 import {
   TOOL_CALL_STATUS,
   type ModelFailure,
-  type FileListEntry,
   type MediaAttachmentKind,
   type LogLevel,
   type MessageType,
@@ -172,16 +171,6 @@ export interface WebSearchRow extends TranscriptRowBase {
   readonly query?: string;
 }
 
-export interface FileListRow extends TranscriptRowBase {
-  readonly kind: 'fileList';
-  /** Every entry the loader reported, loaded and failed alike. An entry's
-   *  `media` (the kind and size a host shows beside its name) is kept only
-   *  on a file that loaded through the media pipeline. */
-  readonly files: readonly FileListEntry[];
-  /** `Files (3/4 loaded, 1 not found)` — the one statement of partial load. */
-  readonly summary: string;
-}
-
 /** One labeled number from a context-management row. */
 export interface StatItem {
   /** Stable key hosts use to pick an icon; never shown as-is. */
@@ -220,7 +209,6 @@ export type TranscriptRow =
   | ErrorRow
   | ToolRow
   | WebSearchRow
-  | FileListRow
   | ContextManagementRow
   | ProgressStatusRow
   | CompactionActivityRow
@@ -241,7 +229,6 @@ export type TranscriptRowKind = TranscriptRow['kind'];
 const IMMEDIATELY_FINAL_ROW_KINDS = new Set<TranscriptRowKind>([
   'user',
   'error',
-  'fileList',
   'contextManagement',
   'progressStatus',
 ]);
@@ -296,7 +283,6 @@ export function isFinalRow(row: TranscriptRow, hasLaterRow: boolean): boolean {
     case 'webSearch':
     case 'user':
     case 'error':
-    case 'fileList':
     case 'contextManagement':
     case 'progressStatus':
     case 'log':
@@ -324,8 +310,6 @@ export function rowHeadline(row: ReadonlyDeep<TranscriptRow>): string {
     case 'contextManagement':
     case 'compactionActivity':
       return row.label;
-    case 'fileList':
-      return row.summary;
     case 'tool':
       return '';
   }

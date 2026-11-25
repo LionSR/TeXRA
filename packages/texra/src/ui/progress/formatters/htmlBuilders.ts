@@ -4,7 +4,7 @@
  */
 
 // Third-party imports
-import { formatResultCount, getBasename } from '@texra-ai/worldline/schemas';
+import { formatResultCount } from '@texra-ai/worldline/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap, type ClassInfo } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -19,14 +19,11 @@ import type { IconName } from '@ui/wa/iconNames';
 import { waSpinner } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { formatMediaLabel } from '@ui/copy/format';
-import { fileLoadTone, statusGlyph } from '@ui/copy/runStatus';
 
 // Side-effect import - register the <copy-button> element drawn below
 import '@ui/progress/components/CopyButton';
 
 // Local imports - formatter helpers
-import type { FileListRow } from '@texra-ai/worldline/transcript';
 
 // Threshold constants for diff detection heuristics
 const DIFF_DETECTION_LINE_LIMIT = 20;
@@ -213,29 +210,6 @@ export function buildLineChangeStats(changes: {
 }): TemplateResult {
   // prettier-ignore
   return html`<span class="file-stats"><span class="visually-hidden">${formatResultCount(changes.added, 'line')} added, ${formatResultCount(changes.removed, 'line')} removed</span><span class="added" aria-hidden="true">+${changes.added}</span><span class="removed" aria-hidden="true">-${changes.removed}</span></span>`;
-}
-
-/** Build the `<li>` rows for a file-list banner. The summary line above them
- *  is the row's (`FileListRow.summary`), not derived here. A file that
- *  reached the model as an image or audio clip carries its `media`, and
- *  reports its kind and size beside its name. */
-export function buildFileListRender(
-  files: FileListRow['files'],
-): TemplateResult {
-  // prettier-ignore
-  return html`${files.map((file) => {
-    const tone = fileLoadTone(file.ok);
-    const filePath = file.path;
-    const fileName = getBasename(filePath);
-    const loaded = file.media;
-
-    // The one rule for a loaded file's source label, shared with the CLI
-    // (transcriptRowLines): paint `sourceDisplay`, nothing else — an entry
-    // worth labelling sets `sourceDisplay`, so no host needs a fallback to
-    // spell it out.
-    // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}>${waIcon(statusGlyph({ tone }), { className: `file-load-icon tone-${tone}` })} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${fileName}</bdi>`)}${file.varName ? html` <span class="file-var">[<bdi dir="auto">${file.varName}</bdi>]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(<bdi dir="auto">${file.sourceDisplay}</bdi>)</span>` : ''}${loaded ? html` <span class="file-media"><bdi dir="ltr">${formatMediaLabel(loaded)}</bdi></span>` : ''}</li>`;
-  })}`;
 }
 
 // ============================================================================

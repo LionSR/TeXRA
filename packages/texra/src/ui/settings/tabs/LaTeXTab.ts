@@ -56,7 +56,7 @@ import {
 import {
   LATEXDIFF_CHANGES_ONLY_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
-} from '@texra/shared/settings/documentsSettings';
+} from '@texra/shared/settings/latexdiffSettings';
 
 /** What the Dependencies section says of one dependency: the toolchain's
  *  dependencies, and LaTeX Workshop, which installs through a VS Code

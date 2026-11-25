@@ -181,8 +181,6 @@ const runSelf = Effect.fn('self.call')(function* (
           model: (yield* ScopedRef.get(run.model)).modelId,
           instruction: task,
           displayInstruction: input.prompt,
-          outputFiles: [],
-          launch: undefined,
         };
         return yield* executeSubagentInBand(
           call,

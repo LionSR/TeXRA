@@ -689,8 +689,6 @@ function applyRunEvent(
   switch (event.type) {
     case 'log':
     case 'process.output':
-    case 'stage.start':
-    case 'stage.end':
     case 'tool.start':
     case 'tool.end':
     case 'stream.start':

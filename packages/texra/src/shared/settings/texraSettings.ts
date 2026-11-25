@@ -1,14 +1,14 @@
 /**
  * TeXRA's own setting rows, and the static catalog its settings surfaces
  * read: the harness's rows (`@shared/state/stateSettings`), these, and the
- * rows its plugins declare (`./documentsSettings`).
+ * rows its plugins declare (`./latexdiffSettings`).
  * Every host's config carries the catalog ({@link TEXRA_SETTINGS}`.catalog`,
  * `ConfigProvider.catalog`); the settings surfaces read the placed rows
  * beside it, where each row's placement is the row's own or, for a harness
  * row, the one `./settingSurfaces` gives it.
  *
- * Owner by key: the CLI's startup rows (`agent`, `model`, `chat`, `run`,
- * `outputFormat`), `agentOutputs.autoOpenFinal`, the bibliography
+ * Owner by key: the CLI's startup rows (`model`, `chat`, `run`,
+ * `outputFormat`), the bibliography
  * (`bib.*`), LaTeX (`latex.*`, the formatter), inline criticism and
  * telemetry.
  */
@@ -36,7 +36,7 @@ import {
   NON_REGEX_REPLACEMENT_CATEGORIES,
   REGEX_REPLACEMENT_CATEGORIES,
 } from '@texra/shared/constants/replacementCategories';
-import { DOCUMENTS_SETTINGS } from '@texra/shared/settings/documentsSettings';
+import { LATEXDIFF_SETTINGS } from '@texra/shared/settings/latexdiffSettings';
 import {
   HARNESS_ROW_SURFACES,
   type SettingsViewRow,
@@ -317,7 +317,7 @@ const TEXRA_PLACED_ROWS: readonly TexraSettingRow[] = [
   TELEMETRY_ENABLED_SETTING,
   LATEX_FORMATTER_SETTING,
   INLINE_CRITICISM_SETTING,
-  ...DOCUMENTS_SETTINGS,
+  ...LATEXDIFF_SETTINGS,
 ];
 
 /**

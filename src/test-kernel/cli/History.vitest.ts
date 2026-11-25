@@ -38,7 +38,6 @@ const config = Schema.decodeUnknownSync(AgentConfigSchema)(
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Polish the introduction.',
     inputFiles: ['chapters/intro.tex'],
-    outputFiles: ['chapters/intro.tex'],
   }),
 );
 
@@ -166,7 +165,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 record: Schema.decodeUnknownSync(AgentConfigSchema)({
                   ...toolUseConfig,
                   inputFiles: [],
-                  outputFiles: [],
                   workingDirectory: workspace,
                 }),
                 edited: ['../outside.md', outsidePath, 'missing.md'],

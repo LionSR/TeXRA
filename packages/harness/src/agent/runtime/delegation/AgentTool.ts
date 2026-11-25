@@ -149,7 +149,6 @@ type ChildFiles = {
   readonly inputFiles: readonly string[];
   readonly contextFiles: readonly string[];
   readonly mediaFiles: readonly string[];
-  readonly outputFiles: readonly string[];
 };
 
 /**
@@ -341,7 +340,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       inputFiles: [],
       contextFiles: [],
       mediaFiles: launch.mediaFiles,
-      outputFiles: [],
     };
     if (launch.agentName != null) {
       if (launch.system != null || launch.tools != null)
@@ -489,7 +487,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       inputFiles: inputs.map(({ file }) => file),
       contextFiles,
       mediaFiles: media.map(({ file }) => file),
-      outputFiles: files.outputFiles,
       // The arguments, shown as the proposal's options.
       ...(program !== null && { options: program.args }),
       ...(program === null && { rootUserInstruction: call.instruction }),
