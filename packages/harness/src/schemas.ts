@@ -320,7 +320,6 @@ export {
   type ActiveSkillSourceScope,
   ActiveSkillSourceScopeSchema,
   AgentConfigSchema,
-  labelFileName,
   type AgentProposalRequest,
   type BashRequest,
   type ContextStateData,

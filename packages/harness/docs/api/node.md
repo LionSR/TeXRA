@@ -70,17 +70,6 @@ Absent, none.
 const CommandDirs: Reference<() => readonly string[]>
 ```
 
-## commitExists
-
-Whether `hash` names a commit in the history of the repository at `cwd`.
-
-```ts
-function commitExists(
-  cwd: string,
-  hash: string,
-): Effect.Effect<boolean, never, ChildProcessSpawner>
-```
-
 ## ConfigStore
 
 The store surface one config target needs. `JsonStore` satisfies it; so does
@@ -736,17 +725,6 @@ the paths inside its root and the process filesystem answers for the rest.
 
 ```ts
 const readNormalizedFile: (fs: FileSystem, target: string) => Effect<string, PlatformError, never>
-```
-
-## recentCommitLabels
-
-Up to `limit` recent commits, each labelled `<shortHash>: <subject>
-(<relativeDate>)`, or null when `cwd` is not a work tree. A repository
-with no commit has none; a `git log` that fails on one that has commits
-(unreadable objects, a timeout) is logged at warn and reads as none.
-
-```ts
-const recentCommitLabels: (cwd: string, limit: number) => Effect<readonly string[] | null, never, ChildProcessSpawner>
 ```
 
 ## relativeToRoot

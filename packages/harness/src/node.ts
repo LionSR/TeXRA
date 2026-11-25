@@ -96,7 +96,6 @@ export {
 // the one runner of a command that changes something, under the machine git
 // environment (no helper-invoking key, no terminal prompt).
 export {
-  commitExists,
   currentBranch,
   isGitRepository,
   localBranchExists,
@@ -104,7 +103,6 @@ export {
   type MachineGitResult,
   originDefaultBranch,
   originUrl,
-  recentCommitLabels,
   repositoryRoot,
 } from '@utils/system/git';
 // The file reads `FileSystem` has no form for: crash-safe replace, existence
