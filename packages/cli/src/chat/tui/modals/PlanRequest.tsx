@@ -32,16 +32,19 @@ const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
 const PLAN_APPROVAL_GOAL_NOTICE_ROWS = 2;
 const PLAN_APPROVAL_HIDDEN_NOUN = 'plan rows';
 /** Run as goal: `r` auto-approves commands only; `a`, the card's key handlers'
- *  "approve broadly" key, also approves edits and agent work. */
+ *  "approve broadly" key, also approves edits and agent work. Each has a
+ *  short form, so both fit beside y and n on a narrow card. */
 const PLAN_APPROVAL_GOAL_ACTIONS: readonly ConfirmCardKeyRow[] = [
   {
     key: 'r',
-    action: 'run as goal',
+    action: PLAN_GOAL_COPY.action.toLowerCase(),
+    compact: 'goal',
     decision: REQUEST_ACTIONS.planApproval.r,
   },
   {
     key: 'a',
     action: 'goal, approve all',
+    compact: 'all work',
     decision: REQUEST_ACTIONS.planApproval.a,
   },
 ];

@@ -30,11 +30,11 @@ export interface DesktopSettingsIpcOptions {
     openSubscriptionSignInUrl(url: string): Effect.Effect<void, HostFailed>;
     presentSubscriptionSignInUrl(
       url: string,
-      names: Pick<SubscriptionProvider, 'displayName' | 'sessionName'>,
+      names: Pick<SubscriptionProvider, 'id' | 'displayName' | 'sessionName'>,
     ): Effect.Effect<void, Error>;
     presentSubscriptionDeviceCode(
       prompt: SubscriptionDeviceCodePrompt,
-      names: Pick<SubscriptionProvider, 'displayName' | 'sessionName'>,
+      names: Pick<SubscriptionProvider, 'id' | 'displayName' | 'sessionName'>,
       reason: string | undefined,
     ): Effect.Effect<void, Error>;
   };
