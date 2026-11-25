@@ -111,27 +111,25 @@ const CHAT = Schema.decodeUnknownSync(RunIdSchema)('a00000000007');
 /** The goal script the chat's plan launched, named by the plan call, its
  *  one round, named by the script's `self()` call, and the judge the round's
  *  `done` started, named by the judge's `self()` call. */
-const GOAL = Schema.decodeUnknownSync(RunIdSchema)('2f1c7ab8ece343b7f73b2121');
-const ROUND = 'ec36ccfeffe5cb0c0fba912b';
-const JUDGE = '878f77f06a7a5e7a0554dbe9';
-/** The chat's Codex child, which ended on its own before the user's stop. */
-const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000b');
-const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
+const GOAL = Schema.decodeUnknownSync(RunIdSchema)('add2021a080236fbcddd2e48');
+const ROUND = '4b2006862374ba36fb652c46';
+const JUDGE = '492725b1dceb8f37ecf6c681';
+const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000b');
 /** The child the script wrote (`system`, `tools`), named by its `agent()` call. */
-const DEFINED = '0481c225c510b3a82209e466';
+const DEFINED = '454cb95bb0bce3e45d6b8798';
 /** A headless run, and the fork `texra resume --fork` made of it. */
-const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
-const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
+const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000d');
+const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 /** Killed after its command's effect, before the command's result. */
-const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
+const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
 /** The service's task, and the background command it sent, a finished
  *  shell whose input the service's resume closed. */
-const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
-const SERVICE_COMMAND = 'a00000000013';
+const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000011');
+const SERVICE_COMMAND = 'a00000000012';
 /** The `texra run annotate` program run and the round its program ran,
  *  named by the call that launched it. */
 const PROGRAM_RUN = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
-const ROUND_ONE = 'f67ab3ad610d33f7b85cbf1c';
+const ROUND_ONE = '97524c016cf0da7443d17629';
 
 const roots: string[] = [];
 afterAll(() => {
@@ -236,12 +234,20 @@ describe('the golden 1.0 store', () => {
         expect(events).toHaveLength(rows.length);
         const types = new Set<string>(events.map((event) => event.type));
         // Every row kind is in the fixture, the decode test of a released
-        // store, but a plugin's stage: no listed plugin opens one.
+        // store, but what only a plugin's own trace writes: a stage, a
+        // card it closes itself, and the usage it reports. No listed
+        // plugin writes one.
         expect(
           Object.keys(ROW_KINDS)
             .filter((kind) => !types.has(kind))
             .toSorted(),
-        ).toEqual(['stage.end', 'stage.start']);
+        ).toEqual([
+          'stage.end',
+          'stage.start',
+          'tool.end',
+          'tool.start',
+          'usage',
+        ]);
         for (const type of [
           'tool.result',
           'request.decided',
@@ -333,7 +339,6 @@ describe('the golden 1.0 store', () => {
           [CHAT, 'validation-plan-1'],
           [GOAL, 'script/0'],
           [GOAL, 'script/1'],
-          [CHAT, 'validation-codex-4'],
           // The agent the script defined is its `agent()` call's child.
           [SCRIPTED, 'validation-script-1/4'],
           [SERVICE_TASK, 'validation-bash-1'],
@@ -432,16 +437,15 @@ describe('the golden 1.0 store', () => {
         // The program's run and the one round it ran.
         run(PROGRAM_RUN, 'annotate', { children: [ROUND_ONE] }),
         run(ROUND_ONE, 'Round 1', { parent: PROGRAM_RUN }),
-        // The user stopped its held turn with Ctrl-C, after its Codex
-        // child's turn had ended.
+        // The user stopped its held turn with Ctrl-C, after its background
+        // command had ended; a later open removed the ended command's run.
         run(CHAT, 'golden_chat', {
           outcome: 'cancelled',
-          children: [CODEX, GOAL],
+          children: [GOAL],
         }),
         run(GOAL, 'Goal', { parent: CHAT, children: [JUDGE, ROUND] }),
         run(ROUND, 'golden_chat', { parent: GOAL }),
         run(JUDGE, 'golden_chat', { parent: GOAL }),
-        run(CODEX, 'codex', { parent: CHAT }),
         run(SCRIPTED, 'golden_script', { children: [DEFINED] }),
         run(DEFINED, 'Defined agent', { parent: SCRIPTED }),
         run(FORK_SOURCE, 'golden_fork'),
@@ -459,7 +463,7 @@ describe('the golden 1.0 store', () => {
         run(SERVICE_COMMAND, 'bash', { parent: SERVICE_TASK }),
       ]);
       expect(folded.requests).toEqual([]);
-      // The message typed behind the stopped turn and the Codex child's
+      // The message typed behind the stopped turn and the command's
       // report stay queued for a resume to join. The headless parent holds
       // none: its child's message joined its one cycle.
       expect(

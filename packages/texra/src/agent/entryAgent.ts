@@ -51,10 +51,7 @@ const ENTRY_TOOLS: readonly string[] = Object.freeze([
   'program',
   'script',
   'executions',
-  'codex',
-  'claude_code',
   'ask_user_question',
-  'github_subscription',
 ]);
 
 /**

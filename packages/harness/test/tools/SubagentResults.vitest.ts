@@ -5,8 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 
 // formatDelivery is the one renderer of every child-run delivery: the
-// native subagent path, the background-bash path, workflow scripts, and the
-// agent-CLI tools (codex.ts, claudeAgent.ts).
+// native subagent path, the background-bash path and workflow scripts.
 
 describe('formatDelivery', () => {
   it('escapes attrs and text and words the wall time', () => {

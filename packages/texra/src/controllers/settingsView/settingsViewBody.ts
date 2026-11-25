@@ -55,7 +55,6 @@ import {
   invalidateSubscriptionUsage,
 } from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
 import { setModelAccessPreference } from '@texra/controllers/modelAccess/modelAccessPreference';
-import { settingsGitCommands } from '@texra/controllers/settingsView/settingsGitCommands';
 import {
   hostStatePage,
   settingsPresentation,
@@ -92,7 +91,6 @@ import {
   SettingsViewInboundMessageSchema,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
-import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import type { WorkspaceRoots } from '@texra-ai/worldline';
@@ -125,7 +123,6 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     // ── Controllers ──
 
     const memory = settingsMemoryCommands({ roots, bindings, present });
-    const gitPage = settingsGitCommands({ bindings, present });
     const toolsPage = settingsToolCommands({ roots, bindings, present });
     const pluginsPage = settingsPluginCommands({ roots, bindings, present });
 
@@ -174,7 +171,6 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           snapshots,
         })),
       ),
-      ...gitPage.pages,
       ...toolsPage.pages,
     ];
 
@@ -341,8 +337,6 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         ),
       openExternalUrl: (message) =>
         bindings.externalOpener.openExternal(message.url),
-      openGitHubTokenUrl: () =>
-        bindings.externalOpener.openExternal(GITHUB_TOKEN_CREATE_URL),
       setModelEnabled: (message) =>
         setModelEnabled({
           model: message.modelName,
@@ -376,7 +370,6 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         ),
 
       ...memory,
-      ...gitPage.handlers,
       ...toolsPage.handlers,
       ...pluginsPage.handlers,
     } satisfies SettingsHandlers;
@@ -474,10 +467,9 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           // The re-probe's network checks never hold the
           // view's ready answer, so the host's tab reveal is not kept waiting.
           moved([]).pipe(Stream.runForEach(() => finish(toolsPage.refresh))),
-          // A run that binds a GitHub subscription and a provider key written by any writer (the setup agent's
+          // A provider key written by any writer (the setup agent's
           // `unset_api_key`, another window). OAuth tokens and other
           // secrets are not provider keys, so they change nothing here.
-          followSignal('githubSubscriptionsChanged', () => changed('github')),
           followSignal('credentialChanged', ({ key }) => {
             const provider = apiKeyEntry(key);
             return provider === undefined || provider === 'unknown'

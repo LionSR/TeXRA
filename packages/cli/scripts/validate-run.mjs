@@ -1235,7 +1235,7 @@ function validatePluginProgram() {
       path.join(plugin, 'programs', 'first-line.js'),
       `// Reads each input file and answers with what it was offered.
 export const description = 'Quote the first line of each input file.';
-export const uses = ['read_file', 'github_subscription', 'agent'];
+export const uses = ['read_file', 'open_pdf', 'agent'];
 
 export default async (args, { inputFiles }) => {
   const lines = [];
@@ -1338,7 +1338,7 @@ export default async () => 'never runs';
     });
     assert(
       reviewText.includes(
-        'review-kit:first-line: Quote the first line of each input file. (tools: read_file, github_subscription, agent)',
+        'review-kit:first-line: Quote the first line of each input file. (tools: read_file, open_pdf, agent)',
       ) &&
         reviewText.includes(
           'Program programs/broken.js of plugin review-kit is not loaded: `description` must be one quoted string',
@@ -1366,13 +1366,13 @@ export default async () => 'never runs';
             // Its delegations stand approved, so `agent` is offered where
             // no prompt can show.
             tools.includes('agent') &&
-            !tools.includes('github_subscription') &&
+            !tools.includes('open_pdf') &&
             modules.includes('review-kit:first-line') &&
             !modules.includes('review-kit:broken'),
         ) &&
-        /Offered: (?!.*github_subscription).*read_file/.test(response) &&
-        !started.stderr.includes('github_subscription'),
-      `the program's run should be offered read_file, and not the tool of a switched-off plugin, and load only the well-formed module (artifact: ${artifactPath})\n${JSON.stringify(offered)}`,
+        /Offered: (?!.*open_pdf).*read_file/.test(response) &&
+        !started.stderr.includes('open_pdf'),
+      `the program's run should be offered read_file, and not a tool its host does not serve, and load only the well-formed module (artifact: ${artifactPath})\n${JSON.stringify(offered)}`,
     );
     assert(
       broken.status !== 0 &&

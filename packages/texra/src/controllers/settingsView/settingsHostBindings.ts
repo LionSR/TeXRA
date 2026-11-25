@@ -25,7 +25,6 @@ import type {
   SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ProcessServices } from '@texra-ai/worldline/host';
-import type { RunId } from '@texra-ai/worldline/schemas';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 
@@ -59,9 +58,6 @@ export interface SettingsHostBindings {
   signInSubscription(
     providerId: SubscriptionProviderId,
   ): HostEffect<SubscriptionAccount>;
-  /** Select a run in the host's run view. */
-  revealRun(runId: RunId): HostEffect<'revealed' | 'missing' | 'unavailable'>;
-  runLabel(runId: RunId): string | undefined;
   /** Run a command in a terminal the user sees and can type into. */
   runInTerminal(name: string, command: string): HostEffect;
   /** The host's code editor, where it has one: the LaTeX page shows its
@@ -89,7 +85,6 @@ export type SettingsInput =
   | 'credentials'
   | 'subscriptions'
   | 'usage'
-  | 'github'
   | 'memory'
   | 'plugins'
   | 'latex';

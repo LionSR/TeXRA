@@ -229,9 +229,6 @@ const ToolDashboardItemSchema = Schema.Struct({
   ),
   /** A built-in plugin is always on; one with a toggle is on or off. */
   switch: Schema.Literals(['always-on', 'on', 'off']),
-  settings: Schema.optional(
-    Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
-  ),
 });
 export type ToolDashboardItem = typeof ToolDashboardItemSchema.Type;
 
@@ -272,13 +269,6 @@ const SkillsPageSchema = Schema.Struct({
   issues: Schema.Array(SkillDisplayIssueSchema),
 });
 
-/** Outbound: backend → frontend GitHub token status. */
-const GitHubTokenPageSchema = Schema.Struct({
-  /** Where the token comes from: the host's secret store, `GH_TOKEN` /
-   *  `GITHUB_TOKEN`, or nowhere. */
-  status: CredentialOriginSchema,
-});
-
 /** Each subscription's sign-in status, by provider. */
 const SubscriptionAuthPageSchema = Schema.Record(
   Schema.Literals(SUBSCRIPTION_AUTH_PROVIDERS),
@@ -288,22 +278,6 @@ const SubscriptionAuthPageSchema = Schema.Record(
 const SubscriptionUsagePageSchema = Schema.Struct({
   snapshots: SubscriptionUsageSnapshotsSchema,
 });
-const PRSubscriptionOwnerSchema = Schema.Struct({
-  runId: RunIdSchema,
-  label: Schema.String,
-});
-
-const PRSubscriptionEntrySchema = Schema.Struct({
-  key: Schema.NonEmptyString,
-  owners: Schema.Array(PRSubscriptionOwnerSchema),
-});
-export type PRSubscriptionEntry = typeof PRSubscriptionEntrySchema.Type;
-
-/** Outbound: backend → frontend active PR subscriptions. */
-const PRSubscriptionsPageSchema = Schema.Struct({
-  subscriptions: Schema.Array(PRSubscriptionEntrySchema),
-});
-
 // ============================================================
 // LaTeX settings data schemas
 // ============================================================
@@ -384,10 +358,8 @@ const SettingsHostStateSchema = Schema.Struct({
   models: ModelSelectionPageSchema,
   skills: SkillsPageSchema,
   plugins: PluginsPageSchema,
-  githubToken: GitHubTokenPageSchema,
   subscriptionAuth: SubscriptionAuthPageSchema,
   subscriptionUsage: SubscriptionUsagePageSchema,
-  prSubscriptions: PRSubscriptionsPageSchema,
   latex: LatexStatusPageSchema,
 });
 export type SettingsHostState = typeof SettingsHostStateSchema.Type;
@@ -477,16 +449,6 @@ const RunToolCommandMessageSchema = Schema.Struct({
 });
 export type ToolCommandKind =
   (typeof RunToolCommandMessageSchema)['Type']['kind'];
-// GitHub token messages (for PR subscription tool)
-const SetGitHubTokenMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN,
-);
-const RemoveGitHubTokenMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN,
-);
-const OpenGitHubTokenUrlMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
-);
 // Subscription sign-in messages, addressed by provider
 const SignInSubscriptionMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SIGN_IN_SUBSCRIPTION),
@@ -504,14 +466,6 @@ const SetSubscriptionPreferenceMessageSchema = Schema.Struct({
 const GetSubscriptionUsageMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE),
   forceRefresh: Schema.optional(Schema.Boolean),
-});
-const UnsubscribePRMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR),
-  key: Schema.NonEmptyString,
-});
-const OpenPRSubscriptionStreamMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM),
-  runId: RunIdSchema,
 });
 
 // LaTeX settings inbound messages
@@ -585,17 +539,11 @@ export const SettingsViewInboundMessageSchema = Schema.Union([
   // Model selection messages
   SetModelEnabledMessageSchema,
   SetModelReasoningLevelMessageSchema,
-  // GitHub token messages
-  SetGitHubTokenMessageSchema,
-  RemoveGitHubTokenMessageSchema,
-  OpenGitHubTokenUrlMessageSchema,
   // Subscription sign-in messages
   SignInSubscriptionMessageSchema,
   SignOutSubscriptionMessageSchema,
   SetSubscriptionPreferenceMessageSchema,
   GetSubscriptionUsageMessageSchema,
-  UnsubscribePRMessageSchema,
-  OpenPRSubscriptionStreamMessageSchema,
   // Generic catalog-driven scalar-setting write
   UpdateStateSettingMessageSchema,
   SetSkillEnabledMessageSchema,

@@ -40,7 +40,7 @@ import {
 import { decodingDefault, type StateKey } from '@texra-ai/worldline/schemas';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import { askNotice, vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   executeVscodeCommand,
   safeExecuteCommand,
@@ -83,7 +83,6 @@ import {
 } from '@texra/controllers/server/client';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
-import { followGitHubTokenRejections } from '@texra/controllers/session/windowNotices';
 import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 
 // Local file imports
@@ -507,12 +506,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
 
   // Activation-lifetime listeners run in the activation scope, which ends
   // them when the extension deactivates.
-  yield* Effect.forkScoped(
-    followGitHubTokenRejections(askNotice, (target) =>
-      settingsViewProvider.showSettingsView(target),
-    ),
-    { startImmediately: true },
-  );
   yield* Effect.forkScoped(criticism.follow(roots));
 
   yield* taskStatusBar(context, session, roots.config);
