@@ -4,7 +4,6 @@
  * Outbound: Backend → Frontend (the `profile` page of the host state)
  */
 import { Schema } from 'effect';
-import { decodingDefault } from '@texra-ai/worldline/schemas';
 import { CredentialOriginSchema } from '@texra-ai/llm';
 
 // ============================================================
@@ -33,8 +32,8 @@ const ProviderKeyStatusSchema = Schema.Struct({
   displayName: Schema.String,
   status: CredentialOriginSchema,
   /** The provider's endpoint setting; null when it has none to set. */
-  customEndpoint: decodingDefault(Schema.NullOr(Schema.String), null),
-  providerSettings: decodingDefault(Schema.Array(ProviderSettingSchema), []),
+  customEndpoint: Schema.NullOr(Schema.String),
+  providerSettings: Schema.Array(ProviderSettingSchema),
 });
 export type ProviderKeyStatus = typeof ProviderKeyStatusSchema.Type;
 
