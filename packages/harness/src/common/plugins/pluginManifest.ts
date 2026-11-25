@@ -23,6 +23,7 @@ import {
 
 // Local imports - common
 import { SKILL_FILE_NAME, SkillNameSchema } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { meansAbsent, pathExists } from '@utils/files/fsEntryExists';
 import { isPathWithin } from '@utils/core/pathCore';
 import { formatWordList } from '@utils/text/stringUtils';
@@ -36,7 +37,6 @@ import {
 import { readNativeEntry, type NativeEntry } from './nativeEntry';
 import { readPluginPrograms, type PluginPrograms } from './pluginPrograms';
 import {
-  jsonSyntaxError,
   parseMcpServers,
   ServerNameSchema,
   type McpServerConfig,
@@ -129,6 +129,22 @@ const exists = (target: string) =>
   FileSystem.FileSystem.use((fs) => pathExists(fs, target)).pipe(
     Effect.mapError(ioError),
   );
+
+/**
+ * What `JSON.parse` rejected, without the file's text. V8 quotes an excerpt
+ * of the source in double quotes, and an MCP server config holds credentials, so
+ * the message is cut at its first double quote before anything else reads
+ * it; one with no position is cut at its first single quote too, which
+ * quotes a source character.
+ */
+function jsonSyntaxError(error: unknown): string {
+  const kind = toErrorMessage(error)
+    .split('"', 1)[0]
+    .replace(/[,\s]+$/, '');
+  return /at position \d+/.test(kind)
+    ? kind
+    : kind.split("'", 1)[0].replace(/[,\s]+$/, '') || 'Unexpected content';
+}
 
 /** Read and validate one JSON file, or `undefined` when it is absent. */
 export const readJsonFile = Effect.fn('readJsonFile')(function* <T>(
