@@ -18,7 +18,7 @@ import {
   countBySeverity,
   formatCounts,
   formatGroupedSections,
-} from '@texra/utils/diagnostics/diagnosticFormatting';
+} from '@texra/tools/diagnosticFormatting';
 import {
   LEAN_PROJECT_COMMANDS,
   extractHoverText,

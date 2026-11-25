@@ -51,7 +51,7 @@ import {
   type PerKeyLane,
   withPerKeyLane,
 } from '@texra-ai/worldline/plugins';
-import type { DiagnosticSeverity } from '@texra/utils/diagnostics/diagnosticFormatting';
+import type { DiagnosticSeverity } from '@texra/tools/diagnosticFormatting';
 import type { LeanServerInfo } from '../leanServerInfo';
 import {
   LeanFileUnreadable,

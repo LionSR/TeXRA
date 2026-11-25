@@ -10,7 +10,7 @@
  */
 import { Context, type Effect, Schema } from 'effect';
 
-import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
+import type { GenericDiagnostic } from '@texra/tools/diagnosticFormatting';
 import type { FileLocation } from '@texra-ai/worldline/schemas';
 
 /**

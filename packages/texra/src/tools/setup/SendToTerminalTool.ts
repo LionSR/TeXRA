@@ -8,7 +8,7 @@ import {
   ToolError,
   defineTool,
 } from '@texra-ai/worldline/plugins';
-import { TERMINAL_OUTPUT_MAX_CHARS } from '@texra/common/terminalOutput';
+import { TERMINAL_OUTPUT_MAX_CHARS } from '@texra/hosts/uiHosts';
 
 // Local file imports
 import { SetupPlatform } from './platform';
