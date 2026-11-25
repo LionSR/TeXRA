@@ -21,6 +21,7 @@ import { goalGrant } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { withLogChannel } from '@logger/effectLog';
 import {
+  APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
@@ -70,7 +71,7 @@ const GOAL_AUTO_APPROVALS: Record<
   readonly ApprovalBypassKind[]
 > = {
   commands: ['bash'],
-  allAgentWork: ['superYolo', 'toolEdit', 'bash'],
+  allAgentWork: [...APPROVAL_BYPASS_KINDS],
 };
 
 const PlanToolInputSchema = Schema.Struct({

@@ -5,6 +5,7 @@
 import {
   isLoopDriven,
   isPlainAgentIdentity,
+  RUN_OUTCOME,
   type RunAction,
 } from '@shared/schemas';
 
@@ -68,7 +69,7 @@ export function runActions(
   if (
     continuesFromRows({ ...run, ended }) &&
     (isInterrupted(run) ||
-      (run.identity.kind === 'script' && run.outcome !== 'completed'))
+      (run.identity.kind === 'script' && run.outcome !== RUN_OUTCOME.COMPLETED))
   )
     actions.push('resume');
   if (isPlainAgentIdentity(run.identity)) {
