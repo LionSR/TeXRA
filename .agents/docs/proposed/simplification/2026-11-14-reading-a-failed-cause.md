@@ -32,7 +32,7 @@ not a rendering.
 ## Done on 2026-11-15
 
 - **The decision reading.** `readCause`
-  (`packages/harness/src/shared/session/causeReading.ts`) asks the four
+  (`packages/harness/src/agent/runtime/causeReading.ts`) asks the four
   questions in one order; `ModelInvoker.ts` (both exits) and
   `loop/toolUseDispatch.ts` use it. The attempt exit's missing storage check
   was not intended: a refused write now stops the turn there too, instead of

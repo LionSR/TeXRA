@@ -31,7 +31,7 @@ import {
 import type { SessionApprovals } from '@shared/session/sessionApprovals';
 import type { SessionRowDraft } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
-import { ancestryRows } from '@shared/session/runRelation';
+import { ancestryRows } from './runRelation';
 import { descendantRuns, type SessionView } from '@shared/session/sessionView';
 import {
   Approvals,

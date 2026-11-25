@@ -13,7 +13,7 @@ import {
   RUN_LIFECYCLE_CHANNEL,
   type RunEnding,
 } from '@agent/storage/runLifecycle';
-import { classifyAgentError } from '@common/errors/agentErrorClassification';
+import { classifyAgentError } from './agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import type { ResultEvent } from '@shared/session/agentEvent';
