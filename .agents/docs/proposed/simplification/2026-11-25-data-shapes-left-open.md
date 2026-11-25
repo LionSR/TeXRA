@@ -7,8 +7,8 @@ Origin: the 2026-11-25 scheduled data-structure audit, read on `main` at
 `duplicateOf`, the setup launch model's second map, a pasted image's id,
 media type and name, an unavailable usage snapshot's plan fields and each
 window's `percentRemaining`), one state in several fields (the desktop file
-tree's top level, a parsed approval answer), "none" spelled two ways (a
-retry's `credentials`, the LaTeX search path's inputs), and optional fields
+tree's top level, a parsed approval answer), "none" spelled two ways (the
+carrier of a retry's credentials, the LaTeX search path's inputs), and optional fields
 their one producer always sets (the headless prompt hooks, the CLI command
 name and status bar inputs, the provider key status, `desktop:showDiff`).
 The findings below were checked against their producers and readers and held
@@ -114,6 +114,14 @@ calls it too.
 - `RegisterRunOptions.takesFollowUps`
   (`packages/harness/src/shared/session/runFacts.ts`) is optional though
   both callers set it.
+
+- A retry decision's `credentials`
+  (`packages/harness/src/shared/schemas/request.ts`) still accepts
+  `'configured'`, which no producer writes and the reader treats as absent.
+  Dropping the literal makes a stored row that holds it fail its decode, so
+  it goes with the next `request.decided` version bump, not alone: a bump
+  also means regenerating the golden store
+  (`src/test-kernel/fixtures/storage/golden-1.0.sql`).
 
 ## 6. Checked and refused
 
