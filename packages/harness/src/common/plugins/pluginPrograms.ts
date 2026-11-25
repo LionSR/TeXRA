@@ -30,7 +30,7 @@ import { Array as Arr, Effect, FileSystem, Result } from 'effect';
 
 // Local imports
 import { meansAbsent } from '@utils/files/fsEntryExists';
-import { collapseWhitespace, formatWordList } from '@utils/text/stringUtils';
+import { formatWordList } from '@utils/text/stringUtils';
 
 /** The directory of a plugin that holds its programs. */
 const PROGRAMS_DIRECTORY = 'programs';
@@ -216,7 +216,7 @@ function readDeclarations(
       // shows the literal is the whole value (`'a' + b` is an expression).
       if (text === undefined || take(/;/) === null)
         return refuse(wrong.description);
-      description = collapseWhitespace(text);
+      description = text.replaceAll(/\s+/g, ' ').trim();
       if (description === '') return refuse('`description` is empty');
       if (description.length > DESCRIPTION_MAX_LENGTH)
         return refuse(

@@ -15,7 +15,7 @@ The PR that adds this note lands eleven findings, one commit each: the
 enableable-model catalog, `TEXRA_MODEL`'s spellings, `texra init`'s default
 model and its `texra.chat.model` copy, the subscription account's name, the
 missing-key sentence, the spend figure a model reads, the JSON parse-error
-cleaner, text on one line, the palette category, the supported Node range,
+cleaner, the MCP tool prefix, the palette category, the supported Node range,
 and the log line of a notice that could not be shown.
 
 ## Open

@@ -1,7 +1,5 @@
 import { Result, Schema, SchemaGetter } from 'effect';
 
-import { collapseWhitespace } from '@utils/text/stringUtils';
-
 const SKILL_NAME_MAX_LENGTH = 64;
 
 /** The file that makes a directory a skill: its frontmatter and body. */
@@ -10,7 +8,9 @@ export const SKILL_FILE_NAME = 'SKILL.md';
 /** Canonical grammar for discovered and persisted skill names. */
 export const SkillNameSchema = Schema.String.pipe(
   Schema.decodeTo(Schema.String, {
-    decode: SchemaGetter.transform(collapseWhitespace),
+    decode: SchemaGetter.transform((name) =>
+      name.replaceAll(/\s+/g, ' ').trim(),
+    ),
     encode: SchemaGetter.passthrough(),
   }),
 )

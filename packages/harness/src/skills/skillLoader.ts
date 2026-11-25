@@ -9,7 +9,6 @@ import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { SKILL_FILE_NAME, SkillNameSchema } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { collapseWhitespace } from '@utils/text/stringUtils';
 
 // Local imports - skill parsing
 import {
@@ -173,7 +172,7 @@ function normalizeSkillDescription(
   const errors: SkillLoadIssue[] = [];
   const description =
     typeof rawDescription === 'string'
-      ? collapseWhitespace(rawDescription)
+      ? rawDescription.replaceAll(/\s+/g, ' ').trim()
       : '';
 
   if (!description) {
