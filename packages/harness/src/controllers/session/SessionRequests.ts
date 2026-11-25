@@ -43,14 +43,10 @@ import { descriptionRow } from '@shared/session/runFacts';
 import { HostSkillSources, skillActivationText } from '@skills/runtimeSkills';
 import { ToolRegistry, type ToolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  deleteAcceptedRun,
-  runFiles,
-  type RunFilesServices,
-} from './deletionCleanup';
+import { deleteAcceptedRun } from './deletionCleanup';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
-type RequestServices = GlobalValues | RunFilesServices;
+type RequestServices = GlobalValues | FileSystem.FileSystem | Path.Path;
 type SessionServices = Effect.Services<typeof sessionServices>;
 /** What a handler reads of `services`; never the whole captured context. */
 const servicesOf = Context.pick(GlobalValues, FileSystem.FileSystem, Path.Path);
@@ -82,7 +78,6 @@ const GATED_ACTIONS: Partial<Record<RuntimeCommand['kind'], RunAction>> = {
   'run.delete': 'delete',
   'run.compact': 'compact',
   'run.rename': 'rename',
-  'run.files': 'files',
   'policy.set': 'grant',
 };
 
@@ -289,8 +284,6 @@ const handle = (
       return viaInput(deps, req, runs);
     case 'run.rename':
       return rename(deps, req);
-    case 'run.files':
-      return runFiles(runs, req);
     case 'run.fork':
       return forkRun({ id: req.runId, uid: accepted.uid }, req.at ?? null).pipe(
         Effect.provideService(ToolRegistry, deps.plugins),
