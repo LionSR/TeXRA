@@ -219,6 +219,7 @@ export function readCliEntrypointPath(): string {
 
 const CliPackageManifest = Schema.Struct({
   version: Schema.NonEmptyString,
+  engines: Schema.Struct({ node: Schema.NonEmptyString }),
   bugs: Schema.optional(Schema.Struct({ url: Schema.optional(Schema.String) })),
 });
 type CliPackageManifest = typeof CliPackageManifest.Type;
@@ -246,6 +247,19 @@ function loadCliPackageManifest(): CliPackageManifest {
 
 export function readCliVersion(): string {
   return loadCliPackageManifest().version;
+}
+
+/**
+ * The Node.js semver range the `texra` CLI supports: the package's own
+ * `engines.node`, so `texra doctor` and npm never disagree about what runs.
+ *
+ * The official Effect SQLite client requires the `node:sqlite` backup,
+ * columns and setReturnArrays APIs (Node 23 lacks setReturnArrays), the
+ * bundled undici 8.x requires `>=22.19.0`, and `which` and
+ * `write-file-atomic` declare `^22.22.2 || ^24.15.0`.
+ */
+export function readCliNodeRange(): string {
+  return loadCliPackageManifest().engines.node;
 }
 
 /**
