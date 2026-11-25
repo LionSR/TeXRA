@@ -30,8 +30,9 @@ export class TraceUnavailable extends Schema.TaggedError<TraceUnavailable>()(
   { status: TraceMissingSchema },
 ) {}
 
-/** The host's install has no trace-viewer bundle at `path` (a checkout where
- *  `packages/trace-viewer` was not built); each host names its rebuild. */
+/** The host's install has no usable trace-viewer bundle at `path`: none (a
+ *  checkout where `packages/trace-viewer` was not built), or one without the
+ *  module script the trace goes before. Each host names its rebuild. */
 export class TraceViewerMissing extends Schema.TaggedError<TraceViewerMissing>()(
   'TraceViewerMissing',
   { path: Schema.String },
@@ -52,17 +53,14 @@ function jsonForInlineScript(value: unknown): string {
   return JSON.stringify(value).replaceAll('<', '\\u003c');
 }
 
+/** The page with `trace` embedded ahead of the bundle's module script, or
+ *  `undefined` for a bundle without one (an older or broken build). */
 export function injectStandaloneTrace(
   template: string,
   trace: TraceDocument,
-): string {
+): string | undefined {
   const index = template.indexOf(MODULE_SCRIPT_MARKER);
-  if (index === -1) {
-    throw new Error(
-      'Trace-viewer standalone template is missing its module <script> tag — ' +
-        'rebuild packages/trace-viewer (its output format may have changed).',
-    );
-  }
+  if (index === -1) return undefined;
   const inlineScript = `<script>window.__TEXRA_TRACE__ = ${jsonForInlineScript(trace)};</script>\n    `;
   return template.slice(0, index) + inlineScript + template.slice(index);
 }
@@ -97,8 +95,11 @@ export const traceHtml = Effect.fn('traceHtml')(function* (
         Effect.fail(new TraceViewerMissing({ path: templatePath })),
       ),
     );
+  const html = injectStandaloneTrace(template, result.trace);
+  if (html === undefined)
+    return yield* new TraceViewerMissing({ path: templatePath });
   return {
-    html: injectStandaloneTrace(template, result.trace),
+    html,
     trace: result.trace,
     record: result.record,
   };
