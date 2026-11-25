@@ -83,8 +83,7 @@ export {
 export { runsInWsl } from '@utils/system/wslDetect';
 // The process environment as the harness reads it: a flag (any value but
 // unset, empty, `0`, `false`, `no` or `off` is on), and the environment a
-// child agent CLI starts from (no provider key but the one it authenticates
-// with).
+// child process starts from (no provider key).
 export { AppNamespace } from '@utils/system/appNamespace';
 export {
   approvalPolicyEnv,

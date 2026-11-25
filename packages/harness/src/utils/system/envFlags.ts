@@ -22,11 +22,7 @@
  */
 import { Config, Effect, Option, Record as EffectRecord } from 'effect';
 
-import {
-  API_KEY_ENV_NAMES,
-  apiKeyEnvName,
-  type ApiKeyProviderId,
-} from '@texra-ai/llm';
+import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 
 import { AppNamespace, appEnvName } from '@utils/system/appNamespace';
 import { environment } from '@utils/system/nodeWorkspace';
@@ -78,30 +74,28 @@ export const approvalPolicyEnv = (namespace: string): string =>
  * minus every provider API-key variable the harness reads as its own credential
  * ({@link API_KEY_ENV_NAMES}) and the requested approval policy
  * ({@link approvalPolicyEnv}). What a child prints lands in tool results and
- * the transcript, so the key is never there to print. `keep` names the one
- * provider whose key a child agent CLI authenticates with itself. Windows
+ * the transcript, so the key is never there to print. Windows
  * matches variable names case-insensitively, as its environment does.
  */
-export const inheritedEnv = Effect.fn('envFlags.inheritedEnv')(function* (
-  keep?: ApiKeyProviderId,
-): Effect.fn.Return<Record<string, string>> {
-  const env = yield* environment;
-  // Read where served, not required: every process runtime serves it (its
-  // stores require it), and a bare program outside one has no app whose
-  // variable a child could inherit.
-  const namespace = yield* Effect.serviceOption(AppNamespace);
-  const kept = keep === undefined ? undefined : apiKeyEnvName(keep);
-  // A project's `.env` never reaches a nested harness process as a requested
-  // approval policy: only the user's own invocation asks for one.
-  const withheld = new Set(
-    [
-      ...API_KEY_ENV_NAMES.filter((name) => name !== kept),
-      ...Option.toArray(Option.map(namespace, approvalPolicyEnv)),
-    ].map(envNameKey),
-  );
-  return EffectRecord.filter(
-    env,
-    (value, name): value is string =>
-      value !== undefined && !withheld.has(envNameKey(name)),
-  );
-});
+export const inheritedEnv = Effect.fn('envFlags.inheritedEnv')(
+  function* (): Effect.fn.Return<Record<string, string>> {
+    const env = yield* environment;
+    // Read where served, not required: every process runtime serves it (its
+    // stores require it), and a bare program outside one has no app whose
+    // variable a child could inherit.
+    const namespace = yield* Effect.serviceOption(AppNamespace);
+    // A project's `.env` never reaches a nested harness process as a requested
+    // approval policy: only the user's own invocation asks for one.
+    const withheld = new Set(
+      [
+        ...API_KEY_ENV_NAMES,
+        ...Option.toArray(Option.map(namespace, approvalPolicyEnv)),
+      ].map(envNameKey),
+    );
+    return EffectRecord.filter(
+      env,
+      (value, name): value is string =>
+        value !== undefined && !withheld.has(envNameKey(name)),
+    );
+  },
+);

@@ -1,7 +1,7 @@
 /**
  * TeXRA's own setting rows, and the static catalog its settings surfaces
  * read: the harness's rows (`@shared/state/stateSettings`), these, and the
- * rows its plugins declare (`./latexdiffSettings`, `./integrationSettings`).
+ * rows its plugins declare (`./latexdiffSettings`).
  * Every host's config carries the catalog ({@link TEXRA_SETTINGS}`.catalog`,
  * `ConfigProvider.catalog`); the settings surfaces read the placed rows
  * beside it, where each row's placement is the row's own or, for a harness
@@ -37,10 +37,6 @@ import {
   REGEX_REPLACEMENT_CATEGORIES,
 } from '@texra/shared/constants/replacementCategories';
 import { LATEXDIFF_SETTINGS } from '@texra/shared/settings/latexdiffSettings';
-import {
-  CLAUDE_AGENT_SETTINGS,
-  CODEX_SETTINGS,
-} from '@texra/shared/settings/integrationSettings';
 import {
   HARNESS_ROW_SURFACES,
   type SettingsViewRow,
@@ -322,7 +318,6 @@ const TEXRA_PLACED_ROWS: readonly TexraSettingRow[] = [
   LATEX_FORMATTER_SETTING,
   INLINE_CRITICISM_SETTING,
   ...LATEXDIFF_SETTINGS,
-  ...[...CODEX_SETTINGS, ...CLAUDE_AGENT_SETTINGS].map(({ row }) => row),
 ];
 
 /**

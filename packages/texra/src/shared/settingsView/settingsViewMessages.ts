@@ -229,9 +229,6 @@ const ToolDashboardItemSchema = Schema.Struct({
   ),
   /** A built-in plugin is always on; one with a toggle is on or off. */
   switch: Schema.Literals(['always-on', 'on', 'off']),
-  settings: Schema.optional(
-    Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
-  ),
 });
 export type ToolDashboardItem = typeof ToolDashboardItemSchema.Type;
 

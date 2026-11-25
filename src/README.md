@@ -35,7 +35,7 @@ CLI surfaces, and ships in nothing.
 
 | Directory       | What it is                                                                                                                                        |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tools/`        | TeXRA's plugins: LaTeX, Lean, setup, the theory programs, codex, claude-agent; `registry.ts` lists them                                           |
+| `tools/`        | TeXRA's plugins: LaTeX, Lean, setup, the theory programs; `registry.ts` lists them                                                                |
 | `agent/`        | The entry assistant (`entryAgent.ts`), runtime helpers (`runtime/`), and transcript export (`export/`)                                            |
 | `controllers/`  | Main, progress and settings views, model access, onboarding, the service (`server/`), and the host-side session modules (`session/`)              |
 | `shared/`       | App wire contracts (`ipc.ts`, settings rows and handlers, session frames and host requests) and the host-neutral logic over them                  |
