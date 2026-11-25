@@ -51,10 +51,7 @@ export function subscriptionQuotaUsed(
   let rounded = Math.round(percentUsed * 10) / 10;
   if (percentUsed > 0 && rounded === 0) rounded = 0.1;
   if (percentUsed < 100 && rounded === 100) rounded = 99.9;
-  const percent = Number.isInteger(rounded)
-    ? `${rounded}%`
-    : `${rounded.toFixed(1)}%`;
-  return `${percent} used`;
+  return `${rounded}% used`;
 }
 
 export function formatSubscriptionUsageReset(
