@@ -85,3 +85,6 @@ The PR that adds this note lands five findings:
    Kimi Code-only model reads under another provider there. Proposed: one
    catalog read in the app that both surfaces sort and print their own
    way. It changes the CLI's JSON `provider` field for those models.
+   Landed on 2026-11-25: `enableableModels`
+   (`packages/harness/src/model/computeModelOptions.ts`) is the catalog
+   both surfaces list, and both name a row by `resolveModelSource`.

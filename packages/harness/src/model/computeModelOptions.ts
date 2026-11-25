@@ -318,6 +318,18 @@ function isUnservedModelId(model: string): boolean {
 }
 
 /**
+ * The registry models a person can switch on, which is every one a run can be
+ * served on ({@link setModelEnabled} refuses the rest): the rows the Models
+ * tab, `texra models enabled` and `/models` list. A surface names a row's
+ * provider with `resolveModelSource`.
+ */
+export function enableableModels(): readonly ModelConfig[] {
+  return Object.values(MODEL_CONFIGS).filter(
+    (config) => !isUnservedModel(config),
+  );
+}
+
+/**
  * Unserved models drop out here, so no startup pass sweeps persisted state.
  * An explicitly enabled default is also kept in `enabledExtras`, so it stays
  * on if the curated defaults later drop it; the set de-duplicates it.

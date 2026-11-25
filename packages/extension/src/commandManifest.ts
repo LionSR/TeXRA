@@ -10,6 +10,7 @@
 // Local imports
 import {
   COMMAND_CATALOG,
+  COMMAND_CATEGORY,
   type CommandId,
 } from '@texra/shared/commands/catalog';
 
@@ -23,9 +24,6 @@ interface CommandPresentation {
    */
   readonly palette?: false;
 }
-
-/** The palette group of every command the extension contributes. */
-const COMMAND_CATEGORY = 'TeXRA';
 
 /** The context key the extension sets once every command is registered, so
  *  neither the palette nor a keybinding reaches a command that is not there

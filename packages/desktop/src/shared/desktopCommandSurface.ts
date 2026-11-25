@@ -1,6 +1,7 @@
 import { Schema } from 'effect';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import {
+  COMMAND_CATEGORY,
   commandCatalogById,
   settingsTabByCommand,
   type CommandCatalogEntry,
@@ -46,24 +47,21 @@ interface DesktopCommandEntry extends Omit<CommandCatalogEntry, 'id'> {
   readonly category: string;
 }
 
-/** The palette group of TeXRA's own commands, as in the extension. */
-const TEXRA_COMMAND_CATEGORY = 'TeXRA';
-
 /** What each desktop-only command is, keyed by the ids above so each is
  *  spelled once. TeXRA's own commands are the app's catalog. */
 const DESKTOP_ONLY_COMMANDS = {
   [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: {
     title: 'Show Logs',
-    category: TEXRA_COMMAND_CATEGORY,
+    category: COMMAND_CATEGORY,
   },
   [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: {
     title: 'Open Logs Folder',
-    category: TEXRA_COMMAND_CATEGORY,
+    category: COMMAND_CATEGORY,
   },
   [DESKTOP_COMMAND_PALETTE_ID]: {
     title: 'Show Commands',
     shortTitle: 'Commands',
-    category: TEXRA_COMMAND_CATEGORY,
+    category: COMMAND_CATEGORY,
     keybinding: { key: 'ctrl+k', mac: 'cmd+k' },
   },
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: {
@@ -107,7 +105,7 @@ export function desktopCommandEntry(
   if (isDesktopOnlyCommand(id)) return DESKTOP_ONLY_COMMANDS[id];
   const entry = commandCatalogById.get(id);
   if (!entry) throw new Error(`Missing command catalog entry: ${id}`);
-  return { ...entry, category: TEXRA_COMMAND_CATEGORY };
+  return { ...entry, category: COMMAND_CATEGORY };
 }
 
 function isDesktopOnlyCommand(id: string): id is DesktopOnlyCommandId {

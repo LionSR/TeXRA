@@ -90,7 +90,7 @@ try {
       // the bundle, so nothing is looked up at run time.
       'process.env.TEXRA_CLI_RESOURCES': JSON.stringify('../resources'),
       'process.env.TEXRA_CLI_MANIFEST': JSON.stringify(
-        JSON.stringify({ version, bugs }),
+        JSON.stringify({ version, bugs, engines }),
       ),
     },
     entryPoints: [entryPoint],
