@@ -59,7 +59,6 @@ import {
   type SessionRowDraft,
   type SessionView,
 } from '@texra-ai/worldline/schemas';
-import { LocalRuntimeStateSchema } from '@shared/schemas';
 import { sessionEventsLayer } from '@agent/runtime/sessionEventsLayer';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionWorkspace } from '@shared/session/sessionWorkspace';

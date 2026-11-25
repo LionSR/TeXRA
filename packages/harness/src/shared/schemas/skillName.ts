@@ -1,5 +1,7 @@
+// Third-party imports
 import { Result, Schema, SchemaGetter } from 'effect';
 
+// Local imports
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
 const SKILL_NAME_MAX_LENGTH = 64;

@@ -4,10 +4,10 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { withLogChannel } from '@texra-ai/worldline/plugins';
-import { hasExtension } from '@texra-ai/worldline/schemas';
 import { invokeLatexWorkshopBuild } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
+import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { DiagnosticsReadFailed } from '@texra/tools/editorHost';
 
 const CHANNEL = 'LinterUtils';
@@ -15,7 +15,7 @@ const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;
 
 /**
  * Retrieve linter diagnostics for a file, triggering a LaTeX build first for
- * `.tex` files so the diagnostics are current.
+ * LaTeX files (`isLatexFile`) so the diagnostics are current.
  *
  * `filePath` is already absolute: the diagnostics tool resolves the model's
  * input against its tool root before calling.
@@ -30,7 +30,7 @@ export const getLinterMessages = Effect.fn('linter.getLinterMessages')(
   ): Effect.fn.Return<vscode.Diagnostic[], DiagnosticsReadFailed> {
     const fileUri = vscode.Uri.file(filePath);
 
-    if (hasExtension(filePath, '.tex')) {
+    if (isLatexFile(filePath)) {
       yield* triggerLaTeXBuild(filePath, fileUri);
     }
 

@@ -169,6 +169,17 @@ item's outcome, in listing order.
 const deleteStorageInventory: (storageRoot: string, inventory: Pick<StorageInventory, "orphans" | "asides">) => Effect<({ path: string; outcome: "failed"; message: string; } | { path: string; outcome: "kept"; message?: undefined; } | { path: string; outcome: "deleted"; message?: undefined; } | { path: string; outcome: "failed"; message: string; })[], DatabaseReadFailed | PlatformError, FileSystem | GlobalValues | AppNamespace>
 ```
 
+## enableableModels
+
+The registry models a person can switch on, which is every one a run can be
+served on ({@link setModelEnabled} refuses the rest): the rows the Models
+tab, `texra models enabled` and `/models` list. A surface names a row's
+provider with `resolveModelSource`.
+
+```ts
+function enableableModels(): readonly ModelConfig[]
+```
+
 ## ExternalToolCheckResult
 
 Result of running a single external tool check.

@@ -30,7 +30,7 @@ import {
   toJsonValue,
   type ToolResult,
 } from '@shared/schemas';
-import { refusalCopy } from '@shared/session/approvalDecision';
+import { refusalCopy } from '@tools/approval/refusalCopy';
 import {
   callRequestId,
   type AttemptRequests,

@@ -24,9 +24,9 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { ensureError } from '@texra-ai/worldline/schemas';
-import { TERMINAL_OUTPUT_MAX_CHARS } from '@texra/common/terminalOutput';
 // Local imports - hosts
 import {
+  TERMINAL_OUTPUT_MAX_CHARS,
   TerminalRunFailed,
   type TerminalRunRequest,
   type TerminalRunResult,

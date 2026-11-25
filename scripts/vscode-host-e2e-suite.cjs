@@ -9,8 +9,7 @@ const vscode = require('vscode');
 
 const EXTENSION_ID = 'texra-ai.texra';
 console.log('[texra e2e] suite loaded');
-const serviceRun = path.join(os.homedir(), '.texra', 'run');
-const serviceLog = path.join(serviceRun, 'serve.log');
+const dataRoot = path.join(os.homedir(), '.texra');
 
 /**
  * One step of the suite, said as it starts and bounded: a step that never
@@ -29,8 +28,13 @@ async function step(label, program, ms = 90_000) {
 }
 
 async function run() {
+  // The services module names the service's log and reads its lines; it is
+  // an ES module, which CommonJS loads with `import()` on every supported
+  // VS Code.
+  const services = await import('./texra-services.mjs');
+  const serviceLog = services.serviceLogPath(dataRoot);
   try {
-    await checks();
+    await checks(services, serviceLog);
   } catch (error) {
     // What the service said is the evidence a failed run needs.
     const log = existsSync(serviceLog)
@@ -41,7 +45,7 @@ async function run() {
   }
 }
 
-async function checks() {
+async function checks({ serviceAnnouncements }, serviceLog) {
   // The runner swapped the home: nothing here may reach the developer's.
   const realHome = process.env.TEXRA_E2E_REAL_HOME;
   assert.ok(realHome, 'the runner did not say which home it replaced');
@@ -51,8 +55,8 @@ async function checks() {
     `the extension host still resolves the real home (${realHome})`,
   );
   assert.ok(
-    path.relative(path.join(realHome, '.texra'), serviceRun).startsWith('..'),
-    `the service record would land in the real ~/.texra (${serviceRun})`,
+    path.relative(path.join(realHome, '.texra'), dataRoot).startsWith('..'),
+    `the service record would land in the real ~/.texra (${dataRoot})`,
   );
 
   const extension = vscode.extensions.getExtension(EXTENSION_ID);
@@ -103,16 +107,7 @@ async function checks() {
   if (process.platform === 'win32') return;
   // The service names itself in its log once it holds the record: the
   // newest such line is the running one.
-  const listening = () => {
-    if (!existsSync(serviceLog)) return undefined;
-    const lines = [
-      ...readFileSync(serviceLog, 'utf8').matchAll(
-        /TeXRA service (\S+) listening on \S*serve-(\d+)\.sock/g,
-      ),
-    ];
-    const last = lines.at(-1);
-    return last && { version: last[1], pid: Number(last[2]) };
-  };
+  const listening = () => serviceAnnouncements(serviceLog).at(-1);
   const until = async (label, check) => {
     const end = Date.now() + 60_000;
     while (!check()) {

@@ -23,7 +23,7 @@ import { RunRegistry, type AgentRunServices } from '@agent/runtime/runRegistry';
 import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
-import { classifyAgentError } from '@common/errors/agentErrorClassification';
+import { classifyAgentError } from './agentErrorClassification';
 import {
   generateRunId,
   runEndErrorMessage,

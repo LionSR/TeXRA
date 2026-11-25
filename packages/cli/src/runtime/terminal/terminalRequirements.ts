@@ -1,17 +1,5 @@
 import type { CliContext } from '../platform/cliContext';
 
-/**
- * Node.js semver range the `texra` CLI supports; the same value
- * `packages/cli/package.json` declares as `engines.node`, so `texra doctor`
- * and npm never disagree about what runs.
- *
- * The official Effect SQLite client requires the `node:sqlite` backup,
- * columns and setReturnArrays APIs (Node 23 lacks setReturnArrays), the
- * bundled undici 8.x requires `>=22.19.0`, and `which` and
- * `write-file-atomic` declare `^22.22.2 || ^24.15.0`.
- */
-export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '^22.22.2 || >=24.15.0';
-
 type InteractiveTerminalFailureReason = 'headless' | 'dumb-terminal';
 
 type InteractiveTerminalContext = Pick<

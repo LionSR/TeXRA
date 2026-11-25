@@ -160,6 +160,9 @@ export interface TerminalRunRequest {
   timeoutMs: number;
 }
 
+/** How many characters of a terminal run's output a host keeps: its tail. */
+export const TERMINAL_OUTPUT_MAX_CHARS = 12_000;
+
 export interface TerminalRunResult {
   /** Undefined when the host cannot observe the command exit code. */
   exitCode: number | undefined;

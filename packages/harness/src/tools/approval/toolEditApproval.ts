@@ -8,7 +8,7 @@ import {
   type ToolEditRequest,
   type ToolResult,
 } from '@shared/schemas';
-import { refusalCopy } from '@shared/session/approvalDecision';
+import { refusalCopy } from '@tools/approval/refusalCopy';
 import { Approvals, SessionLog } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
 import {

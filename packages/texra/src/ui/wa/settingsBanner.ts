@@ -3,6 +3,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - Web Awesome
 import type { IconName } from '@ui/wa/iconNames';
+import type { WaVariant } from '@ui/wa/waVariant';
 import { renderBannerFrame } from './bannerFrame';
 import { waIcon } from './webAwesomeIcons';
 
@@ -14,7 +15,7 @@ interface SettingsBannerOptions {
   readonly detail?: TemplateResult | typeof nothing;
   readonly actions?: TemplateResult | typeof nothing;
   readonly className?: string;
-  readonly variant?: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
+  readonly variant?: WaVariant;
 }
 
 /**

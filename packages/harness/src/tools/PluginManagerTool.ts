@@ -32,7 +32,7 @@ import {
 import { commandApproval } from '@agent/runtime/loop/toolGuard';
 import { operationOf } from '@agent/runtime/requests';
 import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
-import { refusalCopy } from '@shared/session/approvalDecision';
+import { refusalCopy } from '@tools/approval/refusalCopy';
 import { Approvals } from '@shared/session/runHistory';
 import { shortPluginId, ToolError, type RequestPayload } from '@shared/schemas';
 import { defineTool } from '@tools/core/definition';

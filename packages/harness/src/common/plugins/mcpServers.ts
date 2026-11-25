@@ -17,7 +17,6 @@ import stableStringify from 'safe-stable-stringify';
 // Local imports - shared contracts
 import type { SettingsStores } from '@shared/config/settings';
 import type { StateKey } from '@shared/state/stateSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** One configured stdio server, as the MCP plugin spawns it. */
 export interface McpServerConfig {
@@ -145,20 +144,4 @@ export function parseMcpServers(
       ),
   );
   return { servers: parsed, warnings };
-}
-
-/**
- * What `JSON.parse` rejected, without the file's text. V8 quotes an excerpt
- * of the source in double quotes, and a server config holds credentials, so
- * the message is cut at its first double quote before anything else reads
- * it; one with no position is cut at its first single quote too, which
- * quotes a source character.
- */
-export function jsonSyntaxError(error: unknown): string {
-  const kind = toErrorMessage(error)
-    .split('"', 1)[0]
-    .replace(/[,\s]+$/, '');
-  return /at position \d+/.test(kind)
-    ? kind
-    : kind.split("'", 1)[0].replace(/[,\s]+$/, '') || 'Unexpected content';
 }

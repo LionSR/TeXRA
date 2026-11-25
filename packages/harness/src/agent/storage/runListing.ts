@@ -28,9 +28,9 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
   ]);
   const rows = Map.groupBy(listing, (row) => row.aggregateId);
   const results = yield* Effect.forEach(
-    [...view.runs.values()].filter(
-      (run) => run.identity.kind === 'agent' && run.parentId === null,
-    ),
+    [...view.runs.values()]
+      .filter((run) => run.identity.kind === 'agent' && run.parentId === null)
+      .toSorted((a, b) => b.launchedAt - a.launchedAt),
     (run) =>
       Effect.gen(function* (): Effect.fn.Return<
         AgentRunListingEntry | null,
@@ -67,7 +67,5 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
     { concurrency: RUN_STORAGE_CONCURRENCY },
   );
 
-  return results
-    .filter(Predicate.isNotNull)
-    .toSorted((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+  return results.filter(Predicate.isNotNull);
 });

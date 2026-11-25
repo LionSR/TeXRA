@@ -50,6 +50,10 @@ These landed in the PR that adds this note:
    is CommonJS inside the VS Code extension host, also on the minimum
    supported VS Code, whose Node may not `require` an ES module: use
    `await import()` inside its async `checks()`.
+   **Landed 2026-11-25 evening:** the suite's `run()` loads the module with
+   `import()` and reads the newest announcement through
+   `serviceAnnouncements(serviceLogPath(...))`; its own path and regex are
+   gone.
 4. **A raw `exists` in files the open PRs hold** (`latexMedia.ts`,
    `acceptedFileTarget.ts`, `ProgressDocumentTaskFileActionsController.ts`,
    `vendorPackages.ts`) and the same `${n} ${pluralize(n, …)}` in the arXiv
@@ -63,10 +67,20 @@ These landed in the PR that adds this note:
    `import … with { type: 'json' }` loads on Node 22.23. Not checked: that
    the Vite config loader accepts it (`vitest.config.mjs` imports the
    sandbox worker).
+   **Landed 2026-11-25 evening** for the harness bundle, the sandbox
+   worker's build stamp and the VS Code host runner; the Vite config loader
+   accepts the import (`vitest list` loads the config and lists the same
+   250 suites). `packages/cli/scripts/build-bundle.mjs` is held by an open
+   PR and still reads its manifest by hand.
 6. **`vitest.config.mjs` is the root's one importer of the `glob` package.**
    `globSync` from `node:fs` returns the same 250 suites on Linux; it has no
    `posix` option, so the Windows shards need the separators replaced.
    Dropping the dependency edits `pnpm-lock.yaml`, which the open PRs hold.
+   **Landed 2026-11-25 evening** for the import: the config lists its
+   suites with `node:fs` `globSync` and rewrites the platform separator to
+   `/`, and `vitest list` assigns the same 250 suites to the same projects.
+   The root `package.json`'s `glob` devDependency now has no importer; drop
+   it with its `pnpm-lock.yaml` entry once the open PRs merge.
 7. Items 1, 3 and 4 of the 2026-11-23 note (`ifCurrent` compared as JSON
    text, the home directory, one timestamp format twice) are unchanged.
 

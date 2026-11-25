@@ -181,7 +181,7 @@ export function postDroppedFiles(
 ): void {
   // `extractDroppedFilePaths` accumulates into a Set of non-empty paths, and
   // the host re-resolves, re-filters and re-dedupes anyway
-  // (`attachDroppedPaths`), so nothing is cleaned here. An
+  // (`attachDroppedFiles`), so nothing is cleaned here. An
   // empty list still means "the drop yielded nothing" and must not post.
   if (paths.length === 0) return;
 

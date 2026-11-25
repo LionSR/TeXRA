@@ -29,28 +29,27 @@ word-boundary scan of every export found no symbol without a consumer.
 
 1. **Unused imports that lint cannot see.** The `no-unused-vars` rule in
    `oxlint.config.mts` ignores any variable matching `Schema$`, which also
-   hides an unused import of a schema. `tsc --noUnusedLocals` over the root
-   project found three in this area (removed here) and one in
+   hides an unused import of a schema. Partly landed (2026-11-25 evening):
+   `tsc --noUnusedLocals` over every project (root, test kernel, each
+   package's configs, the harness example; between them every tracked
+   TypeScript file but the Deno `supabase/functions/` tree) found one more
+   unused import, in
+   `src/test-kernel/controllers/session/sessionEvents.vitest.ts`, removed.
+   What is left: the import in
    `packages/harness/src/shared/schemas/logPayload.ts`, a file an open PR
-   holds. The same pass over the app and the hosts was not run. Narrowing
-   the pattern to declarations (not imports) needs a lint option oxlint may
-   not have; the alternative is a `noUnusedLocals` check in the typecheck.
-2. **`SessionLog.history`'s `types`**
-   (`packages/harness/src/shared/session/sessionLog.ts`). Only one test
-   passes it (`packages/harness/test/agent/followUp/ToolUseFollowUp.vitest.ts`,
-   to read every `followup.queued` row). Dropping it needs that test to read
-   the rows another way: the session context holds no `Database`, and the
-   `input` read of `RUN_ROW_READS` folds consumed messages away.
-3. **`ToolError`s that drop their cause.** `subagentRun.ts`'s schema check,
-   the executions tool's unreadable file, `glob.ts`'s pattern errors,
-   `WebFetchTool.ts`'s Markdown conversion and `toFetchToolError`
-   (`packages/harness/src/tools/timeouts.ts`) build a `ToolError` from a
-   caught error's message without its `cause`. Passing the cause is not
-   behavior-preserving: the tool boundary renders `toErrorMessage(error)`,
-   which walks the cause chain, so a cause whose message the wrapper quotes
-   without its final stop would be printed twice to the model.
+   holds, and the check itself. The pattern needs no narrowing: it can go.
+   With `varsIgnorePattern: '^_'` (no `|Schema$`) `npm run lint` reports
+   that held import and nothing else, since a schema read only in types
+   counts as used (`reportVarsOnlyUsedAsTypes` is off). Take both lines
+   when `oxlint.config.mts` and `logPayload.ts` leave the open PR.
+2. **`SessionLog.history`'s `types`**: landed (2026-11-25 evening). Six
+   test reads passed it, not one (four in `ToolUseProgressEvents.vitest.ts`
+   and one in `AgentLaunchContext.vitest.ts` beside `ToolUseFollowUp`'s).
+   Each now filters what it reads: `context.edit` and `response.finalized`
+   from `history`, which reads the run-state kinds, and `followup.queued`
+   and `approval.policy` from the run's display rows (`SessionLog.display`).
 
-4. **TSDoc on the `./plugins` surface**, left because its generated
+3. **TSDoc on the `./plugins` surface**, left because its generated
    reference (`packages/harness/docs/api/plugins.md`) is held by an open
    PR: `pathToLocationIn`'s @param/@returns restate its signature
    (`packages/harness/src/common/storage/fileLocation.ts`), so do
@@ -59,7 +58,7 @@ word-boundary scan of every export found no symbol without a consumer.
    code never spells (it answers `-32601`). Take them with `npm run
    docgen` once that PR merges.
 
-5. **`RunFailure.cause` is required** (`packages/harness/src/effect/errors.ts`),
+4. **`RunFailure.cause` is required** (`packages/harness/src/effect/errors.ts`),
    so `runView`'s `failure` (`packages/harness/src/effect/runHandle.ts`) and
    the service session's `runFailure`
    (`packages/texra/src/controllers/server/serviceSession.ts`) mint
@@ -67,9 +66,22 @@ word-boundary scan of every export found no symbol without a consumer.
    `AGENTS.md` makes it `Schema.optional(Schema.Defect())`. `RunFailure` is
    on the `.` entry, so the change regenerates
    `packages/harness/docs/api/index.md`, which the same open PR holds; take
-   it with item 4.
+   it with item 3. Both still wait (2026-11-25 evening): the open PR holds
+   `packages/harness/docs/api/index.md` and `plugins.md`.
 
 ## Checked and declined
+
+- **`ToolError`s that drop their cause** (2026-11-25 evening: `subagentRun.ts`'s
+  schema check, the executions tool's refused query, `glob.ts`'s pattern
+  errors, `WebFetchTool.ts`'s Markdown conversion, `toFetchToolError`). A
+  `ToolError`'s `cause` has one reader, the tool boundary's
+  `toErrorMessage` (`packages/harness/src/tools/core/definition.ts`): no
+  code catches a `ToolError` by tag and none logs one. Each site already
+  quotes the cause's whole message, so a cause with no chain of its own
+  would be dropped by `toErrorMessage` as embedded and add nothing, and
+  one with a chain whose parts end in a stop would print them twice.
+  `toFetchToolError`'s status and timeout messages leave the error out on
+  purpose. No site gains a reader; the messages stay as they are.
 
 - **`requireFileReadForEdit`'s `errorMessage`** and **`holdServer`'s
   `load`**: an AST count of direct calls saw neither passed, but `load` is

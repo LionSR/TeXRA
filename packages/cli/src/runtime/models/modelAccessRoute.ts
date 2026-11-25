@@ -1,6 +1,9 @@
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import type { ModelAccessStatus } from '@texra/controllers/modelAccess/modelAccessPreference';
-import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAuthStatus';
+import {
+  subscriptionAccountLabel,
+  type SubscriptionAuthStatus,
+} from '@texra/shared/model/subscriptionAuthStatus';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
@@ -40,18 +43,11 @@ export type CliModelAccessItemsInput =
       readonly state: 'failed' | 'loading';
     };
 
-/** The account a subscription session is signed in as, when it names one. */
-export function subscriptionAccountLabel(
-  status: SubscriptionAuthStatus,
-): string | undefined {
-  return status.email ?? status.accountId ?? undefined;
-}
-
 /** Format one subscription preference independently of its session. */
 export function formatCliSubscriptionPreference(
   status: SubscriptionAuthStatus,
 ): string {
-  const account = subscriptionAccountLabel(status) ?? 'your account';
+  const account = subscriptionAccountLabel(status.provider, status);
   if (status.preferSubscription && status.signedIn) return `On · ${account}`;
   if (status.signedIn) return `Off · ${account}`;
   return status.preferSubscription
@@ -160,8 +156,7 @@ export function buildCliAccountAccessRows(
         provider,
         operation: 'sign-out',
         label: copy.signOutLabel,
-        description:
-          subscriptionAccountLabel(subscription) ?? copy.subscriptionLabel,
+        description: subscriptionAccountLabel(provider, subscription),
       });
     } else if (subscription.preferSubscription) {
       rows.push({
