@@ -337,9 +337,7 @@ export class StageList extends LitElement {
   /** A section's header: its status, title, start and duration. */
   private renderStageHeader(node: StageEntry): TemplateResult {
     const { stage } = node;
-    const formattedStartTime = TIME_OF_DAY.format(
-      new Date(stage.startTime),
-    );
+    const formattedStartTime = TIME_OF_DAY.format(new Date(stage.startTime));
     const durationText = stage.end
       ? formatCompactDuration(stage.end.at - stage.startTime)
       : '';
