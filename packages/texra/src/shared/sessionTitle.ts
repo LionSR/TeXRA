@@ -1,4 +1,7 @@
-import type { SessionTitleState } from '@texra-ai/worldline/schemas';
+import {
+  FACT_SEPARATOR,
+  type SessionTitleState,
+} from '@texra-ai/worldline/schemas';
 import { runStatusLabel } from '@ui/copy/runStatus';
 
 /**
@@ -28,8 +31,8 @@ export const TERMINAL_TAB_TITLE: SessionTitleStyle = Object.freeze({
 
 export const NATIVE_WINDOW_TITLE: SessionTitleStyle = Object.freeze({
   brand: 'TeXRA',
-  separator: ' · ',
-  markerSeparator: ' · ',
+  separator: FACT_SEPARATOR,
+  markerSeparator: FACT_SEPARATOR,
   marker: Object.freeze({
     idle: undefined,
     running: runStatusLabel('running'),

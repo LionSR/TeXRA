@@ -44,7 +44,7 @@ export function SkillsSettingsForm(
   const { roots } = useChatProcess();
   return (
     <AsyncListForm<SkillsSettingsData, SkillToggle>
-      title="/config · Skills"
+      title={joinFacts(['/config', 'Skills'])}
       loadingLabel="Loading skills…"
       load={() =>
         Effect.gen(function* () {

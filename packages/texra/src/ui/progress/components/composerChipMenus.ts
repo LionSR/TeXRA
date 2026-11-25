@@ -12,6 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import {
   getModelLabel,
   isModelOptionAvailable,
+  joinFacts,
 } from '@texra-ai/worldline/schemas';
 import { modelRefOf } from '@texra-ai/llm';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
@@ -178,7 +179,7 @@ function approvalMenu(
         type="checkbox"
         .checked=${live(!overridden)}
         ><span class="menu-choice"
-          ><span>Use settings · ${policyLabel}</span>
+          ><span>${joinFacts(['Use settings', policyLabel])}</span>
           <small>${policyDescription}</small></span
         ></wa-dropdown-item
       >

@@ -1,6 +1,9 @@
 import { Record as EffectRecord } from 'effect';
 
-import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
+import {
+  joinFacts,
+  type ApprovalBypassKind,
+} from '@texra-ai/worldline/schemas';
 
 /**
  * What each run-scoped grant approves, one noun per approval kind: edits,
@@ -69,7 +72,10 @@ const firstSentence = (text: string): string => {
  */
 export const CHILD_AGENT_COPY = Object.freeze({
   heading: (label: string, tools: readonly string[]) =>
-    `Agent '${label}' · tools: ${tools.length > 0 ? tools.join(', ') : 'none'}`,
+    joinFacts([
+      `Agent '${label}'`,
+      `tools: ${tools.length > 0 ? tools.join(', ') : 'none'}`,
+    ]),
   summary: firstSentence,
   promptLabel: 'System prompt',
   instructionLabel: 'Instructions',

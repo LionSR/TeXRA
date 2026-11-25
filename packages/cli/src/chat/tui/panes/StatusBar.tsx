@@ -3,7 +3,11 @@ import { Effect, Exit, Stream, type Duration } from 'effect';
 import { useCallback, useEffect, useState } from 'react';
 
 import { readModelOptions } from '@texra-ai/worldline/host';
-import { isEmptyUsage, toErrorMessage } from '@texra-ai/worldline/schemas';
+import {
+  isEmptyUsage,
+  joinFacts,
+  toErrorMessage,
+} from '@texra-ai/worldline/schemas';
 import { isWorking } from '@texra-ai/worldline/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_BADGE_TEXT } from '@cli/tui/ui/colors';
@@ -204,7 +208,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     transientNotice:
       transientNotice ??
       (modelConnectionNeeded
-        ? { kind: 'message', text: 'No model connected · /login' }
+        ? { kind: 'message', text: joinFacts(['No model connected', '/login']) }
         : undefined),
     commandName: props.commandName,
     approvalDepth: attention.length,
