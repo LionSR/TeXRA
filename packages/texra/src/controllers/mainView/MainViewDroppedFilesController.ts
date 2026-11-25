@@ -48,8 +48,11 @@ const droppedWorkspaceFile = Effect.fn('droppedWorkspaceFile')(function* (
 
 /**
  * A launcher drop onto one field: each dropped path probed against the
- * workspace (none is taken without one), then the files that field accepts.
- * The one plan every host applies to `attachDroppedFiles`.
+ * workspace (none is taken without one), then the files that field accepts,
+ * deduplicated and in drop order. The one plan every host applies to
+ * `attachDroppedFiles`. A drop that attached nothing but rejected something
+ * is the user's to hear about, so it is a rejection rather than an empty
+ * result.
  */
 export const attachDroppedFiles = Effect.fn('attachDroppedFiles')(function* (
   workspaceRoot: string | undefined,
@@ -64,49 +67,27 @@ export const attachDroppedFiles = Effect.fn('attachDroppedFiles')(function* (
           (raw) => droppedWorkspaceFile(workspaceRoot, raw),
           { concurrency: 8 },
         );
-  return yield* attachDroppedPaths(resolved, allowedExtensions);
-});
-
-/**
- * The dropped paths one launcher field takes: every non-null path whose
- * extension that field accepts, deduplicated and in drop order. A drop that
- * attached nothing but rejected something is the user's to hear about, so it
- * is a rejection rather than an empty result.
- */
-function attachDroppedPaths(
-  paths: readonly (string | null)[],
-  allowedExtensions: readonly string[],
-): Effect.Effect<
-  { paths: string[]; attachedCount: number; rejectedCount: number },
-  Rejected
-> {
   const takes = fieldTakes(allowedExtensions);
   const attached = new Set<string>();
   let rejectedCount = 0;
-
-  for (const filePath of paths) {
+  for (const filePath of resolved) {
     if (!filePath || !takes(filePath)) {
       rejectedCount += 1;
       continue;
     }
     attached.add(filePath);
   }
-
-  if (attached.size === 0 && rejectedCount > 0) {
-    return Effect.fail(
-      new Rejected({
-        reason:
-          'No dropped files were attached. Drop regular files from this project with supported extensions.',
-      }),
-    );
-  }
-
-  return Effect.succeed({
+  if (attached.size === 0 && rejectedCount > 0)
+    return yield* new Rejected({
+      reason:
+        'No dropped files were attached. Drop regular files from this project with supported extensions.',
+    });
+  return {
     paths: [...attached],
     attachedCount: attached.size,
     rejectedCount,
-  });
-}
+  };
+});
 
 /** A file's extension as the launcher compares it: lower case, no dot. */
 function extensionOf(filePath: string): string {
