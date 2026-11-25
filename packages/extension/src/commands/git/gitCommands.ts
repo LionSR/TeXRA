@@ -13,7 +13,6 @@ import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
   cloneOverleafProject as runOverleafClone,
-  overleafCloneNotice,
   type OverleafCloneOutcome,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
@@ -23,7 +22,11 @@ import {
   LATEX_TOOL_ENTRIES,
 } from '@texra/shared/constants/latexToolchain';
 import { osPlatformOf } from '@texra/shared/osPlatform';
-import { CLONE_COPY, cloneProviderLabel } from '@ui/copy/clone';
+import {
+  CLONE_COPY,
+  cloneProviderLabel,
+  overleafCloneNotice,
+} from '@ui/copy/clone';
 import { hasPackageManager } from '@texra/utils/system/toolChecks';
 import {
   Secrets,
