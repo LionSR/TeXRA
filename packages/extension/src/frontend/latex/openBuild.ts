@@ -34,8 +34,7 @@ const CHANNEL = 'OpenBuildUtils';
 
 /**
  * Resolve `latex-workshop.latex.outDir` by expanding all LaTeX Workshop
- * placeholders for the given file.  Longer placeholders are replaced first
- * so that e.g. `%DOC_EXT%` is not partially consumed by `%DOC%`.
+ * placeholders for the given file.
  *
  * Falls back to a relative path resolved against the file's directory when the
  * result is not absolute.
