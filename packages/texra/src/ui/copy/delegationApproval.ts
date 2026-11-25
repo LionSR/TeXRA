@@ -1,6 +1,9 @@
 import { Record as EffectRecord } from 'effect';
 
-import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
+import {
+  collapseWhitespace,
+  type ApprovalBypassKind,
+} from '@texra-ai/worldline/schemas';
 
 /**
  * What each run-scoped grant approves, one noun per approval kind: edits,
@@ -57,7 +60,7 @@ export const DELEGATION_APPROVAL_COPY = Object.freeze({
 /** The first sentence of `text`, on one line: a card's summary of a
  *  child's system text. */
 const firstSentence = (text: string): string => {
-  const flat = text.trim().replaceAll(/\s+/g, ' ');
+  const flat = collapseWhitespace(text);
   const end = flat.search(/[.!?](?:\s|$)/);
   return end === -1 ? flat : flat.slice(0, end + 1);
 };
