@@ -30,11 +30,14 @@ import replacementEngine, {
 } from '@replacement/engine';
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import { texraPlugin } from '@texra/tools/texraPlugin';
+import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import type { ToolInstallAction } from '@texra/shared/settingsView/settingsViewMessages';
 import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
 import { hasExtension } from '@texra-ai/worldline/schemas';
 
 // Local file imports
+import { claudeAgent } from './agentCli/claudeAgentPlugin';
+import { codex } from './agentCli/codexPlugin';
 import {
   InlineComments,
   InlineCommentTool,
@@ -111,6 +114,9 @@ export interface ToolPluginSetup {
 export interface PluginCard {
   readonly name: string;
   readonly description: string;
+  /** The plugin's catalog rows the card renders inline, in order; the
+   *  catalog itself takes them from TeXRA's rows (`@texra/shared/settings/texraSettings`). */
+  readonly settings?: readonly PluginSettingRow[];
   /** Install and sign-in copy and actions; only a probed plugin's card
    *  shows them. */
   readonly setup?: ToolPluginSetup;
@@ -124,6 +130,9 @@ export interface PluginCard {
 export type TexraPlugin = Plugin & {
   readonly dashboard?: PluginCard;
   readonly icons?: Readonly<Record<string, string>>;
+  /** The tools, by normalized tool name, whose output the transcript paints
+   *  as a terminal session, as it paints `bash`'s. */
+  readonly terminalOutput?: readonly string[];
 };
 
 /** TeXRA's filter on `write_file`: a `.tex` file's content goes through the
@@ -360,6 +369,8 @@ export const texraPlugins = (host: {
         },
       },
     },
+    codex,
+    claudeAgent,
     core(editors, host.inlineComments),
     { ...codemode, icons: { script: 'code' } },
     setup(host.setup ?? {}, host.name, host.editor),

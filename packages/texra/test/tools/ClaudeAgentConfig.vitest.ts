@@ -1,0 +1,63 @@
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { ConfigProvider, Effect, Layer } from 'effect';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { apiKeySecretName } from '@texra-ai/llm';
+import { Secrets } from '@texra-ai/worldline/plugins';
+import { FakeSecrets } from '@test/support/FakePlatform';
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { buildClaudeAgentEnv } from '@texra/tools/agentCli/claudeAgentConfig';
+import { HARNESS_APP } from '@test/support/FakePlatform';
+
+/** Build the env over a stored managed API key, with no keychain
+ *  credential: every `security` probe exits 1. */
+function buildEnv(): Promise<NodeJS.ProcessEnv> {
+  const spawner = scriptedSpawnerLayer(() => ({ exitCode: 1 }));
+  return Effect.runPromise(
+    buildClaudeAgentEnv().pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Secrets.layer(
+            new FakeSecrets({ [apiKeySecretName('anthropic')]: 'from-secret' }),
+            HARNESS_APP.client,
+          ),
+          // The live env provider, so the suite's `vi.stubEnv` still governs
+          // the API-key fallback read through `envVar`.
+          ConfigProvider.layer(ConfigProvider.fromEnvRecord(process.env)),
+          spawner.layer,
+        ),
+      ),
+    ),
+  );
+}
+
+describe('Claude Code CLI configuration', () => {
+  beforeEach(() => {
+    // Deterministic baseline: no OAuth credential present. Point the config dir
+    // at a path that cannot contain `.credentials.json` and clear the token so
+    // tests don't pick up a real `claude login` session on the host.
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', '');
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    delete process.env.ANTHROPIC_API_KEY;
+    vi.stubEnv(
+      'CLAUDE_CONFIG_DIR',
+      path.join(os.tmpdir(), 'texra-test-no-claude-config'),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('strips an inherited and a managed API key when an OAuth token is present', async () => {
+    // OAuth must win even over an explicit env API key; otherwise the CLI
+    // prefers ANTHROPIC_API_KEY and ignores the login session.
+    vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', ' oauth-token ');
+
+    const env = await buildEnv();
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('oauth-token');
+  });
+});

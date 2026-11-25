@@ -98,7 +98,8 @@ export function formatToolUseTemplate(
   // the header, the error, or the sections above).
   if (model.output.kind === 'shown') {
     sections.push(
-      displayKind === 'bash'
+      displayKind === 'bash' ||
+        tools.terminalOutput.includes(normalizedToolName)
         ? buildTerminalSection('', model.output.text.full)
         : buildToolSection('', model.output.text.full, {
             extraClass: 'tool-output-full',

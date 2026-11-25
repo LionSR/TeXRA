@@ -28,7 +28,7 @@ const extensionConfig = {
     'fsevents', // macOS native module
   ],
   logLevel: 'info',
-  // Polyfill import.meta.url for ESM-only dependencies
+  // Polyfill import.meta.url for ESM-only dependencies (e.g. @openai/codex-sdk)
   // bundled into CJS. Without this, esbuild replaces import.meta with {} and
   // calls like createRequire(import.meta.url) throw at runtime.
   // The extension host bundle targets Node. Keep unqualified browser

@@ -6,16 +6,19 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@altmetric/identifiers": "catalog:",
+    "@anthropic-ai/claude-agent-sdk": "catalog:",
     "@awesome.me/webawesome": "^3.15.0",
     "@effect/platform-node": "catalog:",
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
     "@lit-labs/signals": "^0.3.0",
+    "@openai/codex-sdk": "catalog:",
     "@texra-ai/worldline": "workspace:*",
     "@texra-ai/llm": "workspace:*",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "content-disposition": "catalog:",
     "diff": "catalog:",
+    "diff-match-patch": "catalog:",
     "effect": "catalog:",
     "glob": "catalog:",
     "highlight.js": "^11.12.0",
@@ -28,9 +31,11 @@
     "markdown-it-texmath": "^1.0.0",
     "monaco-editor": "^0.57.0",
     "pretty-bytes": "catalog:",
-    "sortablejs": "^1.15.7"
+    "sortablejs": "^1.15.7",
+    "which": "catalog:"
   },
   "devDependencies": {
+    "@types/diff-match-patch": "^1.0.36",
     "@types/sortablejs": "^1.15.9"
   }
 }

@@ -143,6 +143,8 @@ export {
   codexBackendModelId,
   decideModelRoute,
   CHATGPT_SUBSCRIPTION_MAX_CONTEXT_WINDOW,
+  isClaudeCodeModel,
+  isCodexModel,
   isUnservedModel,
   kimiCodeServing,
   OWN_KEY_ROUTE_FACTS,

@@ -22,11 +22,11 @@ const agent = (
 
 export const GOLDEN_AGENTS = Object.freeze({
   /** The interactive chat, run as a goal, switched mid-run, and stopped
-   *  over a background command. */
+   *  over a Codex child. */
   golden_chat: agent(
     'golden_chat',
     'GOLDEN-CHAT: plan, run the plan as a goal, complete it.',
-    ['plan', 'bash'],
+    ['plan', 'codex', 'bash'],
   ),
   /** The child, delegated to and deleted. */
   golden_child: agent('golden_child', 'GOLDEN-CHILD: answer the task.', [
