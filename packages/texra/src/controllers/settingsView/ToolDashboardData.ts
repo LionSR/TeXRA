@@ -76,6 +76,13 @@ export const planToolTerminalAction = (input: {
     };
   });
 
+/** The card's inline settings rows, as the dashboard item carries them. */
+function settingRows(card: PluginCard): Pick<ToolDashboardItem, 'settings'> {
+  return card.settings
+    ? { settings: card.settings.map(({ row, label }) => [row.key, label]) }
+    : {};
+}
+
 // ============================================================
 // Public API
 // ============================================================
@@ -117,6 +124,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         })),
         setup: null,
         switch: 'always-on' as const,
+        ...settingRows(card),
       }));
 
     const resultById = new Map(results.map((result) => [result.id, result]));
@@ -155,6 +163,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
             : disabledIds.has(plugin.id)
               ? 'off'
               : 'on',
+        ...settingRows(card),
       });
     }
 

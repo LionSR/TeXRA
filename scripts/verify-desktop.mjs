@@ -420,6 +420,30 @@ function verifySigningEnv(args) {
 
 const desktopIconPath = join(desktopRoot, 'build', 'icon.icns');
 const bundledRuntimeResourceDirs = ['plugins'];
+// The Codex and Claude Code SDKs each pull a per-platform package carrying a
+// 250-410 MiB native CLI binary. The desktop app resolves a user-installed CLI
+// at runtime (packages/texra/src/tools/agentCli/codexImport.ts, packages/texra/src/tools/agentCli/claudeAgentImport.ts), so
+// none of these packages may ship inside the app. The desktop manifest does not
+// declare the SDKs (packages/texra does, and esbuild inlines them from there),
+// and electron-builder copies only the manifest's production dependencies.
+const forbiddenNativeCliPackages = [
+  {
+    label: 'OpenAI Codex CLI',
+    scope: '@openai',
+    isPackageDirName: (name) => name === 'codex' || name.startsWith('codex-'),
+    pnpmStorePrefix: '@openai+codex',
+  },
+  {
+    label: 'Claude Code CLI',
+    scope: '@anthropic-ai',
+    isPackageDirName: (name) => name.startsWith('claude-agent-sdk'),
+    pnpmStorePrefix: '@anthropic-ai+claude-agent-sdk',
+  },
+];
+const nativeCliNodeModulesRoots = [
+  'node_modules',
+  'app.asar.unpacked/node_modules',
+];
 const desktopStartupForbiddenInputPackages = [
   {
     label: '@google/genai',
@@ -803,6 +827,67 @@ function dependencyPackageJsonPath(name) {
   return join('node_modules', name, 'package.json');
 }
 
+async function checkNoBundledNativeCliPayload(app, failures) {
+  const bundled = [];
+
+  for (const nodeModulesRoot of nativeCliNodeModulesRoots) {
+    for (const cli of forbiddenNativeCliPackages) {
+      for (const entry of await app.listDir(
+        posix.join(nodeModulesRoot, cli.scope),
+      )) {
+        if (!cli.isPackageDirName(entry)) continue;
+        bundled.push({
+          cli,
+          path: posix.join(nodeModulesRoot, cli.scope, entry),
+        });
+      }
+
+      for (const entry of await app.listDir(
+        posix.join(nodeModulesRoot, '.pnpm'),
+      )) {
+        if (!entry.startsWith(cli.pnpmStorePrefix)) continue;
+        bundled.push({
+          cli,
+          path: posix.join(nodeModulesRoot, '.pnpm', entry),
+        });
+      }
+    }
+  }
+
+  if (bundled.length === 0) return;
+
+  const described = [];
+  for (const { cli, path } of bundled) {
+    const sizeBytes = await onDiskSize(app.fsPath(path));
+    described.push(
+      `${cli.label} at ${path}${sizeBytes == null ? '' : ` (${formatBytes(sizeBytes)})`}`,
+    );
+  }
+
+  failures.push(
+    'Packaged desktop app bundles native CLI payloads that must be installed ' +
+      'by the user instead. Keep the SDKs in devDependencies so ' +
+      `electron-builder never copies their platform packages: ${described.join('; ')}`,
+  );
+}
+
+async function onDiskSize(path) {
+  const entryStat = statSync(path, { throwIfNoEntry: false });
+  if (entryStat == null) return null;
+  if (!entryStat.isDirectory()) return entryStat.size;
+
+  let total = 0;
+  for (const entry of await readdir(path, { withFileTypes: true })) {
+    const childSize = await onDiskSize(join(path, entry.name));
+    if (childSize != null) total += childSize;
+  }
+  return total;
+}
+
+function formatBytes(bytes) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
 async function checkRuntimeDependencies(app, appPackageJson, failures) {
   const sourcePackageJson = await readJsonFile(
     join(desktopRoot, 'package.json'),
@@ -996,6 +1081,10 @@ const packageOnlyChecks = [
     name: 'macOS node-pty spawn-helper is executable',
     applies: isMacApp,
     run: checkMacPtyHelpers,
+  },
+  {
+    name: 'no bundled Codex or Claude Code CLI payload',
+    run: checkNoBundledNativeCliPayload,
   },
   {
     name: 'desktop main dynamic require shim',

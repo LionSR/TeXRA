@@ -1,0 +1,87 @@
+/**
+ * The model and effort an agent CLI (Claude Code, Codex) runs with.
+ *
+ * Both CLIs name their model the way every TeXRA setting does, as an llm-zoo
+ * selection string (`provider/id[@effort]`), and both send the effort the one
+ * reasoning policy chooses: the call's own level, else the model string's,
+ * else the user's saved level, else the policy default, snapped to a level
+ * the model (and the route, when it reports one) accepts.
+ */
+import { Effect, Result, Schema } from 'effect';
+
+import {
+  chooseReasoning,
+  type ChooseReasoningOptions,
+  type ModelConfig,
+  type ReasoningChoice,
+  type SelectedModel,
+  selectModel,
+} from '@texra-ai/llm';
+import { ToolError } from '@texra-ai/worldline/plugins';
+import {
+  AgentCliEffortSchema,
+  type AgentCliEffort,
+} from '@texra/shared/agentCliSettings';
+
+/** Which models an agent CLI accepts, for validation and its error message. */
+export interface AgentCliModelRule {
+  /** The CLI as the user knows it, e.g. `Claude Code`. */
+  readonly cli: string;
+  readonly eligible: (config: ModelConfig) => boolean;
+  /** What an eligible model is, e.g. `a non-retired Anthropic model`. */
+  readonly requirement: string;
+}
+
+interface AgentCliModel {
+  readonly choice: ReasoningChoice;
+  /** The level to send; `undefined` sends none (the model has no effort control). */
+  readonly effort: AgentCliEffort | undefined;
+}
+
+/** The registry model a model string names, if the CLI can run it. */
+export function selectAgentCliModel(
+  id: string,
+  rule: AgentCliModelRule,
+): Effect.Effect<SelectedModel, ToolError> {
+  const selection = selectModel(id);
+  if (selection === undefined)
+    return Effect.fail(
+      new ToolError(
+        `Unknown model "${id}" for ${rule.cli}: expected a model reference such as provider/id, optionally with @effort.`,
+      ),
+    );
+  if (!rule.eligible(selection.config))
+    return Effect.fail(
+      new ToolError(
+        `${rule.cli} cannot run "${id}" (${selection.config.label}): it needs ${rule.requirement}.`,
+      ),
+    );
+  return Effect.succeed(selection);
+}
+
+/**
+ * The effort to send for a selection: `effort` (the call's own level)
+ * overrides the model string's, and `options.userEffort` is the saved level.
+ */
+export function agentCliReasoning(
+  selection: SelectedModel,
+  effort: AgentCliEffort | undefined,
+  options: ChooseReasoningOptions,
+): Effect.Effect<AgentCliModel, ToolError> {
+  const request =
+    effort === undefined ? selection.request : { ...selection.request, effort };
+  return Effect.fromResult(
+    chooseReasoning(selection.config, request, options),
+  ).pipe(
+    Effect.mapError((error) => new ToolError(error.message, { cause: error })),
+    Effect.map((choice) => {
+      const sent = Schema.decodeUnknownResult(AgentCliEffortSchema)(
+        choice.effort,
+      );
+      return {
+        choice,
+        effort: Result.getOrUndefined(sent),
+      };
+    }),
+  );
+}

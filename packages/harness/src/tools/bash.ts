@@ -103,12 +103,6 @@ function boundedOutput(streamName: 'stdout' | 'stderr') {
   };
 }
 
-/** The longest a foreground command may hold its call. */
-const FOREGROUND_MAX_TIMEOUT_MS = 600_000;
-/** The longest a background command may run: a build, a test suite or
- *  another agent's command-line turn outlasts a foreground call. */
-const BACKGROUND_MAX_TIMEOUT_MS = 6 * 3_600_000;
-
 const BashInputSchema = Schema.Struct({
   command: Schema.String,
   description: optionalInput(
@@ -117,10 +111,10 @@ const BashInputSchema = Schema.Struct({
   ),
   timeout: nullishWithDefault(
     Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
-      Schema.isLessThanOrEqualTo(BACKGROUND_MAX_TIMEOUT_MS),
+      Schema.isLessThanOrEqualTo(600_000),
     ),
     BASH_TOOL_DEFAULT_TIMEOUT_MS,
-    'Timeout in milliseconds (default 120,000 ms / 2 min; at most 600,000 ms / 10 min in the foreground and 21,600,000 ms / 6 h with run_in_background).',
+    'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
   ),
   run_in_background: nullishWithDefault(
     Schema.Boolean,
@@ -290,10 +284,6 @@ const executeBashTool = Effect.fn('executeBashTool')(function* (
     );
   }
 
-  if (input.timeout > FOREGROUND_MAX_TIMEOUT_MS)
-    return yield* new ToolError(
-      `A foreground command runs at most ${Duration.format(Duration.millis(FOREGROUND_MAX_TIMEOUT_MS))}. Set run_in_background: true for a longer one.`,
-    );
   return yield* executeForeground(input.command, input.timeout, toolCall, cwd);
 });
 

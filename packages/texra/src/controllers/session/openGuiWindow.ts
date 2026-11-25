@@ -294,6 +294,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       icons: Object.fromEntries(
         plugins.flatMap((plugin) => Object.entries(plugin.icons ?? {})),
       ),
+      terminalOutput: plugins.flatMap((plugin) => plugin.terminalOutput ?? []),
     },
     root: roots.workspace,
     stores: roots,

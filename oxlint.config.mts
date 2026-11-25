@@ -424,6 +424,12 @@ export default defineConfig({
       },
     },
     {
+      files: ['packages/texra/src/tools/agentCli/claudeAgent.ts'],
+      rules: {
+        'no-restricted-globals': 'off',
+      },
+    },
+    {
       files: CORE.flatMap(globs),
       rules: {
         'promise/avoid-new': 'error',

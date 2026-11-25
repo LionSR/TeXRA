@@ -211,7 +211,7 @@ const transcriptBody = (project: RailProject, run: RunView) =>
     <log-list
       .run=${run}
       .surface=${project.surface}
-      .tools=${{ icons: {} }}
+      .tools=${{ icons: {}, terminalOutput: [] }}
     ></log-list>`;
 
 const pdfPane = createPdfPane({ openExternally: () => undefined });

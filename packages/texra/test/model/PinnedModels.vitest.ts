@@ -1,4 +1,5 @@
 // Third-party imports
+import { Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
@@ -13,6 +14,10 @@ import {
   CLI_CHEAP_START_MODEL,
   CURATED_MODELS,
 } from '@texra/model/curatedModels';
+import {
+  CLAUDE_AGENT_MODEL_VALUES,
+  CODEX_MODEL_VALUES,
+} from '@texra/shared/agentCliSettings';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   CHATGPT_SETUP_MODEL,
@@ -22,7 +27,9 @@ import {
 /**
  * Every model id TeXRA ships as literal data. An llm-zoo bump that retires or
  * deprecates one fails here, and the pin is replaced by hand: nothing probes
- * a dead model or swaps one silently at runtime.
+ * a dead model or swaps one silently at runtime. The agent CLI defaults are
+ * decoded through their settings' schemas, which also fails a default the
+ * picker no longer offers.
  */
 const PINNED: readonly (readonly [string, string])[] = [
   [
@@ -34,6 +41,14 @@ const PINNED: readonly (readonly [string, string])[] = [
   ...Object.entries(SETUP_MODEL_BY_PROVIDER).map(
     ([provider, model]) => [`setup model for ${provider}`, model] as const,
   ),
+  [
+    'Claude Code model setting',
+    Schema.decodeUnknownSync(CLAUDE_AGENT_MODEL_VALUES.schema)(undefined),
+  ],
+  [
+    'Codex model setting',
+    Schema.decodeUnknownSync(CODEX_MODEL_VALUES.schema)(undefined),
+  ],
 ];
 
 describe('pinned model ids', () => {
