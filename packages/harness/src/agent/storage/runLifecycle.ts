@@ -161,7 +161,7 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
         type: 'run.start',
         aggregateId: runId,
         identity: options.identity,
-        takesFollowUps: options.takesFollowUps ?? false,
+        takesFollowUps: options.takesFollowUps,
         worktree: worktree ? { workingDirectory: worktree } : null,
         parent: options.parent ?? null,
         provenance: options.provenance ?? null,
