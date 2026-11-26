@@ -35,12 +35,6 @@ import { selectAvailableDelegationModel } from './delegationAvailability';
 // Local file imports
 import type { ApprovalMeta, DelegatedChildApproval } from './subagentRun';
 
-const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
-  'No feedback provided.',
-  'Do not retry the same or equivalent delegation unless the user explicitly asks for it;',
-  'continue directly with available context, or ask the user a clarifying question.',
-].join(' ');
-
 /** Build a concise summary of proposal parameters for rejection echo. */
 function summarizeProposal(proposal: AgentProposal): string {
   const parts = [`Agent: ${proposal.label}`, `Model: ${proposal.model}`];
@@ -79,9 +73,7 @@ function proposalRefusalResult(
     }
     case 'reject': {
       const feedback = refusal.feedback?.trim();
-      const feedbackLine = feedback
-        ? `\nUser feedback: ${feedback}`
-        : `\n${DEFAULT_DELEGATION_REJECTION_FEEDBACK}`;
+      const feedbackLine = feedback ? `\nUser feedback: ${feedback}` : '';
       return errorResult(
         `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
         { summary: `User rejected delegation to '${agentName}'` },

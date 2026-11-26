@@ -59,12 +59,6 @@ import { defineTool } from './core/definition';
 import { nullishWithDefault, optionalInput } from './core/inputSchema';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-const SHELL_BACKGROUNDING_PATTERN =
-  /(?:^|[\s;])nohup\b[^\n;]*(?<![>&])&(?![>&])/;
-const SHELL_BACKGROUNDING_MESSAGE =
-  'This command uses shell-level backgrounding (`nohup ... &`) inside a foreground bash tool call. ' +
-  'Do not emulate background execution inside the shell; call the bash tool again with `run_in_background: true` and the command without `nohup` or a trailing `&`.';
-
 /**
  * A foreground stream's first and last characters, kept as it arrives so a
  * long command needs no buffer of its whole output, and the text they show:
@@ -260,13 +254,6 @@ const executeBashTool = Effect.fn('executeBashTool')(function* (
   input: BashInput,
 ) {
   const toolCall = yield* ToolContext;
-  if (
-    !input.run_in_background &&
-    SHELL_BACKGROUNDING_PATTERN.test(input.command)
-  ) {
-    return yield* new ToolError(SHELL_BACKGROUNDING_MESSAGE);
-  }
-
   const cwd = toolCall.env.workingDirectory ?? toolCall.env.roots.workspace;
 
   if (input.run_in_background) {
@@ -324,12 +311,6 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
     ];
     if (retainedStdout) parts.push(`<stdout>${retainedStdout}</stdout>`);
     if (retainedStderr) parts.push(`<stderr>${retainedStderr}</stderr>`);
-    parts.push(
-      `To fix, either:\n` +
-        `- Increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }\n` +
-        `- Set run_in_background: true to execute asynchronously: { "run_in_background": true }\n` +
-        `Do not use shell-level backgrounding such as \`nohup ... &\` inside a foreground call.`,
-    );
     return yield* new ToolError(parts.join('\n'));
   }
 
@@ -388,9 +369,9 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
     [
       `Command launched in background.`,
       `Run ID: ${runId}`,
-      'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
+      'Result arrives automatically as a follow-up message when complete.',
       `To read its output so far (works while it runs): executions tool with path=/executions/${runId}/output`,
-      `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${runId} action=wait`,
+      `To wait for it: executions tool with path=/executions/${runId} action=wait`,
     ].join('\n'),
     `Launched background: ${preview}`,
   );

@@ -154,7 +154,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
         `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
         `Run ID: ${runId}`,
         `Approval: ${approval}. Model: ${model}.`,
-        `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
+        `To check progress: executions tool with path=/executions/${runId}; action=wait waits for it.`,
         `To send follow-up instructions once it has reported: executions tool, action=send, path=/executions/${runId}; it continues from where it ended and reports again.`,
       ].join('\n'),
       `Launched '${agentName}' (async)`,
