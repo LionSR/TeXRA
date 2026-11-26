@@ -284,6 +284,7 @@ export {
   formatCostUsd,
   formatResetDuration,
   formatResultCount,
+  formatUtcSecond,
   formatWallTime,
   formatWordList,
   joinFacts,
