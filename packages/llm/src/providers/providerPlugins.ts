@@ -61,7 +61,7 @@ export const GLM_BASE_URLS = Object.freeze({
  *   from its named variable;
  * - `unserved`: an llm-zoo provider whose models TeXRA does not serve.
  */
-export type ModelProviderPlugin = {
+type ModelProviderPlugin = {
   /** Stable, persisted identifier: the llm-zoo provider or API-key id. */
   readonly id: string;
   readonly displayName: string;
@@ -166,7 +166,7 @@ const MANIFEST = [
 ] as const satisfies readonly ModelProviderPlugin[];
 
 /** Every model provider plugin, in display order. */
-export const MODEL_PROVIDER_PLUGINS: readonly ModelProviderPlugin[] = MANIFEST;
+const MODEL_PROVIDER_PLUGINS: readonly ModelProviderPlugin[] = MANIFEST;
 
 /** Ids of the providers users can configure a direct API key for. */
 export type ApiKeyProviderId = Extract<
