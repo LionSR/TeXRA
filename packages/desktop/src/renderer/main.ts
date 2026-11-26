@@ -584,7 +584,6 @@ function shellTemplate(): TemplateResult {
       ${
         hasWorkspace()
           ? shellStatusBarTemplate({
-              projects: railProjects(),
               active: shell.active,
               planUsage:
                 projectSessions.get(shell.active)?.host$.get()?.planUsage ?? [],

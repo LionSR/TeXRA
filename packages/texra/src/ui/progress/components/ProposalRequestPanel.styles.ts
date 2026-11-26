@@ -7,20 +7,10 @@ export const proposalRequestPanelStyles: CSSResult = css`
     border-block-start: var(--border-thin) solid var(--color-border);
   }
 
-  /* The model menu sits in the ask's sentence, in the ask's type. */
+  /* The model picker sits in the ask's sentence. */
   .proposal-model {
-    display: inline-block;
-    vertical-align: baseline;
-  }
-
-  .proposal-model__trigger::part(label) {
-    font-size: inherit;
-    font-weight: inherit;
-  }
-
-  .proposal-model wa-dropdown-item {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-normal);
+    display: inline-flex;
+    vertical-align: middle;
   }
 
   /* A script request's lede. */

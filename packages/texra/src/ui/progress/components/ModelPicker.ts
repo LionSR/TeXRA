@@ -1,9 +1,10 @@
 /**
- * `<model-picker>`: the composer's model choice. Its chip names the model
- * and the reasoning level a run sends; its panel searches the host's models,
- * says what each is for, and sets the selected model's reasoning level.
- * It owns no selection: a pick goes out as `model-pick`, a level as the
- * host's `setReasoningLevel`, and the chip follows the rows it is given.
+ * `<model-picker>`: a model choice, in the composer and on a card that
+ * approves another run's launch. Its chip names the model and its reasoning
+ * level; its panel searches the host's models and sets the level. It owns
+ * no selection: every pick goes out as `model-pick` with the model string
+ * to run (`provider/id[@effort]`), so a level belongs to the task, follow-up
+ * or delegation it was picked for.
  */
 
 // Third-party imports
@@ -16,18 +17,20 @@ import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/popover/popover.js';
 
 // Local imports
-import { modelRefOf, type ReasoningEffort } from '@texra-ai/llm';
+import { selectModel, type ReasoningEffort } from '@texra-ai/llm';
 import {
   getModelLabel,
   isModelOptionAvailable,
-  joinFacts,
 } from '@texra-ai/worldline/schemas';
 import { REASONING_LEVEL_LABELS } from '@texra/shared/model/modelPicker';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { TexraElement } from '@ui/litBase';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
-import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /** One row of a model choice: a host row, or the selected model as itself. */
@@ -39,11 +42,14 @@ export interface ModelChoice {
   readonly row?: ModelOptionData;
 }
 
+/** The model a string names without its effort or mode, for matching rows. */
+const refOf = (model: string): string =>
+  selectModel(model)?.config.ref ?? model;
+
 /**
- * The models a choice offers over `selected`: the host's rows, the selected
- * one among them. A model the host does not list (a saved effort or mode,
- * or a proposal's model) leads the list as itself, its effort or mode after
- * the name: `ref@high` is "Name (high)".
+ * The models a choice offers over `selected`: the host's rows, the one
+ * `selected` names among them whatever effort it carries. A model the host
+ * does not list (a proposal's, say) leads the list as itself.
  */
 export function modelChoices(
   selected: string,
@@ -55,30 +61,23 @@ export function modelChoices(
     disabled: !isModelOptionAvailable(row),
     row,
   }));
-  const current = listed.find((choice) => choice.value === selected);
+  const ref = refOf(selected);
+  const current = listed.find((choice) => refOf(choice.value) === ref);
   if (current !== undefined) return { current, choices: listed };
-  const ref = modelRefOf(selected) ?? selected;
-  const modifiers = selected.slice(ref.length).replace(/^[@+]/, '');
   const own: ModelChoice = {
     value: selected,
-    label:
-      modifiers === ''
-        ? getModelLabel(selected)
-        : `${getModelLabel(selected)} (${modifiers})`,
+    label: getModelLabel(selected),
     disabled: false,
   };
   return { current: own, choices: [own, ...listed] };
 }
 
-/** What a row says under its name: why it cannot run, else what it is for,
- *  else its facts. */
-function describe(row: ModelOptionData | undefined): string {
-  if (row === undefined) return '';
-  return (
-    row.unavailableReason ??
-    row.hint ??
-    joinFacts([row.routeLabel, row.context && `${row.context} context`])
-  );
+/** The level `selected` runs at: the one it names, else what its row sends. */
+function levelOf(
+  selected: string,
+  current: ModelChoice,
+): ReasoningEffort | undefined {
+  return selectModel(selected)?.request.effort ?? current.row?.efforts?.sent;
 }
 
 const matches = (choice: ModelChoice, query: string): boolean =>
@@ -130,7 +129,7 @@ export class ModelPicker extends TexraElement {
       }
       wa-popover {
         --arrow-size: 0;
-        --max-width: min(26rem, calc(100vw - 2 * var(--wa-space-m)));
+        --max-width: min(20rem, calc(100vw - 2 * var(--wa-space-m)));
       }
       wa-popover::part(body) {
         padding: 0;
@@ -138,8 +137,8 @@ export class ModelPicker extends TexraElement {
       .panel {
         display: flex;
         flex-direction: column;
-        width: min(26rem, calc(100vw - 2 * var(--wa-space-m)));
-        max-height: min(28rem, 70vh);
+        width: min(20rem, calc(100vw - 2 * var(--wa-space-m)));
+        max-height: min(24rem, 70vh);
         font-size: var(--font-size-sm);
       }
       .search {
@@ -168,11 +167,12 @@ export class ModelPicker extends TexraElement {
         scrollbar-width: thin;
       }
       .choice {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        column-gap: var(--wa-space-xs);
+        display: flex;
+        align-items: center;
+        gap: var(--wa-space-xs);
         width: 100%;
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        min-height: var(--row-height);
+        padding: 0 var(--wa-space-xs);
         border: 0;
         border-radius: var(--field-radius);
         background: transparent;
@@ -185,35 +185,16 @@ export class ModelPicker extends TexraElement {
         background: var(--surface-hover);
       }
       .choice:disabled {
+        color: var(--color-text-secondary);
         cursor: not-allowed;
       }
-      .choice:disabled .choice-name {
-        color: var(--color-text-secondary);
-      }
       .choice-name {
-        font-weight: var(--font-weight-medium);
+        flex: 1 1 auto;
+        min-width: 0;
         ${truncateDeclarations}
       }
-      .choice-about {
-        grid-column: 1;
-        color: var(--color-text-secondary);
-        font-size: var(--font-size-xs);
-        line-height: var(--line-height-normal);
-        display: -webkit-box;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-        overflow: hidden;
-      }
-      .choice-cost {
-        color: var(--color-text-secondary);
-        font-size: var(--font-size-xs);
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-      }
       .choice-check {
-        grid-column: 2;
-        grid-row: 2;
-        justify-self: end;
+        flex: none;
         color: var(--color-text-secondary);
       }
       .none {
@@ -224,17 +205,15 @@ export class ModelPicker extends TexraElement {
         display: flex;
         align-items: center;
         gap: var(--wa-space-xs);
-        padding: var(--wa-space-2xs) var(--wa-space-s);
+        padding: var(--wa-space-2xs);
         border-block-start: var(--border-thin) solid var(--color-border);
       }
-      .foot-label {
-        color: var(--color-text-secondary);
-        margin-inline-end: auto;
+      .search .action-icon-button {
+        flex: none;
       }
       .levels {
         display: flex;
         flex-wrap: wrap;
-        justify-content: flex-end;
         gap: var(--wa-space-3xs);
       }
       .level {
@@ -259,8 +238,10 @@ export class ModelPicker extends TexraElement {
 
   /** The host's model rows. */
   @property({ attribute: false }) options: readonly ModelOptionData[] = [];
-  /** The model in effect: the launch's, or the run's. */
+  /** The model in effect: the launch's, the run's, or the proposal's. */
   @property({ attribute: false }) selected = '';
+  /** The chip's id, which a holder with two pickers on screen sets apart. */
+  @property({ attribute: false }) triggerId = 'composer-model';
 
   @state() private searchText = '';
   /** The row the arrow keys are on, an index into the filtered rows. */
@@ -286,13 +267,12 @@ export class ModelPicker extends TexraElement {
     void this.panel?.hide();
   }
 
-  private setLevel(model: string, level: ReasoningEffort): void {
+  /** The selected model at `level`, keeping the mode it carries. */
+  private setLevel(current: ModelChoice, level: ReasoningEffort): void {
+    const mode = selectModel(this.selected)?.request.mode;
+    const model = `${refOf(current.value)}@${level}${mode ? `+${mode}` : ''}`;
     this.dispatchEvent(
-      SessionUiEvents.host({
-        kind: 'setReasoningLevel',
-        model: modelRefOf(model) ?? model,
-        level,
-      }),
+      new CustomEvent<string>('model-pick', { detail: model }),
     );
   }
 
@@ -314,13 +294,18 @@ export class ModelPicker extends TexraElement {
       ?.scrollIntoView({ block: 'nearest' });
   }
 
-  private renderChoice(choice: ModelChoice, index: number): TemplateResult {
-    const chosen = choice.value === this.selected;
+  private renderChoice(
+    choice: ModelChoice,
+    index: number,
+    current: ModelChoice,
+  ): TemplateResult {
+    const chosen = choice === current;
     return html`<button
       type="button"
       role="option"
       class=${classMap({ choice: true, 'is-active': index === this.active })}
       aria-selected=${chosen}
+      title=${choice.row?.unavailableReason ?? ''}
       ?disabled=${choice.disabled}
       @pointermove=${() => {
         this.active = index;
@@ -328,8 +313,6 @@ export class ModelPicker extends TexraElement {
       @click=${() => this.pick(choice)}
     >
       <span class="choice-name">${choice.label}</span>
-      <span class="choice-cost">${choice.row?.cost ?? ''}</span>
-      <span class="choice-about">${describe(choice.row)}</span>
       ${chosen ? waIcon('check', { className: 'choice-check' }) : nothing}
     </button>`;
   }
@@ -338,21 +321,17 @@ export class ModelPicker extends TexraElement {
   private renderLevels(current: ModelChoice): TemplateResult | typeof nothing {
     const efforts = current.row?.efforts;
     if (efforts === undefined) return nothing;
+    const sent = levelOf(this.selected, current);
     return html`<div class="foot">
-      <span class="foot-label" id="model-picker-levels">Reasoning</span>
-      <div
-        class="levels"
-        role="radiogroup"
-        aria-labelledby="model-picker-levels"
-      >
+      <div class="levels" role="radiogroup" aria-label="Reasoning level">
         ${efforts.levels.map(
           (level) =>
             html`<button
               type="button"
               role="radio"
               class="level"
-              aria-checked=${level === efforts.sent}
-              @click=${() => this.setLevel(current.value, level)}
+              aria-checked=${level === sent}
+              @click=${() => this.setLevel(current, level)}
             >
               ${REASONING_LEVEL_LABELS[level]}
             </button>`,
@@ -364,10 +343,10 @@ export class ModelPicker extends TexraElement {
   override render(): TemplateResult {
     const { current, choices } = modelChoices(this.selected, this.options);
     const shown = this.filtered(choices);
-    const sent = current.row?.efforts?.sent;
+    const sent = levelOf(this.selected, current);
     return html`
       ${renderLabeledActionButton({
-        id: 'composer-model',
+        id: this.triggerId,
         kind: 'ghost',
         className: 'chip-trigger is-compact',
         // prettier-ignore
@@ -377,16 +356,13 @@ export class ModelPicker extends TexraElement {
         caret: true,
       })}
       <wa-popover
-        for="composer-model"
+        for=${this.triggerId}
         placement="top-start"
         distance="6"
         without-arrow
         @wa-show=${() => {
           // The arrow keys start from the model in effect.
-          this.active = Math.max(
-            0,
-            choices.findIndex((choice) => choice.value === this.selected),
-          );
+          this.active = Math.max(0, choices.indexOf(current));
         }}
         @wa-after-show=${() => this.search?.focus()}
         @wa-after-hide=${() => {
@@ -412,23 +388,11 @@ export class ModelPicker extends TexraElement {
               @keydown=${(event: KeyboardEvent) =>
                 this.onSearchKey(event, shown)}
             />
-          </label>
-          <div class="rows" role="listbox" aria-label="Models">
-            ${
-              shown.length === 0
-                ? html`<div class="none">No model matches.</div>`
-                : repeat(
-                    shown,
-                    (choice) => choice.value,
-                    (choice, index) => this.renderChoice(choice, index),
-                  )
-            }
-          </div>
-          ${this.renderLevels(current)}
-          <div class="foot">
-            ${renderLabeledActionButton({
-              text: 'Model settings…',
-              kind: 'link',
+            ${renderIconActionButton({
+              id: 'model-picker-settings',
+              icon: 'gear',
+              label: 'Model settings',
+              tooltip: 'Model settings',
               onClick: () => {
                 void this.panel?.hide();
                 this.dispatchEvent(
@@ -439,7 +403,20 @@ export class ModelPicker extends TexraElement {
                 );
               },
             })}
+          </label>
+          <div class="rows" role="listbox" aria-label="Models">
+            ${
+              shown.length === 0
+                ? html`<div class="none">No model matches.</div>`
+                : repeat(
+                    shown,
+                    (choice) => choice.value,
+                    (choice, index) =>
+                      this.renderChoice(choice, index, current),
+                  )
+            }
           </div>
+          ${this.renderLevels(current)}
         </div>
       </wa-popover>
     `;

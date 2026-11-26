@@ -16,7 +16,6 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
@@ -37,17 +36,15 @@ import { markdownStyles } from '@ui/styles/markdownStyles';
 
 // Local imports - shared utilities
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
-import { selectedItemValue } from '@ui/wa/selectTemplates';
 
 // Local imports - base class
 import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
-import { modelMenu } from './composerChipMenus';
+import './ModelPicker';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { renderMarkdownHtml } from '../formatters/markdownRenderer';
 import { proposalLaunchPatch } from '../proposalEdit';
 import { delegateKeyActivation } from './composedPath';
-import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('proposal-request-panel')
 export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
@@ -99,31 +96,20 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     return html`${REQUEST_ASK.proposal(data.task)}${agent}${model}`;
   }
 
-  /** The model in the ask. On a card that can be answered it is a menu over
+  /** The model in the ask. On a card that can be answered it is the picker over
    *  the host's models: changing only the model takes one pick here, where
    *  Edit opens the whole launch form. */
   private renderModel(): TemplateResult | string {
     const { host } = this;
     if (!this.editable || host === null) return getModelLabel(this.model);
-    const menu = modelMenu(this.model, host);
-    return html`<wa-dropdown
+    return html`<model-picker
       class="proposal-model"
-      @wa-select=${(event: WaSelectEvent) => {
-        const value = selectedItemValue(event);
-        if (!value.startsWith('model:')) return;
-        this.writeDraft({ ...this.draft, model: value.slice(6) });
-      }}
-    >
-      ${renderLabeledActionButton({
-        id: 'proposal-model-trigger',
-        text: menu.label,
-        kind: 'ghost',
-        className: 'proposal-model__trigger is-compact',
-        slot: 'trigger',
-        caret: true,
-      })}
-      ${menu.items}
-    </wa-dropdown>`;
+      triggerId="proposal-model-trigger"
+      .options=${host.modelOptions}
+      .selected=${this.model}
+      @model-pick=${(event: CustomEvent<string>) =>
+        this.writeDraft({ ...this.draft, model: event.detail })}
+    ></model-picker>`;
   }
 
   protected override handleExtraKey(key: string): boolean {

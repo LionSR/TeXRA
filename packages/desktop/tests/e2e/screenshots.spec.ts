@@ -88,10 +88,7 @@ test('first-run screenshot', async () => {
 test('command palette', async () => {
   await showLauncher(launched);
   await expect(launched.page.locator('.shell-conversation')).toBeVisible();
-  await launched.page
-    .locator('.shell-sidebar-primary .shell-sidebar-action')
-    .filter({ hasText: 'Commands' })
-    .click();
+  await launched.page.locator('#shellCommands').click();
   await expect(
     launched.page.locator('.desktop-command-palette'),
   ).toHaveAttribute('open');

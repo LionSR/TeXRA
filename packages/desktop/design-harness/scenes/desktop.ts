@@ -329,7 +329,6 @@ function sceneDesktopProjects(): TemplateResult {
     workbench(lp.display.key, tabs, tabs[0].id, pdfPane.elementFor(tabs[0])),
     html`<div style="grid-column:1/-1">
       ${shellStatusBarTemplate({
-        projects,
         active: lp.display.key,
         planUsage: PLAN_USAGE,
       })}

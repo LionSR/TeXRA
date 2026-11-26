@@ -80,6 +80,10 @@ export type OnboardingFunnelState = typeof OnboardingFunnelStateSchema.Type;
  */
 const PlanUsageSchema = Schema.Struct({
   plan: DeclinableUsageRouteSchema,
+  /** The plan's tier as its provider names it, when it says: plans of one
+   *  route differ in their windows and limits, so the name is the
+   *  provider's and no window is assumed. */
+  planName: Schema.optional(Schema.NonEmptyString),
   windows: Schema.Array(SubscriptionUsageWindowSchema),
   /** When the windows were learned, in epoch milliseconds. */
   at: Schema.optional(NonNegativeIntSchema),

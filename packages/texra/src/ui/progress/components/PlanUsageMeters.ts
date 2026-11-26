@@ -35,13 +35,25 @@ import {
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 
+/** The plan as its provider names its tier, else as TeXRA names the plan. */
 const planName = (usage: PlanUsage): string =>
+  usage.planName ??
   modelAvailabilityLabel({
     availability: 'subscription-access',
     usageRoute: usage.plan,
   });
 
-/** The window a chip stands for: the one nearest its limit. */
+/** A plan's windows still running at `now`: a figure learned before its
+ *  window reset says nothing about the window that followed. */
+const current = (usage: PlanUsage, now: number): PlanUsage => ({
+  ...usage,
+  windows: usage.windows.filter(
+    (window) => window.resetAt === undefined || window.resetAt > now,
+  ),
+});
+
+/** The window a chip stands for: the one nearest its limit, whichever
+ *  windows the plan has. */
 const fullest = (usage: PlanUsage) =>
   usage.windows.toSorted((a, b) => b.percentUsed - a.percentUsed).at(0);
 
@@ -232,11 +244,11 @@ export class PlanUsageMeters extends TexraElement {
 
   override render(): TemplateResult | typeof nothing {
     // A plan with no credential has no usage to show and nothing to fix here.
-    const usage = this.usage.filter(
-      (plan) => plan.unknown !== 'missing_credentials',
-    );
-    if (usage.length === 0) return nothing;
     const now = this.ticker.now;
+    const usage = this.usage
+      .filter((plan) => plan.unknown !== 'missing_credentials')
+      .map((plan) => current(plan, now));
+    if (usage.length === 0) return nothing;
     return html`
       <button
         id="plan-usage"

@@ -2,7 +2,7 @@
  * The new-task composer's chip menus beside its model picker: approval, and
  * the working directory when there are two or more roots. Each chip is a
  * menu over the launcher's selections; the composer renders them and owns
- * the dispatch. A card that offers a model as a plain menu reads it here.
+ * the dispatch.
  */
 import { html, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
@@ -18,7 +18,6 @@ import {
   formatApprovalPolicy,
 } from '@ui/copy/approvalPolicy';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
-import { modelChoices } from './ModelPicker';
 import { launchPolicy, type ApprovalPolicy } from '@texra-ai/worldline/schemas';
 
 export interface ChipMenu {
@@ -32,33 +31,6 @@ export interface ChipMenu {
 }
 
 type Launch = Surface['launch'];
-
-/**
- * The model menu over `selected`, for a card that offers the model as a
- * plain menu: its label, and the choices as items valued `model:<id>`, the
- * selected one checked (`modelChoices`).
- */
-export function modelMenu(
-  selected: string,
-  host: HostSnapshot,
-): { readonly label: string; readonly items: TemplateResult } {
-  const { current, choices } = modelChoices(selected, host.modelOptions);
-  return {
-    label: current.label,
-    items: html`${repeat(
-      choices,
-      (choice) => choice.value,
-      (choice) =>
-        html`<wa-dropdown-item
-          value=${`model:${choice.value}`}
-          type="checkbox"
-          .checked=${live(choice.value === selected)}
-          ?disabled=${choice.disabled}
-          >${choice.label}</wa-dropdown-item
-        >`,
-    )}`,
-  };
-}
 
 /** The launcher's chips beside its model: approval, and the working
  *  directory when there are two or more roots. */

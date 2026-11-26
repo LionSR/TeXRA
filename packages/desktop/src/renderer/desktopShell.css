@@ -102,7 +102,14 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   background: var(--wa-color-surface-lowered);
 }
 .shell-sidebar-primary {
-  padding: var(--wa-space-s) var(--wa-space-s) var(--wa-space-2xs);
+  display: flex;
+  align-items: center;
+  gap: var(--wa-space-2xs);
+  padding: var(--wa-space-xs) var(--wa-space-s) 0;
+}
+.shell-sidebar-primary > .shell-sidebar-action {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .shell-sidebar-scroll {
   min-height: 0;
@@ -117,7 +124,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 36px;
+  min-height: var(--row-height);
   gap: var(--wa-space-xs);
   padding-inline: var(--wa-space-xs) var(--wa-space-2xs);
 }
@@ -128,16 +135,15 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   letter-spacing: 0.02em;
 }
 .shell-history-section {
-  margin-top: var(--wa-space-m);
+  margin-top: var(--wa-space-xs);
 }
 .shell-project-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) repeat(2, var(--height-control-compact));
   gap: var(--wa-space-2xs);
   align-items: center;
-  min-height: 34px;
+  min-height: var(--row-height);
   padding-inline-end: var(--wa-space-2xs);
-  margin-block: var(--wa-space-3xs);
   border-radius: var(--row-radius);
 }
 .shell-project-item.is-active {
@@ -152,7 +158,13 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-project-name {
   display: block;
   font-size: var(--font-size-sm);
+}
+.shell-project-item.is-active .shell-project-name {
   font-weight: var(--font-weight-medium);
+}
+/* A row's menu shows once the row is pointed at, focused or open. */
+.shell-project-item:not(:hover, :focus-within) .shell-project-menu {
+  opacity: 0;
 }
 .shell-project-status {
   grid-column: 2;
@@ -291,17 +303,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   background: var(--wa-color-surface-lowered);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
-}
-.shell-statusbar-path {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-.shell-statusbar-count {
-  flex: none;
-  color: var(--tone-color);
-}
-.shell-statusbar-spacer {
-  flex: 1 1 auto;
 }
 .shell-statusbar plan-usage-meters {
   height: 100%;

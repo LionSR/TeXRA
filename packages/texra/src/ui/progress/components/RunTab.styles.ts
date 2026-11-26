@@ -200,7 +200,12 @@ export const runTabStyles = css`
     display: none;
   }
 
-  /* Always-present actions keep renaming/deletion reachable by keyboard and screen reader. */
+  /* The menu stays in the row, so keyboard and screen reader reach rename
+     and delete; it is drawn once the row is pointed at or focused. */
+  .tab-container:not(:hover, :focus-within) .tab-actions {
+    opacity: 0;
+  }
+
   .tab-actions {
     display: block;
     width: var(--control-size-s);

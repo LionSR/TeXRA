@@ -9,7 +9,6 @@
  * component adds its case here with its first dispatch.
  */
 import { Schema } from 'effect';
-import { ReasoningEffortSchema } from '@texra-ai/llm';
 
 import {
   APPROVAL_BYPASS_KINDS,
@@ -85,14 +84,6 @@ export const HostCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('refreshUsage'),
     force: Schema.optional(Schema.Boolean),
-  }),
-  /** Save a model's reasoning level, or clear it with a null `level`: the
-   *  per-model setting the Models page writes, which every later run on the
-   *  model reads. */
-  Schema.Struct({
-    kind: Schema.Literal('setReasoningLevel'),
-    model: Schema.NonEmptyString,
-    level: Schema.NullOr(ReasoningEffortSchema),
   }),
   /** Settings at a target, or where it last was when `target` is absent
    *  (the header's gear). */

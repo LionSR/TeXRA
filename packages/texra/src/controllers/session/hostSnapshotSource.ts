@@ -303,6 +303,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
                   return [
                     {
                       plan,
+                      ...(quota.state === 'read' &&
+                        quota.planName && { planName: quota.planName }),
                       at: quota.at,
                       windows: quota.windows.map((window) => ({
                         name: window.name,

@@ -182,7 +182,6 @@ function projectSection(
           : renderLabeledActionButton({
               kind: 'ghost',
               className: 'shell-project-row is-row is-row-content',
-              icon: 'folder',
               // prettier-ignore
               text: html`<span class="shell-project-name truncate">${name}</span>`,
               title: key,
@@ -232,10 +231,19 @@ export function shellSidebarTemplate(
   return html`
     <aside class="shell-sidebar" aria-label="Projects and tasks">
       <nav class="shell-sidebar-primary" aria-label="Quick actions">
-        ${sidebarAction({
+        ${renderLabeledActionButton({
+          id: 'shellNewTask',
+          icon: 'plus',
+          text: 'New task',
+          kind: 'ghost',
+          className: 'shell-sidebar-action is-row',
+          onClick: callbacks.onNewTask,
+        })}
+        ${renderIconActionButton({
+          id: 'shellCommands',
           icon: 'magnifying-glass',
           label: model.commandsLabel,
-          title: model.commandsTitle,
+          tooltip: model.commandsTitle,
           onClick: callbacks.onOpenCommands,
         })}
       </nav>
@@ -280,15 +288,7 @@ export function shellSidebarTemplate(
           aria-label="Task history"
         >
           <div class="shell-sidebar-section-heading">
-            <span class="shell-sidebar-section-label">Task history</span>
-            ${renderLabeledActionButton({
-              id: 'shellNewTask',
-              icon: 'plus',
-              text: 'New task',
-              kind: 'ghost',
-              className: 'is-compact',
-              onClick: callbacks.onNewTask,
-            })}
+            <span class="shell-sidebar-section-label">Tasks</span>
           </div>
           ${
             active && active.view.order.length > 0
@@ -315,40 +315,22 @@ export function shellSidebarTemplate(
 }
 
 /**
- * The window's status bar: the shown project's folder, what is in progress
- * or waiting across every open project, and the subscription meters of the
- * shown project. `data-session` names that project, so a request the meters
- * send (a refresh, the settings page) goes to its session.
+ * The window's status bar: the subscription meters of the shown project,
+ * and nothing where no plan states a quota. `data-session` names that
+ * project, so a request the meters send (a refresh, the settings page) goes
+ * to its session.
  */
 export function shellStatusBarTemplate(model: {
-  readonly projects: readonly RailProject[];
   readonly active: string;
   readonly planUsage: readonly PlanUsage[];
-}): TemplateResult {
-  const counts = RAIL_SECTIONS.flatMap((section) => {
-    const count = model.projects.reduce(
-      (sum, project) => sum + project.view.rollup[section],
-      0,
-    );
-    return count === 0 ? [] : [{ section, count }];
-  });
+}): TemplateResult | typeof nothing {
+  if (model.planUsage.length === 0) return nothing;
   return html`
     <footer
       class="shell-statusbar"
       aria-label="Status"
       data-session=${model.active}
     >
-      <span class="shell-statusbar-path truncate" title=${model.active}
-        >${model.active}</span
-      >
-      ${counts.map(
-        ({ section, count }) =>
-          html`<span
-            class="shell-statusbar-count tone-${runSectionTone(section)}"
-            >${sectionCountLabel(section, String(count))}</span
-          >`,
-      )}
-      <span class="shell-statusbar-spacer"></span>
       <plan-usage-meters .usage=${model.planUsage}></plan-usage-meters>
     </footer>
   `;
