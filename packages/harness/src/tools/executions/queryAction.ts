@@ -15,15 +15,17 @@ import {
   type HistoryCell,
   type HistoryPage,
 } from '@shared/session/runHistory';
+import { appendHead } from '@utils/text/appendTail';
 
 const CELL_CHARACTER_LIMIT = 2000;
 
 function formatCell(cell: HistoryCell): string {
   if (cell === null) return 'NULL';
   const text = String(cell).replaceAll(/\r?\n/g, '\\n').replaceAll('|', '\\|');
-  return text.length <= CELL_CHARACTER_LIMIT
+  const head = appendHead('', text, CELL_CHARACTER_LIMIT);
+  return head.length === text.length
     ? text
-    : `${text.slice(0, CELL_CHARACTER_LIMIT)}… (${text.length - CELL_CHARACTER_LIMIT} more characters; select a substr() to read them)`;
+    : `${head}… (${text.length - head.length} more characters; select a substr() to read them)`;
 }
 
 function formatPage(page: HistoryPage): string {

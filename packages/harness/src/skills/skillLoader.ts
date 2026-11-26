@@ -17,6 +17,7 @@ import {
   SkillSchema,
   type Skill,
 } from './SkillSchema';
+import { appendHead } from '@utils/text/appendTail';
 
 interface ExtractedFrontmatter {
   frontmatter: unknown;
@@ -195,7 +196,7 @@ function normalizeSkillDescription(
       ),
     );
     return {
-      description: description.slice(0, SKILL_DESCRIPTION_MAX_LENGTH),
+      description: appendHead('', description, SKILL_DESCRIPTION_MAX_LENGTH),
       errors,
     };
   }

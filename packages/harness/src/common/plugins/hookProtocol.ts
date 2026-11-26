@@ -16,6 +16,7 @@ import type {
   HookStatus,
 } from '@shared/schemas';
 import { NonNegativeIntSchema } from '@shared/schemas';
+import { appendHead } from '@utils/text/appendTail';
 
 // --------------------------------------------------------------------- input
 
@@ -217,7 +218,7 @@ const NO_ANSWER: Pick<HookVerdict, 'decision' | 'reason' | 'updatedInput'> =
 const CONTEXT_MAX = 10_000;
 
 const capped = (context: string | null) =>
-  context === null ? null : context.slice(0, CONTEXT_MAX);
+  context === null ? null : appendHead('', context, CONTEXT_MAX);
 
 const firstLine = (text: string) => text.trim().split('\n')[0] ?? '';
 

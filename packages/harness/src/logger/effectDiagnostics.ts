@@ -4,6 +4,7 @@ import { Exit, Layer, Logger, type LogLevel, References, Tracer } from 'effect';
 
 // Local imports
 import { logEntryOf, writeLogEntry } from '@logger/logSink';
+import { appendHead } from '@utils/text/appendTail';
 
 const MAX_SPAN_ATTRIBUTES = 32;
 const MAX_ATTRIBUTE_LENGTH = 512;
@@ -35,7 +36,7 @@ class DiagnosticSpan extends Tracer.NativeSpan {
       return;
     }
     if (typeof value === 'string') {
-      super.attribute(key, value.slice(0, MAX_ATTRIBUTE_LENGTH));
+      super.attribute(key, appendHead('', value, MAX_ATTRIBUTE_LENGTH));
     } else if (typeof value === 'number' || typeof value === 'boolean') {
       super.attribute(key, value);
     }
