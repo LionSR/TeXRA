@@ -92,7 +92,6 @@ export {
   resolveToolPath,
   type ToolPathCall,
   type ToolPathResolution,
-  type WorkspacePathResolution,
 } from '@tools/pathResolution';
 // An agent's memory folders, for a host that opens them outside a run.
 export { memoryFolders, type MemoryFolder } from '@agent/memory/memoryLayout';

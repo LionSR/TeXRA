@@ -2428,10 +2428,20 @@ interface ToolPathCall {
 
 ## ToolPathResolution
 
-A resolved tool path plus the POSIX form a tool shows for it.
+A tool path resolved against the call's root: its root-relative and
+absolute spellings, the path filesystem calls take, and the POSIX form
+a tool shows for it.
 
 ```ts
-interface ToolPathResolution extends WorkspacePathResolution {
+interface ToolPathResolution {
+  readonly relative: string;
+  readonly absolute: string;
+  /**
+   * The path to pass to filesystem operations.
+   * Absolute when operating outside the workspace (e.g. a worktree),
+   * workspace-relative otherwise.
+   */
+  readonly fsPath: string;
   readonly display: string;
 }
 ```
@@ -2663,22 +2673,4 @@ class WorkspaceFs extends Context.Service<
   WorkspaceFs,
   RootedFileSystem
 >()('@texra-ai/worldline/platform/WorkspaceFs')
-```
-
-## WorkspacePathResolution
-
-A tool path resolved against the call's root: its root-relative and
-absolute spellings, and the path filesystem calls take.
-
-```ts
-interface WorkspacePathResolution {
-  readonly relative: string;
-  readonly absolute: string;
-  /**
-   * The path to pass to filesystem operations.
-   * Absolute when operating outside the workspace (e.g. a worktree),
-   * workspace-relative otherwise.
-   */
-  readonly fsPath: string;
-}
 ```

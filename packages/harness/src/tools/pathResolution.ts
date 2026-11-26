@@ -14,8 +14,9 @@ import {
 } from '@utils/core/pathCore';
 
 /** A tool path resolved against the call's root: its root-relative and
- *  absolute spellings, and the path filesystem calls take. */
-export interface WorkspacePathResolution {
+ *  absolute spellings, the path filesystem calls take, and the POSIX form
+ *  a tool shows for it. */
+export interface ToolPathResolution {
   readonly relative: string;
   readonly absolute: string;
   /**
@@ -24,6 +25,7 @@ export interface WorkspacePathResolution {
    * workspace-relative otherwise.
    */
   readonly fsPath: string;
+  readonly display: string;
 }
 
 /** Trim and validate a working_directory value. Must be absolute if provided. */
@@ -51,11 +53,6 @@ export function parseWorkingDirectory(
 export interface ToolPathCall {
   readonly roots: { readonly workspace: string | undefined };
   readonly workingDirectory?: string;
-}
-
-/** A resolved tool path plus the POSIX form a tool shows for it. */
-export interface ToolPathResolution extends WorkspacePathResolution {
-  readonly display: string;
 }
 
 /** Fail when a raw tool path contains a parent-directory segment. */
