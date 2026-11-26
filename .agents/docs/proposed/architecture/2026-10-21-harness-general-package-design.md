@@ -699,7 +699,11 @@ both call. No shared preamble is left to fold: the bash guard decides in the loo
 
 Still open after this design: about 350 lines of duplicated lowering across the
 llm adapters; `sessionViewUpdate.ts` at 1,169
-lines (1,074 at `c78e9f9`); the CLI approval stack versus the webview request panels; and four
+lines (1,074 at `c78e9f9`; 1,045 on 2026-11-26, of which 286 are comments
+and blank lines: a reducer over six input tags and the display row kinds,
+each concern in its own functions, with no fact kept twice found; what is
+left is small, such as the thirteen `applyRunEvent` cases that return the
+run unchanged); the CLI approval stack versus the webview request panels; and four
 CLAUDE.md rules with no check (the barrel ban, the single-caller ban, renderer
 `Date.now()`, and silent degradation outside the harness and llm).
 
