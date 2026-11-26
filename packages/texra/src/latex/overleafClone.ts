@@ -24,7 +24,6 @@ import {
   overleafTokenSpec,
   type OverleafGitClone,
   type OverleafRemote,
-  type OverleafTokenSpec,
 } from '@latex/overleafProject';
 import type { CredentialStore } from '@texra-ai/llm';
 import type { PlatformError } from 'effect/PlatformError';
@@ -44,7 +43,7 @@ export interface OverleafCloneWorkflowPorts {
    * cannot prompt at all (a non-interactive CLI run, say) — that is a usage
    * error for the caller to report, not a cancelled clone.
    */
-  promptToken(spec: OverleafTokenSpec): Effect.Effect<string | null, Error>;
+  promptToken(): Effect.Effect<string | null, Error>;
   /** Show `clone` (the `git clone` run) as one long-running step, where the
    *  host has a progress display; a host without one returns it as is. */
   showProgress<A, E, R>(clone: Effect.Effect<A, E, R>): Effect.Effect<A, E, R>;
@@ -60,11 +59,7 @@ export interface OverleafCloneWorkflowPorts {
 export type OverleafCloneOutcome =
   | { readonly _tag: 'Cloned'; readonly destination: string }
   | { readonly _tag: 'Cancelled' }
-  | {
-      readonly _tag: 'InvalidToken';
-      readonly spec: OverleafTokenSpec;
-      readonly message: string;
-    }
+  | { readonly _tag: 'InvalidToken' }
   | { readonly _tag: 'GitMissing' }
   | { readonly _tag: 'WorkspaceUnreadable'; readonly message: string }
   | { readonly _tag: 'WorkspaceNotEmpty'; readonly destination: string }
@@ -88,15 +83,10 @@ const resolveOverleafToken = Effect.fn('overleaf.resolveToken')(function* (
   }
   if (stored) yield* ports.secrets.delete(spec.tokenKey);
 
-  const input = yield* ports.promptToken(spec);
+  const input = yield* ports.promptToken();
   if (!input) return { _tag: 'Cancelled' };
 
-  if (!isValid(input)) {
-    const message = spec.tokenHint
-      ? `Invalid token format. ${spec.tokenHint}`
-      : 'Invalid token format.';
-    return { _tag: 'InvalidToken', spec, message };
-  }
+  if (!isValid(input)) return { _tag: 'InvalidToken' };
 
   yield* ports.secrets.set(spec.tokenKey, input);
   return { _tag: 'Ready', token: input };
