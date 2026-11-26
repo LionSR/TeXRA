@@ -7,7 +7,7 @@
 import StatusPill from './StatusPill.vue';
 
 const items = [
-  { id: 'anthropic/claude-fable-5-1', thinking: true },
+  { id: 'anthropic/claude-fable-5-2', thinking: true },
   { id: 'anthropic/claude-opus-5-5', thinking: true },
   {
     id: 'anthropic/claude-sonnet-5-5',
