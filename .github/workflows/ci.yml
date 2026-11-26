@@ -5,28 +5,22 @@ on:
     branches:
       - main
   pull_request:
-  schedule:
-    - cron: '17 3 * * *'
   workflow_dispatch:
 
 concurrency:
-  # Nightly `schedule` runs use github.ref == refs/heads/main, the same ref a
-  # push to main uses. Without the event_name suffix, cancel-in-progress would
-  # let a same-ref push cancel the nightly runtime-validation timing run (or
-  # vice versa) — see #7756.
+  # A push to main and a dispatch on main share a ref; the event name keeps
+  # one from cancelling the other.
   group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
-# Validation is split into parallel jobs (static groups / test shards / build) so PR
-# wall-time is bounded by the slowest job, not the sum of a serial chain. Each
-# job repeats the cheap cached setup (~30s) to buy that parallelism.
-#
-# The nightly `schedule` run carries the three jobs nothing else covers: the
-# runtime-validation timing run, the full TUI frame validation and the
-# Windows kernel shards, which no PR or push runs (see the `test` matrix). Every push to main already validates Linux,
-# so the remaining heavy jobs stay gated off `schedule` rather than
-# re-validating an unchanged tree nightly (the macOS jobs bill at 10x Linux
-# rates).
+# A pull request and a push run only what is cheap and static: lint and the
+# invariants, the docs checks, typecheck + formatting, the Effect diagnostics
+# and a compile of the extension. Nothing here runs a test suite, launches an
+# app or needs a macOS or Windows runner. Every suite (the kernel shards on
+# Linux and Windows, both hosts' e2e, the packed example, the CLI runtime and
+# TUI validations, the VSIX package) runs in `nightly.yml`, and
+# `nightly-fix.yml` starts the agent that repairs a failing night. Run
+# `npm test` before opening a pull request: no check here will.
 jobs:
   changes:
     name: detect changes
@@ -34,9 +28,6 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.detect.outputs.code }}
-      desktop: ${{ steps.detect.outputs.desktop }}
-      vscode: ${{ steps.detect.outputs.vscode }}
-      packages: ${{ steps.detect.outputs.packages }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -49,19 +40,15 @@ jobs:
       - name: Detect non-docs changes
         id: detect
         run: |
-          # Heavy validation (typecheck/lint/tests/build) only runs when a PR touches
+          # The static jobs and the compile only run when a PR touches
           # something other than docs. Docs-only PRs fall through to the
-          # lightweight docs-build job below, keeping CI spend down. Pushes to
-          # main and manual dispatches always run full validation, and so
-          # does a PR whose checkout is not its merge commit (a conflicted
-          # PR's checkout falls back to the head, where HEAD^1 is not the
-          # base).
+          # docs-build job below. Pushes to main and manual dispatches always
+          # run them, and so does a PR whose checkout is not its merge commit
+          # (a conflicted PR's checkout falls back to the head, where HEAD^1
+          # is not the base).
           if [ "${{ github.event_name }}" != "pull_request" ] || ! git rev-parse -q --verify HEAD^2 >/dev/null; then
-            echo "Event '${{ github.event_name }}' -> full validation."
+            echo "Event '${{ github.event_name }}' -> code checks."
             echo "code=true" >> "$GITHUB_OUTPUT"
-            echo "desktop=true" >> "$GITHUB_OUTPUT"
-            echo "vscode=true" >> "$GITHUB_OUTPUT"
-            echo "packages=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # HEAD^1 is the base tip the merge commit was built on, so this is
@@ -71,43 +58,15 @@ jobs:
           files="$(git diff --no-renames --name-only HEAD^1 HEAD)"
           echo "Changed files in this PR:"
           printf '%s\n' "$files"
-          # Here-strings, not `printf | grep -q`: an early grep exit would
+          # A here-string, not `printf | grep -q`: an early grep exit would
           # SIGPIPE the writer and pipefail would misread that as no match.
           # Code = any path outside docs/ and *.md.
           if grep -qvE '^docs/|\.md$' <<<"$files"; then
-            echo "Non-docs changes detected -> full validation."
+            echo "Non-docs changes detected -> code checks."
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Docs-only change -> lightweight docs build only."
+            echo "Docs-only change -> docs build only."
             echo "code=false" >> "$GITHUB_OUTPUT"
-          fi
-          # The session layer and CLI service a host's windows drive.
-          session_layer='^packages/texra/src/controllers/(server|session)/|^packages/harness/src/controllers/session/|^packages/cli/src/(runtime/cliService|commands/service)\.ts$'
-          # Desktop host = the Electron app, the session layer, and this
-          # workflow. Everything else the app bundles is covered by the kernel
-          # tests, and every push to main still runs the desktop suite.
-          if grep -qE "^packages/desktop/|$session_layer|^\.github/workflows/ci\.yml\$" <<<"$files"; then
-            echo "desktop=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "desktop=false" >> "$GITHUB_OUTPUT"
-          fi
-          # VS Code host = the extension, the service and the session layer
-          # a window drives it through, the scripts that run it, and this
-          # workflow: a PR touching any of them runs the real VS Code.
-          if grep -qE "^packages/extension/|$session_layer|^scripts/vscode-host-e2e|^\.github/workflows/ci\.yml\$" <<<"$files"; then
-            echo "vscode=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "vscode=false" >> "$GITHUB_OUTPUT"
-          fi
-          # Published packages = the two npm packages, what their bundles
-          # inline (the code sandbox worker, and the OpenAI SDK the llm build
-          # bundles), and every file that decides which versions a consumer's
-          # install resolves: a PR touching any of them installs the packed
-          # tarballs the way a consumer would.
-          if grep -qE '^packages/(harness|llm)/|^scripts/code-sandbox-worker\.mjs$|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig(\.build)?\.json)$|^\.github/workflows/ci\.yml$' <<<"$files"; then
-            echo "packages=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "packages=false" >> "$GITHUB_OUTPUT"
           fi
 
   # The static gate is `npm run gate` (package.json): lint and the
@@ -118,7 +77,7 @@ jobs:
   invariants:
     name: invariants (linux)
     needs: changes
-    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -181,7 +140,7 @@ jobs:
   typecheck:
     name: typecheck + format (linux)
     needs: changes
-    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -202,7 +161,7 @@ jobs:
   effect-diagnostics:
     name: effect diagnostics (linux)
     needs: changes
-    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -248,81 +207,12 @@ jobs:
       - name: Check guidance, proposals and the docs root
         run: npm run gate:docs
 
-  test:
-    # Keep the pre-existing `linux` / `windows` labels rather than the raw
-    # runner image: these strings are the historical check names.
-    name: kernel tests (${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}, shard ${{ matrix.shard }}/2)
+  compile:
+    name: compile (linux)
     needs: changes
-    # Unlike the other heavy jobs this one also runs on the nightly schedule,
-    # where it is the Windows shards and nothing else — the tree may be
-    # unchanged, but the drift this catches is in the suites themselves.
     if: needs.changes.outputs.code == 'true'
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      # Run every shard on every OS to completion so a red run reports every
-      # failure at once instead of hiding the other shard's results.
-      fail-fast: false
-      matrix:
-        # Windows stays off PR and push validation: it re-ran assertions the
-        # Linux shards already cover — Windows-specific behaviour is exercised
-        # by suites that stub the platform (`platform: 'win32'`), and 17
-        # assertions actively skip themselves when the runner really is
-        # Windows — while costing ~16 min per shard against ~10 on Linux and
-        # setting the wall-clock for the entire workflow. The Windows-only
-        # defects it did find were path and filesystem assumptions, which the
-        # nightly run below catches within a day.
-        #
-        # What it does run on is the nightly schedule, alone (#12943). A suite
-        # that hard-codes a `/` in a native absolute path, or mocks POSIX-only
-        # filesystem behaviour, passes everywhere else and is invisible until
-        # someone remembers to dispatch this workflow: #12939 repaired five
-        # such suites that had been red for a week. A nightly run bounds that
-        # window to a day and costs nothing on a PR. A manual dispatch still
-        # runs both platforms, for re-checking Windows before a release or
-        # right after touching path handling.
-        os: ${{ fromJson(github.event_name == 'workflow_dispatch' && '["ubuntu-latest", "windows-latest"]' || github.event_name == 'schedule' && '["windows-latest"]' || '["ubuntu-latest"]') }}
-        shard: [1, 2]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup-workspace
-
-      # Vitest starts the files that took longest last run first; without
-      # its results it falls back to the largest files, and the crash-point
-      # suites (a few lines each, the slowest by far) would start last and
-      # set the shard's wall-clock. Each run saves its own results; a run
-      # restores the newest a shard saved, a PR's from its base branch.
-      - name: Restore test durations
-        uses: actions/cache@v6
-        with:
-          path: node_modules/.vite/vitest
-          key: vitest-results-${{ runner.os }}-shard${{ matrix.shard }}-${{ github.run_id }}
-          restore-keys: vitest-results-${{ runner.os }}-shard${{ matrix.shard }}-
-
-      # --maxWorkers=2 saturates the 2-vCPU hosted runner (see #8039); the
-      # shards exist because a single runner can't go wider than that.
-      # The projects that share a module registry run in a new file order
-      # each time, so a suite that leaks process-wide state into the next
-      # fails here; the log's "Running tests with seed" line replays the
-      # order with --sequence.seed. Vitest picks one order for a whole run,
-      # so the other two projects keep the duration order in their own step.
-      - name: Kernel tests, shuffled
-        run: pnpm run test --project pure --project kernel --sequence.shuffle.files --maxWorkers=2 --shard=${{ matrix.shard }}/2
-
-      - name: Isolated and crash tests
-        if: ${{ !cancelled() }}
-        run: pnpm run test --project isolated --project crash --maxWorkers=2 --shard=${{ matrix.shard }}/2
-
-  build:
-    name: build artifacts (linux)
-    needs: changes
-    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
@@ -331,213 +221,18 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
 
-      - name: Validate CLI TUI smoke frames
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/artifacts"
-          pnpm --filter @texra-ai/cli validate:tui -- \
-            --snapshot-dir "$GITHUB_WORKSPACE/artifacts/tui-frames" --smoke
-
-      - name: Upload CLI TUI smoke frames
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: texra-cli-tui-smoke-frames
-          path: artifacts/tui-frames
-          if-no-files-found: warn
-          retention-days: 14
-
-      # No separate dev-mode `pnpm run compile` step: build:fast starts with
-      # clean:dist and rebuilds esbuild + Vite output in production mode, so a
-      # preceding dev compile is discarded work.
-      # Desktop app packaging is intentionally not part of PR CI. Keep this
-      # check scoped to the VS Code extension package.
-      - name: Build extension VSIX package
-        run: pnpm --filter texra build:fast
-
-      - name: Check extension VSIX contents
-        run: node scripts/verify-vsix-contents.mjs
-
-      - name: Upload extension VSIX artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: texra-extension-vsix
-          path: releases/*.vsix
-          if-no-files-found: error
-          retention-days: 14
-
-  vscode-host-e2e:
-    name: vscode host e2e (stable)
-    needs: changes
-    # It loads the built extension in the latest stable VS Code and checks
-    # activation, command registration, the webview panels and the window's
-    # service (scripts/vscode-host-e2e-suite.cjs). The engines.vscode minimum
-    # is a by-hand check before a release (`--vscode minimum`): in CI it only
-    # ever failed alongside stable. It runs on a macOS runner, so a pull request runs it only when it touches
-    # the VS Code host (`changes.vscode`), and `validate` requires it: off
-    # pull requests it went red on main for days unseen.
-    if: needs.changes.outputs.vscode == 'true' && github.event_name != 'schedule'
-    runs-on: macos-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup-workspace
-
-      - name: Build extension
+      # The esbuild and Vite bundles of the extension, which pull in the
+      # harness, the app and both webview frontends: a bundling failure
+      # `tsc` cannot see (an unresolved alias, a browser bundle reaching a
+      # Node module) fails here. The production VSIX is built nightly.
+      - name: Compile extension
         run: pnpm run compile:fast
-
-      - name: Run VS Code host e2e
-        run: pnpm run test:vscode -- --vscode stable
-
-      - name: Upload VS Code host e2e screenshot
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: vscode-host-e2e-stable
-          path: artifacts/vscode-e2e/
-          if-no-files-found: ignore
-          retention-days: 7
-
-  desktop-e2e:
-    name: desktop e2e (macOS)
-    needs: changes
-    # The Playwright suite that launches the built Electron app: quit, the
-    # project seed, workbench tabs, Monaco, the pty. Nothing else exercises
-    # the app end to end, and it broke twice unnoticed before it ran here.
-    # macOS because its window-lifecycle specs are macOS behaviour and the
-    # runner needs no virtual display. macOS bills at 10x Linux rates, so a
-    # pull request runs it only when it touches the desktop host
-    # (`changes.desktop`); every push to main runs it.
-    if: needs.changes.outputs.desktop == 'true' && github.event_name != 'schedule'
-    runs-on: macos-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup-workspace
-
-      # The build the installers ship; the `typecheck` job type checks it.
-      - name: Build desktop app
-        run: pnpm run desktop:build
-
-      # `electron` is not in pnpm's allowBuilds, so install skips its
-      # postinstall and the binary downloads the first time a test resolves
-      # `require('electron')`, inside the first spec's 60 s budget. Download
-      # it here, in its own timed step, so no test pays for it.
-      - name: Download the Electron binary
-        run: pnpm --filter @texra/desktop exec node -e "require('electron')"
-
-      - name: Run desktop e2e suite
-        run: pnpm --filter @texra/desktop test:e2e
-
-      - name: Upload desktop e2e results
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: texra-desktop-e2e-results
-          path: packages/desktop/tests/e2e/test-results/
-          if-no-files-found: ignore
-          retention-days: 14
-
-  # Packs @texra-ai/llm and @texra-ai/worldline, installs both tarballs into
-  # a temporary directory outside the repository with plain npm (no workspace
-  # links, no lockfile), type-checks packages/harness/example against them,
-  # and runs it. The workspace's lockfile cannot see what a consumer's fresh
-  # install resolves, so this is the check that a broken tarball, an
-  # undeclared dependency, or an incoherent Effect set fails before npm does.
-  # It runs nightly too: a new upstream patch changes a consumer's install
-  # with no commit here.
-  packed-example:
-    name: packed example (linux)
-    needs: changes
-    if: needs.changes.outputs.packages == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup-workspace
-
-      - name: Install the packed tarballs and run the example
-        run: pnpm --filter @texra-ai/worldline run example:packed
-
-  runtime-validation:
-    name: runtime validation (linux)
-    # Runs on the nightly schedule (whose whole purpose is this timing run)
-    # and manual dispatch; never on PRs or pushes, where it never failed.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup-workspace
-        with:
-          node-version: '22.22.2'
-
-      - name: Validate CLI real-runtime run path
-        run: |
-          set +e
-          start_time="$(date +%s)"
-          pnpm --filter @texra-ai/cli validate:run
-          status="$?"
-          end_time="$(date +%s)"
-          duration="$((end_time - start_time))"
-          {
-            echo '### CLI real-runtime validation'
-            echo
-            echo "- Command: \`pnpm --filter @texra-ai/cli validate:run\`"
-            echo "- Duration: ${duration}s"
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit "$status"
-
-  # PR CI runs only the scenarios tagged `smoke` (the `build` job); every
-  # scenario runs here, nightly and on manual dispatch.
-  tui-validation:
-    name: TUI frames (linux)
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup-workspace
-
-      - name: Validate every CLI TUI frame scenario
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/artifacts"
-          pnpm --filter @texra-ai/cli validate:tui -- \
-            --snapshot-dir "$GITHUB_WORKSPACE/artifacts/tui-frames"
-
-      - name: Upload CLI TUI frames
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: texra-cli-tui-frames
-          path: artifacts/tui-frames
-          if-no-files-found: warn
-          retention-days: 14
 
   docs-check:
     name: docs build
     needs: changes
-    # Runs only for docs-only PRs (where the heavy validation jobs are
-    # skipped). Formatting still uses the root workspace's pinned oxfmt;
+    # Runs only for docs-only PRs (where the static jobs and the
+    # compile are skipped). Formatting still uses the root workspace's pinned oxfmt;
     # VitePress then builds from its self-contained npm sub-project.
     if: needs.changes.result == 'success' && needs.changes.outputs.code != 'true'
     runs-on: ubuntu-latest
@@ -571,21 +266,12 @@ jobs:
       - typecheck
       - effect-diagnostics
       - guidance-refs
-      - test
-      - build
-      - desktop-e2e
-      - vscode-host-e2e
-      - runtime-validation
-      - tui-validation
-      - packed-example
+      - compile
       - docs-check
     if: always()
-    outputs:
-      problems: ${{ steps.require.outputs.problems }}
 
     steps:
       - name: Require validation jobs success
-        id: require
         env:
           NEEDS: ${{ toJSON(needs) }}
           CODE: ${{ needs.changes.outputs.code }}
@@ -594,89 +280,16 @@ jobs:
         # succeeded; a skip passes unless the event requires the job:
         # - always: change detection (if it fails, everything skips) and the
         #   ungated docs checks;
-        # - a code change: the Linux jobs, of which the nightly schedule runs
-        #   only the kernel shards (with runtime validation, the full TUI
-        #   frames and Windows);
+        # - a code change: the static jobs and the compile;
         # - a docs-only PR: the docs build, which gates in their place.
-        #
-        # What fails this step is also the job's `problems` output, which the
-        # nightly issue quotes.
         run: |
-          report() {
-            echo "$1"
-            { echo 'problems<<END_OF_PROBLEMS'; echo "$1"; echo 'END_OF_PROBLEMS'; } >> "$GITHUB_OUTPUT"
-            exit 1
-          }
           failed="$(jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key) result: \(.value.result)"' <<<"$NEEDS")"
-          if [ -n "$failed" ]; then report "$failed"; fi
+          if [ -n "$failed" ]; then echo "$failed"; exit 1; fi
           required='changes guidance-refs'
           if [ "$CODE" = true ]; then
-            if [ "$EVENT" = schedule ]; then required="$required test"
-            else required="$required test invariants typecheck effect-diagnostics build"; fi
+            required="$required invariants typecheck effect-diagnostics compile"
           elif [ "$EVENT" = pull_request ]; then
             required="$required docs-check"
           fi
           missing="$(jq -r --arg required "$required" '. as $needs | $required | split(" ")[] | select($needs[.].result != "success") | "\(.) did not run: \($needs[.].result)"' <<<"$NEEDS")"
-          if [ -n "$missing" ]; then report "$missing"; fi
-
-  # Nobody watches a schedule, and the nightly run carries jobs no pull request
-  # runs (the Windows kernel shards, runtime validation, the full TUI frames): it failed three
-  # nights running before anyone looked. So a failing night opens one issue,
-  # each further failing night comments on it, and the first passing night
-  # closes it. The issue is found by its label, which nothing else uses.
-  #
-  # Only the scheduled run on `main` reports: a pull request or a dispatch
-  # shows its own result to whoever started it.
-  nightly-issue:
-    name: nightly issue
-    needs: validate-status
-    # A cancelled run says nothing about the tree, so it neither opens nor
-    # closes the issue. `!cancelled()` is what says so: `validate-status`
-    # still runs in a cancelled run and fails on the cancelled jobs.
-    if: >-
-      !cancelled() && github.event_name == 'schedule' && github.ref == 'refs/heads/main' &&
-      (needs.validate-status.result == 'success' || needs.validate-status.result == 'failure')
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # Declaring permissions on a job drops every one not listed, so this job's
-    # token can read, open, comment on, label and close issues and do nothing
-    # else: no repository contents (it checks nothing out), no pull requests,
-    # no Actions API. The failed jobs come from `validate-status`, not from
-    # the API, for that reason.
-    permissions:
-      issues: write
-
-    steps:
-      - name: Open, update or close the nightly issue
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RESULT: ${{ needs.validate-status.result }}
-          PROBLEMS: ${{ needs.validate-status.outputs.problems }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          COMMIT: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          label='nightly-ci'
-          issue="$(gh issue list --state open --label "$label" --limit 1 --json number --jq '.[0].number // empty')"
-
-          if [ "$RESULT" = success ]; then
-            if [ -n "$issue" ]; then
-              gh issue close "$issue" --reason completed \
-                --comment "The nightly \`CI\` run passed at \`${COMMIT:0:7}\`: $RUN_URL"
-            fi
-            exit 0
-          fi
-
-          # Job ids as `.github/workflows/ci.yml` names them; the run page
-          # has each matrix shard.
-          night="$(printf 'The nightly `CI` run on `main` failed at `%s`: %s\n\n```\n%s\n```' \
-            "${COMMIT:0:7}" "$RUN_URL" "${PROBLEMS:-validate failed without naming a job; see the run}")"
-          if [ -n "$issue" ]; then
-            gh issue comment "$issue" --body "$night"
-          else
-            gh label create "$label" --force --color B60205 \
-              --description 'The scheduled CI run on main is failing'
-            gh issue create --label "$label" --title 'Nightly CI is failing on main' \
-              --body "$(printf '%s\n\nThis issue is kept by the `nightly issue` job of `.github/workflows/ci.yml`: each further failing night adds a comment, and the first passing night closes it.' "$night")"
-          fi
+          if [ -n "$missing" ]; then echo "$missing"; exit 1; fi

@@ -79,7 +79,7 @@ relative paths, reach the kernel's host (`support/fakeHost.ts`), and
 every other suite is `kernel`. There is no list of exempt suites or
 modules. A shared worker runs file after file, so process-wide state a
 source scan cannot see (the environment chalk takes its color level from, a
-stubbed global) is found by the file-order shuffle CI runs `pure` and
+stubbed global) is found by the file-order shuffle the `Nightly` workflow runs `pure` and
 `kernel` under (`--sequence.shuffle.files`; the log prints its seed and
 `--sequence.seed=<n>` replays it) and fixed in the suite: set the state on the instance
 it lives on and restore it after. A module under test that reaches for an

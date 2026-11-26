@@ -1,0 +1,355 @@
+name: Nightly
+
+# Every suite the repository has, once a night on `main`. `ci.yml` runs only
+# the static checks and a compile on a pull request or a push, so this run is
+# where a behavior regression, a platform assumption or a broken package is
+# found: within a day, on the whole tree, with nothing skipped by a path
+# filter.
+#
+# A failing night opens or updates the `nightly-ci` issue (the `nightly issue`
+# job below) and `nightly-fix.yml` starts the agent that repairs it. That
+# agent dispatches this workflow on its fix branch to prove the fix, which is
+# also how a person checks a risky branch before merging:
+#
+#   gh workflow run Nightly --ref <branch>
+#
+# A release requires a green run of this workflow on the released commit
+# (`.github/actions/require-green-ci`).
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  # The scheduled run and a dispatch on `main` share a ref; the event name
+  # keeps one from cancelling the other. A second dispatch on a branch
+  # replaces the first.
+  group: nightly-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: kernel tests (${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}, shard ${{ matrix.shard }}/2)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      # Run every shard on every OS to completion so a red run reports every
+      # failure at once instead of hiding the other shard's results.
+      fail-fast: false
+      matrix:
+        # Windows re-runs what Linux covers at ~16 min per shard against ~10,
+        # and finds what nothing else does: a suite that hard-codes a `/` in
+        # a native absolute path, or mocks POSIX-only filesystem behaviour
+        # (#12939 repaired five such suites that had been red for a week).
+        os: [ubuntu-latest, windows-latest]
+        shard: [1, 2]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      # Vitest starts the files that took longest last run first; without
+      # its results it falls back to the largest files, and the crash-point
+      # suites (a few lines each, the slowest by far) would start last and
+      # set the shard's wall-clock. Each run saves its own results; a run
+      # restores the newest a shard saved, a PR's from its base branch.
+      - name: Restore test durations
+        uses: actions/cache@v6
+        with:
+          path: node_modules/.vite/vitest
+          key: vitest-results-${{ runner.os }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          restore-keys: vitest-results-${{ runner.os }}-shard${{ matrix.shard }}-
+
+      # --maxWorkers=2 saturates the 2-vCPU hosted runner (see #8039); the
+      # shards exist because a single runner can't go wider than that.
+      # The projects that share a module registry run in a new file order
+      # each time, so a suite that leaks process-wide state into the next
+      # fails here; the log's "Running tests with seed" line replays the
+      # order with --sequence.seed. Vitest picks one order for a whole run,
+      # so the other two projects keep the duration order in their own step.
+      - name: Kernel tests, shuffled
+        run: pnpm run test --project pure --project kernel --sequence.shuffle.files --maxWorkers=2 --shard=${{ matrix.shard }}/2
+
+      - name: Isolated and crash tests
+        if: ${{ !cancelled() }}
+        run: pnpm run test --project isolated --project crash --maxWorkers=2 --shard=${{ matrix.shard }}/2
+
+  package:
+    name: extension package (linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      # No separate dev-mode `pnpm run compile` step: build:fast starts with
+      # clean:dist and rebuilds esbuild + Vite output in production mode, so a
+      # preceding dev compile is discarded work.
+      # The desktop installers are built by `desktop-package.yml`, on request.
+      - name: Build extension VSIX package
+        run: pnpm --filter texra build:fast
+
+      - name: Check extension VSIX contents
+        run: node scripts/verify-vsix-contents.mjs
+
+      - name: Upload extension VSIX artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-extension-vsix
+          path: releases/*.vsix
+          if-no-files-found: error
+          retention-days: 14
+
+  vscode-host-e2e:
+    name: vscode host e2e (stable)
+    # It loads the built extension in the latest stable VS Code and checks
+    # activation, command registration, the webview panels and the window's
+    # service (scripts/vscode-host-e2e-suite.cjs). The engines.vscode minimum
+    # is a by-hand check before a release (`--vscode minimum`): in CI it only
+    # ever failed alongside stable.
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      - name: Build extension
+        run: pnpm run compile:fast
+
+      - name: Run VS Code host e2e
+        run: pnpm run test:vscode -- --vscode stable
+
+      - name: Upload VS Code host e2e screenshot
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vscode-host-e2e-stable
+          path: artifacts/vscode-e2e/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  desktop-e2e:
+    name: desktop e2e (macOS)
+    # The Playwright suite that launches the built Electron app: quit, the
+    # project seed, workbench tabs, Monaco, the pty. Nothing else exercises
+    # the app end to end. macOS because its window-lifecycle specs are macOS
+    # behaviour and the runner needs no virtual display.
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      # The build the installers ship; `ci.yml` type checks it.
+      - name: Build desktop app
+        run: pnpm run desktop:build
+
+      # `electron` is not in pnpm's allowBuilds, so install skips its
+      # postinstall and the binary downloads the first time a test resolves
+      # `require('electron')`, inside the first spec's 60 s budget. Download
+      # it here, in its own timed step, so no test pays for it.
+      - name: Download the Electron binary
+        run: pnpm --filter @texra/desktop exec node -e "require('electron')"
+
+      - name: Run desktop e2e suite
+        run: pnpm --filter @texra/desktop test:e2e
+
+      - name: Upload desktop e2e results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-desktop-e2e-results
+          path: packages/desktop/tests/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Packs @texra-ai/llm and @texra-ai/worldline, installs both tarballs into
+  # a temporary directory outside the repository with plain npm (no workspace
+  # links, no lockfile), type-checks packages/harness/example against them,
+  # and runs it. The workspace's lockfile cannot see what a consumer's fresh
+  # install resolves, so this is the check that a broken tarball, an
+  # undeclared dependency, or an incoherent Effect set fails before npm does.
+  # A new upstream patch changes a consumer's install with no commit here,
+  # which is why an unchanged tree is still worth a night.
+  packed-example:
+    name: packed example (linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      - name: Install the packed tarballs and run the example
+        run: pnpm --filter @texra-ai/worldline run example:packed
+
+  runtime-validation:
+    name: runtime validation (linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          node-version: '22.22.2'
+
+      - name: Validate CLI real-runtime run path
+        run: |
+          set +e
+          start_time="$(date +%s)"
+          pnpm --filter @texra-ai/cli validate:run
+          status="$?"
+          end_time="$(date +%s)"
+          duration="$((end_time - start_time))"
+          {
+            echo '### CLI real-runtime validation'
+            echo
+            echo "- Command: \`pnpm --filter @texra-ai/cli validate:run\`"
+            echo "- Duration: ${duration}s"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+  tui-validation:
+    name: TUI frames (linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      - name: Validate every CLI TUI frame scenario
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          pnpm --filter @texra-ai/cli validate:tui -- \
+            --snapshot-dir "$GITHUB_WORKSPACE/artifacts/tui-frames"
+
+      - name: Upload CLI TUI frames
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-cli-tui-frames
+          path: artifacts/tui-frames
+          if-no-files-found: warn
+          retention-days: 14
+
+  result:
+    name: nightly
+    runs-on: ubuntu-latest
+    needs:
+      - test
+      - package
+      - vscode-host-e2e
+      - desktop-e2e
+      - packed-example
+      - runtime-validation
+      - tui-validation
+    if: always()
+    outputs:
+      problems: ${{ steps.require.outputs.problems }}
+
+    steps:
+      # `needs` above is the one list of jobs, and every one of them must
+      # have succeeded: nothing here is conditional. What fails this step is
+      # also the job's `problems` output, which the nightly issue quotes.
+      - name: Require every job's success
+        id: require
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          failed="$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key) result: \(.value.result)"' <<<"$NEEDS")"
+          if [ -n "$failed" ]; then
+            echo "$failed"
+            { echo 'problems<<END_OF_PROBLEMS'; echo "$failed"; echo 'END_OF_PROBLEMS'; } >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+  # Nobody watches a schedule: this run failed three nights running before
+  # anyone looked. So a failing night opens one issue, each further failing
+  # night comments on it, and the first passing night closes it. The issue is
+  # found by its label, which nothing else uses, and `nightly-fix.yml` reads
+  # the same label to find what its agent is repairing.
+  #
+  # Only the scheduled run on `main` reports: a dispatch shows its own result
+  # to whoever started it.
+  nightly-issue:
+    name: nightly issue
+    needs: result
+    # A cancelled run says nothing about the tree, so it neither opens nor
+    # closes the issue. `!cancelled()` is what says so: `result` still runs
+    # in a cancelled run and fails on the cancelled jobs.
+    if: >-
+      !cancelled() && github.event_name == 'schedule' && github.ref == 'refs/heads/main' &&
+      (needs.result.result == 'success' || needs.result.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Declaring permissions on a job drops every one not listed, so this job's
+    # token can read, open, comment on, label and close issues and do nothing
+    # else: no repository contents (it checks nothing out), no pull requests,
+    # no Actions API. The failed jobs come from `result`, not from
+    # the API, for that reason.
+    permissions:
+      issues: write
+
+    steps:
+      - name: Open, update or close the nightly issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULT: ${{ needs.result.result }}
+          PROBLEMS: ${{ needs.result.outputs.problems }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          label='nightly-ci'
+          issue="$(gh issue list --state open --label "$label" --limit 1 --json number --jq '.[0].number // empty')"
+
+          if [ "$RESULT" = success ]; then
+            if [ -n "$issue" ]; then
+              gh issue close "$issue" --reason completed \
+                --comment "The \`Nightly\` run passed at \`${COMMIT:0:7}\`: $RUN_URL"
+            fi
+            exit 0
+          fi
+
+          # Job ids as `.github/workflows/nightly.yml` names them; the run page
+          # has each matrix shard.
+          night="$(printf 'The `Nightly` run on `main` failed at `%s`: %s\n\n```\n%s\n```' \
+            "${COMMIT:0:7}" "$RUN_URL" "${PROBLEMS:-the run failed without naming a job; see the run}")"
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$night"
+          else
+            gh label create "$label" --force --color B60205 \
+              --description 'The Nightly run on main is failing'
+            gh issue create --label "$label" --title 'Nightly is failing on main' \
+              --body "$(printf '%s\n\nThis issue is kept by the `nightly issue` job of `.github/workflows/nightly.yml`: each further failing night adds a comment, and the first passing night closes it.' "$night")"
+          fi
