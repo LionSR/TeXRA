@@ -57,7 +57,11 @@ import {
   desktopCommandPaletteShortcut,
 } from './desktopShortcutRegistry';
 import './desktopShell.css';
-import { shellSidebarTemplate, type RailProject } from './desktopShell';
+import {
+  shellSidebarTemplate,
+  shellStatusBarTemplate,
+  type RailProject,
+} from './desktopShell';
 import {
   initialDesktopShellState,
   openWorkbenchTab,
@@ -577,6 +581,16 @@ function shellTemplate(): TemplateResult {
           <div class="shell-workspace-layout">${main}</div>
         </div>
       </wa-split-panel>
+      ${
+        hasWorkspace()
+          ? shellStatusBarTemplate({
+              projects: railProjects(),
+              active: shell.active,
+              planUsage:
+                projectSessions.get(shell.active)?.host$.get()?.planUsage ?? [],
+            })
+          : nothing
+      }
     </div>
   `;
 }

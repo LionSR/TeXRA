@@ -15,6 +15,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import type { SessionView } from '@texra-ai/worldline/schemas';
 import {
   projectName,
+  type PlanUsage,
   type ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
@@ -34,6 +35,7 @@ import { actionMenu } from '@ui/wa/actionMenu';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { inlineRenameField } from '@ui/wa/inlineRename';
 import { waSpinner } from '@ui/wa/spinner';
+import '@ui/progress/components/PlanUsageMeters';
 import type { Shell } from './shell';
 
 /** One open project as the rail lists it: how its host names it, its session,
@@ -309,5 +311,45 @@ export function shellSidebarTemplate(
         ${sidebarAction({ icon: 'gear', label: 'Settings', onClick: callbacks.onOpenSettings })}
       </footer>
     </aside>
+  `;
+}
+
+/**
+ * The window's status bar: the shown project's folder, what is in progress
+ * or waiting across every open project, and the subscription meters of the
+ * shown project. `data-session` names that project, so a request the meters
+ * send (a refresh, the settings page) goes to its session.
+ */
+export function shellStatusBarTemplate(model: {
+  readonly projects: readonly RailProject[];
+  readonly active: string;
+  readonly planUsage: readonly PlanUsage[];
+}): TemplateResult {
+  const counts = RAIL_SECTIONS.flatMap((section) => {
+    const count = model.projects.reduce(
+      (sum, project) => sum + project.view.rollup[section],
+      0,
+    );
+    return count === 0 ? [] : [{ section, count }];
+  });
+  return html`
+    <footer
+      class="shell-statusbar"
+      aria-label="Status"
+      data-session=${model.active}
+    >
+      <span class="shell-statusbar-path truncate" title=${model.active}
+        >${model.active}</span
+      >
+      ${counts.map(
+        ({ section, count }) =>
+          html`<span
+            class="shell-statusbar-count tone-${runSectionTone(section)}"
+            >${sectionCountLabel(section, String(count))}</span
+          >`,
+      )}
+      <span class="shell-statusbar-spacer"></span>
+      <plan-usage-meters .usage=${model.planUsage}></plan-usage-meters>
+    </footer>
   `;
 }

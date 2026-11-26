@@ -80,6 +80,12 @@ export const HostCommandSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('popOut') }),
   Schema.Struct({ kind: Schema.Literal('popBack') }),
   Schema.Struct({ kind: Schema.Literal('refreshFiles') }),
+  /** Read the plans' quotas again; `force` asks each plan's endpoint
+   *  instead of taking an answer still fresh. */
+  Schema.Struct({
+    kind: Schema.Literal('refreshUsage'),
+    force: Schema.optional(Schema.Boolean),
+  }),
   /** Save a model's reasoning level, or clear it with a null `level`: the
    *  per-model setting the Models page writes, which every later run on the
    *  model reads. */

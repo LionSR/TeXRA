@@ -5,7 +5,7 @@
 }
 .desktop-app {
   display: grid;
-  grid-template-rows: var(--height-header) minmax(0, 1fr);
+  grid-template-rows: var(--height-header) minmax(0, 1fr) auto;
   height: 100vh;
   overflow: hidden;
 }
@@ -277,4 +277,32 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   .shell-workspace-toolbar {
     gap: var(--wa-space-xs);
   }
+}
+
+/* The window's status line: quiet text on the rail's surface. */
+.shell-statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--wa-space-s);
+  min-width: 0;
+  height: var(--height-control-compact);
+  padding: 0 var(--wa-space-s);
+  border-top: var(--border-thin) solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-lowered);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+.shell-statusbar-path {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.shell-statusbar-count {
+  flex: none;
+  color: var(--tone-color);
+}
+.shell-statusbar-spacer {
+  flex: 1 1 auto;
+}
+.shell-statusbar plan-usage-meters {
+  height: 100%;
 }

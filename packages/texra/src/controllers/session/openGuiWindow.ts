@@ -24,6 +24,7 @@ import type {
   RuntimePresentationEventPayloads,
 } from '@texra-ai/worldline';
 import {
+  PlanQuotas,
   presenterOn,
   sessionFsLayer,
   workspaceEnvironmentLayer,
@@ -636,6 +637,11 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return yield* draftRequests.handle(request, port);
         case 'refreshFiles':
           yield* snapshot.refreshFiles;
+          return done;
+        case 'refreshUsage':
+          if (request.force === true)
+            yield* PlanQuotas.use((quotas) => quotas.invalidate());
+          yield* snapshot.refreshUsage;
           return done;
         case 'dismissBanner':
           yield* snapshot.dismissBanner(request.banner);
