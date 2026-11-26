@@ -50,7 +50,9 @@ two halves:
    inset so margins do not stack across shadow roots.
    `styles/messageHeaderStyles.ts` groups the author and short timestamp,
    with Copy and collapse controls at the trailing edge. User, assistant and
-   error messages share this geometry; the full date remains in the time tooltip.
+   error messages share this geometry and one template, `buildMessageHeader`
+   (`progress/formatters/htmlBuilders.ts`); the full date is the time's hover
+   hint, and Copy is the `<copy-button>` element.
 6. **Canvas widgets:** xterm.js and Monaco draw on a canvas and cannot read a
    CSS token. `wa/cssTokenColor.ts` is the one reading of a token as the color
    the host paints; `wa/xtermTheme.ts` and the desktop's
@@ -78,6 +80,14 @@ two halves:
   `triangle-exclamation` (`TONE_GLYPH`, `copy/runStatus.ts`). A log level's icon
   and word come from `copy/logLevels.ts`, a run status's from
   `copy/runStatus.ts`.
+- **Status badges.** A badge or tag that shows a status takes its variant
+  from the status's tone (`toneVariant`, `wa/waVariant.ts`) and its glyph
+  from `statusGlyph`; it names neither directly.
+- **File links.** A file path that opens its file is `buildFileLinkSpan`,
+  and the view's delegated click reads it with `fileLinkTarget`
+  (`progress/formatters/htmlBuilders.ts`).
+- **Fact separators.** Facts on one line are joined by `joinFacts` when they
+  are strings and by `factDot()` (`wa/factDot.ts`) when they are elements.
 - **Disclosure toggles.** A button that opens a section passes `expanded`
   and names no icon: the helper draws the chevron, which turns while open.
 - **Icons and menus.** `waIcon()` uses a square canvas. Dropdown items reserve

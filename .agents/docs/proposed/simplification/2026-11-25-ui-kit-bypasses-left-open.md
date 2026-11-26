@@ -19,34 +19,24 @@ lands.
 
 ## Web views
 
-1. **A hover hint has two forms for one kind of thing.** A message
-   timestamp is a `<wa-tooltip>` in `UserMessage.ts` and a native `title`
-   in `bannerFormatters.ts` and `messageFormatters.ts`; a file path is a
-   `<wa-tooltip>` in `FileList.ts` and `ProposalRequestPanel.ts` and a
-   `title` in `FileSelectGroup.ts`, `LaunchAttachments.ts` and
-   `htmlBuilders.ts`. A `<wa-tooltip>` anchors by `id`, and the formatter
-   rows render many to a shadow root, so the choice is between a native
-   `title` everywhere and an id per row. The same three files write the
-   message header (icon, author, time, Copy) out in full; one
-   `buildMessageHeader` beside `messageHeaderStyles` would hold it.
-2. **A clickable file path has three markups and three click handlers.**
-   `buildFileLinkSpan` (`htmlBuilders.ts`) is the owner; `FileList.ts` and
-   `ProposalRequestPanel.ts` write their own span without its accessible
-   name, each with its own click and keydown handler.
+1. **A file path's hover hint has two forms.** It is a `<wa-tooltip>` in
+   `FileList.ts` and `ProposalRequestPanel.ts` and a native `title` in
+   `FileSelectGroup.ts`, `LaunchAttachments.ts` and `htmlBuilders.ts`. A
+   `<wa-tooltip>` anchors by `id`, and the formatter rows render many to a
+   shadow root, so the choice is between a native `title` everywhere and an
+   id per row. (Closed for a message's time: `buildMessageHeader` writes the
+   user, assistant and error headers, with the full moment as a `title`.)
+2. **Closed.** `buildFileLinkSpan` draws every clickable file path and
+   `fileLinkTarget` reads the click.
 3. **`PluginsTab.renderSelectRow` restates `renderStateSettingSelectRow`**
    (`settings/components/shared/stateSettingRows.ts`): the same catalog
    lookup, row markup and write. The plugin card passes its own label and
-   a narrower select, so the helper needs a `label` first.
-4. **`UserMessage.ts` builds its own Copy button** with its own controller
-   and Copied state, where the assistant and error headers use
-   `<copy-button>` through `buildCopyButton`. Its hint is a `<wa-tooltip>`
-   and the shared button's a `title` (entry 1 decides which).
-5. **Dot separators in templates.** `UsagePanel.ts`, `SessionComposer.ts`
-   and `ModelSelectionList.ts` write `<span aria-hidden="true">·</span>`
-   between elements. `joinFacts` joins strings only; a template join that
-   hides the dot from a screen reader would be the owner. (`wa/metaStrip.ts`
-   was that helper without the `aria-hidden` and without a caller; it is
-   deleted.)
+   a narrower select, so the helper needs a `label` first. The only rows
+   that use it are the Codex and Claude Code plugins' inline settings, which
+   #15230 deletes; if that lands, the method goes with them.
+4. **Closed.** The user message's Copy is the shared `<copy-button>`.
+5. **Closed.** `factDot` (`wa/factDot.ts`) is the dot between two
+   elements, hidden from a screen reader.
 6. **A status glyph and its colour disagree in two places.** `LaTeXTab.ts`
    shows a missing dependency as `triangle-exclamation` in the error colour,
    and the "Failed to render" entry (`progress/formatters/index.ts`,
@@ -54,10 +44,9 @@ lands.
    The success mark is `check` in three places and `circle-check`
    (`TONE_GLYPH.success`) in one, in three greens. `statusGlyph({ tone })`
    with a `tone-*` class is the owner; which green stays is a design call.
-7. **`BackgroundTasksPanel.ts`'s count badges** name `variant="success"`,
-   `variant="warning"` and `triangle-exclamation` directly; the row under
-   them reads `runStatus`. There is no map from a `RunTone` to a `wa-badge`
-   variant yet, and the approval badge has no accessible name.
+7. **Closed.** `toneVariant` (`wa/waVariant.ts`) maps a `RunTone` to a
+   badge or tag variant; the approval badge reads the waiting status's
+   glyph and name.
 8. **`RetryRequestPanel.styles.ts` re-skins `.collapsible-quiet`** (header
    height, padding, hover colour) and restates the error-details `pre` of
    `toolUseStyles.ts`.
@@ -71,35 +60,33 @@ lands.
 10. **Two status dots.** `.status-dot` (`styles.css`, 6px, `--dot-color`)
     sits beside the kit's `.status-indicator`
     (`styles/statusIndicatorStyles.ts`, 7px, `--tone-color`); the left rail
-    shows both sizes, a project's unseen dot above a run's. The "unsaved"
-    dot is written twice, with an accessible name in `dockControls.ts` and
-    without one in `editorPane.ts`.
+    shows both sizes, a project's unseen dot above a run's. (The "unsaved"
+    dot is one template now, `unsavedDot` in `paneChrome.ts`; a tab's is
+    the text colour and a tree row's the accent, which is a design call.)
 11. **Sidebar group labels** (`.shell-sidebar-section-label` and the Files
     header in `desktopShell.css`) are small grey labels beside the kit's
     `.overline`, which `RunTabs.ts` uses for its headings in the same
     sidebar. Moving them makes the labels uppercase.
-12. **The path footer** (`footer.shell-editor-toolbar` with a path and one
-    compact button) is built in `pdfPane.ts` and in `projectWorkbench.ts`.
+12. **Closed.** `pathFooter` (`paneChrome.ts`) builds it for both panes.
 
 ## Terminal
 
 13. **`detailRows` is still counted by the caller.** `ListForm` now measures
     its description; `AccountAccessForm.tsx`, `GitHubTokenForm.tsx` and the
     skills forms still pass a row count for a `detail` they render, at one
-    row a line.
-14. **`TasksForm.tsx` drops older transcript rows without a marker**
-    (`lines.slice(-budget)`), where every other bounded body shows
-    `previousRowsText` (`tui/overflowText.ts`).
+    row a line. Ink's `useBoxMetrics` measures the rendered block, which
+    would delete `detailRows`, `detailRowsFor` and the description's own
+    count; it reports zero until the first layout, so the first frame needs
+    a list budget that cannot overflow the terminal, and an Ink render check.
+14. **Closed.** The attached task's transcript is bounded by
+    `boundedScrollableLines`, under a `… N previous rows` marker.
 15. **Clipping text to fit beside a fixed suffix** is written in
     `render/scrollBounds.ts` and twice in `modals/UserQuestion.tsx`, and
     `UserQuestion.tsx` bounds its prompt lines with its own version of
     `boundedScrollableLines`. Its version keeps the question and drops the
     oldest context, which the shared one does not.
-16. **A group heading inside a `Select`** is `<Text bold dimColor>` in
-    `SubagentList.tsx` and a one-row truncating box in
-    `ScriptStagePopup.tsx`.
-17. **`App.tsx` tests Ctrl-C and Ctrl-Z itself** where 22 sites use
-    `isCtrlInput` (`tui/inputKeys.ts`), which also rejects Meta.
+16. **Closed.** `SelectGroupHeading` (`tui/ui/Select.tsx`).
+17. **Closed.** `App.tsx` reads Ctrl-C and Ctrl-Z through `isCtrlInput`.
 
 ## Every host
 
@@ -109,6 +96,10 @@ lands.
     `packages/texra/src/ui/copy/delegationApproval.ts` (the child agent
     heading) were left as they are because other open PRs rewrite the same
     lines; they take `joinFacts` once those land.
+
+The 2026-11-26 run closed entries 2, 4, 5, 7, 12, 14, 16 and 17 and half of
+1 and 10, and rewrote 3 and 13 to what it found. Its scan of the three hosts
+found no new custom icon, colour literal or inline style.
 
 ## Checked and declined
 
