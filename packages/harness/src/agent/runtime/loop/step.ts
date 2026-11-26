@@ -37,6 +37,7 @@ import {
   Effect,
   Equivalence,
   type FileSystem,
+  Order,
   Record,
   Schema,
   ScopedRef,
@@ -463,7 +464,7 @@ const openStep = Effect.fn('Step.open')(function* (
       notOffered: [...notOffered],
       holding,
       contributing: contributing.toSorted(
-        (a, b) => Number(a.id > b.id) - Number(a.id < b.id),
+        Order.mapInput(Order.String, ({ id }) => id),
       ),
     } satisfies OpenStep;
   });
