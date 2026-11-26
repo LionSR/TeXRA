@@ -104,12 +104,10 @@ lands.
 
 ## Every host
 
-18. **Two files still type the fact separator.**
-    `packages/cli/src/runtime/models/modelAccessRoute.ts` (the `On · …` and
-    `Off · …` preference labels) and
-    `packages/texra/src/ui/copy/delegationApproval.ts` (the child agent
-    heading) were left as they are because other open PRs rewrite the same
-    lines; they take `joinFacts` once those land.
+18. **Closed.** The CLI's preference labels
+    (`packages/cli/src/runtime/models/modelAccessRoute.ts`) and the child
+    agent heading (`packages/texra/src/ui/copy/delegationApproval.ts`) join
+    their facts with `joinFacts`.
 
 ## The kit itself
 
