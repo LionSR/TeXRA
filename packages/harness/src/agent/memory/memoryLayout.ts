@@ -24,7 +24,7 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 
 /** The file of a memory folder a step shows its model. */
-export const MEMORY_INDEX = 'MEMORY.md';
+const MEMORY_INDEX = 'MEMORY.md';
 
 /**
  * How much of one index a step shows. The text is sent with every request,

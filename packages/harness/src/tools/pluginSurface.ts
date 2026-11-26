@@ -54,11 +54,7 @@ export {
 export { errorResult, executed } from '@tools/core/result';
 // A listing's output text: its header over its lines, or a note for none.
 export { formatToolOutput } from '@tools/formatting';
-// A workspace file as a call's attachment, and the workspace's ignore policy.
-export {
-  buildFileAttachment,
-  type BuildFileAttachmentOptions,
-} from '@tools/attachments';
+// The workspace's ignore policy.
 export { getGitignoreMatcher, type GitignoreMatcher } from '@tools/gitignore';
 // Asking the person for an edit, the result a refusal returns, and the
 // write of the approved content (a conflict is the value, not a failure).
@@ -86,7 +82,6 @@ export {
 // JSON-RPC 2.0 over a child process's stdio, in a language server's framing.
 export {
   connectJsonRpcProcess,
-  makeJsonRpcConnection,
   type JsonRpcConnection,
   type JsonRpcConnectionDisposed,
   type JsonRpcConnectionOptions,
@@ -96,11 +91,7 @@ export {
 // What a request of each kind is answered with, and the three ways any
 // request is declined.
 export type { DecisionOf, RefusalDecision } from '@shared/schemas';
-export {
-  ToolError,
-  type EditRecord,
-  type ToolFileAttachment,
-} from '@shared/schemas';
+export { ToolError, type EditRecord } from '@shared/schemas';
 export { nullishWithDefault, optionalInput } from '@tools/core/inputSchema';
 export {
   assertNoParentTraversal,
@@ -111,11 +102,7 @@ export {
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
 // An agent's memory folders, for a host that opens them outside a run.
-export {
-  MEMORY_INDEX,
-  memoryFolders,
-  type MemoryFolder,
-} from '@agent/memory/memoryLayout';
+export { memoryFolders, type MemoryFolder } from '@agent/memory/memoryLayout';
 export { noLaterTurn } from '@agent/runtime/RunCall';
 export {
   ChildRuns,
