@@ -92,7 +92,6 @@ export {
   resolveToolPath,
   type ToolPathCall,
   type ToolPathResolution,
-  type WorkspacePathResolution,
 } from '@tools/pathResolution';
 // An agent's memory folders, for a host that opens them outside a run.
 export { memoryFolders, type MemoryFolder } from '@agent/memory/memoryLayout';
@@ -173,7 +172,6 @@ export type { InboxItem } from '@agent/followUp/Inbox';
 export type { DraftBlob } from '@shared/session/historyTurns';
 export type { CellError, RunHistoryRefused } from '@shared/session/runHistory';
 export type { RunHistoryInconsistent } from '@shared/session/runState';
-export type { StepRoot } from '@utils/files/externalRoots';
 // The run a plugin's tool reads (`ToolRun`) and the pieces it names: its
 // policy, trace and stages, model binding and run files.
 export type { ToolRun } from '@tools/core/ToolTypes';

@@ -66,7 +66,7 @@ release closes every session it opened, then the process under them.
 
 - `{ system, tools?, label?, instruction, model }`: the run's
   own system text (before what the harness appends: the project's
-  `AGENTS.md`, attached memories, tool-use instructions, the plugins'
+  `AGENTS.md`, attached memories, the plugins'
   sections), the tool names it declares (`mcp__<server>__*` for every tool of
   a configured MCP server; none, and it answers in text only), the name its
   card and run directory show (default `agent`), the instruction, and the
@@ -179,9 +179,9 @@ An embedder decides them in one of three ways:
   decision })`. Whichever answer lands first is the decision.
 - **Do neither.** Then nobody can answer, and the session's approval
   policy decides every request as it opens. The default, `yolo`, allows
-  ordinary commands and edits without a handler. Under `ask` or
-  `never` it denies them, retries included, and no run is offered a tool
-  that requires approval.
+  ordinary commands and edits without a handler. Under `ask` it
+  denies them, retries included, and no run is offered a tool that requires
+  approval.
 
 The withholding is decided per step, not per start: each step applies the
 session's approval policy to whether the attached host can answer

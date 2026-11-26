@@ -228,7 +228,7 @@ corrupt stores (`*.corrupt-<ms>`) are removed only on explicit user deletion
   with `CWD`; never place end-user text inside `system` (`AGENTS.md`,
   `MEMORY.md`, paths, and git branch are never template-rendered).
 - **Approvals:** Default policy is `yolo`; narrow with
-  `approval: 'ask' | 'never'` or `Settings.set`. Under `ask`, attach
+  `approval: 'ask'` or `Settings.set`. Under `ask`, attach
   `session.attach({ approve })` (requests are durable rows; questions and
   post-retry prompts never auto-answer).
 - **Platform (`nodePlatform`):** Reads `<storageDir>/mcp.json` (stdio MCP

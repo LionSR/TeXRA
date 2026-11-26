@@ -56,11 +56,7 @@ interface ResolveWritableTargetOptions {
   allowMissing?: boolean;
 }
 
-/**
- * Resolve and load a workspace file for editing. Writability is
- * not asked here: the write tools declare their target as a loop-side guard,
- * so a read-only external root is already refused before this runs.
- */
+/** Resolve and load a file for editing. */
 export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
   function* (
     inputPath: string,
@@ -71,10 +67,6 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
     ToolContext | FileSystem.FileSystem
   > {
     const call = yield* ToolContext;
-    // The resolution answered for the call's own workspace, so its absolute
-    // form is the one the process filesystem reads — including a path under a
-    // registered external root, which the workspace facade reached the same
-    // way.
     const {
       fsPath: path,
       absolute: absolutePath,

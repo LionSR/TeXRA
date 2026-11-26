@@ -229,7 +229,6 @@ export {
   SAVE_MODEL_IO_SETTING,
   XAI_PREFER_SUBSCRIPTION_SETTING,
   settingsCatalog,
-  TOOL_PATH_PROTECTION_SETTING,
   WEBSOCKET_OPENAI_SETTING,
   type HarnessRowKey,
   type SettingChoiceCopy,

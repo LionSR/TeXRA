@@ -35,7 +35,6 @@ import {
   TestSession,
 } from '@test/support/testKernel';
 import { EditFileTool } from '@tools/EditTool';
-import { writeFileTool } from '@tools/WriteTool';
 
 // Local file imports
 import {
@@ -182,33 +181,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         assert.deepStrictEqual(
           writes.map((write) => write.content),
           ['\uFEFF\\section{New}\nbody\n'],
-        );
-      }),
-    );
-
-    it.effect('denies an edit under never, and tells the host', () =>
-      Effect.gen(function* () {
-        const {
-          approvalPolicy,
-          stubWorkspaceFile,
-          inRun,
-          writes,
-          openedEdits,
-        } = yield* setUp();
-        yield* approvalPolicy('never');
-
-        stubWorkspaceFile('denied.txt', { exists: false, content: '' });
-
-        const result = yield* inRun(
-          writeFileTool().call({ path: 'denied.txt', content: 'blocked' }),
-        );
-
-        assert.strictEqual(openedEdits().length, 0);
-        assert.strictEqual(writes.length, 0);
-        assert.strictEqual(result.status, 'error');
-        assert.strictEqual(
-          result.error,
-          'Tool edit denied: write_file for denied.txt.\n\nDenied by the approval policy.',
         );
       }),
     );

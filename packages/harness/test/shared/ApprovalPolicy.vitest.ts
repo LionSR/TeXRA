@@ -2,13 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { decideApproval } from '@shared/approvalPolicy';
 
-const POLICY_DENIED = 'Denied by the approval policy.';
 const UNPRESENTABLE =
   'Interactive approval requires a prompt; this run cannot present one.';
 
 describe('TeXRA approval policy', () => {
   it.each([
-    ['never', true, true, { action: 'deny', reason: POLICY_DENIED }],
     ['ask', false, false, { action: 'deny', reason: UNPRESENTABLE }],
     ['ask', true, false, 'allow'],
   ] as const)(

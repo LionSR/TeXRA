@@ -189,7 +189,7 @@ const JOURNEYS = {
     requires: 'lake',
     args: ['prove', '--input', 'Fixture.lean'],
     instruction: 'Prove both theorems.',
-    approval: 'never',
+    approval: 'ask',
     check(dir) {
       const proved = read(dir, 'Fixture.lean');
       for (const kept of [

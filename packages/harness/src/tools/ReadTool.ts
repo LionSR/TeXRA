@@ -96,10 +96,6 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
     return { ...result, reads };
   }
 
-  // The resolution already entered the call's workspace frame, so the
-  // absolute path it produced is what the process filesystem reads: a
-  // workspace file and one under a registered external root are the same
-  // read here, through the process `FileSystem`.
   const fs = yield* FileSystem.FileSystem;
 
   // EML files use complex MIME encoding (multipart, base64, quoted-printable).

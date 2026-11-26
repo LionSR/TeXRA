@@ -1,10 +1,10 @@
 import { runsScript, type AgentConfig } from '@shared/schemas';
 
 /**
- * The variables a run's system text (and the harness's own tool-use suffix)
- * may read, rendered once at launch. Nothing persists them: a run records
- * the text it rendered, and what follows the step (the tool-call mechanics,
- * the skills) is rendered per request (`stepInstructions`).
+ * The variables a run's system text may read, rendered once at launch.
+ * Nothing persists them: a run records the text it rendered, and what
+ * follows the step (the skills, the plugins' sections) is rendered per
+ * request (`stepInstructions`).
  */
 interface PromptVariables {
   /** Working directory the run's tools operate in. */

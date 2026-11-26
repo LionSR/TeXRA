@@ -1729,19 +1729,17 @@ const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApp
 ## resolveToolPath
 
 Resolve a tool path, relative or absolute, against the call's working
-directory when the run has one and its workspace folder otherwise.
-
-A path that escapes that root is accepted only inside a root the call's
-step accepts (`stepRoots`) or with path protection switched off; otherwise
-it fails with a `ToolError` the tool runner reports to the model. With no
-folder open and no working directory, only an absolute path can resolve.
+directory when the run has one and its workspace folder otherwise. A path
+outside that root resolves to itself: a call reaches any file the process
+can. With no folder open and no working directory, only an absolute path
+can resolve.
 
 `fsPath` is workspace-relative for a workspace path, so the confined
 `WorkspaceFs` view answers it, and absolute for a working-directory or
 outside path.
 
 ```ts
-const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, ToolError | StateReadFailed, never>
+const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, ToolError, never>
 ```
 
 ## retryTransientFetch
@@ -2127,20 +2125,6 @@ class StateWriteFailed extends Schema.TaggedError<StateWriteFailed>()(
 )
 ```
 
-## StepRoot
-
-A directory one step accepts for its own calls, canonical
-(`canonicalizePath`): a skill it lists or its user activated, read-only,
-or a memory folder, which its calls also write.
-
-```ts
-interface StepRoot {
-  readonly absolutePath: string;
-  readonly label: string;
-  readonly writable?: boolean;
-}
-```
-
 ## StorageFs
 
 The session's own storage root (under the process's storage directory).
@@ -2360,9 +2344,8 @@ interface ToolEditProposal {
 ## ToolEnv
 
 Where a call works: the session's roots (its workspace folder, the
-setting slots and its storage), the run's working directory, and the
-read-only roots the call's step accepts (the skills it lists or its user
-activated). A tool's paths resolve against it.
+setting slots and its storage) and the run's working directory. A tool's
+paths resolve against it.
 `workingDirectory` is already absolute or absent: the run decides it once
 where it is launched (`buildAgentLaunchContext`).
 
@@ -2370,7 +2353,6 @@ where it is launched (`buildAgentLaunchContext`).
 interface ToolEnv {
   readonly roots: WorkspaceRoots;
   readonly workingDirectory?: string;
-  readonly stepRoots?: readonly StepRoot[];
   /** The run the call works for. */
   readonly run: ToolRun;
 }
@@ -2394,20 +2376,13 @@ class ToolError extends Data.TaggedError('ToolError')<{
 ## ToolGuard
 
 The guard the run loop applies before a tool's body runs, declared on the
-tool instead of called inside it: the paths the call writes and the command
-it must get approved. The run loop is the one place either is checked,
-so no tool body re-checks its own roots or asks for the
+tool instead of called inside it: the command it must get approved. The
+run loop is the one place it is checked, so no tool body asks for the
 command's approval; a tool whose body asks its own question declares
 `requiresApproval: 'inBody'` (below).
 
 ```ts
 interface ToolGuard<T> {
-  /**
-   * The paths this call writes, read from its arguments. Each is resolved
-   * against the call's workspace and working directory — which refuses a path
-   * outside either — and refused when it lands in a read-only external root.
-   */
-  readonly writes?: (input: T) => readonly string[];
   /**
    * The command this call runs. Present: the loop puts it through the
    * session's command approval before the body runs.
@@ -2438,28 +2413,35 @@ interface ToolGuard<T> {
 
 ## ToolPathCall
 
-The call fields a tool path resolves against: the session's roots (its
-workspace folder and the setting slots containment policy is read from),
-the run's working directory, and the read-only roots the call's step
-accepts (the skills it lists or its user activated; none outside a run).
-A tool's `ToolContext.env` satisfies it structurally.
-`workingDirectory` is already absolute or absent: the run decides it once
-where it is launched (`buildAgentLaunchContext`).
+The call fields a tool path resolves against: the session's workspace
+folder and the run's working directory. A tool's `ToolContext.env`
+satisfies it structurally. `workingDirectory` is already absolute or
+absent: the run decides it once where it is launched
+(`buildAgentLaunchContext`).
 
 ```ts
 interface ToolPathCall {
-  readonly roots: { readonly workspace: string | undefined } & SettingsStores;
+  readonly roots: { readonly workspace: string | undefined };
   readonly workingDirectory?: string;
-  readonly stepRoots?: readonly StepRoot[];
 }
 ```
 
 ## ToolPathResolution
 
-A resolved tool path plus the POSIX form a tool shows for it.
+A tool path resolved against the call's root: its root-relative and
+absolute spellings, the path filesystem calls take, and the POSIX form
+a tool shows for it.
 
 ```ts
-interface ToolPathResolution extends WorkspacePathResolution {
+interface ToolPathResolution {
+  readonly relative: string;
+  readonly absolute: string;
+  /**
+   * The path to pass to filesystem operations.
+   * Absolute when operating outside the workspace (e.g. a worktree),
+   * workspace-relative otherwise.
+   */
+  readonly fsPath: string;
   readonly display: string;
 }
 ```
@@ -2691,33 +2673,4 @@ class WorkspaceFs extends Context.Service<
   WorkspaceFs,
   RootedFileSystem
 >()('@texra-ai/worldline/platform/WorkspaceFs')
-```
-
-## WorkspacePathResolution
-
-A tool path resolved against the call's roots: its root-relative and
-absolute spellings, the path filesystem calls take, and the external root
-it falls in, if any.
-
-```ts
-interface WorkspacePathResolution {
-  readonly relative: string;
-  readonly absolute: string;
-  /**
-   * The path to pass to filesystem operations.
-   * Absolute when operating outside the workspace (e.g. a worktree),
-   * workspace-relative otherwise.
-   */
-  readonly fsPath: string;
-  /**
-   * When the resolved path falls inside a step root, this
-   * describes that root (label, writable flag). Undefined for workspace paths
-   * and for any external path outside the allowlist.
-   */
-  readonly external?: {
-    readonly root: string;
-    readonly writable: boolean;
-    readonly label: string;
-  };
-}
 ```

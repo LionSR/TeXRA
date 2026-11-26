@@ -94,31 +94,26 @@ describe('executeCliConfig', { timeout: REAL_RUN_TIMEOUT }, () => {
       ),
       { buildPerTest: true },
     )((it) => {
-      it.effect.each([
-        { policy: 'never', overrides: {} },
-        { policy: 'ask', overrides: { approvalPolicy: 'ask' } },
-      ] as const)(
-        'offers a headless $policy run no approval-gated tool',
-        ({ overrides }) =>
-          Effect.gen(function* () {
-            // The run declares `bash`, which asks for approval.
-            const run = yield* runHeadless(
-              {
-                ...GOLDEN_AGENTS.golden_effect,
-                model: MODEL,
-                instruction: 'Go.',
-              },
-              yield* headless(overrides),
-            );
-            assert(run.ok, 'the run ended');
-            const handle = yield* sessionHandleOf(yield* TestSession);
-            const state = yield* Context.get(handle, RunHistory).load(
-              run.result.runId,
-            );
-            const offered = state?.offeredTools?.map((tool) => tool.name);
-            assert(offered !== undefined, 'the run was offered its tools');
-            expect(offered).not.toContain('bash');
-          }),
+      it.effect('offers a headless ask run no approval-gated tool', () =>
+        Effect.gen(function* () {
+          // The run declares `bash`, which asks for approval.
+          const run = yield* runHeadless(
+            {
+              ...GOLDEN_AGENTS.golden_effect,
+              model: MODEL,
+              instruction: 'Go.',
+            },
+            yield* headless({ approvalPolicy: 'ask' }),
+          );
+          assert(run.ok, 'the run ended');
+          const handle = yield* sessionHandleOf(yield* TestSession);
+          const state = yield* Context.get(handle, RunHistory).load(
+            run.result.runId,
+          );
+          const offered = state?.offeredTools?.map((tool) => tool.name);
+          assert(offered !== undefined, 'the run was offered its tools');
+          expect(offered).not.toContain('bash');
+        }),
       );
 
       it.effect(

@@ -10,7 +10,7 @@ is for the person: to follow what is happening and to step in, not to
 supervise each step. Every surface serves one of these:
 
 - **Trust the model.** Commands and edits run without asking by default
-  (the approval policy's Auto-approve); a person narrows it to Ask or Block.
+  (the approval policy's Auto-approve); a person narrows it to Ask.
   Add no control whose job is to tune or second-guess what the model decides
   for itself: which tool, which model for a sub-agent, how hard to think. A
   request for a person is the exception, and it is shown where the
@@ -21,9 +21,8 @@ supervise each step. Every surface serves one of these:
 - **Made for the person.** The rail, the statuses and the usage meters
   answer a person's questions: what is running, what needs me, what
   finished, what it costs. Autonomy has one vocabulary, the approval
-  policy's: Ask / Block / Auto-approve. The composer's Approval chip follows
-  the policy by default, or auto-approves this task alone, which can only
-  loosen Ask: Block still blocks. The run header shows that switch for as
+  policy's: Ask / Auto-approve. The composer's Approval chip follows the
+  policy by default, or auto-approves this task alone. The run header shows that switch for as
   long as the run lives. Every failure the person must act on is shown where
   it happened.
 

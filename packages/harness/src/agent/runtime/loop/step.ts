@@ -47,7 +47,6 @@ import stableStringify from 'safe-stable-stringify';
 
 import {
   memoryFolders,
-  memoryRoots,
   memorySection,
   type MemoryFolder,
 } from '@agent/memory/memoryLayout';
@@ -86,7 +85,6 @@ import { readDisabledTools } from '@shared/state/disabledTools';
 import type { SessionTools } from '@tools/sessionTools';
 import { ToolRegistry } from '@tools/toolTable';
 import { sha256 } from '@utils/core/idHash';
-import type { StepRoot } from '@utils/files/externalRoots';
 
 import {
   heldToRecord,
@@ -115,9 +113,6 @@ export class ProjectTools extends Context.Service<ProjectTools, SessionTools>()(
 export interface StepTools extends ResolvedTools {
   /** The pinned plugins' process and session services. */
   readonly services: PluginContext;
-  /** The directories its calls reach beside the workspace: its skills',
-   *  read-only, and its memory folders. */
-  readonly stepRoots: readonly StepRoot[];
   /** The command hooks of the installed plugins it accepted, by plugin id:
    *  its calls, and the prompts and stops under it, run these. */
   readonly hooks: StepHooks;
@@ -356,8 +351,7 @@ const openStep = Effect.fn('Step.open')(function* (
     // updated since reaches this step's text. A step held to the record
     // lists what the record lists, whatever the toggle says now, as its
     // tools are; otherwise the settings toggle turns the listing off. A
-    // skill the user activated is resolved either way. The skills a step
-    // lists or its user activated are the ones its calls may read.
+    // skill the user activated is resolved either way.
     const contributors = new Set([
       ...pinned.plugins.map(({ id }) => id),
       ...pinned.installed.keys(),
@@ -401,11 +395,13 @@ const openStep = Effect.fn('Step.open')(function* (
       : recordedSkills === null
         ? catalog.catalog.filter(contributes).slice(0, SKILL_CATALOG_MAX_SKILLS)
         : offered(recordedSkills);
-    const activated = offered(names);
+    // An activated skill this step cannot find is reported as the listed
+    // ones are.
+    for (const name of names) if (!byName.has(name)) notOffered.add(name);
     const hooks = stepHooks(run, pinned.installed, recordedHooks);
-    // Memory: the folders are roots this step's file tools read and write,
-    // and their indexes are in its system text as they read now, so a note
-    // one step writes is listed to the next. A run that takes no injected
+    // Memory: its file tools read and write the folders, and their indexes
+    // are in its system text as they read now, so a note one step writes is
+    // listed to the next. A run that takes no injected
     // tool (a program, a text-only run) has none, as it had no memory
     // tool, and neither has a step with nothing to read a note with.
     const remembers =
@@ -435,15 +431,6 @@ const openStep = Effect.fn('Step.open')(function* (
       tools: {
         ...tools,
         services,
-        // Its catalog entries carry their directories canonical already.
-        stepRoots: [
-          ...[...listed, ...activated].flatMap(({ name, directory }) =>
-            directory === null
-              ? []
-              : [{ absolutePath: directory, label: `Skill ${name}` }],
-          ),
-          ...memoryRoots(folders),
-        ],
         hooks,
         modules,
       },

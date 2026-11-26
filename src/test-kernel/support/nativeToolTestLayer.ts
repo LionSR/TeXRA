@@ -73,7 +73,7 @@ export function nativeToolTestLayer(
   return Layer.unwrap(
     Effect.gen(function* () {
       const roots = options.roots ?? (yield* FakeHost).roots;
-      const { origin, workingDirectory, stepRoots } = options;
+      const { origin, workingDirectory } = options;
       const run =
         options.run ??
         (yield* Effect.gen(function* () {
@@ -158,7 +158,6 @@ export function nativeToolTestLayer(
           env: {
             roots,
             ...(workingDirectory !== undefined && { workingDirectory }),
-            ...(stepRoots !== undefined && { stepRoots }),
             run: runCall.run,
           },
           emit: options.emit ?? (() => undefined),

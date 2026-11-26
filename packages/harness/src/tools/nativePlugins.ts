@@ -273,7 +273,7 @@ const hostRun = (
   name: string,
   tool: ITool<Error, PluginToolServices>,
 ): ITool<Error, PluginToolServices> => {
-  const { definition, replay, hostCapability, guard } = tool;
+  const { definition, replay, hostCapability } = tool;
   const what = `${definition.name} of plugin ${name}`;
   const failed = (message: string): ToolResult => ({
     status: 'error',
@@ -284,7 +284,6 @@ const hostRun = (
     ...(replay !== undefined && { replay }),
     ...(hostCapability !== undefined && { hostCapability }),
     guard: {
-      ...(guard?.writes !== undefined && { writes: guard.writes }),
       command: thirdPartyCommand(
         (input: unknown) =>
           `plugin ${name} ${definition.name} ${JSON.stringify(input)}`,
