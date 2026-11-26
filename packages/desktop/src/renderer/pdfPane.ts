@@ -4,6 +4,7 @@
 
 import { html, nothing, render } from 'lit';
 
+import { filePathOfFileUrl } from '@texra-ai/worldline/schemas';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import type { WorkbenchTab } from '../shared/desktopShellState';
@@ -13,19 +14,6 @@ interface PdfView {
   readonly element: HTMLElement;
   readonly frame: HTMLIFrameElement;
   readonly notice: HTMLElement;
-}
-
-/** The path a PDF's `file:` URL names. The main process built the URL from
- *  the path, so its pathname is the path, percent-encoded: a Windows drive
- *  path follows one extra slash, and a network share's server is the host.
- *  A saved tab that names no URL has no path, as its frame has no page. */
-function filePathOf(url: string): string {
-  const parsed = URL.parse(url);
-  if (!parsed) return '';
-  const { hostname, pathname } = parsed;
-  const path = decodeURIComponent(pathname);
-  if (hostname) return `//${hostname}${path}`;
-  return /^\/[A-Za-z]:/.test(path) ? path.slice(1) : path;
 }
 
 export function createPdfPane(options: {
@@ -79,7 +67,9 @@ export function createPdfPane(options: {
     const view: PdfView = { element, frame, notice };
     const footer = document.createElement('footer');
     footer.className = 'shell-editor-toolbar';
-    const path = filePathOf(tab.target ?? '');
+    // The main process built the URL from the path. A saved tab that names
+    // no URL, or a damaged one, has no path, as its frame has no page.
+    const path = filePathOfFileUrl(tab.target ?? '') ?? '';
     render(
       html`<span class="shell-editor-path truncate" title=${path}>${path}</span>
         ${renderLabeledActionButton({
