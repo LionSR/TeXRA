@@ -1,10 +1,9 @@
 /**
- * `<model-picker>`: a model choice, in the composer and on a card that
- * approves another run's launch. Its chip names the model and its reasoning
+ * `<model-picker>`: the composer's model choice. Its chip names the model and its reasoning
  * level; its panel searches the host's models and sets the level. It owns
  * no selection: every pick goes out as `model-pick` with the model string
- * to run (`provider/id[@effort]`), so a level belongs to the task, follow-up
- * or delegation it was picked for.
+ * to run (`provider/id[@effort]`), so a level belongs to the task or
+ * follow-up it was picked for.
  */
 
 // Third-party imports
@@ -231,11 +230,8 @@ export class ModelPicker extends TexraElement {
 
   /** The host's model rows. */
   @property({ attribute: false }) options: readonly ModelOptionData[] = [];
-  /** The model in effect: the launch's, the run's, or the proposal's. */
+  /** The model in effect: the launch's, or the run's. */
   @property({ attribute: false }) selected = '';
-  /** The chip's id, which a holder with two pickers on screen sets apart. */
-  @property({ attribute: false }) triggerId = 'composer-model';
-
   @state() private searchText = '';
   /** The row the arrow keys are on, an index into the filtered rows. */
   @state() private active = 0;
@@ -339,7 +335,7 @@ export class ModelPicker extends TexraElement {
     const sent = levelOf(this.selected, current);
     return html`
       ${renderLabeledActionButton({
-        id: this.triggerId,
+        id: 'composer-model',
         kind: 'ghost',
         className: 'chip-trigger is-compact',
         // prettier-ignore
@@ -349,7 +345,7 @@ export class ModelPicker extends TexraElement {
         caret: true,
       })}
       <wa-popover
-        for=${this.triggerId}
+        for="composer-model"
         placement="top-start"
         distance="6"
         without-arrow

@@ -5,7 +5,6 @@ import {
   getBasename,
   getProposalFileGroups,
   type AgentProposalRequest,
-  type ProposalEdit,
   getModelLabel,
 } from '@texra-ai/worldline/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
@@ -21,7 +20,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { CHILD_AGENT_COPY } from '@ui/copy/delegationApproval';
 import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
@@ -38,8 +36,7 @@ import { markdownStyles } from '@ui/styles/markdownStyles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 // Local imports - base class
-import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
-import './ModelPicker';
+import { BaseRequestPanel } from './BaseRequestPanel';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { renderMarkdownHtml } from '../formatters/markdownRenderer';
@@ -57,34 +54,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   /** The host's catalogs, the lists the launch form offers. */
   @property({ attribute: false }) host: HostSnapshot | null = null;
 
-  /** The model the run starts on: the one picked here, else the proposal's. */
-  private get model(): string {
-    return this.draft.model ?? this.permission.data.model;
-  }
-
-  /** An approval's edit: the model, stated only when it is not the
-   *  proposal's. */
-  private get modelChange(): { readonly edit?: ProposalEdit } {
-    return this.model === this.permission.data.model
-      ? {}
-      : { edit: { kind: 'proposal', model: this.model } };
-  }
-
-  protected override submitPrimary(): void {
-    this.emitAction({ action: 'approve', ...this.modelChange });
-  }
-
-  // The grant carries the launch form's model change.
-  protected override get grant(): RunGrant | null {
-    const offered = super.grant;
-    return (
-      offered && {
-        ...offered,
-        decision: { action: APPROVE_SESSION_ACTION, ...this.modelChange },
-      }
-    );
-  }
-
   /** What the agent wants to start: the agent and the model. */
   protected override renderAsk(): TemplateResult {
     const data = this.permission.data;
@@ -92,24 +61,10 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       return html`${SCRIPT_REQUEST_COPY.title(data.script)}`;
     }
     const agent = html` <strong>${data.label}</strong>`;
-    const model = html` on ${this.renderModel()}`;
+    // The model is the agent's own choice; Edit opens the launch form for
+    // a person who wants another.
+    const model = ` on ${getModelLabel(data.model)}`;
     return html`${REQUEST_ASK.proposal(data.task)}${agent}${model}`;
-  }
-
-  /** The model in the ask. On a card that can be answered it is the picker over
-   *  the host's models: changing only the model takes one pick here, where
-   *  Edit opens the whole launch form. */
-  private renderModel(): TemplateResult | string {
-    const { host } = this;
-    if (!this.editable || host === null) return getModelLabel(this.model);
-    return html`<model-picker
-      class="proposal-model"
-      triggerId="proposal-model-trigger"
-      .options=${host.modelOptions}
-      .selected=${this.model}
-      @model-pick=${(event: CustomEvent<string>) =>
-        this.writeDraft({ ...this.draft, model: event.detail })}
-    ></model-picker>`;
   }
 
   protected override handleExtraKey(key: string): boolean {
@@ -136,10 +91,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       SessionUiEvents.surface({
         kind: 'editProposal',
         proposal: { runId: data.runId, requestId: data.requestId },
-        patch: {
-          ...proposalLaunchPatch(data),
-          model: this.model,
-        },
+        patch: proposalLaunchPatch(data),
       }),
     );
   }

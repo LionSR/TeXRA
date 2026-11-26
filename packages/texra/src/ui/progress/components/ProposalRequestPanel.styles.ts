@@ -7,12 +7,6 @@ export const proposalRequestPanelStyles: CSSResult = css`
     border-block-start: var(--border-thin) solid var(--color-border);
   }
 
-  /* The model picker sits in the ask's sentence. */
-  .proposal-model {
-    display: inline-flex;
-    vertical-align: middle;
-  }
-
   /* A script request's lede. */
   .proposal-card__lede {
     display: flex;

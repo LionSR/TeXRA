@@ -76,9 +76,6 @@ export interface RunGrant {
   readonly label: string;
   /** What else the grant turns on, when the label alone undersells it. */
   readonly scope?: string;
-  /** What the grant sends, when it carries more than the run grant itself
-   *  (an agent proposal's picked model). */
-  readonly decision?: SurfaceDecision;
 }
 
 /** Card chrome shared by every panel; a panel appends its own rules. */
@@ -228,7 +225,7 @@ export abstract class BaseRequestPanel<
       case 'a': {
         const grant = this.noteOpen ? null : this.grant;
         if (!grant) return false;
-        this.emitAction(grant.decision ?? { action: APPROVE_SESSION_ACTION });
+        this.emitAction({ action: APPROVE_SESSION_ACTION });
         return true;
       }
       case 'n':
@@ -343,10 +340,7 @@ export abstract class BaseRequestPanel<
       items: [
         {
           label: grant.label,
-          activate: () =>
-            this.emitAction(
-              grant.decision ?? { action: APPROVE_SESSION_ACTION },
-            ),
+          activate: () => this.emitAction({ action: APPROVE_SESSION_ACTION }),
         },
       ],
     });
