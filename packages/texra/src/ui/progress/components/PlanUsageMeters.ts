@@ -30,10 +30,7 @@ import { TexraElement } from '@ui/litBase';
 import { TickerController } from '@ui/litControllers/TickerController';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { toneStyles } from '@ui/styles/toneStyles';
-import {
-  renderIconActionButton,
-  renderLabeledActionButton,
-} from '@ui/wa/actionButtons';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
 
 /** The plan as its provider names its tier, else as TeXRA names the plan. */
 const planName = (usage: PlanUsage): string =>
@@ -126,18 +123,12 @@ export class PlanUsageMeters extends TexraElement {
         max-width: calc(100vw - 2 * var(--wa-space-m));
         font-size: var(--font-size-sm);
       }
-      .head,
-      .foot {
+      .head {
         display: flex;
         align-items: center;
         gap: var(--wa-space-xs);
         padding: var(--wa-space-xs) var(--wa-space-s);
-      }
-      .head {
         border-block-end: var(--border-thin) solid var(--color-border);
-      }
-      .foot {
-        border-block-start: var(--border-thin) solid var(--color-border);
       }
       .title {
         font-weight: var(--font-weight-medium);
@@ -277,19 +268,6 @@ export class PlanUsageMeters extends TexraElement {
             })}
           </div>
           ${usage.map((plan) => this.renderPlan(plan, now))}
-          <div class="foot">
-            ${renderLabeledActionButton({
-              text: 'Manage subscriptions…',
-              kind: 'link',
-              onClick: () =>
-                this.dispatchEvent(
-                  SessionUiEvents.host({
-                    kind: 'openSettings',
-                    target: 'models/subscriptions',
-                  }),
-                ),
-            })}
-          </div>
         </div>
       </wa-popover>
     `;

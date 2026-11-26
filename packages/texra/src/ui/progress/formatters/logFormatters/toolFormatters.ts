@@ -89,7 +89,10 @@ export function formatToolUseTemplate(
     HEADER_PREVIEW_MAX_CHARS,
   );
 
-  const sections: TemplateResult[] = renderToolSections(model.sections);
+  const sections: TemplateResult[] = renderToolSections(
+    model.sections,
+    model.headerPreview,
+  );
 
   // Output is shown unless the model suppressed it (empty, already said by
   // the header, the error, or the sections above).

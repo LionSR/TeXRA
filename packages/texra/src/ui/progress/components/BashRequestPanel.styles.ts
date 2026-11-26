@@ -11,17 +11,6 @@ export const bashRequestPanelStyles: CSSResult = css`
     text-align: start;
   }
 
-  /* The ask already says it is a command; the block is the text alone. */
-  .bash-request__command .code-block {
-    border: 0;
-    border-radius: var(--field-radius);
-    background: var(--wa-color-surface-lowered);
-  }
-
-  .bash-request__command .code-block-header {
-    display: none;
-  }
-
   .bash-request__command .tool-command-input {
     direction: ltr;
     text-align: left;

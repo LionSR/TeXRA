@@ -220,18 +220,7 @@ export function buildLineChangeStats(changes: {
 // Syntax Highlighting
 // ============================================================================
 
-/** Human-readable labels for language badges */
-const LANGUAGE_LABELS: Record<string, string> = {
-  bash: 'Bash',
-  json: 'JSON',
-  yaml: 'YAML',
-  javascript: 'JavaScript',
-  typescript: 'TypeScript',
-  python: 'Python',
-  plaintext: 'Text',
-};
-
-/** Build a code block with syntax highlighting, a language badge and a copy button. */
+/** Build a code block with syntax highlighting and a copy button. */
 export function buildCodeBlock(
   text: string,
   language: string,
@@ -242,13 +231,11 @@ export function buildCodeBlock(
   const highlighted =
     language === 'plaintext' ? null : highlightSpans(text, language);
   // prettier-ignore
-  const languageBadge = html`<span class="code-block-language">${LANGUAGE_LABELS[language] ?? language}</span>`;
-  // prettier-ignore
   const copyButton = html`<copy-button .text=${text} .label=${'Copy code'} .look=${'code'}></copy-button>`;
   // prettier-ignore
   const codeTemplate = html`<pre class=${classMap(preClasses)} dir="ltr"><code>${highlighted === null ? text : unsafeHTML(highlighted)}</code></pre>`;
   // prettier-ignore
-  return html`<div class="code-block" data-language=${language}><div class="code-block-header">${languageBadge}${copyButton}</div>${codeTemplate}</div>`;
+  return html`<div class="code-block" data-language=${language}><div class="code-block-copy">${copyButton}</div>${codeTemplate}</div>`;
 }
 
 // ============================================================================

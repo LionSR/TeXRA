@@ -25,12 +25,8 @@ import {
 import { REASONING_LEVEL_LABELS } from '@texra/shared/model/modelPicker';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { TexraElement } from '@ui/litBase';
-import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
-import {
-  renderIconActionButton,
-  renderLabeledActionButton,
-} from '@ui/wa/actionButtons';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /** One row of a model choice: a host row, or the selected model as itself. */
@@ -207,9 +203,6 @@ export class ModelPicker extends TexraElement {
         gap: var(--wa-space-xs);
         padding: var(--wa-space-2xs);
         border-block-start: var(--border-thin) solid var(--color-border);
-      }
-      .search .action-icon-button {
-        flex: none;
       }
       .levels {
         display: flex;
@@ -388,21 +381,6 @@ export class ModelPicker extends TexraElement {
               @keydown=${(event: KeyboardEvent) =>
                 this.onSearchKey(event, shown)}
             />
-            ${renderIconActionButton({
-              id: 'model-picker-settings',
-              icon: 'gear',
-              label: 'Model settings',
-              tooltip: 'Model settings',
-              onClick: () => {
-                void this.panel?.hide();
-                this.dispatchEvent(
-                  SessionUiEvents.host({
-                    kind: 'openSettings',
-                    target: 'models/models',
-                  }),
-                );
-              },
-            })}
           </label>
           <div class="rows" role="listbox" aria-label="Models">
             ${
