@@ -104,6 +104,9 @@ view does not hold.
 Held back for size: the design harness (`packages/cli/scripts/tui-harness.tsx`)
 calls it too.
 
+Landed 2026-11-26: `formatCliSessionStatus(view, run, { ... })`; the
+harness passes the same three arguments.
+
 ## 5. Waiting on the open PRs
 
 - `StateSettingUpdateResult`
