@@ -347,7 +347,8 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
             code.
           </li>
           <li>
-            Review every edit as a diff and approve commands before they run.
+            It works on its own: runs commands, edits files, and shows what it
+            changed.
           </li>
           <li>Bring your own model keys or subscriptions.</li>
         </ul>

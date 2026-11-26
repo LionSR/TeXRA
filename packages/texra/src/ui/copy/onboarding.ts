@@ -27,7 +27,7 @@ export const ONBOARDING_CARD_TITLE = 'Connect a model';
 /**
  * What TeXRA is, in one line, wherever a first impression forms.
  */
-export const TEXRA_TAGLINE = 'Your AI theorist.';
+export const TEXRA_TAGLINE = 'Your AI theorist. Derive it, check it, prove it.';
 
 /** State 0 choice 1: the ChatGPT subscription's connect row, as the
  *  terminal's connect panel words it. */
