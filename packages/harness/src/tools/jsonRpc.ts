@@ -99,7 +99,7 @@ export interface JsonRpcConnectionOptions {
   ) => Effect.Effect<void>;
   /**
    * The result of a request the peer sends us, or `undefined` to refuse it
-   * with `MethodNotFound`.
+   * with JSON-RPC's method-not-found error (`-32601`).
    */
   readonly onRequest?: (
     method: string,

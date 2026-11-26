@@ -1087,7 +1087,7 @@ interface JsonRpcConnectionOptions {
   ) => Effect.Effect<void>;
   /**
    * The result of a request the peer sends us, or `undefined` to refuse it
-   * with `MethodNotFound`.
+   * with JSON-RPC's method-not-found error (`-32601`).
    */
   readonly onRequest?: (
     method: string,
@@ -1327,20 +1327,12 @@ function optionalInput<S extends Schema.Top>(
 
 ## pathToLocationIn
 
-Convert a string path to a FileLocation against the workspace root its
-caller holds as data: `undefined` with no folder open, which resolves every
-path as external.
-
-NOT run-storage aware — it can only create workspace or external locations.
-For run-storage awareness, use `sourceLocationUnder`.
-
-Path normalization is handled internally - you can pass paths with either
-forward slashes or backslashes. It's safe to pass already-normalized paths
-(path.normalize() is idempotent).
-
-- `@param` workspaceRoot - The session's workspace root
-- `@param` target - Absolute or workspace-relative path
-- `@returns` FileLocation (workspace or external, never runStorage)
+A path's `FileLocation` against the workspace root its caller holds:
+`workspace` when it lies inside `workspaceRoot` (an absolute path by its
+symlink-aware relative form, a relative one read against the root with
+either separator), `external` otherwise, never `runStorage`. With no folder
+open (`workspaceRoot` undefined) every path is external, a relative one
+resolved against the process's working directory, and an empty one throws.
 
 ```ts
 function pathToLocationIn(
@@ -1699,13 +1691,11 @@ type RefusalDecision = Extract<
 
 ## renderPrompt
 
-Render a prompt string using nunjucks templating. A template is code: its
-expressions run in this process, so render only text the agent's author
-wrote, never text taken from a project's files or an end user.
-
-- `@param` prompt The prompt template string
-- `@param` variables Variables to use in template rendering
-- `@returns` The rendered prompt; a template error fails with its message
+`prompt` rendered as a nunjucks template over `variables`; a template
+error, or `nunjucks` failing to load, fails with its message. A template
+is code: its expressions run in this process, so render only text the
+agent's author wrote, never text taken from a project's files or an end
+user.
 
 ```ts
 const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>
