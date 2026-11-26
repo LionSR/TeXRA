@@ -8,7 +8,7 @@ and the open items of the six earlier layer notes) and a reverse import graph
 of every source file. Each candidate was checked against the code,
 `.agents/docs/refuted-candidates.json` and the three open PRs (#15216,
 #15229, #15230), which still hold 430 files; every item of the 2026-11-25
-note but one waits on them, and so does most of what follows.
+note waits on them or on #15245, and so does most of what follows.
 
 The PR that adds this note lands the instances no open PR holds, under one
 rule: a fact is stated in the layer that owns it, and the layers above read
@@ -27,10 +27,6 @@ it.
   knows `.ltx` and `.latex`; the export controller has one table of
   empty-run reasons; the plugins commands and the composer's auto-approve
   row read `PLUGINS_PAGE` and `TASK_APPROVAL`.
-- **CLI.** Five modules only the chat reads moved under `chat/tui/`. The
-  `--device` with `--no-browser` conflict is checked beside
-  `shouldUseSubscriptionDeviceCode`, so `texra auth <provider> login` refuses
-  it as `/login` does.
 - **Extension.** The LaTeX guard's message lists `LATEX_EXTENSIONS`.
 
 What follows is left open, in the order worth taking.
@@ -62,7 +58,16 @@ What follows is left open, in the order worth taking.
   `packages/texra/src/shared/utils/pastedImageName.ts`), so the host checks
   the name again. The fix changes `hostRequest.ts`.
 
-## 2. Free, and not taken
+## 2. Left to #15245
+
+The data-structure audit of the same morning gives the CLI's sign-in one
+`transport` field, which removes the `--device` with `--no-browser` conflict
+that only `/login` checked (`texra auth <provider> login` let the device
+flow win). It edits the `/login` parser and its readers, so the move of the
+chat-only modules out of `packages/cli/src/runtime/` (item 5 of the
+2026-11-25 note) waits for it.
+
+## 3. Free, and not taken
 
 - **The executions tool's name and default action** are spelled in
   `packages/harness/src/tools/ExecutionsTool.ts` and again as plain strings
