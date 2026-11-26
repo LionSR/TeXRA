@@ -1,10 +1,10 @@
 /**
- * latexdiff and latexdiff-vc: one run of the tool over a pair of documents (or
- * a document against a commit), its `--flatten` fallback, and the clean-up of
- * the file it writes. A run succeeds with the diff's absolute path and fails
- * with a typed error each caller reports in its own words: the tool failed
- * ({@link LatexdiffFailed}), is not installed (`ToolMissing`), or an input is
- * no whole document ({@link NoDocumentEnvironment}).
+ * latexdiff: one run of the tool over a pair of documents, its `--flatten`
+ * fallback, and the clean-up of the file it writes. A run succeeds with the
+ * diff's absolute path and fails with a typed error the caller reports in its
+ * own words: the tool failed ({@link LatexdiffFailed}), is not installed
+ * (`ToolMissing`), or an input is no whole document
+ * ({@link NoDocumentEnvironment}).
  */
 
 // Node imports
@@ -23,7 +23,6 @@ import { DISPLAY_MATH_ENVIRONMENTS } from '@replacement/constants';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
-import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { runTool } from '@texra/utils/system/toolChecks';
 
 // Local file imports
@@ -34,13 +33,11 @@ import {
   LATEXDIFF_TIMEOUT_SETTING,
 } from '@texra/shared/settings/latexdiffSettings';
 
-/** One latexdiff or latexdiff-vc run that did not succeed. Its `stderr` is
- *  scrubbed of secrets on the way in: a run writes the message verbatim into
- *  its transcript's documents fact. */
+/** One latexdiff run that did not succeed. Its `stderr` is scrubbed of
+ *  secrets on the way in: the message is shown to the person verbatim. */
 class LatexdiffFailed extends Schema.TaggedError<LatexdiffFailed>()(
   'LatexdiffFailed',
   {
-    commandType: Schema.String,
     flatten: Schema.Boolean,
     timedOut: Schema.Boolean,
     timeoutMs: Schema.Number,
@@ -50,16 +47,16 @@ class LatexdiffFailed extends Schema.TaggedError<LatexdiffFailed>()(
   override get message(): string {
     const variant = this.flatten ? '' : ' (without --flatten)';
     if (this.timedOut) {
-      return `${this.commandType} operation timed out after ${Duration.format(Duration.millis(this.timeoutMs))}${variant}`;
+      return `latexdiff operation timed out after ${Duration.format(Duration.millis(this.timeoutMs))}${variant}`;
     }
     return this.stderr
-      ? `Failed to run ${this.commandType}${variant}: ${this.stderr}`
-      : `Failed to run ${this.commandType}${variant}`;
+      ? `Failed to run latexdiff${variant}: ${this.stderr}`
+      : `Failed to run latexdiff${variant}`;
   }
 }
 
 /** An input without `\begin{document}` and `\end{document}`: latexdiff has
- *  nothing to mark up, so a run's pass records it at debug level. */
+ *  nothing to mark up. */
 class NoDocumentEnvironment extends Schema.TaggedError<NoDocumentEnvironment>()(
   'NoDocumentEnvironment',
   { file: Schema.String },
@@ -120,33 +117,20 @@ const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS: readonly string[] =
 
 const LATEXDIFF_CHANGES_ONLY_SUBTYPE = 'ONLYCHANGEDPAGE';
 
-/** How a diff marks changes; a field left out is the workspace's setting. */
-interface MarkupOptions {
-  readonly mathMarkup?: LatexdiffMathMarkupValue;
-  /** Change boundary marking, e.g. `ONLYCHANGEDPAGE`. */
-  readonly subtype?: string;
-}
-
-/** The markup flags latexdiff and latexdiff-vc share. */
+/** The markup flags, from the workspace's two latexdiff settings. */
 const markupFlags = Effect.fn('latexdiff.markupFlags')(function* (
   roots: WorkspaceRoots,
-  options: MarkupOptions,
 ) {
-  const mathMarkup =
-    options.mathMarkup ??
-    (yield* Settings.get(roots, LATEXDIFF_MATH_MARKUP_SETTING));
+  const mathMarkup = yield* Settings.get(roots, LATEXDIFF_MATH_MARKUP_SETTING);
   const changesOnly = yield* Settings.get(
     roots,
     LATEXDIFF_CHANGES_ONLY_SETTING,
   );
-  const subtype =
-    options.subtype ??
-    (changesOnly ? LATEXDIFF_CHANGES_ONLY_SUBTYPE : undefined);
   return [
     '--graphics-markup=none',
     `--exclude-textcmd=${LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS.join(',')}`,
     `--math-markup=${mathMarkup}`,
-    ...(subtype ? [`--subtype=${subtype}`] : []),
+    ...(changesOnly ? [`--subtype=${LATEXDIFF_CHANGES_ONLY_SUBTYPE}`] : []),
   ];
 });
 
@@ -157,14 +141,13 @@ const isBibliographyError = (error: LatexdiffFailed): boolean =>
   );
 
 /**
- * Run `tool` with the arguments `args(true)` builds, and on a bibliography
+ * Run latexdiff with the arguments `args(true)` builds, and on a bibliography
  * failure again without `--flatten`. The subprocess is torn down by the
  * fiber's own interruption: `executeCommand` kills it from its finalizer.
  * Succeeds with the tool's stdout.
  */
 const runWithFlattenFallback = Effect.fn('latexdiff.runWithFlattenFallback')(
   function* (
-    tool: 'latexdiff' | 'latexdiff-vc',
     args: (flatten: boolean) => readonly string[],
     roots: WorkspaceRoots,
     cwd: string | undefined,
@@ -175,15 +158,14 @@ const runWithFlattenFallback = Effect.fn('latexdiff.runWithFlattenFallback')(
       flatten: boolean,
     ) {
       yield* Effect.logDebug(
-        `Running ${tool} ${flatten ? 'with' : 'without'} --flatten`,
+        `Running latexdiff ${flatten ? 'with' : 'without'} --flatten`,
       );
-      const result = yield* runTool(tool, args(flatten), {
+      const result = yield* runTool('latexdiff', args(flatten), {
         timeout: timeoutMs,
         cwd,
       });
       if (!result.success || !result.stdout) {
         return yield* new LatexdiffFailed({
-          commandType: tool,
           flatten,
           timedOut: result.end._tag === 'TimedOut',
           timeoutMs,
@@ -220,23 +202,20 @@ const requireDocument = Effect.fn('latexdiff.requireDocument')(function* (
 });
 
 /** Where a latexdiff runs and what it writes. */
-interface LatexdiffOptions extends MarkupOptions {
+interface LatexdiffOptions {
   /** The roots of the workspace being diffed: its settings and replacement
    *  rules answer for the diff, never the calling fiber's. */
   readonly roots: WorkspaceRoots;
   /** Directory latexdiff runs in, named by the caller from the roots it
    *  holds (#12421). */
   readonly cwd: string | undefined;
-  /** What the diff file's name adds to the revised file's stem. */
-  readonly suffix: string;
-  /** Where the diff is written; the base's folder when left out. */
-  readonly outputDirectory?: string;
+  /** Where the diff is written, as {@link generateDiffFileName} names it. */
+  readonly outputDirectory: string;
 }
 
 /**
  * latexdiff of `revised` against `base`, cleaned up for compiling: the
- * absolute path of the diff `.tex` it wrote. Only this function picks the
- * output directory, so a caller never re-joins a file name of its own.
+ * absolute path of the diff `.tex` it wrote.
  */
 export const latexdiff = Effect.fn('latexdiff')(function* (
   base: FileLocation,
@@ -254,9 +233,8 @@ export const latexdiff = Effect.fn('latexdiff')(function* (
   yield* requireDocument(base.absolutePath, baseContent);
   yield* requireDocument(revised.absolutePath, revisedContent);
 
-  const flags = yield* markupFlags(options.roots, options);
+  const flags = yield* markupFlags(options.roots);
   const stdout = yield* runWithFlattenFallback(
-    'latexdiff',
     (flatten) => [
       ...(flatten ? ['--flatten'] : []),
       '--encoding=utf8',
@@ -270,11 +248,10 @@ export const latexdiff = Effect.fn('latexdiff')(function* (
     options.cwd,
   );
 
-  const outputDirectory =
-    options.outputDirectory ?? path.dirname(base.absolutePath);
+  const { outputDirectory } = options;
   const diffPath = path.join(
     outputDirectory,
-    generateDiffFileName(revised.absolutePath, options.suffix),
+    generateDiffFileName(revised.absolutePath),
   );
   yield* fs.makeDirectory(outputDirectory, { recursive: true });
   yield* fs.writeFileString(
