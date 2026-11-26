@@ -185,7 +185,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
 
     const remote = parseLatexGitUrl(input);
     if (!remote) {
-      yield* showLoggedMessage('Invalid project URL or ID.');
+      yield* showLoggedMessage(CLONE_COPY.invalidProject);
       return;
     }
 

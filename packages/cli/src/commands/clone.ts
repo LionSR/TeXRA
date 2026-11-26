@@ -143,10 +143,7 @@ export const cloneCommand = cliCommand('clone', {
   run: (context, input) => {
     const remote = parseLatexGitUrl(input.project);
     if (!remote) {
-      throw new CliUsageError({
-        message:
-          'Invalid Overleaf/ShareLaTeX project. Pass a project URL, git URL, or 24-character project ID.',
-      });
+      throw new CliUsageError({ message: CLONE_COPY.invalidProject });
     }
 
     const destination = Option.getOrUndefined(input.destination);
