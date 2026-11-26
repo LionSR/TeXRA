@@ -31,16 +31,6 @@ import {
 
 const CHANNEL = 'DiagnosticsTool';
 
-/**
- * The host capabilities and working directory this tool reads from the
- * session, resolved in the caller's run context before the program runs.
- */
-interface DiagnosticsPorts {
-  readonly call: ToolPathCall;
-  readonly readDiagnostics: EditorCapabilities['readDiagnostics'];
-  readonly addCriticism: EditorCapabilities['addCriticism'];
-}
-
 // Described on the encoded side, the one the model's JSON Schema shows.
 const DiagnosticsPathSchema = Schema.String.annotate({
   description: 'Workspace-relative or absolute file path.',
@@ -90,12 +80,12 @@ const DiagnosticsInputSchema = Schema.Union([
 type DiagnosticsInput = typeof DiagnosticsInputSchema.Type;
 
 const readDiagnostics = Effect.fn('DiagnosticsTool.readDiagnostics')(function* (
-  ports: DiagnosticsPorts,
+  call: ToolPathCall,
+  linter: EditorCapabilities['readDiagnostics'],
   input: Extract<DiagnosticsInput, { command: 'list' | 'count' }>,
 ): Effect.fn.Return<ToolResult, Error> {
   const { command, path } = input;
-  const diagnosticsPath = (yield* resolveToolPath(ports.call, path)).absolute;
-  const linter = ports.readDiagnostics;
+  const diagnosticsPath = (yield* resolveToolPath(call, path)).absolute;
   if (!linter) {
     return yield* new ToolError(
       'Diagnostics capability unavailable: this session has no diagnostics provider.',
@@ -134,11 +124,11 @@ const readDiagnostics = Effect.fn('DiagnosticsTool.readDiagnostics')(function* (
 });
 
 const addCriticism = Effect.fn('DiagnosticsTool.addCriticism')(function* (
-  ports: DiagnosticsPorts,
+  call: ToolPathCall,
+  addCriticismSink: EditorCapabilities['addCriticism'],
   input: Extract<DiagnosticsInput, { command: 'add' }>,
 ): Effect.fn.Return<ToolResult, Error> {
   const { path, line, message, severity, confidence } = input;
-  const addCriticismSink = ports.addCriticism;
   if (!addCriticismSink) {
     return yield* new ToolError(
       'Diagnostics add capability unavailable: this session has no criticism sink.',
@@ -147,7 +137,7 @@ const addCriticism = Effect.fn('DiagnosticsTool.addCriticism')(function* (
 
   // Path resolution shares the sink's failure report: both are the "add"
   // command failing before it could annotate anything.
-  const absolutePath = (yield* resolveToolPath(ports.call, path)).absolute;
+  const absolutePath = (yield* resolveToolPath(call, path)).absolute;
   const accepted = yield* addCriticismSink({
     absolutePath,
     line,
@@ -178,14 +168,9 @@ const diagnose = Effect.fn('DiagnosticsTool.call')(function* (
 ) {
   const { env } = yield* ToolContext;
   const editor = (yield* EditorHost).at(env.roots.storage);
-  const ports: DiagnosticsPorts = {
-    call: env,
-    readDiagnostics: editor.readDiagnostics,
-    addCriticism: editor.addCriticism,
-  };
   return yield* input.command === 'add'
-    ? addCriticism(ports, input)
-    : readDiagnostics(ports, input);
+    ? addCriticism(env, editor.addCriticism, input)
+    : readDiagnostics(env, editor.readDiagnostics, input);
 });
 
 export const DiagnosticsTool = defineTool({
