@@ -11,7 +11,6 @@ import {
   UserMessagePayloadSchema,
   WebSearchPayloadSchema,
 } from './toolCard';
-import { DeclinableUsageRouteSchema } from './usage';
 
 const StreamingTextDataSchema = Schema.StructWithRest(
   Schema.Struct({

@@ -320,7 +320,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     turnStartedAt: null,
   });
   const label = runIdentityName(event.identity);
-  const common = {
+  return {
     id,
     identity: event.identity,
     label,
@@ -330,11 +330,12 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     modelLabel: null,
     command: null,
     inputFiles: [],
+    program: null,
     facts: {},
     worktree: event.worktree,
-    position: 'ready' as const,
+    position: 'ready',
     outcome: null,
-    holder: 'none' as const,
+    holder: 'none',
     output: null,
     statusNotice: null,
     lost: null,
@@ -360,7 +361,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     ancestors: [],
     childIds: [],
     rollup: emptyRollup(),
-    approval: 'none' as const,
+    approval: 'none',
     actions: [],
     usage: emptyUsageStats(),
     treeUsage: emptyUsageStats(),
@@ -371,7 +372,6 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     latestLine: null,
     transcript: emptyTranscript(),
   };
-  return { ...common, program: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -932,9 +932,8 @@ function applyEvent(
     relink(u, next, created ? null : before.parentId);
     if (!created) walkUp(u, before.parentId);
   }
-  const linked = u.view.runs.get(next.id);
-  if (!linked) throw new Error(`Run ${next.id} left the view while relinking`);
-  next = linked;
+  // Relinking rewrote the run's ancestors in the view.
+  next = requireRun(u.view, next.id);
   setRun(u, withAggregates(u, next));
   walkUp(u, next.parentId);
   return true;

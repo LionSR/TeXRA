@@ -246,8 +246,10 @@ export interface RegisterRunOptions {
   readonly parent?: Omit<RunParent, 'uid'>;
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
-  /** Runtime behavior declared by the launch source, not UI visibility. */
-  readonly takesFollowUps?: boolean;
+  /** Whether a message reaches the run (a child's is its resume): the
+   *  run's runtime decides it (`executeAgent`, a process child's launch, a
+   *  fork), so a launch site's registration leaves it out. */
+  readonly takesFollowUps: boolean;
   /** The run's `run.description`, durable at birth: a child's
    *  task label; a root's summary comes later as a second row. */
   readonly description?: string;

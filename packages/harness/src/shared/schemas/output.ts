@@ -1,6 +1,5 @@
 import { Schema } from 'effect';
 
-import { getBasename } from '@utils/core/pathBasics';
 import { RunIdSchema } from './identifiers';
 
 const WorkspaceFileLocationSchema = Schema.Struct({
@@ -30,7 +29,6 @@ export const FileLocationSchema = Schema.Union([
 
 export type RunStorageFileLocation =
   (typeof RunStorageFileLocationSchema)['Type'];
-export type ExternalFileLocation = typeof ExternalFileLocationSchema.Type;
 export type FileLocation = typeof FileLocationSchema.Type;
 
 // ============================================================================
@@ -55,40 +53,4 @@ export function fileLocationDisplayPath(location: FileLocation): string {
   return location.kind === 'external'
     ? location.absolutePath
     : location.relativePath;
-}
-
-/**
- * Like {@link fileLocationDisplayPath} but collapses an external location to
- * its basename, so a long absolute path (e.g. a run-storage file resolved as
- * external because it sits outside the workspace root) cannot dominate a UI
- * row or a prompt line. The full path stays on `absolutePath`.
- */
-export function fileLocationShortDisplayPath(location: FileLocation): string {
-  return location.kind === 'external'
-    ? getBasename(location.absolutePath)
-    : location.relativePath;
-}
-
-/**
- * Reference to a run-storage file the way an agent prompt addresses it:
- * `/executions/<runId>/files/<relativePath>`. The one definition of that
- * convention.
- */
-export function runStorageFilePath(
-  runId: string,
-  relativePath: string,
-): string {
-  return `/executions/${runId}/files/${relativePath}`;
-}
-
-/**
- * How a location is addressed in text that leaves the UI — copied run context,
- * follow-up prompts, subagent results. A run-storage location carries the
- * run that owns it, so its `/executions/...` route resolves without the
- * caller supplying one; every other kind reads as its display path.
- */
-export function fileLocationAddressPath(location: FileLocation): string {
-  return location.kind === 'runStorage'
-    ? runStorageFilePath(location.runId, location.relativePath)
-    : fileLocationDisplayPath(location);
 }

@@ -255,7 +255,11 @@ describe('the golden 1.0 store', () => {
         expect(
           events.flatMap((event) =>
             event.type === 'context.edit' && event.aggregateId === chat
-              ? [event.payload.trigger]
+              ? [
+                  event.payload.cause === 'compaction'
+                    ? event.payload.trigger
+                    : event.payload.cause,
+                ]
               : [],
           ),
         ).toEqual(['user']);

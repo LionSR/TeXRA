@@ -20,7 +20,6 @@ plugin is written with. The built-in plugins are
   [`optionalInput`](#optionalinput),
   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
   ([`requestToolEditApproval`](#requesttooleditapproval),
-  [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),
   [`approvedWriteConflict`](#approvedwriteconflict)).
 - **Native plugins**: an installed plugin folder's `harness.mjs` is a
   module whose default export ([`NativeEntryModule`](#nativeentrymodule))
@@ -354,16 +353,6 @@ interface BoundModel extends Binding {
   /** The retry gate's routes: the model on its wire route, then the wire route. */
   readonly routes: readonly [RoutePolicy, RoutePolicy];
 }
-```
-
-## buildApprovalRejectedResult
-
-```ts
-function buildApprovalRejectedResult(
-  path: string,
-  sourceTool: string,
-  refusal: RefusalDecision,
-): ToolResult
 ```
 
 ## buildDiffHunks
@@ -770,12 +759,6 @@ interface DraftBlob {
 }
 ```
 
-## EditRecord
-
-```ts
-type EditRecord = typeof EditRecordSchema.Type;
-```
-
 ## emitAppSignal
 
 Publish `signal` from a program: {@link AppSignals}' `emit`.
@@ -842,18 +825,6 @@ The plugin fact kinds a store reads, by `plugin/kind`.
 
 ```ts
 type FactKinds = Readonly<Record<FactName, FactKind>>;
-```
-
-## formatToolOutput
-
-Format tool output with a header and content.
-
-```ts
-function formatToolOutput(
-  header: string,
-  content: string | string[] | null,
-  noMatchesText: string = '(no entries)',
-): string
 ```
 
 ## getGitignoreMatcher
@@ -977,18 +948,6 @@ consumer.
 function isTransientHttpStatus(status: number): boolean
 ```
 
-## isTransportReason
-
-A request that got no (complete) answer: nothing responded, or the
-connection dropped mid-body (undici's `TypeError`, "terminated"; a
-malformed body is a `SyntaxError`).
-
-```ts
-function isTransportReason(
-  reason: HttpClientError.HttpClientError['reason'],
-): boolean
-```
-
 ## ITool
 
 Contract for tool implementations.
@@ -1085,26 +1044,6 @@ interface ITool<E = Error, R = never> {
 }
 ```
 
-## jitteredExponentialBackoffMs
-
-Compute a jittered exponential backoff delay: `baseMs * 2^(failures-1)`,
-capped at `maxMs`, then randomized by +/-20% and capped again
-so jitter can never push the result past `maxMs`. Shared by every retry/
-backoff loop in the codebase so the jitter formula only exists once.
-
-`unitRandom` is the caller's uniform draw in [0, 1) — `yield* Random.next`
-in the Effect callers — so a test fixes the jitter through Effect's
-`Random` reference instead of stubbing the global `Math.random`.
-
-```ts
-function jitteredExponentialBackoffMs(
-  baseMs: number,
-  failures: number,
-  maxMs: number,
-  unitRandom: number,
-): number
-```
-
 ## JsonRpcConnection
 
 ```ts
@@ -1148,7 +1087,7 @@ interface JsonRpcConnectionOptions {
   ) => Effect.Effect<void>;
   /**
    * The result of a request the peer sends us, or `undefined` to refuse it
-   * with `MethodNotFound`.
+   * with JSON-RPC's method-not-found error (`-32601`).
    */
   readonly onRequest?: (
     method: string,
@@ -1386,32 +1325,14 @@ function optionalInput<S extends Schema.Top>(
 ): Schema.optional<Schema.NullOr<S>>
 ```
 
-## parseWorkingDirectory
-
-Trim and validate a working_directory value. Must be absolute if provided.
-
-```ts
-function parseWorkingDirectory(
-  raw: string | null | undefined,
-): Result.Result<string | undefined, ToolError>
-```
-
 ## pathToLocationIn
 
-Convert a string path to a FileLocation against the workspace root its
-caller holds as data: `undefined` with no folder open, which resolves every
-path as external.
-
-NOT run-storage aware — it can only create workspace or external locations.
-For run-storage awareness, use `sourceLocationUnder`.
-
-Path normalization is handled internally - you can pass paths with either
-forward slashes or backslashes. It's safe to pass already-normalized paths
-(path.normalize() is idempotent).
-
-- `@param` workspaceRoot - The session's workspace root
-- `@param` target - Absolute or workspace-relative path
-- `@returns` FileLocation (workspace or external, never runStorage)
+A path's `FileLocation` against the workspace root its caller holds:
+`workspace` when it lies inside `workspaceRoot` (an absolute path by its
+symlink-aware relative form, a relative one read against the root with
+either separator), `external` otherwise, never `runStorage`. With no folder
+open (`workspaceRoot` undefined) every path is external, a relative one
+resolved against the process's working directory, and an empty one throws.
 
 ```ts
 function pathToLocationIn(
@@ -1770,13 +1691,11 @@ type RefusalDecision = Extract<
 
 ## renderPrompt
 
-Render a prompt string using nunjucks templating. A template is code: its
-expressions run in this process, so render only text the agent's author
-wrote, never text taken from a project's files or an end user.
-
-- `@param` prompt The prompt template string
-- `@param` variables Variables to use in template rendering
-- `@returns` The rendered prompt; a template error fails with its message
+`prompt` rendered as a nunjucks template over `variables`; a template
+error, or `nunjucks` failing to load, fails with its message. A template
+is code: its expressions run in this process, so render only text the
+agent's author wrote, never text taken from a project's files or an end
+user.
 
 ```ts
 const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>
@@ -2122,19 +2041,6 @@ interface SettingsStores {
   readonly repoState: StateStore;
   readonly globalState: StateStore;
 }
-```
-
-## sourceLocationUnder
-
-Where a path a run reads from lives, under the roots its caller holds: a
-file in run storage keeps its run's provenance, anything else is its
-workspace or external location.
-
-```ts
-function sourceLocationUnder(
-  roots: { readonly storage: string; readonly workspace: string | undefined },
-  inputPath: string,
-): FileLocation
 ```
 
 ## StateReadFailed
@@ -2706,22 +2612,6 @@ interface ToolTable {
    *  one. */
   readonly natives: readonly NativePlugin[];
 }
-```
-
-## unifiedDiffText
-
-Unified-diff body between two texts (`text` is undefined when they are
-identical), with the pass's {@link DiffHunks.timeout} for the caller to
-report.
-
-Carries no `---`/`+++` file header: every consumer already names the file in
-its own surrounding prose.
-
-```ts
-function unifiedDiffText(
-  oldText: string,
-  newText: string,
-): { readonly text: string | undefined; readonly timeout: string | undefined }
 ```
 
 ## ValueFamily

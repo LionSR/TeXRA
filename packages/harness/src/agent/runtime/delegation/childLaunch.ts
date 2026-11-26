@@ -68,7 +68,7 @@ export const childOf = (
 export const startChildRun = Effect.fn('startChildRun')(function* (
   runId: RunId,
   definition: PreparedAgentDefinition,
-  registration: RegisterRunOptions,
+  registration: Omit<RegisterRunOptions, 'takesFollowUps'>,
   options: Pick<ExecuteAgentOptions, 'onProgress'> = {},
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
   const { opened } = yield* (yield* RunRegistry).start(

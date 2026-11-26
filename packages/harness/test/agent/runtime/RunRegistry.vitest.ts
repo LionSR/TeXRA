@@ -171,6 +171,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
           const refusal = yield* Effect.flip(
             registrationRows(generateRunId(), CONFIG, {
               identity: { kind: 'agent', agent: 'chat' },
+              takesFollowUps: false,
               parent: { id: rootRunId, call: null },
             }).pipe(Effect.provide(session)),
           );

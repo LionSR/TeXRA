@@ -258,8 +258,7 @@ export const serviceProjectState = (
 };
 
 /** A failure of a call to the service, as a run's own. */
-const runFailure = (message: string) =>
-  new RunFailure({ cause: new Error(message), message });
+const runFailure = (message: string) => new RunFailure({ message });
 
 /** The service's own reason for a start or resume it did not run (it is
  *  shutting down, the project would not open), as the run's failure,

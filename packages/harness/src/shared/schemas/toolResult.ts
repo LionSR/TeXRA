@@ -54,7 +54,6 @@ const EditRecordSchema = Schema.Struct({
   /** 1-based line number where the edit starts (for navigation) */
   startLine: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
 });
-export type EditRecord = typeof EditRecordSchema.Type;
 
 // ============================================================================
 // Schema issues

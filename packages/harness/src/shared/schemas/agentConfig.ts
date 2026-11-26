@@ -85,8 +85,6 @@ export const AgentConfigSchema = FileFieldsSchema.mapFields(
   }),
 );
 
-export type AgentConfigInput = typeof AgentConfigSchema.Encoded;
-
 export type AgentConfig = typeof AgentConfigSchema.Type;
 
 /** Partial agent configuration accepted before launch-time normalization. */
