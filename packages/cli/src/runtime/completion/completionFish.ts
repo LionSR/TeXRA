@@ -1,10 +1,9 @@
 import {
   CLI_COMPLETION_SHELLS,
-  DYNAMIC_VALUE_FLAG_SOURCES,
   POSITIONAL_COMPLETION_SOURCES,
   completionFlagVariants,
+  dynamicValueFlags,
   type CompletionCommand,
-  type CompletionFlag,
   type CompletionSource,
 } from './completionCommandTree';
 
@@ -23,33 +22,19 @@ const DYNAMIC_POSITIONAL_COMPLETIONS: readonly (readonly [string, string])[] =
   ]);
 
 // A dynamic-value flag emits one generic `complete` line regardless of which
-// command carries it, so a flag added to DYNAMIC_VALUE_FLAG_SOURCES completes
+// command carries it, so a flag added to the dynamic-value sources completes
 // in fish without manual special-casing.
 function dynamicFlagValueLines(
   commands: readonly CompletionCommand[],
 ): string[] {
-  const flagsByName = new Map<string, CompletionFlag>();
-  for (const command of commands) {
-    for (const flag of command.flags) {
-      if (
-        flag.name in DYNAMIC_VALUE_FLAG_SOURCES &&
-        !flagsByName.has(flag.name)
-      ) {
-        flagsByName.set(flag.name, flag);
-      }
-    }
-  }
-  return Object.keys(DYNAMIC_VALUE_FLAG_SOURCES).flatMap((name) => {
-    const flag = flagsByName.get(name);
-    if (flag === undefined) return [];
-    const base = [`-l ${flag.name}`];
-    for (const alias of flag.aliases) base.push(`-s ${alias}`);
-    base.push(
+  return dynamicValueFlags(commands).map(({ flag, source }) =>
+    fishCompleteLine([
+      `-l ${flag.name}`,
+      ...flag.aliases.map((alias) => `-s ${alias}`),
       '-r',
-      `-a '${dynamicListSource(DYNAMIC_VALUE_FLAG_SOURCES[name])}'`,
-    );
-    return [fishCompleteLine(base)];
-  });
+      `-a '${dynamicListSource(source)}'`,
+    ]),
+  );
 }
 
 function fishEscape(value: string): string {
