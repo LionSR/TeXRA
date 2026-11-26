@@ -263,8 +263,8 @@ Landed:
   and fetched the URL up to a hundred times until it answered. It calls
   `createServer` and `listen` from **vite**
   ([npm](https://www.npmjs.com/package/vite), 8.3.8, already a desktop
-  dependency), as `tests/e2e/devStartup.spec.ts` does: Vite binds port 0
-  and `listen` resolves when it serves. The main-process watcher is started
+  dependency), as `packages/desktop/tests/e2e/devStartup.spec.ts` does:
+  Vite binds port 0 and `listen` resolves when it serves. The main-process watcher is started
   as its own Node process, so the stop signal reaches it; started through
   `pnpm run`, it outlived the launcher. The `watch:main` script, whose one
   caller was the launcher, is gone.

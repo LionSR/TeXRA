@@ -59,7 +59,8 @@ function stop(exitCode) {
     if (!child.killed) child.kill('SIGTERM');
   }
   process.exitCode = exitCode;
-  // The renderer is the dev server's client, so the server closes after it.
+  // Electron's window is the dev server's client, so the server closes
+  // after Electron is told to stop.
   void renderer?.close();
   const forceStopTimer = scheduleTimeout(() => {
     for (const child of children) {
