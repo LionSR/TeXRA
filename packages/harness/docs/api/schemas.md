@@ -79,12 +79,6 @@ const AGENT_SKILLS_ENABLED_SETTING: { readonly key: "skills.enabled"; readonly s
 type AgentConfig = typeof AgentConfigSchema.Type;
 ```
 
-## AgentConfigInput
-
-```ts
-type AgentConfigInput = typeof AgentConfigSchema.Encoded;
-```
-
 ## AgentConfigPayload
 
 Partial agent configuration accepted before launch-time normalization.
@@ -493,20 +487,6 @@ What stands between a label and the detail that explains it
 const DETAIL_SEPARATOR: " — "
 ```
 
-## DiffStats
-
-```ts
-type DiffStats = typeof DiffStatsSchema.Type;
-```
-
-## DiffStatsSchema
-
-Schema for diff statistics where one side may be absent.
-
-```ts
-const DiffStatsSchema: Struct<{ readonly added: optional<Int>; readonly removed: optional<Int>; }>
-```
-
 ## DISABLED_SKILL_SOURCES_SETTING
 
 ```ts
@@ -592,12 +572,6 @@ One node of a run's conversation as an export reads it.
 const ExportNodeSchema: Union<readonly [Struct<{ readonly kind: Literal<"user-message">; readonly parts: $Array<Union<readonly [Struct<{ readonly type: Literal<"text">; readonly text: String; }>, Struct<{ readonly type: Literal<"attachment">; readonly attachmentType: Literals<readonly ["image", "document"]>; }>]>>; }>, Struct<{ readonly kind: Literal<"assistant-text">; readonly text: String; }>, Struct<{ readonly kind: Literal<"thinking">; readonly text: String; }>, Struct<{ readonly kind: Literal<"tool-call">; readonly name: String; readonly input: Unknown; }>, Struct<{ readonly kind: Literal<"tool-result">; readonly text: String; readonly value: optional<Codec<Json, Json, never, never>>; }>, Struct<{ readonly kind: Literal<"web-search">; readonly query: String; }>]>
 ```
 
-## ExternalFileLocation
-
-```ts
-type ExternalFileLocation = typeof ExternalFileLocationSchema.Type;
-```
-
 ## extractErrorMessage
 
 Extract error message from Error objects or strings.
@@ -649,17 +623,6 @@ const FileFieldsSchema: Struct<{ readonly inputFiles: withDecodingDefault<$Array
 type FileLocation = typeof FileLocationSchema.Type;
 ```
 
-## fileLocationAddressPath
-
-How a location is addressed in text that leaves the UI — copied run context,
-follow-up prompts, subagent results. A run-storage location carries the
-run that owns it, so its `/executions/...` route resolves without the
-caller supplying one; every other kind reads as its display path.
-
-```ts
-function fileLocationAddressPath(location: FileLocation): string
-```
-
 ## fileLocationDisplayPath
 
 How a location reads as a path: workspace and run-storage files by their
@@ -679,17 +642,6 @@ Discriminated union of all file location types
 
 ```ts
 const FileLocationSchema: Union<readonly [Struct<{ readonly kind: Literal<"workspace">; readonly absolutePath: String; readonly relativePath: String; }>, Struct<{ readonly kind: Literal<"runStorage">; readonly absolutePath: String; readonly relativePath: String; readonly runId: brand<String, "RunId">; }>, Struct<{ readonly kind: Literal<"external">; readonly absolutePath: String; }>]>
-```
-
-## fileLocationShortDisplayPath
-
-Like {@link fileLocationDisplayPath} but collapses an external location to
-its basename, so a long absolute path (e.g. a run-storage file resolved as
-external because it sits outside the workspace root) cannot dominate a UI
-row or a prompt line. The full path stays on `absolutePath`.
-
-```ts
-function fileLocationShortDisplayPath(location: FileLocation): string
 ```
 
 ## FinishedToolResult
@@ -2067,19 +2019,6 @@ type RunStorageFileLocation =
   (typeof RunStorageFileLocationSchema)['Type'];
 ```
 
-## runStorageFilePath
-
-Reference to a run-storage file the way an agent prompt addresses it:
-`/executions/<runId>/files/<relativePath>`. The one definition of that
-convention.
-
-```ts
-function runStorageFilePath(
-  runId: string,
-  relativePath: string,
-): string
-```
-
 ## RuntimeCommand
 
 One command a surface issues to its session's runtime.
@@ -2576,14 +2515,6 @@ type ToolEditContent = typeof ToolEditContentSchema.Type;
 
 ```ts
 type ToolEditRequest = typeof ToolEditRequestSchema.Type;
-```
-
-## ToolFact
-
-A fact a tool's call states about its run (`ToolFactSchema`).
-
-```ts
-type ToolFact = typeof ToolFactSchema.Type;
 ```
 
 ## ToolUseLog

@@ -84,13 +84,11 @@ export type { RunStanding } from '@shared/session/runRowReads';
 // owners, run facts, tool definitions and results, log and transcript
 // payloads, follow-ups and requests.
 export type {
-  AgentConfigInput,
   CompactionActivityData,
   CompactionActivityOutcome,
   DeclinableUsageRoute,
   DispatchFacts,
   DisplayRow,
-  ExternalFileLocation,
   FileLocation,
   FinishedToolResult,
   FollowUpContent,
@@ -126,7 +124,6 @@ export type {
   ToolDefinition,
   ToolEditContent,
   ToolEditRequest,
-  ToolFact,
   ToolUseLog,
   UsageRoute,
 } from '@shared/schemas';
@@ -314,12 +311,8 @@ export {
   type BashRequest,
   type ContextStateData,
   CredentialSwitchSchema,
-  type DiffStats,
-  DiffStatsSchema,
-  fileLocationAddressPath,
   fileLocationDisplayPath,
   FileLocationSchema,
-  fileLocationShortDisplayPath,
   // A fresh run id, for a caller that names a run before a session launches it.
   generateRunId,
   formatHunkLines,
@@ -377,7 +370,6 @@ export {
   type RunWorkspaceFile,
   AgentRunListingEntrySchema,
   type AgentRunListingEntry,
-  runStorageFilePath,
   type SkillDisplayIssue,
   SkillDisplayIssueSchema,
   type SkillDisplayItem,
