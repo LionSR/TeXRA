@@ -80,21 +80,16 @@ export type {
 } from '@shared/session/database';
 // Where a run stands, the pair of `RunView` fields a renderer reads.
 export type { RunStanding } from '@shared/session/runRowReads';
-// A follow-up queued for a run, as its row holds it (a message, a delivery, or the run's own `control`).
-export type { QueuedFollowUp } from '@shared/session/runRows';
 // The data shapes the public signatures name: session events and their
 // owners, run facts, tool definitions and results, log and transcript
 // payloads, follow-ups and requests.
 export type {
   AgentConfigInput,
-  AgentProposal,
   CompactionActivityData,
   CompactionActivityOutcome,
-  ContextManagementData,
   DeclinableUsageRoute,
   DispatchFacts,
   DisplayRow,
-  ExternalFileLocation,
   FileListEntry,
   FileLocation,
   FinishedToolResult,
@@ -117,7 +112,6 @@ export type {
   RequestShowErrorPayload,
   RequestShowInstructionPayload,
   ResponseCut,
-  ResumeRefusal,
   RunAction,
   RunId,
   RunIdentity,
@@ -137,7 +131,6 @@ export type {
   ToolFact,
   ToolUseLog,
   UsageRoute,
-  WorkspaceFileLocation,
 } from '@shared/schemas';
 export { ResumeRefusalSchema } from '@shared/schemas';
 // Default a schema field to a plain constant when it decodes from an absent
@@ -398,7 +391,6 @@ export {
   type StoredMedia,
   StoredMediaSchema,
   sumUsageStats,
-  toJsonValue,
   type TokenUsageStats,
   type UserQuestionAnswers,
   UserQuestionAnswersSchema,

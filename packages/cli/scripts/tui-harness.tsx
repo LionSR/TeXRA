@@ -43,7 +43,6 @@ import {
   runBypasses,
   RunIdSchema,
   toErrorMessage,
-  toJsonValue,
   type AgentProposalRequest,
   type ApprovalPolicy,
   type LogLevel,
@@ -74,8 +73,9 @@ import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { runStatus } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 // What no public entry serves: the session's own owners, which the fixtures
-// seed rows through, the leaves they build rows with, and the stored model
-// selection's key (this file is an exemption in oxlint.config.mts).
+// seed rows through, the leaves they build rows with (`toJsonValue` among
+// them), and the stored model selection's key (this file is an exemption in
+// oxlint.config.mts).
 import {
   attachInteractions,
   Interactions,
@@ -97,6 +97,7 @@ import {
   describeRefusal,
   LOG_LEVELS,
   TOOL_CALL_STATUS,
+  toJsonValue,
 } from '@shared/schemas';
 import {
   RunHistory,
