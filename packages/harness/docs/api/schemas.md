@@ -102,12 +102,6 @@ Canonical configuration: at most as many outputs as text/media inputs.
 const AgentConfigSchema: Struct<{ readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly label: String; readonly system: withDecodingDefault<String, never>; readonly tools: withDecodingDefault<$Array<NonEmptyString>, never>; readonly toolScope: optional<Literals<readonly ["declared", "topLevel"]>>; readonly model: String; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<String>; readonly displayInstruction: optional<String>; readonly skills: optional<$Array<String>>; readonly workingDirectory: optional<String>; readonly launch: optional<$Record<String, Codec<Json, Json, never, never>>>; readonly outputSchema: optional<$Record<String, Unknown>>; readonly script: optional<Union<readonly [Struct<{ readonly kind: Literal<"background">; readonly code: NonEmptyString; readonly title: NonEmptyString; readonly tools: $Array<NonEmptyString>; readonly timeoutMs: optional<Int>; }>, Struct<{ readonly kind: Literal<"program">; readonly name: NonEmptyString; readonly args: $Record<String, Codec<Json, Json, never, never>>; }>]>>; }>
 ```
 
-## AgentProposal
-
-```ts
-type AgentProposal = typeof AgentProposalSchema.Type;
-```
-
 ## AgentProposalRequest
 
 ```ts
@@ -373,12 +367,6 @@ the project; `global` is the user's file for every workspace.
 
 ```ts
 type ConfigTarget = 'global' | 'workspace' | 'local';
-```
-
-## ContextManagementData
-
-```ts
-type ContextManagementData = typeof ContextManagementDataSchema.Type;
 ```
 
 ## ContextStateData
@@ -1061,12 +1049,6 @@ the run's own model. An app names its own (`settingsCatalog`'s
 const HELPER_MODEL_SETTING: { readonly key: "helperModel"; readonly slot: "globalState"; readonly schema: UndefinedOr<NonEmptyString>; readonly title: "Helper model"; readonly description: "Model for quick helper steps like task titles and small fixes."; }
 ```
 
-## HookEvent
-
-```ts
-type HookEvent = typeof HookEventSchema.Type;
-```
-
 ## InputHistoryRecord
 
 ```ts
@@ -1438,14 +1420,6 @@ A whole number that is zero or more: a count, a size, an offset.
 const NonNegativeIntSchema: Int
 ```
 
-## NormalizedUsage
-
-Normalized, priced usage of one call ({@link NormalizedUsageSchema}).
-
-```ts
-type NormalizedUsage = typeof NormalizedUsageSchema.Type;
-```
-
 ## normalizeFilePath
 
 Normalize a file path to forward slashes for consistent comparisons.
@@ -1694,18 +1668,6 @@ function providerRegionSetting(
 ): (typeof PROVIDER_REGION_SETTINGS)[number] | undefined
 ```
 
-## QueuedFollowUp
-
-A follow-up queued for the run and not yet consumed, as its row holds
-it; `at` is when it was queued, which a run's own note tells its reader.
-
-```ts
-type QueuedFollowUp = Pick<
-  Extract<SessionRow, { type: 'followup.queued' }>,
-  'followUpId' | 'content' | 'holdUntil' | 'commit' | 'at'
->;
-```
-
 ## ReadonlyDeep
 
 A runtime value as a host or an embedder holds it: read-only all the
@@ -1890,14 +1852,6 @@ The limit that ended an answer early: the model's output budget
 
 ```ts
 type ResponseCut = typeof ResponseCutSchema.Type;
-```
-
-## ResumeRefusal
-
-One reason a resume is refused ({@link ResumeRefusalSchema}).
-
-```ts
-type ResumeRefusal = typeof ResumeRefusalSchema.Type;
 ```
 
 ## ResumeRefusalSchema
@@ -2576,15 +2530,6 @@ wrapper with a fixed sentence no longer hides the failure under it.
 function toErrorMessage(err: unknown): string
 ```
 
-## toJsonValue
-
-A value as a stored row keeps it: what `JSON.stringify` writes, read
-back. The boundary where an arbitrary value enters a persisted field.
-
-```ts
-const toJsonValue: (value: unknown) => Json
-```
-
 ## TokenUsageStats
 
 ```ts
@@ -2851,12 +2796,6 @@ The OpenAI WebSocket transport (experimental).
 
 ```ts
 const WEBSOCKET_OPENAI_SETTING: { readonly key: "websocket.openai"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "OpenAI WebSocket"; readonly description: "Experimental: send OpenAI API-key requests over WebSocket for lower latency (off by default)."; }
-```
-
-## WorkspaceFileLocation
-
-```ts
-type WorkspaceFileLocation = typeof WorkspaceFileLocationSchema.Type;
 ```
 
 ## WorktreeInfo

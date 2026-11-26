@@ -415,33 +415,6 @@ names the cause, and the caller that owns the edit reports it through
 function buildDiffHunks(oldText: string, newText: string): DiffHunks
 ```
 
-## buildFileAttachment
-
-Build a tool attachment by reading a workspace file and packaging metadata.
-
-```ts
-const buildFileAttachment: (args_0: BuildFileAttachmentOptions) => Effect<{ readonly [x: string]: unknown; readonly mimeType: string; readonly path: string; readonly description?: string | undefined; readonly digest?: string | undefined; readonly base64Data?: string | undefined; readonly bytes?: Uint8Array<ArrayBuffer> | undefined; }, ToolError, FileSystem | ToolContext>
-```
-
-## BuildFileAttachmentOptions
-
-```ts
-interface BuildFileAttachmentOptions {
-  /** Path to a workspace file (relative or absolute) */
-  filePath: string;
-  /** Optional description surfaced to the model */
-  description?: string;
-  /** Override detected MIME type */
-  mimeType?: string;
-  /**
-   * Pre-resolved path. When provided, skips the internal resolveToolPath()
-   * call — use this to avoid double-resolution when the caller already
-   * resolved the path (e.g. ReadTool).
-   */
-  resolved?: ToolPathResolution;
-}
-```
-
 ## CallRequests
 
 The requests one tool call raises, opened through its run's loop. Each
@@ -1209,7 +1182,7 @@ class JsonRpcConnectionDisposed extends Schema.TaggedError<JsonRpcConnectionDisp
 
 ## JsonRpcConnectionOptions
 
-What {@link makeJsonRpcConnection} connects: the peer's byte streams
+What `makeJsonRpcConnection` connects: the peer's byte streams
 and the owner's handlers.
 
 ```ts
@@ -1318,20 +1291,6 @@ type LogOptions =
             readonly data: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded'];
           };
     }[MessageType];
-```
-
-## makeJsonRpcConnection
-
-```ts
-const makeJsonRpcConnection: (options: JsonRpcConnectionOptions) => Effect<{ connection: JsonRpcConnection; inputEnded: Effect<void, never, never>; }, never, Scope>
-```
-
-## MEMORY_INDEX
-
-The file of a memory folder a step shows its model.
-
-```ts
-const MEMORY_INDEX: "MEMORY.md"
 ```
 
 ## MemoryFolder
@@ -2629,12 +2588,6 @@ class ToolError extends Data.TaggedError('ToolError')<{
   readonly summary?: string;
   readonly cause?: unknown;
 }>
-```
-
-## ToolFileAttachment
-
-```ts
-type ToolFileAttachment = typeof ToolFileAttachmentSchema.Type;
 ```
 
 ## ToolGuard

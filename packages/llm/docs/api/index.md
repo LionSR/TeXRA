@@ -16,7 +16,6 @@ catalogs, route decisions, reasoning selection, turn cost, and `ModelError`.
   [`ResolvedTurn`](#resolvedturn), [`TurnEvent`](#turnevent),
   [`TurnResult`](#turnresult), and [`completedTurn`](#completedturn).
 - **Model & provider catalogs**: [`selectModel`](#selectmodel),
-  [`MODEL_PROVIDER_PLUGINS`](#model_provider_plugins),
   [`decideModelRoute`](#decidemodelroute),
   [`RouteFacts`](#routefacts) ([`OWN_KEY_ROUTE_FACTS`](#own_key_route_facts)),
   [`chooseReasoning`](#choosereasoning), and [`turnCost`](#turncost).
@@ -389,16 +388,6 @@ keeps a re-thrown error's text and origin.
 const fillModelError: (error: ModelError, known: Partial<ModelErrorFields>) => ModelError
 ```
 
-## findModelProviderPlugin
-
-Look up a provider plugin by id.
-
-```ts
-function findModelProviderPlugin(
-  id: string,
-): ModelProviderPlugin | undefined
-```
-
 ## hasUsableApiKey
 
 Check whether a usable API key is resolved for a provider (secret storage,
@@ -621,14 +610,6 @@ Complete registry of all available model configurations, keyed by
 const MODEL_CONFIGS: Readonly<Record<ModelRef, ModelConfig>>
 ```
 
-## MODEL_PROVIDER_PLUGINS
-
-Every model provider plugin, in display order.
-
-```ts
-const MODEL_PROVIDER_PLUGINS: readonly ModelProviderPlugin[]
-```
-
 ## modelConfig
 
 The registry entry a stored model string names.
@@ -844,31 +825,6 @@ declare enum ModelProvider {
     /** Other providers (OpenRouter-only models, etc.) */
     OTHERS = "others"
 }
-```
-
-## ModelProviderPlugin
-
-One model provider plugin, by what TeXRA does with it:
-- `backend`: an llm-zoo provider a run binds to, over its own HTTP
-  endpoint (a default base URL, or a China/international pair the region
-  toggle picks), with a direct API key;
-- `plan-key`: a coding plan's own key outside llm-zoo (`kimiCode`), read
-  from its named variable;
-- `unserved`: an llm-zoo provider whose models TeXRA does not serve.
-
-```ts
-type ModelProviderPlugin = {
-  /** Stable, persisted identifier: the llm-zoo provider or API-key id. */
-  readonly id: string;
-  readonly displayName: string;
-} & (
-  | {
-      readonly kind: 'backend';
-      readonly baseUrl: string | RegionalBaseUrl;
-    }
-  | { readonly kind: 'plan-key'; readonly apiKeyEnvName: string }
-  | { readonly kind: 'unserved' }
-);
 ```
 
 ## ModelRef

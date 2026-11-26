@@ -13,7 +13,6 @@
  *   [`ResolvedTurn`](#resolvedturn), [`TurnEvent`](#turnevent),
  *   [`TurnResult`](#turnresult), and [`completedTurn`](#completedturn).
  * - **Model & provider catalogs**: [`selectModel`](#selectmodel),
- *   [`MODEL_PROVIDER_PLUGINS`](#model_provider_plugins),
  *   [`decideModelRoute`](#decidemodelroute),
  *   [`RouteFacts`](#routefacts) ([`OWN_KEY_ROUTE_FACTS`](#own_key_route_facts)),
  *   [`chooseReasoning`](#choosereasoning), and [`turnCost`](#turncost).
@@ -106,13 +105,10 @@ export {
   API_KEY_PATTERN_SOURCE,
   API_KEY_PROVIDER_IDS,
   BACKEND_PROTOCOLS,
-  findModelProviderPlugin,
-  MODEL_PROVIDER_PLUGINS,
 } from './providers/providerPlugins.js';
 export type {
   ApiKeyProviderId,
   BackendProviderId,
-  ModelProviderPlugin,
   RegionalBaseUrl,
   RegionalProviderId,
 } from './providers/providerPlugins.js';

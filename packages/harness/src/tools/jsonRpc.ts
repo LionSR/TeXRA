@@ -86,7 +86,7 @@ export interface JsonRpcConnection {
   readonly close: (reason: string) => Effect.Effect<void>;
 }
 
-/** What {@link makeJsonRpcConnection} connects: the peer's byte streams
+/** What `makeJsonRpcConnection` connects: the peer's byte streams
  *  and the owner's handlers. */
 export interface JsonRpcConnectionOptions {
   /** The peer's output: bytes we decode. */

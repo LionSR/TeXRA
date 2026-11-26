@@ -236,7 +236,7 @@ function formatFatalErrorDetail(error: unknown): string
 
 The models a person has switched on: the list the Models tab and
 `texra models enabled` edit — the single reader of
-{@link MODEL_SELECTION_KEY} for every host. What a picker lists is
+`MODEL_SELECTION_KEY` for every host. What a picker lists is
 `readModelOptions`' default list, which adds what a subscription serves.
 
 ```ts
@@ -286,6 +286,12 @@ interface HelperPrompt {
   readonly userPrompt: string;
   readonly systemPrompt?: string;
 }
+```
+
+## HookEvent
+
+```ts
+type HookEvent = typeof HookEventSchema.Type;
 ```
 
 ## InstalledPlugin
@@ -345,15 +351,6 @@ interface McpServerConfig {
 }
 ```
 
-## MODEL_SELECTION_KEY
-
-The model selection's key. Its absence is the empty delta, read here
-rather than by a decoding default, so a corrupt record is reported.
-
-```ts
-const MODEL_SELECTION_KEY: { readonly key: "modelSelection"; readonly slot: "globalState"; readonly schema: Struct<{ readonly enabledExtras: $Array<String>; readonly disabledDefaults: $Array<String>; }>; }
-```
-
 ## ModelVerdict
 
 One visible model's verdict: whether it can run now, the route that decided
@@ -406,6 +403,14 @@ interface NativeEntry {
   /** What its plugin contributes, as `provides` names it. */
   readonly provides: readonly string[];
 }
+```
+
+## NormalizedUsage
+
+Normalized, priced usage of one call ({@link NormalizedUsageSchema}).
+
+```ts
+type NormalizedUsage = typeof NormalizedUsageSchema.Type;
 ```
 
 ## normalizeProviderError
@@ -1208,7 +1213,7 @@ function sessionFsLayer(
 ## setModelEnabled
 
 Enable or disable one model — the only writer of
-{@link MODEL_SELECTION_KEY}.
+`MODEL_SELECTION_KEY`.
 
 Two invariants: at least one model stays enabled, and an unserved model is
 never enabled. Either violation fails with `StateWriteFailed`.

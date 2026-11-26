@@ -101,7 +101,6 @@ export {
   isGitRepository,
   localBranchExists,
   machineGit,
-  type MachineGitResult,
   originDefaultBranch,
   originUrl,
   recentCommitLabels,

@@ -292,15 +292,6 @@ interface LogRow extends TranscriptRowBase {
 }
 ```
 
-## mcpServerOfToolName
-
-The server an MCP tool name (or `mcp__<server>__*` wildcard) names, or
-`undefined` for any other tool name.
-
-```ts
-function mcpServerOfToolName(name: string): string | undefined
-```
-
 ## normalizeToolName
 
 Canonical lookup key for a tool name: namespaces stripped, lowercased.
