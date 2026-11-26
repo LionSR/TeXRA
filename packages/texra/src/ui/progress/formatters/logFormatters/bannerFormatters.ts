@@ -19,7 +19,11 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { renderMarkdownHtml } from '../markdownRenderer';
-import { buildCopyButton, buildDetailsCard } from '../htmlBuilders';
+import {
+  buildCopyButton,
+  buildDetailsCard,
+  buildMessageHeader,
+} from '../htmlBuilders';
 import type { StreamingTextRow } from '@texra-ai/worldline/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 
@@ -96,7 +100,6 @@ export function formatBannerContentTemplate(
     : html`<div class="banner-content markdown-content log-entry-content ${contentClass}">${unsafeHTML(renderMarkdownHtml(trimmedContent))}</div>`;
 
   if (kind === 'assistant') {
-    const time = formatDisplayTimestamp(new Date(timestamp), 'minute');
     // An answer its model ended early says so under its text.
     const cutNote =
       row.cut === undefined
@@ -106,8 +109,14 @@ export function formatBannerContentTemplate(
           </div>`;
     // The transcript has one header grid for people, assistant output and errors.
     // Keep the disclosure at the trailing edge, beside the copy action.
+    const header = buildMessageHeader({
+      icon: waIcon('wand-magic-sparkles'),
+      label: html`<span>Assistant</span>`,
+      timestamp,
+      actions: buildCopyButton(config.copyTitle, trimmedContent),
+    });
     // prettier-ignore
-    return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--assistant message-disclosure" open><div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('wand-magic-sparkles')}<span>Assistant</span></span><time class="message-timestamp" datetime=${new Date(timestamp).toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time>${buildCopyButton(config.copyTitle, trimmedContent)}</div>${contentTemplate}${cutNote}</wa-details>`;
+    return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--assistant message-disclosure" open>${header}${contentTemplate}${cutNote}</wa-details>`;
   }
 
   return buildDetailsCard({

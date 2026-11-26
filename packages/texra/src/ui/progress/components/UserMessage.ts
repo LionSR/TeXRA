@@ -16,7 +16,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared styles
-import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { designTokens } from '@ui/styles';
 import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
 import { markdownStyles } from '@ui/styles/markdownStyles';
@@ -25,16 +24,16 @@ import {
   messageHeaderStyles,
   messageDisclosureStyles,
 } from '@ui/styles/messageHeaderStyles';
-import {
-  renderIconActionButton,
-  renderLabeledActionButton,
-} from '@ui/wa/actionButtons';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 // Local imports - formatter helpers
 import { renderMarkdownHtml } from '../formatters/markdownRenderer';
-import { formatDisplayTimestamp } from '../formatters/timestampUtils';
+import {
+  buildCopyButton,
+  buildMessageHeader,
+} from '../formatters/htmlBuilders';
 import type {
   ScriptDeliverySummary,
   StoredMediaSchema,
@@ -143,8 +142,6 @@ export class UserMessage extends LitElement {
   @property({ attribute: false })
   media: readonly (typeof StoredMediaSchema.Type)[] = [];
 
-  private copyController = new CopyButtonController(this);
-
   /** A delivery's rendered Markdown, by its text: message text is immutable
    *  after creation, so the parse must not rerun on every render. */
   private markdownCache = { text: '', html: '' };
@@ -175,13 +172,6 @@ export class UserMessage extends LitElement {
   }
 
   override render(): TemplateResult {
-    const messageDate = new Date(this.timestamp);
-    const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
-      messageDate,
-      'minute',
-    );
-    const { copied } = this.copyController;
-    const copyTitle = copied ? 'Copied!' : 'Copy message';
     const isStructuredDelivery = this.scriptSummary !== null;
 
     return html`
@@ -197,20 +187,12 @@ export class UserMessage extends LitElement {
             'user-message--structured-delivery': isStructuredDelivery,
           })}
         >
-          <div slot="summary" class="user-message-header message-header">
-            <span class="message-label"
-              >${waIcon('user')}<span class="message-author">You</span></span
-            >
-            <time
-              id="user-message-timestamp"
-              class="user-message-timestamp message-timestamp"
-              datetime=${messageDate.toISOString()}
-              >${timeDisplay}</time
-            >
-            <wa-tooltip for="user-message-timestamp"
-              >${tooltipTimestamp}</wa-tooltip
-            >
-            <span
+          ${buildMessageHeader({
+            icon: waIcon('user'),
+            label: html`<span>You</span>`,
+            timestamp: this.timestamp,
+            // A click or key on an action must not toggle the disclosure.
+            actions: html`<span
               class="message-actions"
               @click=${(event: MouseEvent) => {
                 event.preventDefault();
@@ -218,14 +200,7 @@ export class UserMessage extends LitElement {
               }}
               @keydown=${(event: KeyboardEvent) => event.stopPropagation()}
             >
-              ${renderLabeledActionButton({
-                id: 'user-message-copy-button',
-                text: copied ? 'Copied' : 'Copy',
-                label: copyTitle,
-                tooltip: copyTitle,
-                className: `user-message-copy message-copy ${copied ? 'copy-success' : ''}`,
-                onClick: () => this.copyController.copy(this.text),
-              })}
+              ${buildCopyButton('Copy message', this.text)}
               ${
                 this.forkAt !== null && !isStructuredDelivery
                   ? renderIconActionButton({
@@ -233,13 +208,13 @@ export class UserMessage extends LitElement {
                       icon: 'code-branch',
                       label: TASK_ACTIONS.forkFromHere,
                       tooltip: TASK_ACTIONS.forkFromHere,
-                      className: 'user-message-copy user-message-fork',
+                      className: 'user-message-fork',
                       onClick: () => this.forkFromHere(),
                     })
                   : nothing
               }
-            </span>
-          </div>
+            </span>`,
+          })}
           ${
             isStructuredDelivery
               ? html`<div

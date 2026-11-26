@@ -27,6 +27,7 @@ import '@ui/progress/components/CopyButton';
 
 // Local imports - formatter helpers
 import type { FileListRow } from '@texra-ai/worldline/transcript';
+import { formatDisplayTimestamp } from './timestampUtils';
 
 // Threshold constants for diff detection heuristics
 const DIFF_DETECTION_LINE_LIMIT = 20;
@@ -107,6 +108,24 @@ export function buildCopyButton(
 }
 
 /** A `<wa-icon>`, or a `<wa-spinner>` in its place while `running`. */
+/**
+ * The summary row a user, assistant or error message opens with
+ * (`messageHeaderStyles`): its icon and label, the time of day with the full
+ * moment as its hover hint, then its actions at the trailing edge.
+ */
+export function buildMessageHeader(header: {
+  readonly icon: TemplateResult;
+  /** Who wrote the message, or an error's summary. */
+  readonly label: unknown;
+  readonly timestamp: number;
+  readonly actions: unknown;
+}): TemplateResult {
+  const date = new Date(header.timestamp);
+  const time = formatDisplayTimestamp(date, 'minute');
+  // prettier-ignore
+  return html`<div slot="summary" class="details-summary message-header"><span class="message-label">${header.icon}${header.label}</span><time class="message-timestamp" datetime=${date.toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time>${header.actions}</div>`;
+}
+
 export function renderIconOrSpinner(
   running: boolean,
   iconName: IconName,
