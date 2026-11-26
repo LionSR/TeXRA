@@ -820,7 +820,6 @@ const SCENARIOS = [
     expect: [
       '/config · Tasks and agents',
       'Agents at once',
-      'Let a task stop its agents',
       '↑/↓ navigate',
       'Enter toggle / edit / open',
       'Esc back',

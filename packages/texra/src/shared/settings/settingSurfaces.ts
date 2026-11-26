@@ -23,7 +23,6 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type HarnessRowKey,
   type SettingRow,
-  ALLOW_ORCHESTRATOR_KILL_SETTING,
   DASHSCOPE_REGION_SETTING,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
@@ -238,12 +237,6 @@ export const HARNESS_ROW_SURFACES: Readonly<
   [GIT_AUTHOR_EMAIL_SETTING.key]: Object.freeze({
     category: 'git',
     ...GIT_AUTHOR_AND_CLI,
-  }),
-
-  // --- Agent coordination -----------------------------------------------------
-  [ALLOW_ORCHESTRATOR_KILL_SETTING.key]: Object.freeze({
-    category: 'agents',
-    ...AGENTS_AND_CLI,
   }),
 
   // --- Memory and code mode --------------------------------------------------
