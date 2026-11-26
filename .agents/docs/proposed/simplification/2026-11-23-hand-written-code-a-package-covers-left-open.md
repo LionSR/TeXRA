@@ -240,3 +240,84 @@ Landed, all small:
 This theme has now been read three days running and the last two runs
 found under a hundred lines between them. What is left is items 2 to 4
 above, each waiting on a decision or a Deno runtime.
+
+## The 2026-11-26 run
+
+Two read-only sweeps (the hosts and scripts; the harness, llm, the app and
+`supabase/functions/`) over families no earlier run named: terminal control
+sequences, capability and CI detection, the clipboard, spinners and
+symbols, key parsing, update checks, config directories, TOML and INI,
+tables, colour maths, Electron window state and settings, archives and
+downloads; partial JSON, response headers, file-type and charset sniffing,
+HTML entities, indentation, patch parsing, OAuth, proxies, address checks,
+token estimates, JSON Schema walking, Office and PDF reading, markdown by
+regex, cron and durations, queues and graphs, locks and timeouts. Each is
+on a builtin, Effect or an installed package already, except the items
+below.
+
+Landed:
+
+- **The desktop dev launcher starts Vite through its API.**
+  `packages/desktop/scripts/dev.mjs` found a free port by opening and
+  closing a socket, spawned the Vite CLI on it through the package manager
+  and fetched the URL up to a hundred times until it answered. It calls
+  `createServer` and `listen` from **vite**
+  ([npm](https://www.npmjs.com/package/vite), 8.3.8, already a desktop
+  dependency), as `tests/e2e/devStartup.spec.ts` does: Vite binds port 0
+  and `listen` resolves when it serves. The main-process watcher is started
+  as its own Node process, so the stop signal reaches it; started through
+  `pnpm run`, it outlived the launcher. The `watch:main` script, whose one
+  caller was the launcher, is gone.
+
+### Open after 2026-11-26
+
+5. **Job-control suspend re-implements Ink's `suspendTerminal`**
+   (`packages/cli/src/tui/terminalCleanup.ts`, the `suspend` / `resume`
+   pair and `KITTY_PUSH_DISAMBIGUATE` / `REARM_INPUT_MODES`, about 30
+   lines, with the kitty flags `runChatTui.tsx` passes to keep them in
+   step). **ink** 8 ([npm](https://www.npmjs.com/package/ink), already the
+   CLI's renderer) pops and re-pushes the kitty flags it was given, turns
+   raw mode and bracketed paste off and on, and redraws; a callback that
+   stops the process and resolves on `SIGCONT` would put Ctrl-Z on it.
+   `release` stays: the `exit` hook must be synchronous. Ink also erases
+   its frame on suspend, which the hand-written path does not, so this
+   needs Ctrl-Z and `fg` tried in a real terminal, more than one emulator.
+6. **An arXiv source's extension is read from the content type by
+   substring** (`getExtensionFromContentType` in
+   `packages/texra/src/latex/arxivProcessor.ts`): `includes('tex')` is true
+   of `text/html`, so an HTML page answered with 200 and no
+   `Content-Disposition` would be saved as `.tex`. Compare the media type
+   (the text before `;`) instead. Both open PRs edit the file; take it
+   after them.
+
+### Checked and declined on 2026-11-26
+
+- **markdown-it for the link and heading reader in
+  `scripts/check-guidance-refs.mjs`** (about 137 lines) and the fence
+  tracking in `scripts/check-proposal-status.mjs`. Both scripts state that
+  they run on bare Node before anything is installed, and markdown-it is
+  not a root dependency.
+- **`Codegen.propertyKey` and `Codegen.docComment` (Effect) for the key
+  quoting and doc comments in
+  `packages/harness/src/tools/codemode/declarations.ts`.** Both are marked
+  experimental, `docComment` takes no indent, and together they replace
+  about fifteen lines.
+- **`RcMap` (Effect) for `withPerKeyLane`**
+  (`packages/harness/src/utils/core/perKeyQueue.ts`). The callers pass
+  their own `Map` or `WeakMap` and rely on the key's lifetime; `RcMap`
+  would make each call scoped.
+- **markdown-it for `collectLatexFencedBlocks`**
+  (`packages/texra/src/agent/output/extraction/contentSimilarity.ts`). It
+  departs from CommonMark on purpose: fences at any indentation, an
+  unclosed fence dropped and reported, a longer fence restarting the block.
+- **ansi-escapes for the clear-screen constants in `terminalCleanup.ts`**
+  and **Node's `hasColors` for `resolveStreamColor`**
+  (`packages/cli/src/runtime/platform/cliContext.ts`). Six constants
+  against a dependency the CLI does not declare; `hasColors` reads an
+  empty `FORCE_COLOR` as on and exists only on a TTY stream.
+- **update-notifier, clipboardy, electron-log, `@octokit/rest`,
+  hosted-git-info.** Each spawns or stores outside Effect, lacks the case
+  the code handles (Homebrew, OSC 52, images, ETag polling), or is a new
+  dependency for under forty lines.
+- **One `Retry-After` reader for llm and the GitHub client.** The GitHub
+  client reads seconds only; #15229 deletes it.
