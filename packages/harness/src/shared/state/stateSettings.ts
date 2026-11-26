@@ -479,16 +479,17 @@ export const GLM_CODING_PLAN_SETTING = {
 } as const satisfies SettingRow<boolean>;
 
 /**
- * Keep file-oriented tools inside the active working directory unless the
- * user explicitly grants them access to arbitrary filesystem paths.
+ * Keep file-oriented tools inside the active working directory, for a
+ * person who wants that boundary; without it they reach any path the
+ * process can.
  */
 export const TOOL_PATH_PROTECTION_SETTING = {
   key: 'tools.restrictPathsToWorkingDirectory',
   slot: 'workspaceState',
-  schema: booleanWithDefault(true),
+  schema: booleanWithDefault(false),
   title: 'Restrict tools to project folder',
   description:
-    'Keep file read/edit, search, diagnostics, and PDF tools inside the current project folder. Turn off only if an agent needs outside files.',
+    'Keep file read/edit, search, diagnostics, and PDF tools inside the current project folder. Off by default: an agent reads and edits the files its work needs.',
 } as const satisfies SettingRow<boolean>;
 
 // ============================================================================
