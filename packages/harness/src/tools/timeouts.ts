@@ -32,7 +32,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * connection dropped mid-body (undici's `TypeError`, "terminated"; a
  * malformed body is a `SyntaxError`).
  */
-export function isTransportReason(
+function isTransportReason(
   reason: HttpClientError.HttpClientError['reason'],
 ): boolean {
   return (
