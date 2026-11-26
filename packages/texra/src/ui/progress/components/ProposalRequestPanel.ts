@@ -10,7 +10,6 @@ import {
 } from '@texra-ai/worldline/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
@@ -43,7 +42,12 @@ import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
 import { modelMenu } from './composerChipMenus';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
-import { buildStatusBadge } from '../formatters/htmlBuilders';
+import {
+  buildFileLinkSpan,
+  buildStatusBadge,
+  FILE_LINK,
+  fileLinkTarget,
+} from '../formatters/htmlBuilders';
 import { renderMarkdownHtml } from '../formatters/markdownRenderer';
 import { proposalLaunchPatch } from '../proposalEdit';
 import { delegateKeyActivation } from './composedPath';
@@ -335,19 +339,18 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
           files,
           (file) => file,
           (file, i) =>
-            html`${i > 0 ? ', ' : ''}<span
-                id="${idPrefix}-file-${i}"
-                class="workflow-proposal__file-name ${
-                  clickable
-                    ? 'clickable-link'
-                    : 'workflow-proposal__file-name--readonly'
-                }"
-                data-file=${ifDefined(clickable ? file : undefined)}
-                role=${ifDefined(clickable ? 'button' : undefined)}
-                tabindex=${ifDefined(clickable ? '0' : undefined)}
-                aria-label=${ifDefined(clickable ? `Open ${file}` : undefined)}
-                >${getBasename(file)}</span
-              ><wa-tooltip for="${idPrefix}-file-${i}">${file}</wa-tooltip>`,
+            html`${i > 0 ? ', ' : ''}${
+                clickable
+                  ? buildFileLinkSpan(file, getBasename(file), {
+                      id: `${idPrefix}-file-${i}`,
+                      className: 'workflow-proposal__file-name',
+                    })
+                  : html`<span
+                      id="${idPrefix}-file-${i}"
+                      class="workflow-proposal__file-name workflow-proposal__file-name--readonly"
+                      >${getBasename(file)}</span
+                    >`
+              }<wa-tooltip for="${idPrefix}-file-${i}">${file}</wa-tooltip>`,
         )}
       </div>
     `;
@@ -357,27 +360,18 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   // Proposal-specific handlers
   // ===========================================================================
 
-  private handleFileClick = (event: MouseEvent): void => {
-    if (!(event.target instanceof HTMLElement)) return;
-    const { file } = event.target.dataset;
-    if (file) this.openFile(file);
+  private handleFileClick = (event: MouseEvent | KeyboardEvent): void => {
+    const file = fileLinkTarget(event);
+    if (file) {
+      this.dispatchEvent(
+        SessionUiEvents.host({ kind: 'openFile', path: file.path }),
+      );
+    }
   };
 
-  private openFile(path: string): void {
-    this.dispatchEvent(SessionUiEvents.host({ kind: 'openFile', path }));
-  }
-
-  // Keyboard activation parity for the clickable file-name spans (Enter/Space),
-  // mirroring FileList.ts's handleFileKey delegate for the same job.
+  // Keyboard activation parity for the clickable file names (Enter/Space).
   private handleFileKey = (event: KeyboardEvent): void => {
-    delegateKeyActivation(
-      event,
-      '.workflow-proposal__file-name[data-file]',
-      (fileEl) => {
-        const file = fileEl.dataset.file;
-        if (file) this.openFile(file);
-      },
-    );
+    delegateKeyActivation(event, FILE_LINK, () => this.handleFileClick(event));
   };
 }
 

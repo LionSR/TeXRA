@@ -19,6 +19,7 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { designTokens } from '@ui/styles';
 import { delegateKeyActivation, getComposedPathElement } from './composedPath';
+import { FILE_LINK, fileLinkTarget } from '../formatters/htmlBuilders';
 import { logStyles } from '../styles/logStyles';
 import type { RunView, SessionView, RunId } from '@texra-ai/worldline/schemas';
 
@@ -100,22 +101,15 @@ export class LogList extends LitElement {
 
   private handleKeyEvent = (event: Event): void => {
     if (!(event instanceof KeyboardEvent)) return;
-    delegateKeyActivation(event, '.file-link, .latex-ref', () =>
+    delegateKeyActivation(event, `${FILE_LINK}, .latex-ref`, () =>
       this.activateLinkFromEvent(event),
     );
   };
 
   private activateLinkFromEvent(event: Event): void {
-    const fileLink = getComposedPathElement(event, '.file-link', HTMLElement);
-    if (fileLink?.dataset.file) {
-      const line = Number(fileLink.dataset.fileLine);
-      this.dispatchEvent(
-        SessionUiEvents.host({
-          kind: 'openFile',
-          path: fileLink.dataset.file,
-          ...(Number.isInteger(line) && line > 0 && { line }),
-        }),
-      );
+    const file = fileLinkTarget(event);
+    if (file) {
+      this.dispatchEvent(SessionUiEvents.host({ kind: 'openFile', ...file }));
       return;
     }
     const latexRef = getComposedPathElement(event, '.latex-ref', HTMLElement);

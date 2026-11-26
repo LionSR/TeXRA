@@ -39,8 +39,13 @@ import {
 } from '@ui/wa/actionButtons';
 import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
-import { delegateKeyActivation, getComposedPathElement } from './composedPath';
+import {
+  buildFileLinkSpan,
+  buildLineChangeStats,
+  FILE_LINK,
+  fileLinkTarget,
+} from '@ui/progress/formatters/htmlBuilders';
+import { delegateKeyActivation } from './composedPath';
 
 // Local imports - styles
 import { fileListStyles } from './FileList.styles';
@@ -74,9 +79,6 @@ function alertIcon(
     className: `round-alert tone-${alert.tone}`,
   });
 }
-
-/** A file name that opens the file it names. */
-const OPEN_FILE_TARGET = '.file-path[data-file]';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -209,15 +211,7 @@ export class FileList extends TexraElement {
             ? html`<li class="file-item">
                 ${alertIcon(ROUND_ALERT.replyKept)}
                 ${ROUND_ALERT.replyKept.text}
-                <span
-                  class="file-path clickable-link"
-                  data-file=${replyToCheck.absolutePath}
-                  role="button"
-                  tabindex="0"
-                  ><bdi dir="auto"
-                    >${fileLocationDisplayPath(replyToCheck)}</bdi
-                  ></span
-                >
+                ${buildFileLinkSpan(replyToCheck.absolutePath, html`<bdi dir="auto">${fileLocationDisplayPath(replyToCheck)}</bdi>`)}
               </li>`
             : nothing
         }
@@ -274,16 +268,7 @@ export class FileList extends TexraElement {
             : nothing
         }
         <span class="file-name">
-          <span
-            id="${idPrefix}-path"
-            class="file-path clickable-link"
-            data-file=${filePath}
-            role="button"
-            tabindex="0"
-          >
-            <span class="file-dir">${dir}</span>
-            <span class="file-basename">${basename}</span>
-          </span>
+          ${buildFileLinkSpan(filePath, html`<span class="file-dir">${dir}</span> <span class="file-basename">${basename}</span>`, { id: `${idPrefix}-path` })}
           <wa-tooltip for="${idPrefix}-path">${tooltipPath}</wa-tooltip>
         </span>
         ${diffStats}
@@ -305,17 +290,15 @@ export class FileList extends TexraElement {
   }
 
   /** A click on a file name opens it; its buttons carry their own handlers. */
-  private handleFileClick(event: MouseEvent): void {
-    const pathEl = getComposedPathElement(event, OPEN_FILE_TARGET, HTMLElement);
-    if (pathEl?.dataset.file) this.openFile(pathEl.dataset.file);
+  private handleFileClick(event: MouseEvent | KeyboardEvent): void {
+    const file = fileLinkTarget(event);
+    if (file) this.openFile(file.path);
   }
 
   // Keyboard activation parity for the clickable file names (Enter/Space), so
   // the generated-files list is reachable without a mouse.
   private handleFileKey(event: KeyboardEvent): void {
-    delegateKeyActivation(event, OPEN_FILE_TARGET, (pathEl) => {
-      if (pathEl.dataset.file) this.openFile(pathEl.dataset.file);
-    });
+    delegateKeyActivation(event, FILE_LINK, () => this.handleFileClick(event));
   }
 
   private openFile(path: string): void {
