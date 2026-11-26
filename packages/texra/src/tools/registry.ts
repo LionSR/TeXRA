@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { Effect, Layer } from 'effect';
+import { Layer } from 'effect';
 import {
   codemode,
   fileOps,
@@ -25,15 +25,11 @@ import {
 } from '@texra-ai/worldline/plugins';
 
 // Local imports
-import replacementEngine, {
-  logReplacementDiagnostics,
-} from '@replacement/engine';
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import { texraPlugin } from '@texra/tools/texraPlugin';
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import type { ToolInstallAction } from '@texra/shared/settingsView/settingsViewMessages';
 import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
-import { hasExtension } from '@texra-ai/worldline/schemas';
 
 // Local file imports
 import { claudeAgent } from './agentCli/claudeAgentPlugin';
@@ -90,7 +86,6 @@ import {
   type EditorIntegrationShape,
 } from '@texra/hosts/editorIntegration';
 import { wolfram } from './wolframPlugin';
-import { type WriteFilter } from '@texra-ai/worldline/builtins';
 import { Settings } from '@texra-ai/worldline/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 
@@ -133,16 +128,6 @@ export type TexraPlugin = Plugin & {
   /** The tools, by normalized tool name, whose output the transcript paints
    *  as a terminal session, as it paints `bash`'s. */
   readonly terminalOutput?: readonly string[];
-};
-
-/** TeXRA's filter on `write_file`: a `.tex` file's content goes through the
- *  replacement rules of the call's workspace. */
-const texWriteFilter: WriteFilter = (path, content, config) => {
-  if (!hasExtension(path, '.tex')) return Effect.succeed(content);
-  const replaced = replacementEngine.applyToTexWrite(content, config);
-  return logReplacementDiagnostics(replaced.diagnostics).pipe(
-    Effect.as(replaced.text),
-  );
 };
 
 /** The host capabilities (`ITool.hostCapability`) a plugin serves to a
@@ -302,7 +287,7 @@ export const texraPlugins = (host: {
   const editors = host.editors ?? editorRegistry(() => ({}));
   const plugins: readonly TexraPlugin[] = [
     {
-      ...fileOps({ writeFilter: texWriteFilter }),
+      ...fileOps,
       icons: {
         bash: 'terminal',
         read_file: 'file',

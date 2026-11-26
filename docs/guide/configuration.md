@@ -163,11 +163,7 @@ The **LaTeX** view contains the settings that remain useful to change:
 - formatter selection; and
 - inline criticism display (VS Code only).
 
-The replacement engine's rule groups and custom maps are not shown there. Set
-them in `.texra/config.json` under `texra.latex.enabledReplacements`,
-`texra.latex.enabledReplacementsRegex`, `texra.latex.customReplacements` and
-`texra.latex.customReplacementsRegex`. The auto-compile and latexdiff timeouts
-are edited from the CLI's `/config`.
+The auto-compile and latexdiff timeouts are edited from the CLI's `/config`.
 
 The latexdiff picture-environment pattern is a fixed product rule rather than a
 user setting.

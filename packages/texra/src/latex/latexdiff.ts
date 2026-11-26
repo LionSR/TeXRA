@@ -19,10 +19,6 @@ import { Settings } from '@texra-ai/worldline/plugins';
 import { readNormalizedFile } from '@texra-ai/worldline/node';
 import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type { FileLocation } from '@texra-ai/worldline/schemas';
-import { DISPLAY_MATH_ENVIRONMENTS } from '@replacement/constants';
-import replacementEngine, {
-  logReplacementDiagnostics,
-} from '@replacement/engine';
 import { runTool } from '@texra/utils/system/toolChecks';
 
 // Local file imports
@@ -203,8 +199,8 @@ const requireDocument = Effect.fn('latexdiff.requireDocument')(function* (
 
 /** Where a latexdiff runs and what it writes. */
 interface LatexdiffOptions {
-  /** The roots of the workspace being diffed: its settings and replacement
-   *  rules answer for the diff, never the calling fiber's. */
+  /** The roots of the workspace being diffed: its settings answer for the
+   *  diff, never the calling fiber's. */
   readonly roots: WorkspaceRoots;
   /** Directory latexdiff runs in, named by the caller from the roots it
    *  holds (#12421). */
@@ -254,15 +250,22 @@ export const latexdiff = Effect.fn('latexdiff')(function* (
     generateDiffFileName(revised.absolutePath),
   );
   yield* fs.makeDirectory(outputDirectory, { recursive: true });
-  yield* fs.writeFileString(
-    diffPath,
-    yield* cleanDiff(stdout, revisedContent, options.roots),
-  );
+  yield* fs.writeFileString(diffPath, cleanDiff(stdout, revisedContent));
   yield* Effect.logDebug(
     `latexdiff wrote ${diffPath} for ${base.absolutePath} -> ${revised.absolutePath}`,
   );
   return diffPath;
 });
+
+const DISPLAY_MATH_ENVIRONMENTS = [
+  'equation',
+  'align',
+  'alignat',
+  'flalign',
+  'gather',
+  'multline',
+  'eqnarray',
+];
 
 /** The starred (unnumbered) display environments, whose labels are removed. */
 const STAR_ENV_REGEX = new RegExp(
@@ -295,6 +298,73 @@ const DOCUMENT_END_FIXES: [RegExp, string][] = [
   [/\\end\{document\}\s*\\addcontentsline/g, '\\addcontentsline'],
 ];
 
+/**
+ * A lone subscript or superscript latexdiff cut out of a formula, as it
+ * stands inside `\\DIFdel{...}` or `\\DIFadd{...}`, and the same fragment in
+ * math mode: `\\DIFdel{_1|}` becomes `\\DIFdel{$_1$}`. A fragment followed by
+ * more content is left alone. The added set is the conservative subset.
+ */
+const DIF_MATH_FRAGMENTS: readonly {
+  readonly match: string;
+  readonly replacement: string;
+  readonly deletedOnly?: true;
+}[] = [
+  // Numeric subscripts: `_1|`, `_0)`.
+  { match: '_(\\d+)[\\)\\|]?', replacement: '$_$1$' },
+  // Primes: `'_0)`, `''_t`.
+  { match: "('+)_([a-zA-Z\\d]+)[\\)\\|]?", replacement: '$$1_$2$' },
+  // Braced subscripts with arithmetic: `_{t-1})`.
+  { match: '_\\{([a-zA-Z][+-]?\\d*)\\}[\\)\\|]?', replacement: '$_{$1}$' },
+  // Simple subscripts with arithmetic: `_t|`, `_k-1)`.
+  { match: '_([a-zA-Z](?:[+-]\\d+)?)[\\)\\|]?', replacement: '$_$1$' },
+  // Numeric superscripts: `^2`.
+  { match: '\\^(\\d+)[\\)\\|]?', replacement: '$^$1$' },
+  // Braced superscripts with arithmetic: `^{t-1}`.
+  {
+    match: '\\^\\{([a-zA-Z][+-]?\\d*)\\}[\\)\\|]?',
+    replacement: '$^{$1}$',
+    deletedOnly: true,
+  },
+  // Simple superscripts with arithmetic: `^t|`.
+  {
+    match: '\\^([a-zA-Z](?:[+-]\\d+)?)[\\)\\|]?',
+    replacement: '$^$1$',
+    deletedOnly: true,
+  },
+  // A command as the subscript: `_\tf`, `_{\tauf-1}`.
+  {
+    match: '_\\{?(\\\\(?:tf|tauf)(?:[+-]\\d+)?)[\\}\\)\\|]?',
+    replacement: '$_$1$',
+  },
+  // A single letter before a parenthesis: `_I()`.
+  { match: '_([a-zA-Z])[\\(\\)\\|]?', replacement: '$_$1$', deletedOnly: true },
+];
+
+/** Repairs to the markup latexdiff writes, applied in order: the blank
+ *  lines it leaves before the closing brace of an `align`, the math
+ *  fragments above, and `\\~` where it meant a non-breaking space. */
+const DIF_MARKUP_FIXES: readonly [RegExp, string][] = [
+  [
+    /\n(?:[ \t]*\n)+[ \t]*\}\\end\{(align|aligned)(\*?)\}%DIFAUXCMD/g,
+    '\n}\\end{$1$2}%DIFAUXCMD',
+  ],
+  ...(['del', 'add'] as const).flatMap((kind) => {
+    const marker = `%DIF${kind.toUpperCase()}CMD`;
+    return [
+      ...DIF_MATH_FRAGMENTS.filter(
+        ({ deletedOnly }) => kind === 'del' || !deletedOnly,
+      ).map(({ match, replacement }): [RegExp, string] => [
+        new RegExp(`\\\\DIF${kind}\\{${match}\\}${marker}`, 'gs'),
+        `\\DIF${kind}{${replacement}}${marker}`,
+      ]),
+    ];
+  }),
+  ...(['del', 'add'] as const).map((kind): [RegExp, string] => [
+    new RegExp(`\\\\DIF${kind}\\{\\\\~\\}%DIF${kind.toUpperCase()}CMD`, 'gs'),
+    `\\DIF${kind}{~}%DIF${kind.toUpperCase()}CMD`,
+  ]),
+];
+
 /** Flattened .bbl blocks can contain macro definitions that latexdiff corrupts. */
 const THEBIBLIOGRAPHY_BLOCK =
   /\\begin\{thebibliography\}\{[^}]*\}[\s\S]*?\\end\{thebibliography\}/g;
@@ -304,24 +374,19 @@ const BIBITEM_START = /(?:^|\n)\s*(?:\\DIF(?:add|del)\{)?\\bibitem\b/;
 
 /** latexdiff's output made compilable: the edited document's
  *  `\bibliography` restored over a flattened one, starred environments
- *  without labels, the preamble chatter dropped, the replacement rules
- *  applied. */
-const cleanDiff = Effect.fn('latexdiff.cleanDiff')(function* (
-  content: string,
-  editedContent: string,
-  roots: WorkspaceRoots,
-) {
+ *  without labels, the preamble chatter dropped, its markup repaired. */
+function cleanDiff(content: string, editedContent: string): string {
   let processed = restoreFlattenedBibliography(content, editedContent);
   processed = processStarEnvironments(processed);
   processed = processLineByLine(processed);
-  const replaced = replacementEngine.applyAll(processed, roots.config);
-  yield* logReplacementDiagnostics(replaced.diagnostics);
-  processed = replaced.text;
-  for (const [pattern, replacement] of DOCUMENT_END_FIXES) {
+  for (const [pattern, replacement] of [
+    ...DIF_MARKUP_FIXES,
+    ...DOCUMENT_END_FIXES,
+  ]) {
     processed = processed.replace(pattern, replacement);
   }
   return processed;
-});
+}
 
 function restoreFlattenedBibliography(
   content: string,
