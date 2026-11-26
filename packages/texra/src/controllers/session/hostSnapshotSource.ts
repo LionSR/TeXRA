@@ -150,9 +150,8 @@ export interface HostSnapshotSource {
     | Path.Path
     | ChildProcessSpawner
   >;
-  /** The project's files changed on disk outside TeXRA, or the surface
-   *  asked for a relist. TeXRA's own writes (`workspaceFilesWritten`) are
-   *  followed by the source itself. */
+  /** The project's files changed on disk outside TeXRA. TeXRA's own writes
+   *  (`workspaceFilesWritten`) are followed by the source itself. */
   readonly refreshFiles: Effect.Effect<
     void,
     never,
@@ -410,10 +409,9 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         Effect.andThen(loadUsage),
       ),
     );
-    // A write TeXRA made inside the project (an accepted output or diff, a
-    // service task's file) can add a file the launcher lists, on every host
-    // alike; a host may also follow edits made outside TeXRA
-    // (`refreshFiles`).
+    // A write TeXRA made inside the project (an accepted edit, a service
+    // task's file) can add a file the launcher lists, on every host alike;
+    // a host may also follow edits made outside TeXRA (`refreshFiles`).
     const root = options.root;
     const writtenInProject = ({
       absolutePaths,

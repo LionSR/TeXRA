@@ -635,9 +635,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'polish':
         case 'savePastedImage':
           return yield* draftRequests.handle(request, port);
-        case 'refreshFiles':
-          yield* snapshot.refreshFiles;
-          return done;
         case 'refreshUsage':
           if (request.force === true)
             yield* PlanQuotas.use((quotas) => quotas.invalidate());
