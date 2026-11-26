@@ -7,9 +7,11 @@ name: Nightly
 # filter.
 #
 # A failing night opens or updates the `nightly-ci` issue (the `nightly issue`
-# job below) and `nightly-fix.yml` starts the agent that repairs it. That
-# agent dispatches this workflow on its fix branch to prove the fix, which is
-# also how a person checks a risky branch before merging:
+# job below). A scheduled Claude Code task reads that issue each morning and
+# repairs the failure (`.github/prompts/nightly-fix-prompt.md`); it pushes to
+# a `claude/nightly-fix-*` branch, and every push there runs this workflow,
+# so its fix PR shows every suite's result before a person merges it. A
+# person checks any other risky branch the same way, by dispatch:
 #
 #   gh workflow run Nightly --ref <branch>
 #
@@ -18,12 +20,15 @@ name: Nightly
 on:
   schedule:
     - cron: '17 3 * * *'
+  push:
+    branches:
+      - 'claude/nightly-fix-**'
   workflow_dispatch:
 
 concurrency:
   # The scheduled run and a dispatch on `main` share a ref; the event name
-  # keeps one from cancelling the other. A second dispatch on a branch
-  # replaces the first.
+  # keeps one from cancelling the other. A second push or dispatch on a
+  # branch replaces the first.
   group: nightly-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
@@ -295,11 +300,11 @@ jobs:
   # Nobody watches a schedule: this run failed three nights running before
   # anyone looked. So a failing night opens one issue, each further failing
   # night comments on it, and the first passing night closes it. The issue is
-  # found by its label, which nothing else uses, and `nightly-fix.yml` reads
-  # the same label to find what its agent is repairing.
+  # found by its label, which nothing else uses, and the repair task reads
+  # the same label to find what to repair.
   #
-  # Only the scheduled run on `main` reports: a dispatch shows its own result
-  # to whoever started it.
+  # Only the scheduled run on `main` reports: a push or a dispatch shows its
+  # own result to whoever started it.
   nightly-issue:
     name: nightly issue
     needs: result

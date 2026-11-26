@@ -18,8 +18,8 @@ concurrency:
 # and a compile of the extension. Nothing here runs a test suite, launches an
 # app or needs a macOS or Windows runner. Every suite (the kernel shards on
 # Linux and Windows, both hosts' e2e, the packed example, the CLI runtime and
-# TUI validations, the VSIX package) runs in `nightly.yml`, and
-# `nightly-fix.yml` starts the agent that repairs a failing night. Run
+# TUI validations, the VSIX package) runs in `nightly.yml`, and a scheduled
+# agent repairs a failing night (`.github/prompts/nightly-fix-prompt.md`). Run
 # `npm test` before opening a pull request: no check here will.
 jobs:
   changes:
