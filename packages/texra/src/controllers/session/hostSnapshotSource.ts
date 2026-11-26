@@ -221,6 +221,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     | Path.Path
   > {
     const { stores } = options;
+    const sourceScope = yield* Effect.scope;
     const appState = yield* AppState;
     const inputs = yield* SubscriptionRef.make<Inputs>({
       loaded: false,
@@ -499,15 +500,16 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         Stream.filter((credential) => credential !== undefined),
         Stream.changes,
       ),
-      refresh: Effect.all(
-        [
-          Effect.andThen(loadModels, loadUsage),
-          loadFiles,
-          hostBanners,
-          loadFlags,
-        ],
-        { concurrency: 'unbounded', discard: true },
-      ).pipe(Effect.andThen(write({ loaded: true }))),
+      // The usage meters are optional: the snapshot is published first, and
+      // a slow quota endpoint fills them in afterwards.
+      refresh: Effect.all([loadModels, loadFiles, hostBanners, loadFlags], {
+        concurrency: 'unbounded',
+        discard: true,
+      }).pipe(
+        Effect.andThen(write({ loaded: true })),
+        Effect.andThen(Effect.forkIn(loadUsage, sourceScope)),
+        Effect.asVoid,
+      ),
       refreshFiles: loadFiles,
       filesWritten: appSignalStream('workspaceFilesWritten').pipe(
         Stream.filter(writtenInProject),

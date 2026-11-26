@@ -402,12 +402,9 @@ export class StageList extends LitElement {
               >`
             : nothing
         }`,
-      () =>
-        html`${repeat(
-          run.rows,
-          (row) => row.id,
-          (row) => this.renderLogEntry(row),
-        )}`,
+      // Bounded like a stage's rows: the recent ones first, the rest
+      // behind the reveal control.
+      () => this.renderRowEntries(run.rows, `tools:${run.id}`),
     );
   }
 
@@ -417,7 +414,25 @@ export class StageList extends LitElement {
       `work:${work.id}`,
       'work-fold',
       html`<span class="label">${workedFor(work.durationMs)}</span>`,
-      () => this.renderItems(work.items),
+      () => {
+        // Bounded like a stage's rows: a long turn opens on its recent
+        // items, the rest behind the reveal control.
+        const scope = `work:${work.id}`;
+        const windowSize =
+          this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW;
+        const hiddenCount = Math.max(0, work.items.length - windowSize);
+        return html`${
+          hiddenCount > 0
+            ? this.renderRevealButton({
+                hiddenCount,
+                step: STAGE_ROW_WINDOW_STEP,
+                scope,
+                kind: 'rows',
+                label: 'item',
+              })
+            : nothing
+        }${this.renderItems(work.items.slice(hiddenCount))}`;
+      },
     );
   }
 

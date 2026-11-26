@@ -141,7 +141,11 @@ export function turnLayout(
     let end = index + 1;
     while (end < timeline.length && !isMessage(timeline[end])) end += 1;
     const body = timeline.slice(index + 1, end);
-    let outcomeAt = body.length;
+    // The turn's outcome is its last answer (or error) and what runs with
+    // it, and any rows after it (a Stop hook's warning): those stay in view
+    // with the answer rather than folding it away.
+    const lastOutcome = body.findLastIndex(isOutcome);
+    let outcomeAt = lastOutcome === -1 ? body.length : lastOutcome;
     while (outcomeAt > 0 && isOutcome(body[outcomeAt - 1])) outcomeAt -= 1;
     const work = body.slice(0, outcomeAt);
     const outcome = body.slice(outcomeAt);

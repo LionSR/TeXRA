@@ -5,7 +5,6 @@ import {
   getBasename,
   getProposalFileGroups,
   type AgentProposalRequest,
-  getModelLabel,
 } from '@texra-ai/worldline/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -22,6 +21,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { CHILD_AGENT_COPY } from '@ui/copy/delegationApproval';
+import { modelSelectionLabel } from '@texra/shared/model/modelPicker';
 import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
 
 // Local imports - shared utils
@@ -63,7 +63,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const agent = html` <strong>${data.label}</strong>`;
     // The model is the agent's own choice; Edit opens the launch form for
     // a person who wants another.
-    const model = ` on ${getModelLabel(data.model)}`;
+    const model = ` on ${modelSelectionLabel(data.model)}`;
     return html`${REQUEST_ASK.proposal(data.task)}${agent}${model}`;
   }
 
@@ -141,7 +141,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       <div class="workflow-proposal__plan-note">
         ${scriptRequestFirstAgentLine(
           data.label,
-          getModelLabel(data.model),
+          modelSelectionLabel(data.model),
           data.instruction,
         )}
       </div>

@@ -352,13 +352,15 @@ export class ModelPicker extends TexraElement {
     const { current, choices } = modelChoices(this.selected, this.options);
     const shown = this.filtered(choices);
     const sent = levelOf(this.selected, current);
+    // A selection in pro mode runs differently, so the chip says so.
+    const pro = selectModel(this.selected)?.request.mode === 'pro';
     return html`
       ${renderLabeledActionButton({
         id: 'composer-model',
         kind: 'ghost',
         className: 'chip-trigger is-compact',
         // prettier-ignore
-        text: html`<span class="chip-label">${current.label}${sent === undefined ? nothing : html` <span class="chip-effort">${REASONING_LEVEL_LABELS[sent]}</span>`}</span>`,
+        text: html`<span class="chip-label">${current.label}${sent === undefined ? nothing : html` <span class="chip-effort">${REASONING_LEVEL_LABELS[sent]}</span>`}${pro ? html` <span class="chip-effort">Pro</span>` : nothing}</span>`,
         label: `Model: ${current.label}`,
         tooltip: 'Model',
         caret: true,
