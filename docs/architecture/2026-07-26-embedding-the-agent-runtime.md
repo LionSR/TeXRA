@@ -66,7 +66,7 @@ release closes every session it opened, then the process under them.
 
 - `{ system, tools?, label?, instruction, model }`: the run's
   own system text (before what the harness appends: the project's
-  `AGENTS.md`, attached memories, tool-use instructions, the plugins'
+  `AGENTS.md`, attached memories, the plugins'
   sections), the tool names it declares (`mcp__<server>__*` for every tool of
   a configured MCP server; none, and it answers in text only), the name its
   card and run directory show (default `agent`), the instruction, and the

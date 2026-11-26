@@ -18,43 +18,9 @@ import { buildWorkspaceInfoBlock } from './workspaceInfo';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
- * Instructions appended to an agent-with-tools prompt at open, led by the
- * working-directory sentences of the tools its first step offers. What
- * depends on the model or the settings is rendered by each step
- * (`stepInstructions`).
- */
-const toolUseInstructions = (offered: readonly string[], cwd: string) => {
-  const offers = (...names: string[]) =>
-    names.some((name) => offered.includes(name));
-  const workingDirectory = [
-    offers('bash') &&
-      `Working directory: the bash tool already executes every command from ${cwd}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`cat README.md\`).`,
-    offers('bash', 'glob', 'grep') &&
-      'Scope file searches to `.` or a subdirectory, or use the glob/grep tools.',
-  ].filter(Boolean);
-  const lead =
-    workingDirectory.length > 0 ? `${workingDirectory.join(' ')}\n` : '';
-  return `<tool_use_instructions>
-${lead}Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, file access, or a tool, do not use it. Report any resulting conflict instead.
-
-Prefer using tools over asking the user to take manual actions.
-Do not ask for permission in chat before editing a file or running a command: when the user's approval settings require confirmation, the harness asks before the call runs.
-If you say you will perform an action, immediately call the corresponding tool.
-When this run carries out an approved plan or a goal's round, work toward it end to end. Keep going and verify against real evidence rather than pausing to confirm each step or summarize progress. Stop only when it is verifiably done or you are genuinely blocked on something only the user can provide.
-In replies, lead with the outcome. Keep responses short by being selective about what to include, not by compressing the writing.
-Never mention tool names when speaking to the user.
-</tool_use_instructions>`;
-};
-
-/** How a step that offers tools may issue its calls. */
-const TOOL_CALLS =
-  'Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.';
-
-/**
  * The context a step renders: the tools it offers and the sections it adds
- * after the run's recorded prompt, by name, in order: how to issue tool
- * calls, the skills the step lists, its memory, then each pinned plugin's
- * section, in plugin id order. They are built from the step (its settings, offered tools
+ * after the run's recorded prompt, by name, in order: the skills the step
+ * lists, its memory, then each pinned plugin's section, in plugin id order. They are built from the step (its settings, offered tools
  * and pinned contributors) and the skill catalog it discovers, so a setting
  * change reaches the next request, and a resume rebuilds them.
  */
@@ -65,9 +31,6 @@ export function stepInstructions(
   ctx: Parameters<PromptSection>[0],
 ): PromptSections {
   const sections = Object.fromEntries([
-    // A step that offers no tool (a document reviser, the critic) has no
-    // calls to make.
-    ...(ctx.offered.length > 0 ? [['tool-call', TOOL_CALLS]] : []),
     ...(skills.length > 0
       ? [
           [
@@ -114,12 +77,11 @@ export function contextUpdate(
 
 /**
  * The system text a conversation opens with: its run's own system text
- * rendered, then the user's and project's `AGENTS.md`, and the suffix of
- * tool-use instructions and workspace facts, which a text-only run (one that
- * declares no tools) goes without. Only the run's own system text is a
- * template: the suffix is text this module builds, and the workspace facts in
- * it (a path, a branch name) come from the project, so they are data and are
- * never rendered. What each step's plugins add is appended per request
+ * rendered, then the user's and project's `AGENTS.md`, and the workspace
+ * facts, which a text-only run (one that declares no tools) goes without.
+ * Only the run's own system text is a template: the workspace facts (a path,
+ * a branch name) come from the project, so they are data and are never
+ * rendered. What each step's plugins add is appended per request
  * (`stepInstructions`).
  */
 export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
@@ -132,10 +94,9 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
        *  is the person's own, and the setting slots the `<workspace_info>`
        *  git reads take. */
       roots: WorkspaceRoots;
-      /** A run that declares no tools: no tool-use suffix. */
+      /** A run that declares no tools: no workspace facts. */
       textOnly: boolean;
-      /** The tools the run's first step offers, by name: the suffix names
-       *  only those. */
+      /** The tools the run's first step offers, by name. */
       offered: readonly string[];
       /** The memory folders that step reads and writes, none for a run
        *  with no memory: `<workspace_info>` says where they are. */
@@ -164,12 +125,6 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     );
     const systemPrompt = [rendered, agentsMd].filter(Boolean).join('\n');
     if (options.textOnly) return systemPrompt;
-    return [
-      systemPrompt,
-      toolUseInstructions(options.offered, inputs.CWD),
-      workspaceInfo,
-    ]
-      .filter(Boolean)
-      .join('\n');
+    return [systemPrompt, workspaceInfo].filter(Boolean).join('\n');
   },
 );
