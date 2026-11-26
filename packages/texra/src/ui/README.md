@@ -5,22 +5,27 @@ holds its rules; the values live in code.
 
 ## What the UI has to say
 
-TeXRA is an AI theorist that works with you. It proposes; you decide
-(`TEXRA_TAGLINE`, `copy/onboarding.ts`). Every surface serves one of those
-two halves:
+TeXRA is an AI theorist, and it is trusted to do the work. The interface
+is for the person: to follow what is happening and to step in, not to
+supervise each step. Every surface serves one of these:
 
-- **Capable.** Show the work: the diff, the derivation, the source. Do not
-  decorate it. Offer a concrete next step (one primary action) instead of
-  a blank box.
-- **Autonomous when asked.** One vocabulary, the approval policy's:
-  Ask / Block / Auto-approve. The composer's Approval chip follows the policy
-  by default, or auto-approves this task alone. That can only loosen Ask:
-  Block still blocks. The run header shows the switch for as long as the run
-  lives, and the user can turn it off mid-run. One state (the run's
-  delegated-work bypass), not a second autonomy system with its own words.
-- **In the loop.** Nothing lands without the user seeing it. Approval is a
-  visible choice, not a buried setting, and every failure the user must act on
-  is shown where it happened.
+- **Trust the model.** Commands and edits run without asking by default
+  (the approval policy's Auto-approve); a person narrows it to Ask or Block.
+  Add no control whose job is to tune or second-guess what the model decides
+  for itself: which tool, which model for a sub-agent, how hard to think. A
+  request for a person is the exception, and it is shown where the
+  conversation ends.
+- **Results first.** A finished turn shows its message, what it changed and
+  its answer; how it got there is one click away. When the work is shown, it
+  is the work itself: the diff, the derivation, the source, undecorated.
+- **Made for the person.** The rail, the statuses and the usage meters
+  answer a person's questions: what is running, what needs me, what
+  finished, what it costs. Autonomy has one vocabulary, the approval
+  policy's: Ask / Block / Auto-approve. The composer's Approval chip follows
+  the policy by default, or auto-approves this task alone, which can only
+  loosen Ask: Block still blocks. The run header shows that switch for as
+  long as the run lives. Every failure the person must act on is shown where
+  it happened.
 
 ## Layers
 
