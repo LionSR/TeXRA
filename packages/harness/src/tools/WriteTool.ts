@@ -47,31 +47,26 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   ToolContext | FileSystem.FileSystem | WorkspaceFs | AppSignals
 > {
   const call = yield* ToolContext;
-  const prepared = yield* resolveWritableTarget(input.path, {
-    allowMissing: true,
-  });
+  const prepared = yield* resolveWritableTarget(input.path);
   if ('blocked' in prepared) {
     return prepared.blocked;
   }
-  const { path, displayPath, exists, originalContent } = prepared.target;
+  const { path, displayPath, original } = prepared.target;
   const proposedContent =
     writeFilter === undefined
       ? input.content
       : yield* writeFilter(path, input.content, call.env.roots.config);
 
   return yield* applyApprovedFileEdit({
-    path,
-    displayPath,
-    exists,
-    originalContent,
+    target: prepared.target,
     proposedContent,
     sourceTool: 'write_file',
     present: ({ appliedContent }) => {
-      const originalLineCount = countLines(originalContent);
+      const originalLineCount = countLines(original ?? '');
       const newLineCount = countLines(appliedContent);
-      const action = exists ? 'Overwrote' : 'Created';
+      const action = original === null ? 'Created' : 'Overwrote';
       const replacementNote =
-        exists && originalLineCount > 0
+        originalLineCount > 0
           ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
           : undefined;
       return {
