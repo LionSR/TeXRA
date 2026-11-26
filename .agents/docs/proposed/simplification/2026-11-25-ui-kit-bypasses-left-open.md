@@ -57,9 +57,11 @@ lands.
    a `RunTone` table and their glyph and accessible name from the running
    and waiting statuses. The table stays in the panel until a second badge
    reads a tone.
-8. **`RetryRequestPanel.styles.ts` re-skins `.collapsible-quiet`** (header
-   height, padding, hover colour) and restates the error-details `pre` of
-   `toolUseStyles.ts`.
+8. **Closed.** The retry card's "Error details" is a plain
+   `.collapsible-quiet`; its header and summary rules are gone. Its body
+   stays local: it is extra-small, height-capped text in the card, where
+   `toolUseStyles.ts`'s error `pre` is a transcript row at body size, and
+   the two sheets never meet in one shadow root.
 9. **`DependencyBanner.ts`** joins its install links with a hand-written
    "a, b, and c" and a native `<button class="clickable-link">`, the one
    use of that rule on a button. `formatWordList` returns a string; a
