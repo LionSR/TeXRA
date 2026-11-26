@@ -427,9 +427,9 @@ export class SessionComposer extends TexraElement {
   }
 
   /** The launcher's chips beside its model; a follow-up has none, since its
-   *  run's approval and directory are set. Open on a proposal, the form
-   *  approves another run's launch, so that run's approval and directory
-   *  apply and only the model is offered. */
+   *  run's directory is set. Open on a proposal, the form approves another
+   *  run's launch, so that run's directory applies and only the model is
+   *  offered. */
   private chipMenus(): ChipMenu[] {
     const launch = this.surface?.launch;
     const host = this.host;
@@ -437,10 +437,6 @@ export class SessionComposer extends TexraElement {
     if (this.surface?.shown._tag === 'Proposal') return [];
     return launcherChipMenus(launch, host, {
       setLaunch: (patch) => this.setLaunch(patch),
-      openSettings: (target) =>
-        this.dispatchEvent(
-          SessionUiEvents.host({ kind: 'openSettings', target }),
-        ),
     });
   }
 

@@ -21,9 +21,9 @@ supervise each step. Every surface serves one of these:
 - **Made for the person.** The rail, the statuses and the usage meters
   answer a person's questions: what is running, what needs me, what
   finished, what it costs. Autonomy has one vocabulary, the approval
-  policy's: Ask / Auto-approve. The composer's Approval chip follows the
-  policy by default, or auto-approves this task alone. The run header shows that switch for as
-  long as the run lives. Every failure the person must act on is shown where
+  policy's: Ask / Auto-approve, set in Settings. Under Ask, a request card
+  grants a kind of work for the task, and the run header shows that grant
+  for as long as the run lives. Every failure the person must act on is shown where
   it happened.
 
 ## Layers

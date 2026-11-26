@@ -38,17 +38,13 @@ import {
   workspaceEnvironmentLayer,
 } from '@texra-ai/worldline/host';
 import {
-  Settings,
   logFailure,
   type AppSignals,
   type Secrets,
   type SettingsStores,
   AppState,
 } from '@texra-ai/worldline/plugins';
-import {
-  APPROVAL_POLICY_SETTING,
-  ensureError,
-} from '@texra-ai/worldline/schemas';
+import { ensureError } from '@texra-ai/worldline/schemas';
 import { isPathWithin } from '@texra-ai/worldline/node';
 import { apiKeyEntry } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
@@ -427,12 +423,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       ),
       loadFiles,
     );
-    // The approval policy is read live as each snapshot is mapped; a
-    // settings view's write republishes the inputs so the change shows.
-    yield* follow(
-      yield* subscribeAppSignal('approvalPolicyChanged'),
-      SubscriptionRef.update(inputs, (current) => ({ ...current })),
-    );
     // Configuring a credential clears a previous "Skip for now", so a user
     // who later loses every credential sees the picker again.
     yield* SubscriptionRef.changes(inputs).pipe(
@@ -452,10 +442,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     const snapshotOf = (s: Inputs): HostSnapshot => ({
       project: options.project,
       tools: options.tools,
-      approvalPolicy: Settings.getConfig(
-        stores.config,
-        APPROVAL_POLICY_SETTING,
-      ),
       modelOptions: s.modelOptions,
       planUsage: s.planUsage,
       workspaceRoots: s.workspaceRoots,
