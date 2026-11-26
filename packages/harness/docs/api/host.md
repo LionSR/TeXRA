@@ -288,6 +288,12 @@ interface HelperPrompt {
 }
 ```
 
+## HookEvent
+
+```ts
+type HookEvent = typeof HookEventSchema.Type;
+```
+
 ## InstalledPlugin
 
 ```ts
@@ -397,6 +403,14 @@ interface NativeEntry {
   /** What its plugin contributes, as `provides` names it. */
   readonly provides: readonly string[];
 }
+```
+
+## NormalizedUsage
+
+Normalized, priced usage of one call ({@link NormalizedUsageSchema}).
+
+```ts
+type NormalizedUsage = typeof NormalizedUsageSchema.Type;
 ```
 
 ## normalizeProviderError

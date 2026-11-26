@@ -1043,12 +1043,6 @@ the run's own model. An app names its own (`settingsCatalog`'s
 const HELPER_MODEL_SETTING: { readonly key: "helperModel"; readonly slot: "globalState"; readonly schema: UndefinedOr<NonEmptyString>; readonly title: "Helper model"; readonly description: "Model for quick helper steps like task titles and small fixes."; }
 ```
 
-## HookEvent
-
-```ts
-type HookEvent = typeof HookEventSchema.Type;
-```
-
 ## InputHistoryRecord
 
 ```ts
@@ -1418,14 +1412,6 @@ A whole number that is zero or more: a count, a size, an offset.
 
 ```ts
 const NonNegativeIntSchema: Int
-```
-
-## NormalizedUsage
-
-Normalized, priced usage of one call ({@link NormalizedUsageSchema}).
-
-```ts
-type NormalizedUsage = typeof NormalizedUsageSchema.Type;
 ```
 
 ## normalizeFilePath
