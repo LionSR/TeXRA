@@ -52,6 +52,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import './WorktreeChip';
+import { statusMark } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   NESTED_AGENT,
@@ -361,7 +362,7 @@ export class RunTab extends LitElement {
                 role="img"
                 aria-label=${status.word}
               >
-                ${waIcon(status.glyph, { className: 'tab-status-icon' })}
+                ${statusMark(status, 'tab-status-icon')}
                 ${status.waiting ? html`<span class="tab-status-label">${status.word}</span>` : nothing}
               </span>`
             : nothing

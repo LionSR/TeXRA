@@ -33,6 +33,7 @@ import {
 import { actionMenu } from '@ui/wa/actionMenu';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { inlineRenameField } from '@ui/wa/inlineRename';
+import { waSpinner } from '@ui/wa/spinner';
 import type { Shell } from './shell';
 
 /** One open project as the rail lists it: how its host names it, its session,
@@ -191,11 +192,14 @@ function projectSection(
         // The dot is the row's whole status line; its words are the tooltip.
         status
           ? html`<span
-              class="shell-project-status status-dot tone-${status.tone}"
+              class="shell-project-status tone-${status.tone} ${
+                status.tone === 'running' ? 'is-working' : 'status-dot'
+              }"
               role="img"
               aria-label=${status.label}
               title=${status.label}
-            ></span>`
+              >${status.tone === 'running' ? waSpinner() : nothing}</span
+            >`
           : nothing
       }
       <wa-dropdown

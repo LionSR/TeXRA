@@ -41,6 +41,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { statusMark } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - progress view constants
@@ -444,8 +445,12 @@ export class StageList extends LitElement {
 
     const status = stageStatus(stage, this.run);
     return html`
-      <span class="stage-status-icon">
-        ${waIcon(status.glyph, { label: status.word })}
+      <span
+        class="stage-status-icon tone-${status.tone}"
+        role="img"
+        aria-label=${status.word}
+      >
+        ${statusMark(status)}
       </span>
       <bdi class="stage-title">${stage.name}</bdi>
       <span class="stage-time">

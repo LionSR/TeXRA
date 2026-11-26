@@ -122,10 +122,6 @@ export const runTabStyles = css`
     ${truncateDeclarations}
   }
 
-  .tone-running .tab-status-icon {
-    font-size: 8px;
-  }
-
   .tab-meta {
     display: none;
     align-items: center;

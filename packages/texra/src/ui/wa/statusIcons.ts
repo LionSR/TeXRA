@@ -8,8 +8,24 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 // Local imports
 import { credentialOriginLabel } from '@ui/copy/credentials';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
+import type { IconName } from '@ui/wa/iconNames';
+import { waSpinner } from '@ui/wa/spinner';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { WaVariant } from '@ui/wa/waVariant';
+
+/**
+ * A status's mark: a spinner while its tone is running, so work in progress
+ * moves and a finished run does not, else its glyph. Decorative: the words
+ * beside it, or its holder's label, say the status.
+ */
+export function statusMark(
+  status: { readonly tone: string; readonly glyph: IconName },
+  className?: string,
+): TemplateResult {
+  return status.tone === 'running'
+    ? waSpinner(className)
+    : waIcon(status.glyph, { className });
+}
 
 interface SetStatusFallback {
   readonly label: string;

@@ -159,6 +159,12 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   justify-self: center;
   --dot-color: var(--tone-color);
 }
+/* A project with work in progress shows it moving. */
+.shell-project-status.is-working {
+  display: inline-flex;
+  font-size: var(--font-size-xs);
+  color: var(--tone-color);
+}
 .shell-project-status.tone-unseen {
   --tone-color: var(--wa-color-brand-fill-loud);
 }
