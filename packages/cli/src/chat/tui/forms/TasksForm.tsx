@@ -37,6 +37,7 @@ import {
   type AttachedTaskLevel,
   type ConnectService,
 } from '../state/attachedTask';
+import { boundedScrollableLines } from '../render/scrollBounds';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useChatProcess } from '../chatProcess';
 import { useMountScope } from '../state/useMountScope';
@@ -295,6 +296,13 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
       (notice ? 1 : 0) -
       (presentable ? REQUEST_CARD_ROWS : 0),
   );
+  // The newest rows, under a marker counting the older ones left out.
+  const shown = boundedScrollableLines({
+    lines: lines.map((text) => ({ kind: 'row', text })),
+    maxDisplayLines: budget,
+    scrollOffset: lines.length,
+    width: contentWidth,
+  });
 
   return (
     <Box flexDirection="column">
@@ -303,8 +311,10 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         title={title}
         hints={hints}
       >
-        {lines.slice(-budget).map((line, index) => (
-          <Text key={index}>{line}</Text>
+        {shown.map((line, index) => (
+          <Text key={index} dimColor={line.kind === 'overflow'}>
+            {line.text}
+          </Text>
         ))}
         {composing && (
           <PromptInput
