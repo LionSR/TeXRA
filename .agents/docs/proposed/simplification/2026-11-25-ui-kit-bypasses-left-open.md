@@ -62,10 +62,11 @@ lands.
    stays local: it is extra-small, height-capped text in the card, where
    `toolUseStyles.ts`'s error `pre` is a transcript row at body size, and
    the two sheets never meet in one shadow root.
-9. **`DependencyBanner.ts`** joins its install links with a hand-written
-   "a, b, and c" and a native `<button class="clickable-link">`, the one
-   use of that rule on a button. `formatWordList` returns a string; a
-   `formatToParts` variant and the kit's link button would replace both.
+9. **Closed.** `DependencyBanner.ts` joins its install links with
+   `Intl.ListFormat.formatToParts`, the formatter `formatWordList` wraps.
+   The native `<button class="clickable-link">` stays: the link sits inside
+   a sentence, and a `wa-button` is inline-flex and would break the line
+   (`button.clickable-link` in `commonViewStyles.ts` says so).
 
 ## Desktop
 
