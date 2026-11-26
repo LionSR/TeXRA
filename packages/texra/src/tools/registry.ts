@@ -49,9 +49,10 @@ import { EditorHost, editorRegistry, type EditorRegistry } from './editorHost';
 import { lean4 } from './lean/plugin';
 import { OpenPdfTool } from './OpenPdfTool';
 /**
- * Setup-assistant tools: a narrow set for the onboarding agent, one per
- * concern. Every read-only fact about the environment is one report, so the
- * agent never sequences overlapping reads:
+ * Setup functions: script functions (offered with the script tool, never
+ * sent as tools of their own), one per concern. Every read-only fact about
+ * the environment is one report, so a script never sequences overlapping
+ * reads:
  *   - probe_environment — the read-only environment and credential report
  *     (or, given a `tool`, a recheck of that one tool after an install)
  *   - unset_api_key — remove a persisted provider credential
@@ -73,7 +74,6 @@ import { OpenPdfTool } from './OpenPdfTool';
  * layer over what the host passes `texraPlugins`.
  */
 import { ProbeEnvironmentTool } from './setup/ProbeEnvironmentTool';
-import { SETUP_PROMPT } from './setup/setupPrompt';
 import { UnsetApiKeyTool } from './setup/UnsetApiKeyTool';
 import { InvokeCommandTool } from './setup/InvokeCommandTool';
 import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
@@ -237,9 +237,9 @@ const core = (
   }),
 });
 
-/** The onboarding agent's narrow set, one concern per tool, over the host's
- *  setup capabilities: a tool that needs a member the host left undefined
- *  is not offered. The members are read when asked, not here. */
+/** The setup functions every script has, one concern each, over the host's
+ *  setup capabilities: a function that needs a member the host left
+ *  undefined is not offered. The members are read when asked, not here. */
 const setup = (
   platform: SetupPlatformShape,
   host: SetupHost['Service'],
@@ -247,8 +247,6 @@ const setup = (
 ) =>
   definePlugin<SetupPlatform | SetupHost>({
     id: 'setup',
-    prompt: ({ offered }) =>
-      offered.includes('probe_environment') ? SETUP_PROMPT : '',
     processLayer: {
       layer: Layer.mergeAll(
         Layer.succeed(SetupPlatform)(platform),

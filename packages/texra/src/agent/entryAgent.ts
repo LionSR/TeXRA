@@ -57,35 +57,17 @@ const ENTRY_TOOLS: readonly string[] = Object.freeze([
 
 /**
  * The entry agent as a launch configuration names it: its system text and
- * tools, which the run records, so a resume reads nothing else. `also` adds
- * tools one host action needs (setup's), and `label` is what that action's
- * runs are called.
+ * tools, which the run records, so a resume reads nothing else. `label` is
+ * what one host action's runs are called (setup's).
  */
-export const entryAgent = (
-  also: readonly string[] = [],
-  label: string = ENTRY_AGENT_NAME,
-): ChatLaunch => ({
+export const entryAgent = (label: string = ENTRY_AGENT_NAME): ChatLaunch => ({
   label,
   system: ENTRY_PROMPT,
-  tools: [...new Set([...ENTRY_TOOLS, ...also])],
+  tools: [...ENTRY_TOOLS],
 });
 
 /** What the setup conversation's runs are called: the setup entry points
- *  find a live one by it. */
+ *  find a live one by it. Setup is the entry agent with its script
+ *  functions (\`probe_environment\`, \`update_config\`, …), which every
+ *  run that offers the script tool has. */
 export const SETUP_AGENT_NAME = 'setup';
-
-/** The entry agent as the setup conversation starts it: with the setup
- *  plugin's tools, whose prompt section holds the procedure. */
-export const setupAgent = () =>
-  entryAgent(
-    [
-      'probe_environment',
-      'unset_api_key',
-      'invoke_command',
-      'install_vscode_extension',
-      'read_config',
-      'update_config',
-      'send_to_terminal',
-    ],
-    SETUP_AGENT_NAME,
-  );

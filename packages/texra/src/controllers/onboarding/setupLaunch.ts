@@ -8,7 +8,7 @@ import {
 import { presentRunFailure } from '@texra-ai/worldline/host';
 import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
-import { SETUP_AGENT_NAME, setupAgent } from '@texra/agent/entryAgent';
+import { SETUP_AGENT_NAME, entryAgent } from '@texra/agent/entryAgent';
 import type { Dialogs } from '@texra/hosts/uiHosts';
 import type { Run, Session, Notices } from '@texra-ai/worldline';
 import type { SettingsStores } from '@texra-ai/worldline/plugins';
@@ -18,7 +18,7 @@ const CHANNEL = 'SetupAssistant';
 
 /** The first instruction of the setup conversation. */
 const SETUP_INSTRUCTION =
-  'Finish installing TeXRA. Probe my environment, install anything missing, and configure a working credential.';
+  'Finish setting up TeXRA: probe my environment, install anything missing, make sure a model credential works, then start a first task on my project.';
 
 /** What a project window lends its setup verb: the project's session and
  *  settings, its launcher (`HostRunActions.runValidated`), its notices, and
@@ -77,7 +77,7 @@ export const openWindowSetup = Effect.fn('openWindowSetup')(function* <E, R>(
       inputFiles: [],
       contextFiles: [],
       mediaFiles: [],
-      ...setupAgent(),
+      ...entryAgent(SETUP_AGENT_NAME),
       model,
       instruction: SETUP_INSTRUCTION,
     };

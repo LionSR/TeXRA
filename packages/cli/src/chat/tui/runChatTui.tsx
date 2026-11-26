@@ -65,7 +65,7 @@ import {
   type ChatSessionController,
 } from '../chatSessionController';
 import { App } from './App';
-import { setupAgent } from '@texra/agent/entryAgent';
+import { entryAgent, SETUP_AGENT_NAME } from '@texra/agent/entryAgent';
 import { type ChatLaunch, chatOf } from '@texra/shared/session/surface';
 import { cliEntryAgent, withoutEditorTools } from '@cli/runtime/cliEntryAgent';
 import { type SlashCommandContext } from './commands/handlers/slashContext';
@@ -196,7 +196,7 @@ export async function runChat(
       const chat: ChatLaunch =
         resumed === undefined
           ? init.setup
-            ? withoutEditorTools(setupAgent())
+            ? withoutEditorTools(entryAgent(SETUP_AGENT_NAME))
             : yield* cliEntryAgent
           : chatOf(resumed);
       const modelSelectionExit = yield* Effect.exit(
