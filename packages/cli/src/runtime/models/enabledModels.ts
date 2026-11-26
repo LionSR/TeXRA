@@ -88,8 +88,7 @@ export function setCliModelEnabled(
     // Enablement belongs to the model, not to an effort or mode suffix.
     const resolved = resolveKnownCliModelId(modelInput);
     const model = resolved && (modelRefOf(resolved) ?? resolved);
-    if (!model)
-      return yield* failUsage(unknownCliModelMessage(modelInput));
+    if (!model) return yield* failUsage(unknownCliModelMessage(modelInput));
     const list = yield* setModelEnabled({ model, enabled, stores });
     return { model, enabled: list.includes(model), list };
   });

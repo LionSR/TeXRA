@@ -50,6 +50,7 @@ and the log line of a notice that could not be shown.
    never gets those tools when a GUI window later continues it. Decision:
    delete the strip and rely on the capability, or derive the list from the
    declarations.
+   Landed on 2026-11-26: the strip is deleted.
 3. **Which image types a model takes.** The harness treats any `image/*`
    as an image part (`isImageMimeType`,
    `packages/harness/src/utils/files/mimeUtils.ts`); llm accepts PNG, JPEG,
@@ -65,6 +66,7 @@ and the log line of a notice that could not be shown.
    a person with an unknown `--model` to `texra models list`, which lists
    only enabled models that can run, while `--model` takes any catalog id
    (`texra models list --all`).
+   Landed on 2026-11-26: `NO_RUNNABLE_MODELS` and `unknownCliModelMessage`.
 5. **Which finished run each GUI host announces** (item 1 of the
    2026-11-23 note) is still open. The extension's chime filter reads
    `isDocumentTaskRun`, which #15229 deletes; decide the rule after it
@@ -74,6 +76,7 @@ and the log line of a notice that could not be shown.
    `packages/llm/src/api/openaiResponsesWebSocket.ts`): the same
    environment variable and sentence. Low value; state the pair beside
    `openaiClient`.
+   Already landed: `refuseAmbientOpenAiHeaders`.
 
 ## Checked and declined
 
