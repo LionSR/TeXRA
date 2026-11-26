@@ -25,6 +25,7 @@ import {
   REASONING_LEVEL_OPTIONS,
   EXPENSIVE_MODEL_HINT,
 } from '@texra/shared/model/modelPicker';
+import { factDot } from '@ui/wa/factDot';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { modelAvailabilityLabel } from '@ui/copy/modelAccess';
@@ -204,7 +205,7 @@ export class ModelSelectionList extends TexraSignalElement {
           ${
             model.routeLabel
               ? html`<span class="model-route"
-                  >· <bdi dir="auto">${model.routeLabel}</bdi></span
+                  >${factDot()} <bdi dir="auto">${model.routeLabel}</bdi></span
                 >`
               : nothing
           }
