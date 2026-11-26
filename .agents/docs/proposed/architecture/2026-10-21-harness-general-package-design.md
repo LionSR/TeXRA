@@ -471,7 +471,7 @@ Open, for the owner:
   `withFileWriteLane`, the path predicates, `buildDiffHunks`,
   `readModelOptions`, `AgentDirectories`, `isModuleNotFoundError`. Either
   they are authoring surface and move to `./plugins`, or the plugins stop
-  using them.
+  using them. Landed 2026-11-20 (#15120); recounted on 2026-11-26 below.
 - The MCP client tells every server its name is `texra`
   (`tools/mcp/mcpServer.ts`, `clientInfo`). The app's `ClientIdentity`
   reaches only the model providers; sending it here adds
@@ -516,6 +516,108 @@ takes). `./plugins` is 154 names and imports none of them, so a native
 plugin (`NativePluginHost.plugins`) is no longer handed the built-ins to
 list again. No name was renamed and nothing is re-exported from the old
 entry.
+
+### Re-check (2026-11-26, at `7538e2e`): every name, its importers
+
+Measured with the TypeScript compiler over the nine entries, as the
+2026-11-19 re-check did: for each name, the files outside its own package's
+`src/` that import it (app, hosts, llm, the examples, scripts,
+`src/test-kernel/` and the packages' `test/`), and whether another public
+export names it, in its declaration or in the resolved type the docgen
+report prints (so a field or result type counts as named, as
+`McpServerConfig` is by `readMcpConfig`'s result). A name nobody imports
+and no live name names is free.
+
+| Entry                | Names   | Imported by nobody | Free |
+| -------------------- | ------- | ------------------ | ---- |
+| root                 | 45      | 13                 | 0    |
+| `./schemas`          | 299     | 45                 | 7    |
+| `./transcript`       | 73      | 20                 | 1    |
+| `./plugins`          | 153     | 55                 | 6    |
+| `./builtins`         | 9       | 0                  | 0    |
+| `./host`             | 91 → 90 | 26                 | 0    |
+| `./node`             | 65      | 4                  | 1    |
+| `@texra-ai/llm`      | 103     | 12                 | 3    |
+| `@texra-ai/llm/node` | 23      | 4                  | 0    |
+
+Every root name nobody imports is named by a root signature (`Sessions`,
+`Session`, `LocalSession`, `Notices`); so is every such `./host` name, by a
+`./host` signature, and every such llm name, by an llm or harness one.
+
+Landed: `./host` stops exporting `MODEL_SELECTION_KEY`, whose one importer
+was the TUI fixture script (a lint exemption that already reads the
+session's internals); no signature names it.
+
+The twelve helpers: TeXRA's plugins import nothing from `./host` (zero
+files under `packages/texra/src/tools` or the bundled plugin resources).
+#15120 moved what they still use to the entry it belongs on, and the rest
+went with the code: the `FileLocation` builders (a location is written as
+its literal, #15142), `isModuleNotFoundError` (the agent CLI's own,
+`vendorPackages.ts`); `AgentDirectories` is on no entry. Of the moved ones, `withPerKeyLane`
+(`./plugins`) keeps two plugin importers after #15230 (the Lean server),
+`isPathWithin` (`./node`) one (`OpenPdfTool.ts`), and `buildDiffHunks`,
+`withFileWriteLane`, `isStrictlyWithin` and `toPosixPath` lose their last
+plugin importer to #15229 and #15230 but keep app or host importers;
+`readModelOptions` has no plugin importer and stays on `./host` for the CLI
+and the app's model picker.
+
+Free, but on an entry an open PR edits (#15216, #15229 and #15230 hold
+`schemas.ts`, `plugins.ts`, `transcriptEntry.ts`, `node.ts`,
+`packages/llm/src/index.ts` and the modules behind them), so not taken here:
+
+- `./schemas`: `QueuedFollowUp`, `AgentProposal`, `ContextManagementData`,
+  `ResumeRefusal` (each read only inside the harness),
+  `ExternalFileLocation` and `WorkspaceFileLocation` (two cases of
+  `FileLocation`, which callers write as a literal), and
+  `LoadedMediaMetadata`, which #15229 removes.
+- `./transcript`: `mcpServerOfToolName`, read only inside the harness.
+- `./plugins`: `buildFileAttachment`, `BuildFileAttachmentOptions`,
+  `ToolFileAttachment` (the Read tool's own) and `MEMORY_INDEX`.
+  `NativeEntryModule` and `NativePluginHost` stay: they are what a
+  third-party `harness.mjs` is written against, whose importers live
+  outside this repository.
+- `./node`: `MachineGitResult`, which no signature names (`machineGit`
+  answers its own `{ code, stderr, stdout }`).
+- `@texra-ai/llm`: `findModelProviderPlugin`, `MODEL_PROVIDER_PLUGINS` and
+  `ModelProviderPlugin`, read only inside llm (`providers.ts`,
+  `modelRoute.ts`).
+- Imported only by tests or the fixture scripts and named by nothing:
+  `toJsonValue` (`./schemas`), `makeJsonRpcConnection` (`./plugins`),
+  `DEFAULT_MODEL_CAPABILITIES` (`@texra-ai/llm`).
+
+On the wrong entry, also behind those PRs: `PlanQuotaFailure`, `HookEvent`
+and `NormalizedUsage` are on `./schemas`, but only `./host` signatures
+(`PlanQuota`, `ConfiguredHook`, `helperCall`) name them.
+
+Freed when #15229 and #15230 land (their last importer is a file they
+delete; the PRs leave the export): on `./schemas`, `ToolFact`,
+`causeChain`, `formatWallTime`, `previewLabel`, `DiffStats`,
+`DiffStatsSchema`, `fileLocationShortDisplayPath`, `McpToolOutput`,
+`runStorageFilePath`; on `./transcript`, `buildMcpToolName`; on
+`./plugins`, `formatToolOutput`, `buildApprovalRejectedResult`,
+`unifiedDiffText`, `EditRecord`, `parseWorkingDirectory`, `noLaterTurn`,
+`sourceLocationUnder`, `jitteredExponentialBackoffMs`, `isTransportReason`;
+on `./node`, `isStrictlyWithin`, `toPosixPath`, `createSymlink`; on
+`@texra-ai/llm`, `resolveCredential`, `codexBackendModelId`,
+`DEFAULT_EFFORT`. With the free names above that is 43 names the next run
+over these entries removes after both PRs merge (`./plugins` 153 → 139
+and `./schemas` 299 → 283, beyond the names the PRs remove themselves).
+
+Stays, with its reason:
+
+- `RunServices` and `PlatformServices` on `./host`, though `./plugins`
+  signatures (`PluginToolServices`, `ChildRunsShape`, `ProcessTurn`) name
+  them: they list what a host process serves, and a plugin passes them
+  through.
+- `RouteUnavailable` on `./host`: only the harness's own tests import it,
+  but `CallFailure`, `ownKeyCredential` and `readModelOptions` fail with it.
+- `SubscriptionCoordinator` and `ChatgptSession` on `@texra-ai/llm/node`:
+  only llm's tests import them, but `SubscriptionAccounts` names them.
+- `onAppSignal` and `subscribeAppSignal` beside `appSignalStream` on
+  `./host`, one importer each: `onAppSignal` isolates a throwing listener
+  with a warning that `Stream.runForEach` over the stream does not, and
+  `subscribeAppSignal` subscribes before the caller reads the state; both
+  live in `platform/appSignals.ts`, which #15216 edits.
 
 ### Sequencing with work in flight
 
@@ -572,7 +674,9 @@ both call. No shared preamble is left to fold: the bash guard decides in the loo
 - **Alias scoping** must still serve `tsconfig.test-kernel.json`, which today
   extends the root `tsconfig.json`.
 - **`./host`** is smaller but nothing forces it to shrink. Its api-report diff
-  is the only check.
+  is the only check. On 2026-11-26 none of its 90 names was free (the
+  re-check above), so what shrinks it now is moving its consumers, not
+  deleting names.
 - **The timed follow-up's `notBefore`** needs a `followup.queued` version bump
   either way; after the freeze it costs one identity upcaster more (1.0 PRD,
   decided 2026-10-30).
