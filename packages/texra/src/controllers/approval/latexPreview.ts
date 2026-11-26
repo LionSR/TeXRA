@@ -28,15 +28,11 @@ import {
 } from '@texra-ai/worldline/plugins';
 import { meansAbsent } from '@texra-ai/worldline/node';
 import { toErrorMessage, type FileLocation } from '@texra-ai/worldline/schemas';
-import { collectFilesFromPatterns } from '@housekeeping/artifactFiles';
-import { TEMP_EXTENSIONS } from '@housekeeping/constants';
+import { auxFilesOf } from '@housekeeping/artifactFiles';
 import { removeBestEffort } from '@texra/common/files/removeBestEffort';
 import { latexdiff } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
-import {
-  generateDiffFileName,
-  WORKSPACE_DIFF_SUFFIX,
-} from '@latex/latexdiff/diffFileNameManager';
+import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -153,23 +149,14 @@ type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 
 /**
  * Delete a file and the LaTeX auxiliary files its build wrote, beside it or
- * in its `build/` folder, found the way Clean Build finds them. A listing
- * that fails is logged and deletes only the file.
+ * in its `build/` folder. A listing that fails is logged and deletes only
+ * the file.
  */
 const deleteWithAuxFiles = Effect.fn('latexPreview.deleteWithAuxFiles')(
   function* (
     filePath: string,
   ): Effect.fn.Return<void, never, FileSystem.FileSystem> {
-    const dir = path.dirname(filePath);
-    // An extensionless file keeps its whole name as the stem.
-    const stem = path.basename(filePath, path.extname(filePath));
-    // Listed relative to the file's own directory.
-    const auxFiles = yield* collectFilesFromPatterns(
-      dir,
-      '.',
-      [stem],
-      TEMP_EXTENSIONS,
-    ).pipe(
+    const auxFiles = yield* auxFilesOf(filePath).pipe(
       Effect.catch((error) =>
         logFailure(
           CHANNEL,
@@ -180,7 +167,7 @@ const deleteWithAuxFiles = Effect.fn('latexPreview.deleteWithAuxFiles')(
     );
     yield* removeBestEffort(
       yield* FileSystem.FileSystem,
-      [filePath, ...[...auxFiles].map((file) => path.resolve(dir, file))],
+      [filePath, ...auxFiles],
       'temp file',
     ).pipe(withLogChannel(CHANNEL));
   },
@@ -312,17 +299,13 @@ export const previewProposedLatex = (
     }),
   );
 
-interface LatexdiffOptions extends LatexPreviewDisplayOptions {
-  subtype?: string;
-}
-
 /**
- * Run latexdiff on the original and proposed content.
- * @param options.subtype - e.g., 'ONLYCHANGEDPAGE' to show only pages with changes
+ * Run latexdiff on the original and proposed content, marked up as the
+ * workspace's latexdiff settings say.
  */
 export const runLatexdiff = (
   entry: LatexPreviewEntry,
-  options: LatexdiffOptions,
+  options: LatexPreviewDisplayOptions,
 ): Effect.Effect<void, never, PreviewServices> =>
   withLatexOperation(
     entry,
@@ -360,10 +343,7 @@ export const runLatexdiff = (
       const outputDirectory = path.dirname(originalPath);
       yield* removeWithEntry(
         entry,
-        path.join(
-          outputDirectory,
-          generateDiffFileName(proposedPath, WORKSPACE_DIFF_SUFFIX),
-        ),
+        path.join(outputDirectory, generateDiffFileName(proposedPath)),
       );
 
       const diffPath = yield* latexdiff(
@@ -372,9 +352,6 @@ export const runLatexdiff = (
         {
           roots: entry.request.roots,
           cwd: entry.request.roots.workspace ?? outputDirectory,
-          suffix: WORKSPACE_DIFF_SUFFIX,
-          mathMarkup: 'coarse',
-          subtype: options.subtype,
           outputDirectory,
         },
       ).pipe(withLogChannel('ToolEditApproval'));

@@ -17,10 +17,7 @@ import {
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/platform/logSinks';
-import {
-  formatInteractiveTerminalFailure,
-  interactiveTerminalFailure,
-} from '../runtime/terminal/terminalRequirements';
+import { interactiveTerminalRejection } from '../runtime/terminal/terminalRequirements';
 import {
   CliUsageError,
   failUsage,
@@ -72,7 +69,7 @@ const recoveryInputsAreDurable = Effect.fn('recoveryInputsAreDurable')(
 /**
  * Continue a stored session through the session's resume: a tool-use
  * session reopens the interactive chat TUI (so a usable terminal is
- * required), whose `/resume` calls it; a document task run resumes headless under
+ * required), whose `/resume` calls it; a program run resumes headless under
  * its persisted run id, in the same run skeleton as `texra run`. The chat case names the session with its persisted
  * record rather than mounting the TUI itself: `cliCommand`'s launch mounts it
  * once this program has finished. This entry never suppresses the platform's
@@ -86,7 +83,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   fork = false,
 ) {
   // A conversation continues in the service, which every chat is a client
-  // of: the platform starts it when none runs. A document task resumes
+  // of: the platform starts it when none runs. A program run resumes
   // headless, in this process; a service this process holds none of is
   // said, since nothing after this would say it.
   const stores = yield* cliPlatform;
@@ -96,10 +93,8 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     );
   const runSession = yield* stores.runSession;
   const configResult = yield* Effect.result(runSession.records(id).readConfig);
-  if (Result.isFailure(configResult)) {
-    writeTextStderr(loadFailureMessage(id, configResult.failure));
-    return CliExitCode.AgentError;
-  }
+  if (Result.isFailure(configResult))
+    return resumeFailureExit(id, configResult.failure);
   const config = configResult.success;
   if (!config) {
     return yield* failUsage(`Task not found: ${id}`);
@@ -108,16 +103,10 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   // A fork reads the source's committed rows, whoever holds it, and the
   // chat continues the new task.
   if (fork) {
-    const terminalFailure = interactiveTerminalFailure(context);
-    if (terminalFailure) {
-      return yield* failUsage(
-        formatInteractiveTerminalFailure(terminalFailure, {
-          headlessMessage: `Forking continues the new task in an interactive chat: run \`${context.commandName} resume ${id} --fork\` in a terminal.`,
-          dumbTerminalCommand: 'resume',
-          dumbTerminalOptions: { commandName: context.commandName },
-        }),
-      );
-    }
+    const terminalRejection = interactiveTerminalRejection(context, 'resume', {
+      headlessMessage: `Forking continues the new task in an interactive chat: run \`${context.commandName} resume ${id} --fork\` in a terminal.`,
+    });
+    if (terminalRejection) return yield* failUsage(terminalRejection);
     const forked = yield* Effect.result(forkRun(runSession, id));
     if (Result.isFailure(forked)) {
       return yield* failUsage(requestErrorText(forked.failure));
@@ -134,10 +123,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   // Read from the log: a service window's own view fills after it opens.
   if (!program) {
     const stored = yield* Effect.result(runSession.view.read([id]));
-    if (Result.isFailure(stored)) {
-      writeTextStderr(loadFailureMessage(id, stored.failure));
-      return CliExitCode.AgentError;
-    }
+    if (Result.isFailure(stored)) return resumeFailureExit(id, stored.failure);
     const oneShot = oneShotResumeNotice(
       context.commandName,
       id,
@@ -156,28 +142,19 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     );
 
   // A chat resume reopens the interactive TUI, so headless callers are
-  // rejected before resume-state loading. A document task resumes headless
+  // rejected before resume-state loading. A program run resumes headless
   // and skips this gate entirely.
   if (!program) {
-    const terminalFailure = interactiveTerminalFailure(context);
-    if (terminalFailure) {
-      const commandName = context.commandName;
-      const runCommand = `${commandName} run`;
-      return yield* failUsage(
-        formatInteractiveTerminalFailure(terminalFailure, {
-          headlessMessage: `Resuming opens an interactive chat; run \`${formatResumeCommand(
-            commandName,
-            id,
-            { approvalPolicy: context.approvalPolicy },
-          )}\` in a terminal. For scripting, use \`${runCommand}\`.`,
-          dumbTerminalCommand: 'resume',
-          dumbTerminalOptions: {
-            commandName,
-            nonInteractiveFallback: `\`${runCommand}\``,
-          },
-        }),
-      );
-    }
+    const runCommand = `${context.commandName} run`;
+    const terminalRejection = interactiveTerminalRejection(context, 'resume', {
+      headlessMessage: `Resuming opens an interactive chat; run \`${formatResumeCommand(
+        context.commandName,
+        id,
+        { approvalPolicy: context.approvalPolicy },
+      )}\` in a terminal. For scripting, use \`${runCommand}\`.`,
+      nonInteractiveFallback: `\`${runCommand}\``,
+    });
+    if (terminalRejection) return yield* failUsage(terminalRejection);
     return {
       chat: { initialResume: { id, config } },
     };

@@ -167,9 +167,6 @@ importers:
       esbuild:
         specifier: 'catalog:'
         version: 0.28.2
-      glob:
-        specifier: 'catalog:'
-        version: 14.0.6
       jsdom:
         specifier: ^31.0.1
         version: 31.0.1(@noble/hashes@2.2.0)

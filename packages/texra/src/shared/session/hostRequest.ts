@@ -79,7 +79,6 @@ export const HostCommandSchema = Schema.Union([
   }),
   Schema.Struct({ kind: Schema.Literal('popOut') }),
   Schema.Struct({ kind: Schema.Literal('popBack') }),
-  Schema.Struct({ kind: Schema.Literal('refreshFiles') }),
   /** Read the plans' quotas again; `force` asks each plan's endpoint
    *  instead of taking an answer still fresh. */
   Schema.Struct({

@@ -60,6 +60,8 @@ These landed in the PR that adds this note:
    function returning the message in `terminalRequirements.ts`; two of the
    three files are held. `resumeRun.ts` also writes the non-usage branch of
    its own `resumeFailureExit` inline twice.
+   **Landed 2026-11-26 evening:** `interactiveTerminalRejection` returns
+   the message, and both load failures take `resumeFailureExit`.
 5. **A forwarded `--` is handled three ways in scripts.** Six scripts drop
    every `--` from `process.argv`, two drop a leading one, and nine that
    call `parseArgs` handle none, so `pnpm run <script> -- --flag` reads the
