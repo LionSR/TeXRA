@@ -20,10 +20,14 @@ pointer prompt row and render-error line onto the kit.
    native `<button>` with `aria-current` for its row, because the row holds
    a two-line text block and a badge slot.
 3. **Hard-coded row heights** beside `--row-height` and `--height-control*`:
-   `ScriptStage.ts` (32px), `logEntryStyles.ts` (26px), `NewTaskHero.ts`
-   (24px), `progressAppStyles.ts` (44px), and the desktop's `styles.css` and
-   `desktopShell.css` (28 to 36px). Each wants a check in both themes and
-   both hosts before it takes a token.
+   `ScriptStage.ts` (32px), `logEntryStyles.ts` (26px), and the desktop's
+   `styles.css` and `desktopShell.css` (28 to 36px). Each wants a check in
+   both themes and both hosts before it takes a token: none of them equals
+   a token on both hosts (the extension's `--row-height` is 24px, the
+   desktop's 30px), so each move changes a height somewhere.
+   `NewTaskHero.ts`'s 24px is the hero glyph's box, not a row. The
+   2026-11-26 run dropped `progressAppStyles.ts`'s 44px: the embedded
+   placement is the desktop's, whose `--wa-height-header` is already 44px.
 4. **The desktop's no-project panel** (`packages/desktop/src/renderer/main.ts`)
    builds the icon surface, heading and paragraph that `renderEmptyState`
    renders. It also holds a capabilities list and a primary action, which

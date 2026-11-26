@@ -30,7 +30,7 @@ export function assertExplicitModelKnown(
   const resolved = resolveKnownCliModelId(trimmed);
   if (!resolved) {
     throw new CliUsageError({
-      message: `Model not found: ${trimmed}. Use \`texra models list\` to see available models.`,
+      message: `Model not found: ${trimmed}. Use \`texra models list --all\` to see every model.`,
     });
   }
   return resolved;

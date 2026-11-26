@@ -13,6 +13,9 @@ import {
 } from '@ui/wa/actionButtons';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';
 
+/** `formatWordList(names, 'and')` in parts, so each name can be a link. */
+const NAME_LIST = new Intl.ListFormat('en', { type: 'conjunction' });
+
 /**
  * The missing-tools warning: one sentence naming what is missing and what
  * TeXRA can't do without it, then Install guide, Check again, and ×.
@@ -57,25 +60,20 @@ export class DependencyBanner extends TexraElement {
     const uses = [...new Set(tools.map((tool) => tool.usedFor))];
     const single = groups.length === 1 ? groups[0] : undefined;
     // One tool: its name is plain text and Install guide opens the guide.
-    // Several: each name is its own install-guide link, joined as
-    // `formatWordList` joins words ("a and b", "a, b, and c").
-    const last = groups.length - 1;
-    const joiner = (index: number): string => {
-      if (index === 0) return '';
-      if (index < last) return ', ';
-      return last === 1 ? ' and ' : ', and ';
-    };
+    // Several: each name is its own install-guide link ("a and b",
+    // "a, b, and c").
     const names = single
       ? html`<bdi dir="auto">${single}</bdi>`
-      : groups.map(
-          (group, index) =>
-            html`${joiner(index)}<button
+      : NAME_LIST.formatToParts(groups).map((part) =>
+          part.type === 'literal'
+            ? part.value
+            : html`<button
                 type="button"
                 class="clickable-link focus-ring"
-                aria-label=${`Open the ${group} install guide`}
+                aria-label=${`Open the ${part.value} install guide`}
                 @click=${() => this.install()}
               >
-                <bdi dir="auto">${group}</bdi>
+                <bdi dir="auto">${part.value}</bdi>
               </button>`,
         );
     return renderWarningBanner({

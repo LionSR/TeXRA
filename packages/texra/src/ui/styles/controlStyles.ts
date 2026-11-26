@@ -50,6 +50,25 @@ export const focusRingStyles: CSSResult = css`
 `;
 
 /**
+ * Available to the accessibility tree, absent from the layout, without a
+ * selector. `visuallyHiddenStyles` (`commonViewStyles.ts`) is the class; a
+ * rule that cannot use it interpolates this instead: Web Awesome exposes
+ * form-control labels and hints as shadow parts, so a view hiding one writes
+ * its own `::part(...)` rule against an element it cannot add a class to.
+ */
+export const visuallyHiddenDeclarations: CSSResult = css`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+`;
+
+/**
  * Four button skins plus two modifiers.
  *
  *   .btn-primary    the one accent fill; at most one per view
@@ -66,14 +85,7 @@ export const focusRingStyles: CSSResult = css`
 export const buttonStyles: CSSResult = css`
   /* Slotted text names the inner native button as well as the custom host. */
   .action-button-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+    ${visuallyHiddenDeclarations}
   }
 
   /* The chevron of a disclosure toggle: it turns to point down while the
