@@ -78,11 +78,6 @@ export interface CliExecuteOptions {
    *  a shutdown that leaves the run resumable then prints no resume
    *  command, as nothing could resume it. */
   readonly recoveryInputIsDurable: boolean;
-  /** What the command does with the run once its end is committed (a
-   *  document task's output copy and result record), with its committed
-   *  outcome: part of the finalization a shutdown waits for, so a signal
-   *  never cuts it short. Its failure fails the finalization. */
-  readonly afterRun?: (result: CliRunResult) => Effect.Effect<void, Error>;
   /** The persisted run `texra resume` continues through the session's
    *  resume; unset, the run starts fresh under a minted id. */
   readonly runId?: RunId;
@@ -129,7 +124,7 @@ function launchOn(
  * Validate a headless CLI run's configuration and run it: stand up a runtime
  * host, run the request, always close the host, and resolve the terminal
  * outcome. Command handlers own command-specific config construction; this
- * owns the common request lifecycle, so document task and chat runs
+ * owns the common request lifecycle, so program and chat runs
  * cannot drift on validation, run ids, host lifecycle or outcome handling.
  *
  * A run that opened never fails its launch: its end is its `run.end` row's,
@@ -255,8 +250,7 @@ export const executeCliConfig: (
         launchOn(session, request, runContext, options),
       ).pipe(
         Effect.flatMap((run) =>
-          // The run's whole result, built once: what the command emits and
-          // what its `afterRun` finalizes.
+          // The run's whole result, built once: what the command emits.
           Effect.map(run.result, (end) => ({
             ...end,
             runId: run.runId,
@@ -373,8 +367,6 @@ export const executeCliConfig: (
         // presenter, which `settled` waits for: the presentation host stays
         // attached until it has.
         yield* session.drained;
-        if (runResult.ok && options.afterRun)
-          yield* options.afterRun(runResult.result);
       }),
     );
     // Done only now: a signal during the finalization waits for it, and the
@@ -387,7 +379,7 @@ export const executeCliConfig: (
         primaryRunFailure
           ? new AggregateError(
               [primaryRunFailure.error, finalization.failure],
-              'CLI run failed and its final artifacts could not be persisted',
+              'CLI run failed and its finalization failed',
             )
           : finalization.failure,
       );

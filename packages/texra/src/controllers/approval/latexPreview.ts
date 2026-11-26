@@ -28,8 +28,7 @@ import {
 } from '@texra-ai/worldline/plugins';
 import { meansAbsent } from '@texra-ai/worldline/node';
 import { toErrorMessage, type FileLocation } from '@texra-ai/worldline/schemas';
-import { collectFilesFromPatterns } from '@housekeeping/artifactFiles';
-import { TEMP_EXTENSIONS } from '@housekeeping/constants';
+import { auxFilesOf } from '@housekeeping/artifactFiles';
 import { removeBestEffort } from '@texra/common/files/removeBestEffort';
 import { latexdiff } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -153,23 +152,14 @@ type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 
 /**
  * Delete a file and the LaTeX auxiliary files its build wrote, beside it or
- * in its `build/` folder, found the way Clean Build finds them. A listing
- * that fails is logged and deletes only the file.
+ * in its `build/` folder. A listing that fails is logged and deletes only
+ * the file.
  */
 const deleteWithAuxFiles = Effect.fn('latexPreview.deleteWithAuxFiles')(
   function* (
     filePath: string,
   ): Effect.fn.Return<void, never, FileSystem.FileSystem> {
-    const dir = path.dirname(filePath);
-    // An extensionless file keeps its whole name as the stem.
-    const stem = path.basename(filePath, path.extname(filePath));
-    // Listed relative to the file's own directory.
-    const auxFiles = yield* collectFilesFromPatterns(
-      dir,
-      '.',
-      [stem],
-      TEMP_EXTENSIONS,
-    ).pipe(
+    const auxFiles = yield* auxFilesOf(filePath).pipe(
       Effect.catch((error) =>
         logFailure(
           CHANNEL,
@@ -180,7 +170,7 @@ const deleteWithAuxFiles = Effect.fn('latexPreview.deleteWithAuxFiles')(
     );
     yield* removeBestEffort(
       yield* FileSystem.FileSystem,
-      [filePath, ...[...auxFiles].map((file) => path.resolve(dir, file))],
+      [filePath, ...auxFiles],
       'temp file',
     ).pipe(withLogChannel(CHANNEL));
   },
