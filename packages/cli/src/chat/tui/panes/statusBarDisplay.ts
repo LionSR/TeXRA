@@ -576,7 +576,7 @@ function resolveStatusBarBindings(input: StatusBarChrome): string {
 }
 
 /**
- * The bar for the displayed run (`statusBarRunTarget`), read straight off
+ * The bar for the displayed run, read straight off
  * its `RunView` and the view's runs, around the chrome the TUI supplies.
  */
 export function buildStatusBarDisplay(
