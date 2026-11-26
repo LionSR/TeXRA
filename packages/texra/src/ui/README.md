@@ -55,6 +55,12 @@ two halves:
    (`messageMetaStyles` in `styles/messageHeaderStyles.ts`). A tool call or
    a thought is one unframed line (icon, what it did, what to) that opens
    in place. Only an error with details keeps a framed header.
+   Two groups keep a long run readable, both computed from the rows
+   (`progress/turnLayout.ts`) and closed until opened: consecutive finished
+   calls read as one sentence ("Read 3 files and ran 1 command"), and a
+   finished turn's work stands behind "Worked for 1m 3s", leaving the
+   message and its answer. The turn the run is working on stays open, and
+   so does a call still running.
 6. **Canvas widgets:** xterm.js and Monaco draw on a canvas and cannot read a
    CSS token. `wa/cssTokenColor.ts` is the one reading of a token as the color
    the host paints; `wa/xtermTheme.ts` and the desktop's

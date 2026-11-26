@@ -187,6 +187,23 @@ export const toolUseStyles = css`
     width: var(--font-size-icon-sm);
   }
 
+  /* A finished turn's work: the line between a message and its answer,
+     ruled off from the answer under it. Its content is the turn's own
+     lines, so it takes no indent. */
+  wa-details.work-fold {
+    margin-block-end: var(--message-gap);
+    border-block-end: var(--border-thin) solid var(--color-border);
+  }
+
+  wa-details.work-fold::part(content) {
+    padding-inline-start: 0;
+  }
+
+  .tool-run-failed {
+    color: var(--tone-color);
+    font-size: var(--font-size-xs);
+  }
+
   .summary-detail {
     color: var(--wa-color-text-normal);
   }

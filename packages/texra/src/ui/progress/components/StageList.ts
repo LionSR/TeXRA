@@ -32,6 +32,7 @@ import {
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { stageStatus } from '@ui/copy/runStatus';
+import { toolRunFailed, toolRunSentence, workedFor } from '@ui/copy/toolRun';
 import { designTokens } from '@ui/styles';
 
 // Side-effect imports - register Web Awesome components
@@ -52,6 +53,12 @@ import { logStyles } from '../styles/logStyles';
 import { formatLogEntry } from '../formatters';
 import { TIME_OF_DAY } from '../formatters/timestampUtils';
 import { dispatchDisclosureToggle } from './disclosureToggle';
+import {
+  turnLayout,
+  type LayoutItem,
+  type ToolRunItem,
+  type WorkItem,
+} from '../turnLayout';
 import type {
   RunView,
   SessionView,
@@ -136,9 +143,9 @@ export class StageList extends LitElement {
   /** This is the run on screen; the others are cached hidden. */
   @property({ type: Boolean }) shown = false;
 
-  /** The transcript laid out for render (`transcriptTimeline`), rebuilt
-   *  when the transcript changes. */
-  private timeline: Entry[] = [];
+  /** The transcript laid out for render (`transcriptTimeline`, grouped by
+   *  `turnLayout`), rebuilt when the transcript or the run changes. */
+  private layout: LayoutItem[] = [];
 
   /** Number of recent top-level timeline entries currently rendered. */
   @state() private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
@@ -215,8 +222,16 @@ export class StageList extends LitElement {
           : new Map();
     }
     const transcriptChanged = changedProperties.has('transcript');
-    if (this.terminal || !transcriptChanged) return;
-    this.timeline = this.transcript ? transcriptTimeline(this.transcript) : [];
+    if (this.terminal) return;
+    // Whether the last turn folds depends on the run still working.
+    if (transcriptChanged || changedProperties.has('run'))
+      this.layout = this.transcript
+        ? turnLayout(
+            transcriptTimeline(this.transcript),
+            this.run?.position === 'running',
+          )
+        : [];
+    if (!transcriptChanged) return;
     // The windows count from the tail; a transcript that shrank (a
     // replaced history) or a fresh mount no longer lines up with them.
     const previous = changedProperties.get('transcript');
@@ -313,11 +328,96 @@ export class StageList extends LitElement {
     }
   }
 
-  private visibleTimelineEntries(): Entry[] {
-    const timeline = this.timeline;
-    return timeline.length <= this.timelineItemWindow
-      ? timeline
-      : timeline.slice(-this.timelineItemWindow);
+  private visibleLayoutItems(): LayoutItem[] {
+    const layout = this.layout;
+    return layout.length <= this.timelineItemWindow
+      ? layout
+      : layout.slice(-this.timelineItemWindow);
+  }
+
+  /** One item of the layout; the key names its kind, since a script's
+   *  stage has its `script` card's id and a group has its first row's. */
+  private renderItems(items: readonly LayoutItem[]): TemplateResult {
+    return html`${repeat(
+      items,
+      (item) =>
+        item.kind === 'row'
+          ? `row:${item.row.id}`
+          : item.kind === 'stage'
+            ? `stage:${item.stage.id}`
+            : `${item.kind}:${item.id}`,
+      (item) => {
+        switch (item.kind) {
+          case 'row':
+            return this.renderLogEntry(item.row);
+          case 'stage':
+            return this.renderStage(item);
+          case 'toolRun':
+            return this.renderToolRun(item);
+          case 'work':
+            return this.renderWork(item);
+        }
+      },
+    )}`;
+  }
+
+  /** A group the conversation folds: closed until the person opens it,
+   *  and a closed one contributes no DOM for its content. */
+  private renderFold(
+    key: string,
+    className: string,
+    summary: TemplateResult,
+    body: () => TemplateResult,
+  ): TemplateResult {
+    const open = this.expanded?.get(key) === true;
+    const onToggle = (event: Event) =>
+      dispatchDisclosureToggle(this, event, this.runId, key);
+    return html`
+      <wa-details
+        appearance="plain"
+        icon-placement="end"
+        class="banner-details activity-row ${className}"
+        ?open=${open}
+        @wa-show=${onToggle}
+        @wa-hide=${onToggle}
+      >
+        <div slot="summary" class="details-summary">${summary}</div>
+        ${open ? body() : nothing}
+      </wa-details>
+    `;
+  }
+
+  /** Consecutive calls as one sentence, opening to their own lines. */
+  private renderToolRun(run: ToolRunItem): TemplateResult {
+    return this.renderFold(
+      `tools:${run.id}`,
+      'tool-run',
+      html`${waIcon('list-check', { className: 'icon' })}
+        <span class="label">${toolRunSentence(run.counts)}</span>
+        ${
+          run.failed > 0
+            ? html`<span class="tool-run-failed tone-danger"
+                >${toolRunFailed(run.failed)}</span
+              >`
+            : nothing
+        }`,
+      () =>
+        html`${repeat(
+          run.rows,
+          (row) => row.id,
+          (row) => this.renderLogEntry(row),
+        )}`,
+    );
+  }
+
+  /** A finished turn's work, behind the line that says how long it took. */
+  private renderWork(work: WorkItem): TemplateResult {
+    return this.renderFold(
+      `work:${work.id}`,
+      'work-fold',
+      html`<span class="label">${workedFor(work.durationMs)}</span>`,
+      () => this.renderItems(work.items),
+    );
   }
 
   /** Whether a stage is expanded. */
@@ -467,17 +567,17 @@ export class StageList extends LitElement {
       return this.renderTerminalOutput();
     }
 
-    // Rows no stage holds (user input, follow-ups, errors) and the stages,
-    // in transcript order. Large runs render a recent window first; older
-    // entries remain in memory and can be revealed from the top control.
-    const visibleTimeline = this.visibleTimelineEntries();
-    const hiddenTimelineCount = this.timeline.length - visibleTimeline.length;
+    // The conversation's items in transcript order. Large runs render a
+    // recent window first; older items remain in memory and can be revealed
+    // from the top control.
+    const visible = this.visibleLayoutItems();
+    const hiddenCount = this.layout.length - visible.length;
 
     return html`
       ${
-        hiddenTimelineCount > 0
+        hiddenCount > 0
           ? this.renderRevealButton({
-              hiddenCount: hiddenTimelineCount,
+              hiddenCount,
               step: TIMELINE_ITEM_WINDOW_STEP,
               scope: 'timeline',
               kind: 'timeline',
@@ -485,17 +585,7 @@ export class StageList extends LitElement {
             })
           : nothing
       }
-      ${repeat(
-        visibleTimeline,
-        // A script's stage has its `script` card's id, and the card is a
-        // row of the same list: the key names the kind too.
-        (item) =>
-          item.kind === 'row' ? `row:${item.row.id}` : `stage:${item.stage.id}`,
-        (item) =>
-          item.kind === 'row'
-            ? this.renderLogEntry(item.row)
-            : this.renderStage(item),
-      )}
+      ${this.renderItems(visible)}
     `;
   }
 }

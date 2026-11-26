@@ -502,6 +502,28 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = conversationView();
     return desktopColumn(view, surface(view, { kind: 'select', runId: TALK }));
   },
+  // The same conversation with its finished turn's work opened, and the
+  // calls inside it opened to their own lines.
+  'desktop-conversation-open': () => {
+    const view = conversationView();
+    const rows = view.runs.get(TALK)?.transcript.rows ?? [];
+    const first = (kind: string) => rows.find((row) => row.kind === kind)?.id;
+    return desktopColumn(
+      view,
+      surface(
+        view,
+        { kind: 'select', runId: TALK },
+        ...[`work:${first('user')}`, `tools:${first('thinking')}`].map(
+          (key): SurfaceAction => ({
+            kind: 'group',
+            runId: TALK,
+            key,
+            expanded: true,
+          }),
+        ),
+      ),
+    );
+  },
   // Two run grants on: the header's read-only chips, each revocable.
   'ext-auto-approve': () => {
     const view = withChildGrants(fanOutView());
