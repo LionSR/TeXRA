@@ -1,10 +1,10 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
-import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { setTimeout as scheduleTimeout } from 'node:timers';
-import { setTimeout as sleep } from 'node:timers/promises';
+
+import { createServer } from 'vite';
 
 const require = createRequire(import.meta.url);
 const packageRoot = resolve(import.meta.dirname, '..');
@@ -13,6 +13,8 @@ const packageManagerCli = process.env.npm_execpath;
 const FORCE_STOP_DELAY_MS = 2_000;
 const children = new Set();
 let stopping = false;
+/** The Vite dev server, once it listens. */
+let renderer;
 
 function spawnLogged(command, args, options = {}) {
   const child = spawn(command, args, {
@@ -50,31 +52,6 @@ async function runPackageScript(script) {
   }
 }
 
-async function waitForRenderer(url, vite) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (vite.exitCode != null) {
-      throw new Error(`Vite exited before ${url} was ready.`);
-    }
-    try {
-      const response = await fetch(url);
-      if (response.ok) return;
-    } catch {
-      // The server is still starting.
-    }
-    await sleep(100);
-  }
-  throw new Error(`Timed out waiting for ${url}.`);
-}
-
-async function findAvailablePort() {
-  const server = createServer().listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const { port } = server.address();
-  server.close();
-  await once(server, 'close');
-  return port;
-}
-
 function stop(exitCode) {
   if (stopping) return;
   stopping = true;
@@ -82,6 +59,8 @@ function stop(exitCode) {
     if (!child.killed) child.kill('SIGTERM');
   }
   process.exitCode = exitCode;
+  // The renderer is the dev server's client, so the server closes after it.
+  void renderer?.close();
   const forceStopTimer = scheduleTimeout(() => {
     for (const child of children) {
       if (child.exitCode == null) child.kill('SIGKILL');
@@ -108,33 +87,26 @@ function launchElectron(rendererUrl, args) {
 async function main() {
   await runPackageScript('build:main');
   await runPackageScript('build:preload');
-  const mainWatchInvocation = packageManagerCommand(['run', 'watch:main']);
-  const mainWatch = spawnLogged(
-    mainWatchInvocation.command,
-    mainWatchInvocation.args,
-  );
+  // Started as its own Node process, not through the package manager, so
+  // the stop signal reaches the watcher instead of a wrapper that outlives it.
+  const mainWatch = spawnLogged(process.execPath, [
+    'esbuild.main.mjs',
+    '--watch',
+  ]);
   mainWatch.once('exit', (code) => {
     if (!stopping) stop(code ?? 1);
   });
 
-  const rendererPort = await findAvailablePort();
-  const rendererUrl = `http://127.0.0.1:${rendererPort}`;
-  const viteInvocation = packageManagerCommand([
-    'exec',
-    'vite',
-    '--config',
-    'vite.config.ts',
-    '--host',
-    '127.0.0.1',
-    '--port',
-    String(rendererPort),
-    '--strictPort',
-  ]);
-  const vite = spawnLogged(viteInvocation.command, viteInvocation.args);
-  vite.once('exit', (code) => {
-    if (!stopping) stop(code ?? 1);
+  // Vite picks the free port and resolves `listen` once it serves, so there
+  // is no port to probe for and no URL to poll.
+  renderer = await createServer({
+    configFile: resolve(packageRoot, 'vite.config.ts'),
+    server: { host: '127.0.0.1', port: 0 },
   });
-  await waitForRenderer(rendererUrl, vite);
+  await renderer.listen();
+  const rendererUrl = renderer.resolvedUrls?.local[0];
+  if (!rendererUrl) throw new Error('The Vite dev server opened no port.');
+  renderer.printUrls();
 
   launchElectron(rendererUrl, process.argv.slice(2));
 }
