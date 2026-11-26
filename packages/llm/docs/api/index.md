@@ -1142,21 +1142,6 @@ declare function requestRates(model: ModelConfig | string, promptTokens: number,
 };
 ```
 
-## resolveCredential
-
-The one credential ladder: the persisted secret under `name`, else the
-first of `envNames` set in the environment, in order. Both are trimmed and
-a blank value reads as unset, so an empty variable does not mask anything.
-The environment comes from the ambient Effect `ConfigProvider`, the live
-process environment in production; tests replace it through a provider
-record rather than mutating `process.env`. API keys and the GitHub token
-both read through here, so the value and the origin a status surface
-reports can never disagree.
-
-```ts
-const resolveCredential: (store: Pick<CredentialStore, "get">, name: string, envNames: readonly string[]) => Effect<{ readonly value: string | undefined; readonly origin: "none" | "env" | "secret"; }, SecretsFailed, never>
-```
-
 ## ResolvedApiKey
 
 A provider's key, sealed, and its origin.
