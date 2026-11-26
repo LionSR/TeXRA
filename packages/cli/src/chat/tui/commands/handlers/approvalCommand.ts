@@ -12,7 +12,7 @@ import { RUN_GRANT_NOUN } from '@ui/copy/delegationApproval';
 import { type SlashCommandContext } from './slashContext';
 import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
 
-const APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
+const APPROVAL_USAGE = 'Usage: /approval [ask | yolo]';
 
 /**
  * `/approval` sets this chat's launch policy, like `--approval-policy`, here

@@ -53,36 +53,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     // The project's policy is the fake host's setting, shared by the file,
     // so each test sets the one it runs under.
     it.effect(
-      'lets never override a run bypass and a hook allow at the shared boundary',
-      () =>
-        Effect.scoped(
-          Effect.gen(function* () {
-            const session = yield* isolatedTestSession();
-            const runId = generateRunId();
-            yield* setTestApprovalPolicy('never');
-            yield* publishTestRunStart(session, runId);
-            yield* Context.get(session, Approvals).change(
-              runId,
-              humanGrant(['bash'], true),
-            );
-            const requests = yield* watchBashRequests(session);
-
-            expect(
-              Context.get(session, Approvals).permission(
-                runId,
-                'bash',
-                'allow',
-              ),
-            ).toEqual({
-              action: 'deny',
-              reason: 'Denied by the approval policy.',
-            });
-            expect(requests.opened).toEqual([]);
-          }),
-        ),
-    );
-
-    it.effect(
       'a command grant turned on answers the open request it covers',
       () =>
         Effect.scoped(

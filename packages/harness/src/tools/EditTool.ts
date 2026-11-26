@@ -95,7 +95,5 @@ export const EditFileTool = defineTool({
   description:
     'Performs exact string replacements in workspace files using literal matching.',
   schema: EditInputSchema,
-  // The file this call rewrites; refused loop-side before the body runs.
-  guard: { writes: (input: EditInput) => [input.path] },
   execute: edit,
 });

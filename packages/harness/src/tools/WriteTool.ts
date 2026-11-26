@@ -87,8 +87,5 @@ export const writeFileTool = (writeFilter?: WriteFilter) =>
     description:
       'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
     schema: WriteInputSchema,
-    // The file this call overwrites: the loop refuses it before the body runs
-    // when it escapes the call's roots or lands in a read-only external root.
-    guard: { writes: (input: WriteInput) => [input.path] },
     execute: (input) => write(input, writeFilter),
   });

@@ -51,8 +51,6 @@ import {
   CliUsageError,
   isQuiet,
   launchApproval,
-  launchApprovalNotice,
-  projectApprovalPolicy,
   type CliContext,
   type CliInvocation,
 } from '../platform/cliContext';
@@ -166,11 +164,6 @@ export const executeCliConfig: (
     const plugins = yield* readCliPluginPins(session.roots);
     // The run follows the project's setting, read at each decision, with
     // what this invocation asked for riding its launch (`launchApproval`).
-    const refused = launchApprovalNotice(
-      runContext.requestedApprovalPolicy,
-      projectApprovalPolicy(session.roots.config),
-    );
-    if (refused !== undefined) writeTextStderr(refused);
     // Everything the run attaches to the session for its output: closed once,
     // after the last result read, so the last line is on the wire before the
     // result record. The caller's scope also closes it on partial startup.

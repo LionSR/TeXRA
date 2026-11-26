@@ -135,21 +135,16 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
   const externalRoots = EXTERNAL_ROOT_TOOLS.some((name) =>
     offered.includes(name),
   )
-    ? memory.map((folder) => ({
-        absolutePath: folder.path,
-        label: `${folder.label}: notes on ${folder.holds}`,
-        writable: true,
-      }))
+    ? memory
     : [];
   if (externalRoots.length > 0) {
     lines.push('');
     lines.push(
       `${ACCESSIBLE_EXTERNAL_DIRS_HEADING} (absolute paths; use ${EXTERNAL_ROOT_TOOLS.join(', ')}):`,
     );
-    for (const root of externalRoots) {
-      const rw = root.writable ? 'writable' : 'read-only';
+    for (const folder of externalRoots) {
       lines.push(
-        `  ${escapeTextStrict(root.absolutePath)}: ${escapeTextStrict(root.label)} (${rw})`,
+        `  ${escapeTextStrict(folder.path)}: ${escapeTextStrict(`${folder.label}: notes on ${folder.holds}`)}`,
       );
     }
   }
