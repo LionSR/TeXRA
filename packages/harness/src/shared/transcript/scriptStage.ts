@@ -14,6 +14,7 @@
  */
 import { Array as Arr, Predicate } from 'effect';
 import {
+  AGENT_TOOL_NAME,
   PROGRAM_TOOL_NAME,
   TOOL_CALL_STATUS,
   type RequestPayload,
@@ -42,7 +43,7 @@ const nameOf = (input: Readonly<Record<string, unknown>>): string | undefined =>
 /** The calls that run a child: `agent()`, `program()`, and `self()`, this
  *  agent again. */
 const CHILD_TOOLS: ReadonlySet<string> = new Set([
-  'agent',
+  AGENT_TOOL_NAME,
   PROGRAM_TOOL_NAME,
   'self',
 ]);

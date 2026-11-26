@@ -67,9 +67,9 @@ import {
 const CHANNEL = 'HistoryQuery';
 const QUERY_DEADLINE = '5 seconds';
 /** Rows one query returns; the page says when more exist. */
-const HISTORY_QUERY_ROW_CAP = 200;
+export const HISTORY_QUERY_ROW_CAP = 200;
 /** Serialized page ceiling before a result leaves the query process. */
-const HISTORY_QUERY_PAGE_LIMIT_BYTES = 4 * 1024 * 1024;
+export const HISTORY_QUERY_PAGE_LIMIT_BYTES = 4 * 1024 * 1024;
 /** Capped writes per append keep requests bounded for any history length. */
 const APPEND_OPS = 500;
 

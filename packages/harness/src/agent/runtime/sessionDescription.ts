@@ -23,9 +23,10 @@ import {
   type AgentConfig,
 } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
-import { usageAgentName, type UsageLog } from '@shared/usageLog';
+import type { UsageLog } from '@shared/usageLog';
 import { descriptionRow } from '@shared/session/runFacts';
 import type { RouteRetries } from './ModelRetryGate';
+import { usageAgentName } from './run/pricing';
 import type { PlanQuotas } from './modelAccess/planQuotas';
 import type { HttpClient } from 'effect/http';
 
