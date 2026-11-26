@@ -15,6 +15,7 @@ import {
   joinFacts,
 } from '@texra-ai/worldline/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
+import { previousRowsText } from '@cli/tui/overflowText';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 import {
@@ -295,6 +296,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
       (notice ? 1 : 0) -
       (presentable ? REQUEST_CARD_ROWS : 0),
   );
+  // The newest rows, under a marker counting the older ones they leave out.
+  const shown = lines.length > budget ? lines.slice(1 - budget) : lines;
+  const hiddenRows = lines.length - shown.length;
 
   return (
     <Box flexDirection="column">
@@ -303,7 +307,8 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         title={title}
         hints={hints}
       >
-        {lines.slice(-budget).map((line, index) => (
+        {hiddenRows > 0 && <Text dimColor>{previousRowsText(hiddenRows)}</Text>}
+        {shown.map((line, index) => (
           <Text key={index}>{line}</Text>
         ))}
         {composing && (

@@ -89,9 +89,8 @@ lands.
     its description; `AccountAccessForm.tsx`, `GitHubTokenForm.tsx` and the
     skills forms still pass a row count for a `detail` they render, at one
     row a line.
-14. **`TasksForm.tsx` drops older transcript rows without a marker**
-    (`lines.slice(-budget)`), where every other bounded body shows
-    `previousRowsText` (`tui/overflowText.ts`).
+14. **Closed.** `TasksForm.tsx` shows the newest rows under a dim
+    `previousRowsText` marker when the transcript is longer than its budget.
 15. **Clipping text to fit beside a fixed suffix** is written in
     `render/scrollBounds.ts` and twice in `modals/UserQuestion.tsx`, and
     `UserQuestion.tsx` bounds its prompt lines with its own version of
