@@ -133,6 +133,9 @@ interface DetailsSummaryOptions {
   running?: boolean;
   label: string;
   labelClass?: string;
+  /** What the label acts on (a path, a command), in the reading color
+   *  beside the quieter label. */
+  detail?: string;
   timestamp?: { display: string; tooltip: string };
   copyButton?: {
     title: string;
@@ -150,6 +153,7 @@ function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
     running = false,
     label,
     labelClass = 'label',
+    detail,
     timestamp,
     copyButton,
     extraContent,
@@ -167,7 +171,7 @@ function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
     : nothing;
   const extraTemplate = extraContent ?? nothing;
   // prettier-ignore
-  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto">${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
+  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto">${label}${detail ? html` <span class="summary-detail">${detail}</span>` : nothing}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
 }
 
 /**

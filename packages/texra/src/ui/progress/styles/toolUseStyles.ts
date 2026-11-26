@@ -3,12 +3,9 @@ import { css } from 'lit';
 import {
   messageHeaderStyles,
   messageDisclosureStyles,
+  messageMetaStyles,
 } from '@ui/styles/messageHeaderStyles';
-import {
-  panelFrameStyles,
-  panelHeaderStyles,
-  panelContentStyles,
-} from '@ui/styles/surfaceStyles';
+import { panelFrameStyles } from '@ui/styles/surfaceStyles';
 
 /**
  * Tool-use section styles for tool calls, diffs, etc.
@@ -16,6 +13,7 @@ import {
 export const toolUseStyles = css`
   ${messageHeaderStyles}
   ${messageDisclosureStyles}
+  ${messageMetaStyles}
   .tool-use-section {
     margin: var(--wa-space-2xs) 0;
   }
@@ -77,15 +75,8 @@ export const toolUseStyles = css`
     padding: 0;
   }
 
-  .banner-details--assistant {
-    margin-block-end: var(--message-gap);
-  }
-
-  .banner-details--assistant::part(base) {
-    border: var(--border-thin) solid transparent;
-  }
-
-  .banner-details--assistant .banner-content {
+  /* An answer is its text on the page: no author line, no frame. */
+  .assistant-message > .banner-content {
     padding: 0;
   }
 
@@ -144,20 +135,64 @@ export const toolUseStyles = css`
     border: var(--border-thin) solid var(--color-border);
   }
 
-  wa-details.tool-use-details {
-    margin-block: var(--wa-space-3xs);
+  /* A tool call or a thought is one quiet line that opens in place: icon,
+     what it did, what to. Consecutive lines sit close; the gap to a
+     message is the transcript's. */
+  wa-details.activity-row {
+    margin: 0;
   }
 
-  wa-details.tool-use-details::part(base) {
-    ${panelFrameStyles}
+  .activity-row + :not(.activity-row) {
+    margin-block-start: var(--message-gap);
   }
 
-  wa-details.tool-use-details::part(header) {
-    ${panelHeaderStyles}
+  wa-details.activity-row::part(header) {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--wa-space-2xs);
+    margin-inline: calc(-1 * var(--wa-space-xs));
+    padding: 0 var(--wa-space-xs);
+    border-radius: var(--field-radius);
   }
 
-  wa-details.tool-use-details::part(content) {
-    ${panelContentStyles}
+  wa-details.activity-row::part(header):hover {
+    background: var(--surface-hover);
+  }
+
+  /* The chevron follows the line and shows once the row is pointed at,
+     focused or open. */
+  wa-details.activity-row::part(icon) {
+    font-size: var(--font-size-xs);
+    opacity: 0;
+  }
+
+  wa-details.activity-row:is([open], :hover, :focus-within)::part(icon) {
+    opacity: var(--opacity-full);
+  }
+
+  @media (hover: none) {
+    wa-details.activity-row::part(icon) {
+      opacity: var(--opacity-full);
+    }
+  }
+
+  wa-details.activity-row::part(content) {
+    padding: var(--wa-space-3xs) 0 var(--wa-space-xs)
+      calc(var(--font-size-icon-sm) + var(--wa-space-xs));
+  }
+
+  /* A spinner takes its icon's column, so running lines stay aligned. */
+  .activity-row > .details-summary > .icon {
+    flex: 0 0 var(--font-size-icon-sm);
+    width: var(--font-size-icon-sm);
+  }
+
+  .summary-detail {
+    color: var(--wa-color-text-normal);
+  }
+
+  .tool-use-in-progress .summary-detail {
+    color: inherit;
   }
 
   /* Diff styles */

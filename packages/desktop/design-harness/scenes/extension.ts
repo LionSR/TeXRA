@@ -339,6 +339,136 @@ function forkView(): SessionView {
   ]);
 }
 
+/** One conversation of two turns with the rows a real one has: thinking,
+ *  file and shell calls (one open), and a Markdown answer. */
+const TALK = runId('e1e1e1e1e1e1');
+function conversationView(): SessionView {
+  const log = new Log();
+  log.emit(TALK, T.root, {
+    type: 'run.start',
+    maxCostUsd: null,
+    identity: { kind: 'agent', agent: 'assistant' },
+    worktree: { workingDirectory: '/paper' },
+    parent: null,
+    provenance: null,
+    takesFollowUps: true,
+    grants: NO_GRANTS,
+  });
+  log.emit(TALK, T.root, { type: 'run.activate' });
+  log.emit(TALK, T.root, {
+    type: 'run.description',
+    description: 'Check Lemma B.3',
+    by: 'user',
+  });
+  const line = (
+    at: number,
+    messageType:
+      | typeof MESSAGE_TYPES.USER_MESSAGE
+      | typeof MESSAGE_TYPES.MODEL_RESPONSE
+      | typeof MESSAGE_TYPES.THINKING,
+    message: string,
+  ) => log.emit(TALK, at, { type: 'log', level: 'info', messageType, message });
+  let call = 0;
+  const tool = (
+    at: number,
+    toolName: string,
+    input: Record<string, string>,
+    output?: string,
+  ) => {
+    const logId = `talk-${(call += 1)}`;
+    log.emit(TALK, at, { type: 'tool.start', logId, toolName, input });
+    if (output !== undefined)
+      log.emit(TALK, at + 900, {
+        type: 'tool.end',
+        logId,
+        status: 'completed',
+        result: { status: 'executed', output },
+      });
+  };
+  let at = T.root;
+  const next = (ms: number) => (at += ms);
+  line(
+    next(0),
+    MESSAGE_TYPES.USER_MESSAGE,
+    'Lemma B.3 claims the bound holds for all n. Check the proof in appendixB.tex and fix it if the induction step is wrong.',
+  );
+  line(
+    next(2_000),
+    MESSAGE_TYPES.THINKING,
+    'The induction step uses the hypothesis at n-1 and n-2, so two base cases are needed.',
+  );
+  tool(
+    next(1_000),
+    'read_file',
+    { path: 'appendixB.tex' },
+    '\\begin{lemma}\n…',
+  );
+  tool(
+    next(2_000),
+    'grep',
+    { pattern: 'lem:bound', path: '.' },
+    'appendixB.tex:41\nmain.tex:212\nmain.tex:377',
+  );
+  tool(
+    next(2_000),
+    'edit_file',
+    {
+      path: 'appendixB.tex',
+      old_str: 'The case $n = 1$ is immediate.',
+      new_str: 'The cases $n = 1$ and $n = 2$ are immediate.',
+    },
+    'Edited appendixB.tex',
+  );
+  tool(
+    next(3_000),
+    'bash',
+    { command: 'latexmk -pdf main.tex' },
+    'Latexmk: All targets (main.pdf) are up-to-date',
+  );
+  line(
+    next(4_000),
+    MESSAGE_TYPES.MODEL_RESPONSE,
+    [
+      'The induction step was right, but the proof only checked one base case.',
+      '',
+      '- The step uses the hypothesis at $n-1$ **and** $n-2$, so it needs both $n = 1$ and $n = 2$.',
+      '- I added the second base case in `appendixB.tex`; the bound $a_n \\le 2^{n}$ is unchanged.',
+      '',
+      '```latex',
+      'The cases $n = 1$ and $n = 2$ are immediate.',
+      '```',
+      '',
+      'The paper compiles and the three references to the lemma still resolve.',
+    ].join('\n'),
+  );
+  log.emit(TALK, next(1_000), {
+    type: 'run.position',
+    payload: { at: 'waiting', turn: 1 },
+  });
+  line(
+    next(60_000),
+    MESSAGE_TYPES.USER_MESSAGE,
+    'Good. Does Theorem 4 still follow?',
+  );
+  log.emit(TALK, next(1_000), {
+    type: 'run.position',
+    payload: { at: 'turn.begin', turn: 2 },
+  });
+  tool(
+    next(1_000),
+    'read_file',
+    { path: 'main.tex' },
+    '\\section{Main result}\n…',
+  );
+  tool(next(2_000), 'bash', { command: 'lake build LDT.Theorem4' });
+  return viewOf([
+    subscribe(TALK),
+    ...log.events.map(tail),
+    log.drained(),
+    local({ runsHere: [TALK] }),
+  ]);
+}
+
 // ── scenes ──────────────────────────────────────────────────────────────
 
 export const extensionScenes: Record<string, () => TemplateResult> = {
@@ -366,6 +496,11 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   'desktop-placement': () => {
     const view = fanOutView();
     return desktopColumn(view, surface(view, { kind: 'select', runId: CHILD }));
+  },
+  // A conversation with the rows a real one has, in the desktop's column.
+  'desktop-conversation': () => {
+    const view = conversationView();
+    return desktopColumn(view, surface(view, { kind: 'select', runId: TALK }));
   },
   // Two run grants on: the header's read-only chips, each revocable.
   'ext-auto-approve': () => {

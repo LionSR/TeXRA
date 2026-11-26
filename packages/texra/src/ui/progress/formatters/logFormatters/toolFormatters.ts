@@ -88,9 +88,6 @@ export function formatToolUseTemplate(
     model.headerPreview,
     HEADER_PREVIEW_MAX_CHARS,
   );
-  const titleText = headerPreview
-    ? `${model.headerLabel}: ${headerPreview}`
-    : model.headerLabel;
 
   const sections: TemplateResult[] = renderToolSections(model.sections);
 
@@ -152,7 +149,8 @@ export function formatToolUseTemplate(
     row,
     iconName,
     running: running && model.userInstruction === undefined,
-    label: titleText,
+    label: model.headerLabel,
+    detail: headerPreview || undefined,
     isError: showAsError,
     content: html`${sections}`,
     defaultOpen: shouldOpen,

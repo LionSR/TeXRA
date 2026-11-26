@@ -48,9 +48,13 @@ two halves:
    `--panel-*` geometry and `--message-gap`; component files supply content layout.
    Transcript frames use a trailing gap only; the transcript owns its leading
    inset so margins do not stack across shadow roots.
-   `styles/messageHeaderStyles.ts` groups the author and short timestamp,
-   with Copy and collapse controls at the trailing edge. User, assistant and
-   error messages share this geometry; the full date remains in the time tooltip.
+   The transcript reads as a conversation, not a log. A person's message is
+   a bubble at the trailing edge and an answer is its text on the page, so
+   neither carries an author line; its time and its Copy and Fork actions
+   sit on the line under it, shown on hover or focus
+   (`messageMetaStyles` in `styles/messageHeaderStyles.ts`). A tool call or
+   a thought is one unframed line (icon, what it did, what to) that opens
+   in place. Only an error with details keeps a framed header.
 6. **Canvas widgets:** xterm.js and Monaco draw on a canvas and cannot read a
    CSS token. `wa/cssTokenColor.ts` is the one reading of a token as the color
    the host paints; `wa/xtermTheme.ts` and the desktop's

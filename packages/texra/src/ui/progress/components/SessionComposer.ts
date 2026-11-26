@@ -113,7 +113,7 @@ export class SessionComposer extends TexraElement {
       /* Follow-ups keep a writing area above the same action row as launch.
          Controls never move into the text line or appear only on focus. */
       .composer.is-compact textarea {
-        --textarea-min-height: calc(3lh + 2 * var(--wa-space-2xs));
+        --textarea-min-height: calc(2lh + 2 * var(--wa-space-2xs));
         --textarea-max-height: clamp(var(--textarea-min-height), 24vh, 200px);
       }
       .composer.is-compact .row {
