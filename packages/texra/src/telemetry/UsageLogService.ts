@@ -23,6 +23,7 @@ import {
   type UsageLogEntry,
 } from '@texra-ai/worldline/host';
 import {
+  randomizedExponentialBackoff,
   withLogChannel,
   type AppState,
   type ConfigProvider,
@@ -482,7 +483,9 @@ export const usageLogLayer = (
         }
       });
 
-      const backoff = Schedule.exponential(FLUSH_INTERVAL).pipe(
+      // Randomized, so installs that failed together during an outage do
+      // not all retry at the same instants.
+      const backoff = randomizedExponentialBackoff(FLUSH_INTERVAL).pipe(
         Schedule.modifyDelay(({ duration }) =>
           Effect.succeed(Duration.min(duration, MAX_RETRY_DELAY)),
         ),
