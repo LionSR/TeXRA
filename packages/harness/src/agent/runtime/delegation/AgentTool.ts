@@ -22,6 +22,7 @@ import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
+import { sourceLocationUnder } from '@common/storage/storageLayout';
 import {
   runEndErrorMessage,
   AgentConfigSchema,
@@ -386,7 +387,13 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         ['Media file', files.mediaFiles] as const,
       ].map(([label, list]) =>
         verbatim
-          ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
+          ? Effect.succeed(
+              list.map((file) => ({
+                file,
+                absolutePath: sourceLocationUnder(call.env.roots, file)
+                  .absolutePath,
+              })),
+            )
           : resolveInvocationFileList(parentId, label, list),
       ),
       { concurrency: 'unbounded' },
