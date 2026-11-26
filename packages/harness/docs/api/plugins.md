@@ -1182,7 +1182,7 @@ class JsonRpcConnectionDisposed extends Schema.TaggedError<JsonRpcConnectionDisp
 
 ## JsonRpcConnectionOptions
 
-What {@link makeJsonRpcConnection} connects: the peer's byte streams
+What `makeJsonRpcConnection` connects: the peer's byte streams
 and the owner's handlers.
 
 ```ts

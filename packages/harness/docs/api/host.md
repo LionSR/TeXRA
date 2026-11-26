@@ -236,7 +236,7 @@ function formatFatalErrorDetail(error: unknown): string
 
 The models a person has switched on: the list the Models tab and
 `texra models enabled` edit — the single reader of
-{@link MODEL_SELECTION_KEY} for every host. What a picker lists is
+`MODEL_SELECTION_KEY` for every host. What a picker lists is
 `readModelOptions`' default list, which adds what a subscription serves.
 
 ```ts
@@ -1213,7 +1213,7 @@ function sessionFsLayer(
 ## setModelEnabled
 
 Enable or disable one model — the only writer of
-{@link MODEL_SELECTION_KEY}.
+`MODEL_SELECTION_KEY`.
 
 Two invariants: at least one model stays enabled, and an unserved model is
 never enabled. Either violation fails with `StateWriteFailed`.
