@@ -17,6 +17,7 @@ import type {
 } from '@shared/schemas';
 import { NonNegativeIntSchema } from '@shared/schemas';
 import { appendHead } from '@utils/text/appendTail';
+import { firstLine } from '@utils/text/stringUtils';
 
 // --------------------------------------------------------------------- input
 
@@ -219,8 +220,6 @@ const CONTEXT_MAX = 10_000;
 
 const capped = (context: string | null) =>
   context === null ? null : appendHead('', context, CONTEXT_MAX);
-
-const firstLine = (text: string) => text.trim().split('\n')[0] ?? '';
 
 const joined = (parts: readonly (string | undefined)[]) => {
   const text = parts
