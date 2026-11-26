@@ -185,20 +185,11 @@ export async function runChat(
       // waits for the connection instead of ending the process.
       const credential = yield* checkModelConnection(services);
       if (credential.notice) startupNotices.push(credential.notice);
-      // A resumed conversation's model is the one its run recorded, ranked
-      // as `/resume` inside a chat ranks it: one that can no longer run
-      // falls back with a notice instead of ending the chat.
-      const defaults =
-        initialResume === undefined
-          ? resolveChatDefaults({
-              stores: services,
-              modelOverride: init.modelOverride,
-              envModel: context.envModel,
-            })
-          : ({
-              model: initialResume.config.model,
-              modelSource: 'history',
-            } as const);
+      const defaults = resolveChatDefaults({
+        stores: services,
+        modelOverride: initialResume?.config.model ?? init.modelOverride,
+        envModel: context.envModel,
+      });
       // A resumed conversation keeps the system text and tools its run
       // recorded.
       const resumed = initialResume?.config;

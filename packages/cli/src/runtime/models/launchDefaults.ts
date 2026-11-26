@@ -46,7 +46,7 @@ export const CLI_DEFAULT_MODEL_CANDIDATE = Object.freeze({
  * The one four-tier model lookup every `texra` command starts from:
  * `--model` → `TEXRA_MODEL` → the command's `texra.<role>` section over the
  * top-level row → the cheap-start model. `explicit` is already checked
- * (`assertExplicitModelKnown`).
+ * (`assertExplicitModelKnown`) or comes from a stored run.
  */
 function cliModelCandidates(
   stores: SettingsStores,
@@ -109,7 +109,7 @@ interface ChatDefaults {
 interface ResolveChatDefaultsInit {
   /** The setting slots the `texra.chat` section is read from. */
   readonly stores: SettingsStores;
-  /** `--model`, checked by the chat command. */
+  /** `--model` (checked by the chat command) or the resumed run's model. */
   readonly modelOverride?: string;
   readonly envModel?: string;
 }
