@@ -58,7 +58,10 @@ What follows is left open, in the order worth taking.
   `commands/resumeRun.ts`: the one upward import left in `runtime/`.
 - **A pasted image is named at render time** (`Date.now()` in
   `packages/texra/src/shared/utils/pastedImageName.ts`), so the host checks
-  the name again. The fix changes `hostRequest.ts`.
+  the name again. The fix changes `hostRequest.ts`. (2026-11-26 evening:
+  free of #15229, but the composer writes the `[name]` chip into the draft
+  as the paste lands, before the host answers; naming on the host makes
+  the chip wait for that answer, a change to the composer, not a move.)
 
 ## 2. Left to #15245
 

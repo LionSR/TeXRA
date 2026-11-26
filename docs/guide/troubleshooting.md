@@ -167,7 +167,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 - **Check the toolchain**: Run `texra doctor` to confirm `latexmk`, `pdflatex`, `bibtex`, `biber`, `latexdiff`, and `latexindent` are found on `PATH`.
 - **Verify standalone compilation**: Make sure the original `.tex` document compiles cleanly outside of TeXRA before running a diff or extraction task.
 - **Missing LaTeX packages**: Install missing style files with `tlmgr install <pkg>` (TeX Live) or the MiKTeX Console.
-- **Diff fails to compile**: Complex custom macros or unclosed math environments can conflict with `latexdiff` markup. Format both files first (`latexindent` or `tex-fmt`), or lower **Math markup in diffs** on **Settings → LaTeX → Compile & diff**.
+- **Diff fails to compile**: Complex custom macros or unclosed math environments can conflict with `latexdiff` markup. Format both files first (`latexindent` or `tex-fmt`), or lower **Math markup in diffs** on **Settings → LaTeX → Edit previews**.
 
 ### TikZ and image processing errors
 

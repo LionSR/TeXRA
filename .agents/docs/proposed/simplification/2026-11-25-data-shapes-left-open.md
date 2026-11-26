@@ -116,11 +116,14 @@ calls it too.
   (`packages/cli/src/runtime/terminal/terminalRequirements.ts`) is the last
   optional copy of the command name, with a `'texra'` fallback
   `texra-local chat` reaches; its callers are in the open PRs.
+  **Landed 2026-11-26 evening:** `interactiveTerminalRejection` takes the
+  command name from the invocation's `CliContext`.
 - `attachDroppedFiles`
   (`packages/texra/src/controllers/mainView/MainViewDroppedFilesController.ts`)
   returns `attachedCount` beside the `paths` it counts. (2026-11-25
   evening: its single-caller helper `attachDroppedPaths` is inlined; the
-  field waits on its reader, `openGuiWindow.ts`.)
+  field waits on its reader, `openGuiWindow.ts`.) **Landed 2026-11-26
+  evening:** the field is gone; the window counts `paths`.
 - `allocateConversationPanelRows` (`packages/cli/src/chat/tui/appLayout.ts`)
   returns four row counts where a panel kind and its rows would do.
 - `RegisterRunOptions.takesFollowUps`

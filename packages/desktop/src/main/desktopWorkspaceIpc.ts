@@ -48,9 +48,9 @@ interface DesktopWorkspaceIpc {
   /**
    * Tells the renderer to re-list its file tree. The project's binding runs
    * it on each write TeXRA makes inside the project (the host snapshot's
-   * `filesWritten`): accepted outputs and diffs write straight to disk, past
-   * the editor's own write path, and the tree caches its listing with no
-   * watcher behind it.
+   * `filesWritten`): a tool's edits and a service task's files go straight
+   * to disk, past the editor's own write path, and the tree caches its
+   * listing with no watcher behind it.
    */
   readonly filesChanged: Effect.Effect<void>;
 }
