@@ -517,19 +517,6 @@ the process could not run; a non-zero exit is the caller's to word.
 const machineGit: (args: readonly string[], options?: { readonly cwd?: string | undefined; readonly env?: Readonly<Record<string, string>> | undefined; readonly input?: string | undefined; } | undefined) => Effect<{ stdout: string; stderr: string; code: ExitCode; }, PlatformError, ChildProcessSpawner>
 ```
 
-## MachineGitResult
-
-How a {@link machineGit} command ended.
-
-```ts
-interface MachineGitResult {
-  readonly stdout: string;
-  /** Trimmed. */
-  readonly stderr: string;
-  readonly code: number;
-}
-```
-
 ## meansAbsent
 
 Whether a failure means nothing is at the path: it is not there
