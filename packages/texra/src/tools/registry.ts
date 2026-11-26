@@ -27,7 +27,6 @@ import {
 // Local imports
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import { texraPlugin } from '@texra/tools/texraPlugin';
-import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import type { ToolInstallAction } from '@texra/shared/settingsView/settingsViewMessages';
 import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
 
@@ -109,9 +108,6 @@ export interface ToolPluginSetup {
 export interface PluginCard {
   readonly name: string;
   readonly description: string;
-  /** The plugin's catalog rows the card renders inline, in order; the
-   *  catalog itself takes them from TeXRA's rows (`@texra/shared/settings/texraSettings`). */
-  readonly settings?: readonly PluginSettingRow[];
   /** Install and sign-in copy and actions; only a probed plugin's card
    *  shows them. */
   readonly setup?: ToolPluginSetup;

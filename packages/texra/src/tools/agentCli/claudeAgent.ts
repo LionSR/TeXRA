@@ -328,11 +328,7 @@ const prepareLaunch = Effect.fn('claudeAgent.prepareLaunch')(function* (
   const permissionMode: ClaudePermissionMode = autoApproved
     ? 'bypassPermissions'
     : 'acceptEdits';
-  const claudeRun = yield* readClaudeCodeRun(roots, input).pipe(
-    Effect.catchTag('StateReadFailed', (error) =>
-      Effect.fail(asToolError(error)),
-    ),
-  );
+  const claudeRun = yield* readClaudeCodeRun(input);
   // Mirrors codex so subagents can see the project: a call from inside the
   // workspace runs in that directory with read access to the workspace root
   // for sibling files; an out-of-workspace cwd runs isolated. The SDK's

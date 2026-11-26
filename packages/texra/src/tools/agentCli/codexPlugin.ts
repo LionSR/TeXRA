@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 
 // Local imports
 import { definePlugin } from '@texra-ai/worldline/plugins';
-import { CODEX_SETTINGS } from '@texra/shared/settings/integrationSettings';
 import { CodexThreads, codexThreadsLayer } from './agentCliSessionStores';
 import {
   installCommandLines,
@@ -75,7 +74,6 @@ export const codex: TexraPlugin = texraPlugin({
     name: 'OpenAI Codex CLI',
     description:
       'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',
-    settings: CODEX_SETTINGS,
     setup: {
       get actions(): readonly ToolInstallAction[] {
         return [

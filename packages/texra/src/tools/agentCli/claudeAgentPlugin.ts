@@ -11,7 +11,6 @@ import {
   Secrets,
   withLogChannel,
 } from '@texra-ai/worldline/plugins';
-import { CLAUDE_AGENT_SETTINGS } from '@texra/shared/settings/integrationSettings';
 import {
   ClaudeAgentSessions,
   claudeAgentSessionsLayer,
@@ -121,7 +120,6 @@ export const claudeAgent: TexraPlugin = texraPlugin({
     name: 'Claude Code CLI',
     description:
       'Claude Code agent runtime for delegating code exploration, editing, and shell tasks.',
-    settings: CLAUDE_AGENT_SETTINGS,
     setup: {
       get actions(): readonly ToolInstallAction[] {
         return [

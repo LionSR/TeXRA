@@ -322,7 +322,7 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
     workingDir || !input.thread_id
       ? buildAgentWorkspaceOptions(roots.workspace, workingDir)
       : {};
-  const run = yield* codexRun(roots, codexPath);
+  const run = yield* codexRun(codexPath);
   if (run.note) {
     yield* Effect.logInfo(run.note).pipe(withLogChannel(CODEX_AGENT_NAME));
   }
