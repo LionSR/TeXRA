@@ -11,10 +11,7 @@ import {
   type OverleafCloneOutcome,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
-import {
-  parseLatexGitUrl,
-  type OverleafRemote,
-} from '@latex/overleafProject';
+import { parseLatexGitUrl, type OverleafRemote } from '@latex/overleafProject';
 import { osPlatformOf } from '@texra/shared/osPlatform';
 import { CLONE_COPY, overleafCloneNotice } from '@ui/copy/clone';
 

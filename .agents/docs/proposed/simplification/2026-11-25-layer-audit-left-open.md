@@ -94,10 +94,9 @@ the groups, the lock and the helper choices. The wire shape is
   only reader is `commands/root.ts` (held). It belongs under `commands/`.
 - `packages/cli/src/runtime/headless/taskAttach.ts` imports
   `fullTranscriptEntryLayout` from `chat/tui/panes/` (held).
-- `runtime/models/apiStatus.ts`, `loginOptions.ts` and
-  `modelAccessSelection.ts`, and `runtime/terminal/clipboardImage.ts`, are
-  read only by `chat/tui/`. Moving them is mechanical; left to keep this PR
-  to modules with a wrong import direction or a duplicated fact.
+- Taken on 2026-11-26: the account overview, the `/login` parser, the
+  model-access switch, the clipboard image reader and the shortcut labels
+  moved from `runtime/` under `packages/cli/src/chat/tui/`, their one reader.
 
 ## 6. Smaller single-owner moves
 

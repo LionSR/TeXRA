@@ -56,8 +56,7 @@ const ScriptInputSchema = Schema.Struct({
     'Run the script as a background run of its own: the call returns its run id at once, and the result and a summary arrive as one follow-up when it ends. A one-shot run runs it in the foreground.',
   ),
   timeoutMs: timeoutMsField.annotate({
-    description:
-      `Wall-clock limit in milliseconds, tool calls included: 1 s to 24 h, default ${DEFAULT_TIMEOUT_MS / 60_000} min.`,
+    description: `Wall-clock limit in milliseconds, tool calls included: 1 s to 24 h, default ${DEFAULT_TIMEOUT_MS / 60_000} min.`,
   }),
 });
 type ScriptInput = typeof ScriptInputSchema.Type;
