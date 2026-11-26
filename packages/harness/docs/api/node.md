@@ -88,17 +88,6 @@ interface ConfigStore {
 }
 ```
 
-## createSymlink
-
-Link `destination` to `sourceAbsolute`, parent directories included. An
-existing link there is replaced; any other entry fails `AlreadyExists` and
-stays. A host that cannot make links (`EPERM`, `EACCES`, `EINVAL`,
-`ENOTSUP`) gets a copy of the source instead.
-
-```ts
-const createSymlink: (sourceAbsolute: string, destination: string) => Effect<void, PlatformError, FileSystem>
-```
-
 ## currentBranch
 
 The checked-out branch, or null when HEAD is detached or unreadable.
@@ -787,14 +776,6 @@ function setLogSink(
   next: LogSink | null,
   options: { readonly trusted?: boolean } = {},
 ): void
-```
-
-## toPosixPath
-
-Convert a path to POSIX style (forward slashes, collapsed separators, resolved `.` and `..`).
-
-```ts
-function toPosixPath(relativePath: string): string
 ```
 
 ## whichOnExtendedPath

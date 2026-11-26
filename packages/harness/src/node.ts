@@ -48,13 +48,12 @@ export {
   relativeToRoot,
 } from '@utils/system/nodeWorkspace';
 export { workspaceRelativePath } from '@utils/files/workspaceFS';
-// Path containment under this platform's path rules, a path's segments,
-// and its POSIX form.
+// Path containment under this platform's path rules, and a path's
+// segments.
 export {
   getPathSegments,
   isPathWithin,
   isStrictlyWithin,
-  toPosixPath,
 } from '@utils/core/pathCore';
 export {
   resolveGlobalStoragePath,
@@ -110,7 +109,6 @@ export {
 // and drops one it cannot type, an entry's own (lstat) type, and the
 // failures a probe reads as absent (`NotFound`, or a parent that is a file).
 export {
-  createSymlink,
   readDirectoryTypedTolerant,
   readNormalizedFile,
   writeFileAtomic,
