@@ -47,17 +47,15 @@ import {
   APPROVAL_POLICY_SETTING,
   ensureError,
 } from '@texra-ai/worldline/schemas';
-import { isPathWithin, recentCommitLabels } from '@texra-ai/worldline/node';
+import { isPathWithin } from '@texra-ai/worldline/node';
 import { apiKeyEntry } from '@texra-ai/llm';
-import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
 import type {
-  FileOptions,
   HostSnapshot,
   MissingTool,
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
-import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
+import { workspaceInputFiles } from '@texra/controllers/session/workspaceFileOptions';
 import {
   hasUsableSetupCredential,
   loadModelOptions,
@@ -82,7 +80,7 @@ type DismissibleBanner = Extract<
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
   tools: HostSnapshot['tools'];
-  /** The project folder the launcher's file lists and the recent commits
+  /** The project folder the launcher's input files
    *  are read from and whose `.env` the credential check reads; `undefined`
    *  for a session with no folder open, which is never a repository. */
   root: string | undefined;
@@ -114,8 +112,9 @@ interface Inputs {
   readonly loaded: boolean;
   readonly modelOptions: HostSnapshot['modelOptions'];
   readonly workspaceRoots: HostSnapshot['workspaceRoots'];
-  readonly fileOptions: FileOptions;
-  readonly commits: { readonly commits: string[]; readonly isGitRepo: boolean };
+  /** The project's files a program can take as input; a project with
+   *  none is offered the getting-started card. */
+  readonly inputFiles: readonly string[];
   readonly missingTools: readonly MissingTool[];
   readonly recording: HostSnapshot['recording'];
   readonly service: HostSnapshot['banners']['service'];
@@ -156,7 +155,6 @@ export interface HostSnapshotSource {
   /** Each write TeXRA made inside the project, for a host view of the
    *  project's files beside the launcher (the desktop's file tree). */
   readonly filesWritten: Stream.Stream<void, never, AppSignals>;
-  readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
   /** A tool may have been installed: the missing tools are checked again,
    *  with the credential. */
   readonly refreshHostBanners: Effect.Effect<
@@ -214,8 +212,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       loaded: false,
       modelOptions: [],
       workspaceRoots: options.workspaceRoots(),
-      fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
-      commits: { commits: [], isGitRepo: false },
+      inputFiles: [],
       missingTools: [],
       recording: null,
       service: null,
@@ -269,22 +266,9 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     );
     const loadFiles = yield* producer(
       'the project files',
-      Effect.flatMap(workspaceFileOptions(options.root), (fileOptions) =>
-        write({ fileOptions }),
+      Effect.flatMap(workspaceInputFiles(options.root), (inputFiles) =>
+        write({ inputFiles }),
       ),
-    );
-    const loadCommits = yield* producer(
-      'the recent commits',
-      Effect.gen(function* () {
-        if (options.root === undefined) return;
-        const labels = yield* recentCommitLabels(
-          options.root,
-          yield* Settings.get(stores, GIT_COMMITS_TO_SHOW_SETTING),
-        );
-        yield* write({
-          commits: { commits: [...(labels ?? [])], isGitRepo: labels !== null },
-        });
-      }),
     );
     const loadDependencies = yield* producer(
       'the missing tools',
@@ -411,11 +395,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       ),
       modelOptions: s.modelOptions,
       workspaceRoots: s.workspaceRoots,
-      fileOptions: {
-        ...s.fileOptions,
-        commit: ['HEAD', ...s.commits.commits],
-      },
-      isGitRepo: s.commits.isGitRepo,
       recording: s.recording,
       banners: {
         // A credential that worked stopped working: raised only once a task
@@ -430,7 +409,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
             : null,
         gettingStarted:
           options.shows.gettingStarted &&
-          s.fileOptions.baseFile.length === 0 &&
+          s.inputFiles.length === 0 &&
           !s.dismissed.has('gettingStarted'),
         service: s.service,
       },
@@ -455,16 +434,15 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         Stream.filter((credential) => credential !== undefined),
         Stream.changes,
       ),
-      refresh: Effect.all(
-        [loadModels, loadFiles, loadCommits, hostBanners, loadFlags],
-        { concurrency: 'unbounded', discard: true },
-      ).pipe(Effect.andThen(write({ loaded: true }))),
+      refresh: Effect.all([loadModels, loadFiles, hostBanners, loadFlags], {
+        concurrency: 'unbounded',
+        discard: true,
+      }).pipe(Effect.andThen(write({ loaded: true }))),
       refreshFiles: loadFiles,
       filesWritten: appSignalStream('workspaceFilesWritten').pipe(
         Stream.filter(writtenInProject),
         Stream.as(undefined),
       ),
-      refreshCommits: loadCommits,
       refreshHostBanners: hostBanners,
       refreshWorkspaceRoots: Effect.suspend(() =>
         write({ workspaceRoots: options.workspaceRoots() }),

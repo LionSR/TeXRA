@@ -77,7 +77,6 @@ export const openWindowSetup = Effect.fn('openWindowSetup')(function* <E, R>(
       inputFiles: [],
       contextFiles: [],
       mediaFiles: [],
-      outputFiles: [],
       ...setupAgent(),
       model,
       instruction: SETUP_INSTRUCTION,

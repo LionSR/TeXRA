@@ -23,14 +23,8 @@ import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { AppSignals } from '@platform/appSignals';
 import type { AppState } from '@platform/interfaces';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigProvider } from '@shared/config/settings';
-import {
-  factName,
-  programOrigin,
-  type FactName,
-  type RunId,
-} from '@shared/schemas';
+import { factName, programOrigin, type FactName } from '@shared/schemas';
 import type { ToolCatalog } from '@tools/liveTools';
 import type { FactKind, FactKinds, Plugin } from '@tools/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -101,66 +95,18 @@ export type PromptSection = (ctx: {
  * `async (args, launch) => result`, and a run opened on it
  * (`AgentConfig.script` of kind `program`) is a script run that imports the
  * module and calls that export with the launch's `args` and
- * `{ instruction, inputFiles, contextFiles, mediaFiles }`. A program that
- * returns text answers with it when it registers no `result`. The plugin wrote
+ * `{ instruction, inputFiles, contextFiles, mediaFiles }`; what it returns
+ * is the run's reply. The plugin wrote
  * it, not a model, so the launch that chose it granted it: its tools are
  * the listed ones past any switch, its `agent` calls run under the launch's
  * approval, and its prompts and files pass as written.
  */
-export interface Program<R = unknown> {
+export interface Program {
   /** One line: what the program does and the `args` it reads. The script
    *  tool's description lists it. */
   readonly description: string;
   /** The tools its run is offered, by name. */
   readonly tools: readonly string[];
-  /** How a completed run of it reads to whoever launched it. Without one,
-   *  the run delivers its reply alone. */
-  readonly result?: ProgramResult<R>;
-  /** The files its run writes when its launch names none, for a program
-   *  that creates documents (a deck, a transcript) and does not rewrite
-   *  its inputs. */
-  readonly outputs?: readonly string[];
-}
-
-/**
- * How a completed program run reads: to the launching model, and to a
- * script's summary of the files its calls wrote. What it reports is the
- * run's latest row of the plugin's own `fact` kind (`Plugin.factKinds`),
- * the one record of it; the program's return value is not read. The harness
- * reads the row only through these.
- */
-export interface ProgramResult<R = unknown> {
-  /** The plugin's row kind that records what the run did, and the schema
-   *  its value decodes with. A completed run with no such row, or one that
-   *  fails the schema, is delivered as an invalid result naming the issue,
-   *  never shaped. */
-  readonly fact: {
-    readonly plugin: string;
-    readonly kind: string;
-    readonly schema: Schema.Codec<R, unknown>;
-  };
-  /** The delivery body inside the harness's own result envelope. */
-  delivery(value: R, runId: RunId): readonly string[];
-  /** The files the program wrote, in the order it wrote them (a document
-   *  revised twice appears twice, the later entry its latest): the files a
-   *  parent may read of its child's storage, and a script's summary. */
-  changes(
-    value: R,
-    roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
-  ): readonly ProgramChange[];
-}
-
-/** One file a program wrote, as a script summary counts it. */
-export interface ProgramChange {
-  /** The workspace path the file replaces. */
-  readonly path: string;
-  /** The file the program wrote. */
-  readonly absolutePath: string;
-  /** The file it was diffed against, when it continues one: an earlier
-   *  call's `absolutePath` continues that call's row. */
-  readonly base: string | null;
-  readonly added: number | null;
-  readonly removed: number | null;
 }
 
 /** The plugin table a run step reads: the app's listed plugins and the

@@ -10,7 +10,6 @@ import {
   safeExecuteCommand,
 } from '@frontend/system/commandUtils';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
@@ -76,7 +75,6 @@ export class SettingsViewProvider {
     runtime: ProcessRuntime,
     fork: ScopedFork<ProcessServices>,
     roots: WorkspaceRoots,
-    progressView: ProgressViewProvider,
   ) {
     this.fork = fork;
     this.contentProvider = new BundledViewContentProvider(
@@ -113,7 +111,6 @@ export class SettingsViewProvider {
               : showDocument(() => vscode.workspace.openTextDocument(filePath)),
           revealPath: (filePath) =>
             executeVscodeCommand('revealFileInOS', vscode.Uri.file(filePath)),
-          ...progressView.window.settingsRuns,
           signInSubscription: (providerId) =>
             signInWithSubscription(roots, providerId),
           runInTerminal: (name, command) =>

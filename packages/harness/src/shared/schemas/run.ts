@@ -66,8 +66,6 @@ const RUN_ACTIONS = [
   'runAgain',
   /** A new task holding this conversation (`run.fork`). */
   'fork',
-  /** A finished run's files: read, copied, or removed (`run.files`). */
-  'files',
   /** Remove the run and its folder from history. */
   'delete',
   /** Give the run the user's own title. */

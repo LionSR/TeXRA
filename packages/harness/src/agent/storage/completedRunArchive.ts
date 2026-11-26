@@ -91,7 +91,6 @@ function conversationNodesForRow(
     // ── Deliberately skipped: not conversation content ──────────────────
     // Run diagnostics and status rows, not conversation content.
     case 'error':
-    case 'fileList':
     case 'contextManagement':
     case 'progressStatus':
     case 'compactionActivity':

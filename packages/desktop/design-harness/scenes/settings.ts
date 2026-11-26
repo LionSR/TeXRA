@@ -29,27 +29,20 @@ const ROWS: PluginRow[] = [
   {
     kind: 'texra',
     item: {
-      id: 'zotero',
-      name: 'Zotero Integration',
+      id: 'wolfram',
+      name: 'Wolfram Language',
       description:
-        'Search, add items to, and export citations from your Zotero library.',
-      tools: [
-        { name: 'zotero_collections' },
-        { name: 'zotero_search' },
-        { name: 'zotero_add' },
-      ],
+        'Wolfram Language through wolframscript, which agents run from the shell.',
+      tools: [],
       setup: {
         status: 'not-found',
-        statusLabel: 'Needs Zotero running',
+        statusLabel: 'Needs wolframscript',
         installActions: [
           {
             kind: 'guide',
-            text: 'Requires Zotero with the Better BibTeX plugin installed.',
+            text: 'Requires the "wolframscript" command-line tool.',
           },
-          {
-            kind: 'url',
-            url: 'https://retorque.re/zotero-better-bibtex/installation/',
-          },
+          { kind: 'url', url: 'https://www.wolfram.com/engine/' },
         ],
       },
       switch: 'off',

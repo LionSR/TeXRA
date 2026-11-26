@@ -1,6 +1,6 @@
 /**
  * The allowed values of the LaTeX settings with a fixed choice, read by the
- * setting rows (`documentsSettings.ts`, `texraSettings.ts`) and the code that
+ * setting rows (`latexdiffSettings.ts`, `texraSettings.ts`) and the code that
  * branches on them. Each row holds its own default and bounds.
  */
 

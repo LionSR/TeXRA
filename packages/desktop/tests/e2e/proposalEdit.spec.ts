@@ -1,6 +1,6 @@
 // An agent's proposal of a document program, edited in the desktop app
 // before it runs (#14276). A task in the background service proposes the
-// `edit` program, on the newer build's scripted model, and waits for the
+// `annotate` program, on the newer build's scripted model, and waits for the
 // answer. The proposal card's Edit opens the launch form on the proposal,
 // and Back returns to the asking task with the proposal still waiting. An
 // edit that adds a context file and rewrites the instruction approves the
@@ -22,8 +22,8 @@ import {
 } from './serviceFixture.js';
 import { withStoreCopy } from './workspaceStorageFixture.js';
 
-const PROPOSED = 'Tighten the prose.';
-const EDITED = 'Tighten the prose; keep the macros.';
+const PROPOSED = 'Check the argument.';
+const EDITED = 'Check the argument; use the macros.';
 
 /** The rows `sql` selects from the store of the profile's project;
  *  none before the service creates it. */
@@ -100,7 +100,7 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
   // The asking task: its scripted model calls `program` with this
   // input, on a model the form lists, with an effort.
   const proposal = {
-    name: 'edit',
+    name: 'annotate',
     model: 'openai/gpt-6.1-sol@high',
     inputFiles: ['draft.tex'],
     prompt: PROPOSED,
@@ -217,7 +217,7 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
     ),
   ) as { readonly runId: string };
 
-  // The task asks to run the document task as proposed.
+  // The task asks to run the program as proposed.
   type Opened = {
     readonly requestId: string;
     readonly payload: { readonly data: Record<string, unknown> };
@@ -231,7 +231,7 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
   expect(opened.payload).toMatchObject({
     kind: 'proposal',
     data: {
-      label: 'edit',
+      label: 'annotate',
       model: 'openai/gpt-6.1-sol@high',
       instruction: PROPOSED,
       inputFiles: ['draft.tex'],
@@ -248,7 +248,7 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
   const card = page.locator('proposal-request-panel');
   await expect(
     card.getByRole('heading', {
-      name: 'Run edit on GPT-6.1 Sol',
+      name: 'Run annotate on GPT-6.1 Sol',
     }),
   ).toBeVisible({ timeout: 30_000 });
   const edit = card.getByRole('button', { name: 'Edit', exact: true });
@@ -258,7 +258,7 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
   await edit.click();
   await expect(
     page.getByRole('heading', {
-      name: 'Check edit before it runs',
+      name: 'Check annotate before it runs',
     }),
   ).toBeVisible();
   await expectForm(page, { instruction: PROPOSED, context: [] });
@@ -332,35 +332,30 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
     .toEqual(['completed']);
   const childConfig = runConfig(child);
   expect(childConfig.config).toMatchObject({
-    label: 'edit',
+    label: 'annotate',
     model: 'openai/gpt-6.1-sol@high',
     instruction: EDITED,
     inputFiles: ['draft.tex'],
     contextFiles: ['macros.tex'],
     mediaFiles: [],
     workingDirectory: work,
-    script: { kind: 'program', name: 'edit', args: {} },
+    script: { kind: 'program', name: 'annotate', args: {} },
   });
   saveArtifact('child-run-config.json', childConfig);
 
   // The approval went back to the asking task, which lists the child it
-  // started and the child's two revisions, which the child started in
-  // turn: each row is named by its run's label, so the program's revisions
-  // are `Revision 1` and `Revision 2`. Once the app shows them done, the
-  // child's row opens the child.
+  // started and the round the child started in turn: each row is named by
+  // its run's label, so the program's one round is `Round 1`. Once the app
+  // shows them done, the child's row opens the child.
   const started = page.getByRole('listitem', {
-    name: 'Open edit: Completed',
+    name: 'Open annotate: Completed',
   });
-  for (const name of [
-    'Open edit: Completed',
-    'Open Revision 1: Completed',
-    'Open Revision 2: Completed',
-  ])
+  for (const name of ['Open annotate: Completed', 'Open Round 1: Completed'])
     await expect(page.getByRole('listitem', { name })).toHaveCount(1, {
       timeout: 60_000,
     });
   await started.click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('edit');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('annotate');
   await expect(
     page.getByRole('navigation', { name: 'Started by' }).getByRole('button'),
   ).toHaveText(['propose_validation']);

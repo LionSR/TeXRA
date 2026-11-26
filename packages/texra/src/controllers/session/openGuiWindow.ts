@@ -15,7 +15,7 @@
  */
 import * as path from 'node:path';
 
-import { Effect, Exit, Layer, Scope, Stream } from 'effect';
+import { Effect, Exit, FileSystem, Layer, Scope, Stream } from 'effect';
 
 import type {
   Session,
@@ -30,14 +30,14 @@ import {
   type PresentationEventHandlers,
   type ProcessServices,
 } from '@texra-ai/worldline/host';
-import { commitExists, workspaceRelativePath } from '@texra-ai/worldline/node';
+import { workspaceRelativePath } from '@texra-ai/worldline/node';
 import {
   AppSignals,
-  pathToLocationIn,
   Secrets,
   ToolRegistry,
   type StorageFs,
   WorkspaceFs,
+  runDirUnder,
 } from '@texra-ai/worldline/plugins';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
@@ -64,10 +64,6 @@ import {
   type TranscriptExportHost,
 } from '@texra/controllers/progressView/exportTranscript';
 import {
-  ProgressDocumentTaskFileActionsController,
-  type ProgressDocumentTaskFileActionsHost,
-} from '@texra/controllers/progressView/ProgressDocumentTaskFileActionsController';
-import {
   ApiKeyPromptFailed,
   ProgressApiKeyRetryController,
 } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
@@ -77,10 +73,7 @@ import {
   type WindowClient,
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
-import { documentRoundsOf } from '@texra/shared/plugins/documents';
-import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { texraGuideUrl } from '@ui/copy/guide';
-import { latexdiffVerbs, type LatexdiffHost } from './latexdiffVerbs';
 import { pickLauncherFiles, type OpenFilesDialog } from './launcherFilePicker';
 import {
   createHostRunActions,
@@ -94,6 +87,7 @@ import { answerWorkspaceFile } from './workspaceFileRequest';
 import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
 import type { RunId } from '@texra-ai/worldline/schemas';
 import {
+  toErrorMessage,
   formatResultCount,
   Cancelled,
   Rejected,
@@ -106,7 +100,6 @@ import {
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
 import { openWindowSetup } from '@texra/controllers/onboarding/setupLaunch';
-import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
 import {
   hostFailure,
   openLink,
@@ -180,8 +173,6 @@ export interface SharedHostCommandBindings {
   /** The host's native dialog that opens several files, behind the
    *  launcher's file picker. */
   readonly openFiles: OpenFilesDialog;
-  /** How a generated diff opens and a diff run shows its progress. */
-  readonly latexdiff: LatexdiffHost;
   /** Settings at a target, or where it was last left without one. */
   openSettings(target: SettingsTarget | undefined): HostVerb<void>;
   /** Ask for a provider API key, `provider`'s when a retry names one: a
@@ -232,15 +223,14 @@ export interface GuiWindowHost {
    *  service. Announcing the files a service task wrote is the same on
    *  every host, so the window's opening adds it. */
   readonly window: Omit<WindowHost, 'filesWritten' | 'emit'>;
-  readonly runs: Pick<
-    HostRunActionPorts,
-    'openFinalOutput' | 'revealProgress'
-  > & {
+
+  readonly runs: Pick<HostRunActionPorts, 'revealProgress'> & {
     /** Bring the window's run view into view, so a selection reaches the
      *  surface that brings up. */
     showRunView(): Effect.Effect<void, Error>;
   };
-  readonly files: Omit<ProgressDocumentTaskFileActionsHost, 'showInfo'>;
+  /** Show a directory in the host's file manager. */
+  openDirectory(directory: string): HostVerb<void>;
   /** The transcript export's format picker and opener. */
   readonly export: TranscriptExportHost;
 }
@@ -268,13 +258,6 @@ interface GuiWindowPorts {
     Scope.Scope | ProcessServices
   >;
 }
-
-/** The settings body's verbs on a window's runs: its own session's, never
- *  those of another project its host happens to show. */
-export type GuiWindowSettingsRuns = Pick<
-  SettingsHostBindings,
-  'revealRun' | 'runLabel'
->;
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
@@ -415,10 +398,8 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           cursor: run.activation,
         }),
       ),
-    roots,
     present,
     session,
-    notify: host.notify,
   });
   const runSetup = yield* openWindowSetup({
     session,
@@ -443,30 +424,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       ),
     ),
   });
-  const latexdiff = latexdiffVerbs({
-    host: bindings.latexdiff,
-    roots,
-    session,
-    notify: host.notify,
-  });
-  const documentTaskFileActions = new ProgressDocumentTaskFileActionsController(
-    {
-      rounds: (runId) => {
-        const run = session.view.current().runs.get(runId);
-        return run === undefined ? [] : documentRoundsOf(run);
-      },
-      storageRoot: roots.storage,
-      workspace: roots.workspace,
-      host: {
-        ...host.files,
-        showInfo: (message) => host.notify('info', message),
-      },
-      runs: runActions,
-      latexdiff: latexdiff.file,
-      writeFile: runs.writeFile,
-    },
-  );
-
   const apiKeyRetry = new ProgressApiKeyRetryController({
     // The set-key verb either runs or faults, so its failure is the one
     // failure, as `ApiKeyPromptFailed`.
@@ -558,40 +515,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           // Project-relative inside the project, absolute outside it or
           // with no folder open.
           const current = workspaceRelativePath(roots.workspace, currentPath);
-          // A latexdiff artifact (`paper-diff1234abcd.tex`) taken as the base
-          // file selects the file it was derived from instead, when that
-          // file is still on disk, and its commit rides onto the launcher.
-          const parsed =
-            request.fileType === 'base'
-              ? parseVersionControlDiffFilename(current)
-              : null;
-          if (parsed) {
-            const found =
-              roots.workspace !== undefined &&
-              (yield* commitExists(roots.workspace, parsed.commitHash));
-            if (found)
-              bridge.surfaceAction({
-                kind: 'launch',
-                patch: { commit: parsed.commitHash },
-              });
-            else
-              yield* host.notify(
-                'info',
-                `The commit ${parsed.commitHash} referenced by ${path.basename(current)} was not found in the repository history.`,
-              );
-            const source = pathToLocationIn(roots.workspace, parsed.sourcePath);
-            if (
-              source.kind === 'workspace' &&
-              (yield* (yield* WorkspaceFs).exists(source.relativePath))
-            ) {
-              yield* snapshot.refreshFiles;
-              return { kind: 'files', paths: [parsed.sourcePath] };
-            }
-            yield* host.notify(
-              'info',
-              `The base file ${parsed.sourcePath} could not be found. Keeping ${current} selected.`,
-            );
-          }
           return { kind: 'files', paths: [current] };
         }
         case 'addOpenedFiles': {
@@ -608,9 +531,21 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             ),
           };
         }
-        case 'openRunStorage':
-          yield* documentTaskFileActions.openRunStorage(request.runId);
+        case 'openRunStorage': {
+          const runDirectory = runDirUnder(roots.storage, request.runId);
+          yield* (yield* FileSystem.FileSystem)
+            .makeDirectory(runDirectory, { recursive: true })
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new Rejected({
+                    reason: `Failed to open run folder: ${toErrorMessage(cause)}`,
+                  }),
+              ),
+            );
+          yield* host.openDirectory(runDirectory);
           return done;
+        }
         case 'attachDroppedFiles': {
           const attached = yield* attachDroppedFiles(
             roots.workspace,
@@ -690,9 +625,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           bridge.surfaceAction({ kind: 'select', runId: forked });
           return done;
         }
-        case 'runCompileFixer':
-          yield* runActions.runCompileFixer(request.runId);
-          return done;
         case 'useOwnApiKey':
           yield* apiKeyRetry.useOwnApiKey(request);
           return done;
@@ -700,9 +632,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'polish':
         case 'savePastedImage':
           return yield* draftRequests.handle(request, port);
-        case 'refreshCommits':
-          yield* snapshot.refreshCommits;
-          return done;
         case 'refreshFiles':
           yield* snapshot.refreshFiles;
           return done;
@@ -712,9 +641,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'toolEdit':
           yield* toolEditApprovals.handleAction(request);
           return done;
-        case 'fileAction':
-          yield* documentTaskFileActions.handle(request);
-          return done;
         case 'exportTranscript':
           if (!session.view.current().runs.has(request.runId))
             return yield* new Unavailable({
@@ -722,23 +648,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
               reason: 'The run is no longer open.',
             });
           yield* exportTranscript(request.runId);
-          return done;
-        case 'latexdiff':
-          yield* latexdiff.run(request.runId);
-          return done;
-        case 'pack':
-        case 'clean':
-          yield* runActions.documentTaskFileOperation(
-            request.runId,
-            request.kind,
-          );
-          return done;
-        case 'latexdiffCommit':
-          yield* latexdiff.againstCommit(
-            request.action,
-            request.baseFile ?? '',
-            request.commit ?? 'HEAD',
-          );
           return done;
         case 'openSettings':
           yield* bindings.openSettings(request.target);
@@ -805,28 +714,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     );
   }
 
-  const settingsRuns: GuiWindowSettingsRuns = {
-    revealRun: (runId) =>
-      session.view.current().runs.has(runId)
-        ? host.runs
-            .showRunView()
-            .pipe(
-              Effect.andThen(
-                Effect.sync(() =>
-                  bridge.surfaceAction({ kind: 'select', runId }),
-                ),
-              ),
-              Effect.as('revealed' as const),
-            )
-        : Effect.succeed('missing' as const),
-    runLabel: (runId) => session.view.current().runs.get(runId)?.label,
-  };
-
   return {
     bridge,
     snapshot,
     runValidated: runActions.runValidated,
     runSetup,
-    settingsRuns,
   };
 });

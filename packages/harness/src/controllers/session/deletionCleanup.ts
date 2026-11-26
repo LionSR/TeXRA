@@ -1,8 +1,7 @@
 /**
  * A run's removal: a `run.delete`, which removes the run from its log; the
  * removal of the files a run generated, driven only by committed deletion
- * records; and the `run.files` request that copies a stopped run's
- * directory into the workspace or removes it.
+ * records.
  */
 import * as path from 'node:path';
 
@@ -11,7 +10,6 @@ import {
   Effect,
   Queue,
   FileSystem,
-  Path,
   type PlatformError,
   Schema,
   type Scope,
@@ -20,7 +18,6 @@ import {
 import { RunLive, type RunRegistry } from '@agent/runtime/runRegistry';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { logFailure, withLogChannel } from '@logger/effectLog';
-import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { type RunId, runNoun, type SessionRow } from '@shared/schemas';
 import {
   DatabaseAggregateClosed,
@@ -29,18 +26,13 @@ import {
   type Database,
 } from '@shared/session/database';
 import {
-  Rejected,
   RunActive,
   Unavailable,
   type RequestError,
   type OutcomeOf,
-  type RunFilesResult,
-  type RuntimeCommand,
 } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { SessionViewAccess } from '@shared/session/runHistory';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { copyDereferenced } from '@utils/files/fsDurability';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 import { isPathWithin } from '@utils/core/pathCore';
 
@@ -181,52 +173,6 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
   },
 );
 
-/** What a `run.files` request reads from the process: its files. */
-export type RunFilesServices = FileSystem.FileSystem | Path.Path;
-
-/** A stopped run's directory under the storage root; `undefined`, with a
- *  warning, when the run has none. */
-const existingRunDir = Effect.fn(function* (runId: RunId) {
-  const runDir = path.posix.join(WORKSPACE_STORAGE_LAYOUT.runs, runId);
-  if (yield* (yield* StorageFs).exists(runDir)) return runDir;
-  yield* Effect.logWarning(`Run directory not found for run ${runId}`);
-  return undefined;
-});
-
-/**
- * Copy a stopped run's directory to the workspace path `to`; `false` when
- * the run has no directory. Symlinks are dereferenced so a copy stands
- * alone, and a copy onto an existing folder fails rather than merging into
- * it.
- */
-const copyRunDir = Effect.fn('runStorage.copyRunDir')(function* (
-  runId: RunId,
-  to: string,
-) {
-  const runDir = yield* existingRunDir(runId);
-  if (runDir === undefined) return false;
-  const workspaceFs = yield* WorkspaceFs;
-  const source = yield* (yield* StorageFs).resolve(runDir);
-  const destination = yield* workspaceFs.resolve(to);
-  yield* workspaceFs.makeDirectory((yield* Path.Path).dirname(to), {
-    recursive: true,
-  });
-  yield* copyDereferenced(source, destination);
-  yield* Effect.logInfo(`Copied ${source} -> ${destination}`);
-  return true;
-});
-
-/** Remove a stopped run's directory; `false` when the run has none. */
-const removeRunDir = Effect.fn('runStorage.removeRunDir')(function* (
-  runId: RunId,
-) {
-  const runDir = yield* existingRunDir(runId);
-  if (runDir === undefined) return false;
-  yield* Effect.logInfo(`Removing the run directory ${runDir}`);
-  yield* (yield* StorageFs).remove(runDir, { recursive: true, force: true });
-  return true;
-});
-
 /** The registry's step on a run nothing drives (`withInactiveRun`): it
  *  refuses a run live here or with live work under it, and a launch
  *  arriving meanwhile waits for the step. */
@@ -277,56 +223,3 @@ export const deleteAcceptedRun = (
     return { kind: 'done' } as const;
   });
 };
-
-/**
- * Answer a `run.files` request on its session as one step on the inactive
- * run (`runs`: the registry's `withInactiveRun`): a run launched here
- * refuses it, and a launch arriving meanwhile waits for it. What a copy is
- * for, and where it goes, is the requesting app's.
- */
-export const runFiles = Effect.fn('runFiles')(function* (
-  runs: InactiveRunStep,
-  req: Extract<RuntimeCommand, { kind: 'run.files' }>,
-): Effect.fn.Return<
-  OutcomeOf<'run.files'>,
-  RequestError,
-  RunFilesServices | WorkspaceFs | StorageFs
-> {
-  return yield* runs
-    .withInactiveRun(
-      req.runId,
-      (req.files.op === 'copy'
-        ? copyRunDir(req.runId, req.files.to)
-        : removeRunDir(req.runId)
-      ).pipe(
-        Effect.map((found): RunFilesResult => {
-          if (!found) return { status: 'noFiles' };
-          return req.files.op === 'copy'
-            ? { status: 'done', to: req.files.to }
-            : { status: 'done' };
-        }),
-        Effect.catch((error) =>
-          Effect.logError(
-            `The ${req.files.op} of run ${req.runId} failed`,
-          ).pipe(
-            Effect.annotateLogs({ data: error }),
-            Effect.as<RunFilesResult>({
-              status: 'error',
-              error: toErrorMessage(error),
-            }),
-          ),
-        ),
-      ),
-    )
-    .pipe(
-      Effect.mapError((cause) =>
-        cause instanceof Rejected
-          ? cause
-          : new Rejected({
-              reason: `This run is running: ${toErrorMessage(cause)}`,
-            }),
-      ),
-      Effect.map((result) => ({ kind: 'runFiles', result }) as const),
-      withLogChannel('runFiles'),
-    );
-});

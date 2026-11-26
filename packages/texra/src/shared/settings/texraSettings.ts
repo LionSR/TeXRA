@@ -1,14 +1,14 @@
 /**
  * TeXRA's own setting rows, and the static catalog its settings surfaces
  * read: the harness's rows (`@shared/state/stateSettings`), these, and the
- * rows its plugins declare (`./documentsSettings`, `./integrationSettings`).
+ * rows its plugins declare (`./latexdiffSettings`, `./integrationSettings`).
  * Every host's config carries the catalog ({@link TEXRA_SETTINGS}`.catalog`,
  * `ConfigProvider.catalog`); the settings surfaces read the placed rows
  * beside it, where each row's placement is the row's own or, for a harness
  * row, the one `./settingSurfaces` gives it.
  *
- * Owner by key: the CLI's startup rows (`agent`, `model`, `chat`, `run`,
- * `outputFormat`), `agentOutputs.autoOpenFinal`, the bibliography
+ * Owner by key: the CLI's startup rows (`model`, `chat`, `run`,
+ * `outputFormat`), the bibliography
  * (`bib.*`), LaTeX (`latex.*`, the formatter), inline criticism and
  * telemetry.
  */
@@ -36,7 +36,7 @@ import {
   NON_REGEX_REPLACEMENT_CATEGORIES,
   REGEX_REPLACEMENT_CATEGORIES,
 } from '@texra/shared/constants/replacementCategories';
-import { DOCUMENTS_SETTINGS } from '@texra/shared/settings/documentsSettings';
+import { LATEXDIFF_SETTINGS } from '@texra/shared/settings/latexdiffSettings';
 import {
   CLAUDE_AGENT_SETTINGS,
   CODEX_SETTINGS,
@@ -109,15 +109,6 @@ export const CLI_OUTPUT_FORMAT_SETTING = Object.freeze({
     'Default CLI output format: text, json, or ndjson. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
 } as const satisfies SettingRow<typeof CliOutputFormatSchema.Type>);
 
-export const AUTO_OPEN_FINAL_SETTING = Object.freeze({
-  key: 'agentOutputs.autoOpenFinal',
-  slot: 'config',
-  schema: decodingDefault(Schema.Boolean, true),
-  title: 'Open the final revision',
-  description:
-    'Automatically preview the final revised file when a document task finishes.',
-} as const satisfies SettingRow<boolean>);
-
 export const BIB_DEFAULT_PATH_SETTING = Object.freeze({
   key: 'bib.defaultPath',
   slot: 'config',
@@ -126,20 +117,6 @@ export const BIB_DEFAULT_PATH_SETTING = Object.freeze({
   description:
     'Default .bib file path for citation search (supports Zotero auto-export).',
 } as const satisfies SettingRow<string>);
-
-/** The port of Zotero's local endpoints: the Connector API and Better
- *  BibTeX's JSON-RPC. */
-export const ZOTERO_PORT_SETTING = Object.freeze({
-  key: 'bib.zoteroPort',
-  slot: 'config',
-  schema: decodingDefault(
-    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_535 })),
-    23119,
-  ),
-  title: 'Zotero port',
-  description:
-    'Local Zotero port for Connector API and Better BibTeX (default: 23119).',
-} as const satisfies SettingRow<number>);
 
 export const LATEXINDENT_CONFIG_SETTING = Object.freeze({
   key: 'latex.latexindentConfig',
@@ -312,18 +289,6 @@ export const INLINE_CRITICISM_SETTING = Object.freeze({
 } as const satisfies TexraSettingRow<boolean>);
 
 /** TeXRA's rows no TeXRA UI shows, in catalog order. */
-/** How many recent commits the launcher's commit picker lists. */
-export const GIT_COMMITS_TO_SHOW_SETTING = Object.freeze({
-  key: 'git.numberOfCommitsToShow',
-  slot: 'config',
-  schema: decodingDefault(
-    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
-    20,
-  ),
-  title: 'Commits to show',
-  description: 'Number of recent commits shown in the commit picker.',
-} as const satisfies SettingRow<number>);
-
 /** The audio tools' SoX binary, when automatic detection should not decide. */
 export const SOX_PATH_SETTING = Object.freeze({
   key: 'audio.soxPath',
@@ -334,15 +299,12 @@ export const SOX_PATH_SETTING = Object.freeze({
 } as const satisfies SettingRow<string>);
 
 const TEXRA_UNSHOWN_ROWS: readonly SettingRow[] = [
-  GIT_COMMITS_TO_SHOW_SETTING,
   SOX_PATH_SETTING,
   CLI_MODEL_SETTING,
   CLI_CHAT_SETTING,
   CLI_RUN_SETTING,
   CLI_OUTPUT_FORMAT_SETTING,
-  AUTO_OPEN_FINAL_SETTING,
   BIB_DEFAULT_PATH_SETTING,
-  ZOTERO_PORT_SETTING,
   LATEXINDENT_CONFIG_SETTING,
   TEXFMT_CONFIG_SETTING,
   TIKZ_INPUT_DIRECTORY_SETTING,
@@ -359,7 +321,7 @@ const TEXRA_PLACED_ROWS: readonly TexraSettingRow[] = [
   TELEMETRY_ENABLED_SETTING,
   LATEX_FORMATTER_SETTING,
   INLINE_CRITICISM_SETTING,
-  ...DOCUMENTS_SETTINGS,
+  ...LATEXDIFF_SETTINGS,
   ...[...CODEX_SETTINGS, ...CLAUDE_AGENT_SETTINGS].map(({ row }) => row),
 ];
 

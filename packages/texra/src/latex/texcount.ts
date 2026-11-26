@@ -241,12 +241,3 @@ export function parseTeXCountStats(output: string): TeXCountStat[] {
       : Result.failVoid;
   });
 }
-
-export const getTeXCountStats = Effect.fn('texcount.getTeXCountStats')(
-  function* (workspaceRoot: string | undefined, filePaths: string | string[]) {
-    const { output } = yield* getTeXCount(workspaceRoot, filePaths);
-    return output
-      ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`
-      : null;
-  },
-);

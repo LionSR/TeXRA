@@ -33,12 +33,9 @@ import { texraPlugin } from '@texra/tools/texraPlugin';
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import type { ToolInstallAction } from '@texra/shared/settingsView/settingsViewMessages';
 import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
-import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import { hasExtension } from '@texra-ai/worldline/schemas';
 
 // Local file imports
-import { AcceptRunFilesTool } from './AcceptRunFilesTool';
-import { arxiv } from './arxiv/plugin';
 import { claudeAgent } from './agentCli/claudeAgentPlugin';
 import { codex } from './agentCli/codexPlugin';
 import {
@@ -49,15 +46,6 @@ import {
 } from './comment/InlineCommentTool';
 import { DiagnosticsTool } from './DiagnosticsTool';
 import { EditorHost, editorRegistry, type EditorRegistry } from './editorHost';
-import {
-  DocumentCompileTool,
-  DocumentContextTool,
-  DocumentDiffTool,
-  DocumentExtractTool,
-  DocumentProposeTool,
-} from './documents/documentTools';
-import { DocumentReviewTool } from './documents/DocumentReviewTool';
-import { githubActivity } from './github/plugin';
 import { lean4 } from './lean/plugin';
 import { OpenPdfTool } from './OpenPdfTool';
 /**
@@ -86,7 +74,6 @@ import { OpenPdfTool } from './OpenPdfTool';
  */
 import { ProbeEnvironmentTool } from './setup/ProbeEnvironmentTool';
 import { SETUP_PROMPT } from './setup/setupPrompt';
-import { TASK_MODULES, TASK_PROGRAMS } from './tasks/programs';
 import { UnsetApiKeyTool } from './setup/UnsetApiKeyTool';
 import { InvokeCommandTool } from './setup/InvokeCommandTool';
 import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
@@ -103,7 +90,6 @@ import {
   type EditorIntegrationShape,
 } from '@texra/hosts/editorIntegration';
 import { wolfram } from './wolframPlugin';
-import { zotero } from './zotero/plugin';
 import { type WriteFilter } from '@texra-ai/worldline/builtins';
 import { Settings } from '@texra-ai/worldline/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
@@ -208,8 +194,6 @@ const core = (
   ...definePlugin<EditorHost>({
     id: 'core',
     tools: [InlineCommentTool, OpenPdfTool, AskUserQuestionTool],
-    scriptModules: TASK_MODULES,
-    programs: TASK_PROGRAMS,
     // The section writes math for a rendered reply: a run that writes a
     // document, with no tool offered, gets none of it (`$$\\begin{align}`
     // inside a .tex file does not compile).
@@ -289,50 +273,21 @@ const setup = (
     ],
   });
 
-/** The theorist's programs: the document programs a person or a model
- *  starts by name, the tools they call, and accepting the documents a run
- *  produced into the workspace. */
+/** The theorist's programs, which a person or a model starts by name. */
 const theory: TexraPlugin = texraPlugin({
   id: 'theory',
-  icons: { accept_run_files: 'check' },
+  // The script tool's description lists the programs; a run offered
+  // `program` without it reads them here.
   prompt: ({ offered }) =>
-    offered.includes('program')
-      ? [
-          '`program` starts a document program over files (`inputFiles`, with `contextFiles` it may read and not change).',
-          // The script tool's description lists the programs; a run without
-          // it reads them here.
-          ...(offered.includes('script')
-            ? []
-            : [
-                `The programs: ${Object.entries(THEORY_PROGRAMS)
-                  .map(
-                    ([name, { description }]) => `\`${name}\` (${description})`,
-                  )
-                  .join('; ')}.`,
-              ]),
-          'Each rewrites whole documents in fixed revisions, with compile checks and diffs, and proposes the result for the user to accept; it reads only the files you pass. What to change, how far and from which point of view is the `prompt`: one program covers a proofread and a restructuring, a referee and a first reader.',
-          "Its `args` may switch on `reflect` (a critic reviews each revision but the last), `attachTeXCount` (word counts in the prompt), and `autoExtractFigure`, `autoExtractTikzFigure` or `autoCompileInputPdf` (the inputs' figures, compiled TikZ pictures or PDF as media, for a model that reads images).",
-          'Its delivery lists each proposed file with a `diff` attribute, the diff against the document the program started from, readable among the run\'s files (`/executions/{id}/files/<diff>`), and `large-change="true"` when the file changed extensively; a diff may be truncated.',
-          "The host compiles each .tex the program writes: a file that failed to build leaves its log at `compile/r{n}_<name>.log` among the run's files, which the delivery's `<compile-failures>` names (read it at `/executions/{id}/files/<log>`), and no log means every build passed or no LaTeX toolchain is installed.",
-          ...(offered.includes('script')
-            ? [
-                "In a script, `program(name, { prompt, inputFiles })` resolves to the program's result, whose `changes` list each revision's files in order: pass the last `absolutePath` of each `path` as the `inputFiles` of the next program to chain them. `describeTool(name)` shows a program's source, and `builtIn:revise` exports what the programs are built from.",
-              ]
-            : []),
-        ].join(' ')
+    offered.includes('program') && !offered.includes('script')
+      ? `The LaTeX programs \`program\` starts: ${Object.entries(
+          THEORY_PROGRAMS,
+        )
+          .map(([name, { description }]) => `\`${name}\` (${description})`)
+          .join('; ')}.`
       : '',
   scriptModules: THEORY_MODULES,
   programs: THEORY_PROGRAMS,
-  tools: [
-    AcceptRunFilesTool,
-    DocumentContextTool,
-    DocumentExtractTool,
-    DocumentCompileTool,
-    DocumentDiffTool,
-    DocumentReviewTool,
-    DocumentProposeTool,
-  ],
-  factKinds: APP_FACT_KINDS.theory,
 });
 
 /** TeXRA's plugins, in dashboard order. */
@@ -369,7 +324,6 @@ export const texraPlugins = (host: {
       },
     },
     latexDiagnostics(editors),
-    arxiv,
     {
       ...web,
       icons: { web_search: 'globe', web_fetch: 'globe' },
@@ -401,7 +355,6 @@ export const texraPlugins = (host: {
       },
     },
     wolfram,
-    zotero,
     lean4,
     {
       ...multiAgent,
@@ -416,7 +369,6 @@ export const texraPlugins = (host: {
         },
       },
     },
-    githubActivity,
     codex,
     claudeAgent,
     core(editors, host.inlineComments),

@@ -43,7 +43,6 @@
  *   [`PromptSection`](#promptsection),
  *   [`ProcessPluginLayer`](#processpluginlayer),
  *   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
- *   [`FactKind`](#factkind), and [`Program`](#program) (how its run
- *   reads: [`ProgramResult`](#programresult)).
+ *   [`FactKind`](#factkind), and [`Program`](#program).
  */
 export * from '@tools/pluginSurface';

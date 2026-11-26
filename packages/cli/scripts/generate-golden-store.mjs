@@ -23,14 +23,8 @@
  *   is refused: a one-shot parent never reads a message. Headless
  *   delegation runs in band, so every row commits in one order.
  * - two entry-agent runs over the same notes: the context blobs they share.
- * - an `edit` program run with `--output`: the theory plugin's output
- *   fact, its diffs included, and the program's `run.end` with its documents
- *   as `output.structured`. Its documents have no `\documentclass` and no
- *   document environment, so its compile check and latexdiff run no TeX
- *   tool. The TeX tools it could run by name are stand-ins first on PATH,
- *   which fail the generation if run: what an installed TeX answers is the
- *   machine's. Leaving TeX off the PATH would not hide it: the CLI adds the
- *   usual TeX directories after the PATH it is given (`commandDirs`).
+ * - an `annotate` program run: a program's script run, the child its
+ *   round starts, and the files it reads to check that round.
  * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
  *   Codex switched on in `/plugins`, and a plugin's `PostToolUse` hooks on
  *   `plan` and `codex` enabled: a plan the user runs as a goal
@@ -225,7 +219,7 @@ function scenario(root) {
   );
   writeFileSync(
     path.join(project, 'paper.tex'),
-    '\\section{Input}\nThe golden edit program revises this file.\n',
+    '\\section{Input}\nThe golden annotate program reviews this file.\n',
   );
   // The Codex CLI the Codex child runs: first on PATH, with an empty global
   // npm prefix so no installed Codex is found first. Its one turn answers
@@ -253,15 +247,15 @@ process.stdin.on('end', function answer() {
 `,
     { mode: 0o755 },
   );
-  // The TeX tools the edit program runs by name, also first on PATH: each
-  // only notes in `tex.ran`, beside the flag, that it ran, and the
-  // generation fails once its runs end.
-  for (const tool of ['latexmk', 'pdflatex', 'latexdiff', 'texcount'])
-    writeFileSync(
-      path.join(bin, tool),
-      `#!/bin/sh\necho ${tool} >> "$(dirname "$0")/../tex.ran"\n`,
-      { mode: 0o755 },
-    );
+  // A `wolframscript` that answers the Wolfram plugin's probe, so the
+  // plugin's prompt section stands from the first step on every machine:
+  // without one, the probe's "not found" lands between two steps of a run,
+  // at a point that depends on timing.
+  writeFileSync(
+    path.join(bin, 'wolframscript'),
+    '#!/bin/sh\necho "WolframScript 1.0.0"\n',
+    { mode: 0o755 },
+  );
   // A plugin whose \`PostToolUse\` hooks see each \`codex\` call and hold each
   // \`plan\` call until \`plan.release\` appears beside the project, the
   // hooks' working directory.
@@ -584,17 +578,15 @@ async function generate(root) {
       '--print',
     ]);
 
-  // The `edit` program through `texra run --output`: the theory plugin's
-  // output fact, diffs included, and the program's `run.end` (`structured`).
+  // The `annotate` program through `texra run`: a program's script run
+  // and its round's child.
   cli.run([
     'run',
-    'edit',
+    'annotate',
     '--model',
     'openai/gpt-5.6-sol',
     '--input',
     'paper.tex',
-    '--output',
-    'paper.polished.tex',
     '--approval-policy',
     'never',
     '--output-format',
@@ -1034,13 +1026,6 @@ async function generate(root) {
     client(['history', 'delete', doomed, '--yes', '--print']);
   });
 
-  // A TeX stand-in that ran: the store would hold what this machine's TeX
-  // answers.
-  const tex = path.join(root, 'tex.ran');
-  if (existsSync(tex))
-    fail(
-      `the scenario ran ${readFileSync(tex, 'utf8').trim().split('\n').join(', ')}, which an installed TeX answers differently on each machine`,
-    );
   return cli.store();
 }
 

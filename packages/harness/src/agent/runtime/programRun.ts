@@ -8,31 +8,21 @@
  * module that file holds, and its tools are the ones its registration or
  * its file lists for it.
  */
-import { Effect, FileSystem, Result, Schema, SchemaIssue } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 
 import { readOwnPrograms } from '@agent/memory/ownPrograms';
 import type { PluginPrograms } from '@common/plugins/pluginPrograms';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
-import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   backgroundScriptOf,
-  factName,
   programOf,
   programOrigin,
   type AgentConfig,
   type ProgramOrigin,
-  type RunId,
 } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
-import { SessionLog } from '@shared/session/runHistory';
-import { escapeAttr } from '@shared/utils/xmlEscape';
-import {
-  ToolRegistry,
-  type Program,
-  type ProgramChange,
-} from '@tools/toolTable';
+import { ToolRegistry, type Program } from '@tools/toolTable';
 
 /**
  * The script a program's run makes: import the program's module (a
@@ -185,22 +175,17 @@ const registeredProgram = Effect.fn('registeredProgram')(function* (
 /**
  * What launches the program `name` as a run of its own in the project at
  * `roots`: the run is named for the program and has no agent's prompt or
- * tools (its script is all it runs), and it writes the program's own
- * outputs unless the launch names files other than its inputs.
+ * tools (its script is all it runs). Fails for a program no plugin
+ * registers now.
  */
 export const programLaunch = Effect.fn('programLaunch')(function* (
   name: string,
   args: Readonly<Record<string, Schema.Json>>,
-  files: Pick<AgentConfig, 'inputFiles' | 'outputFiles'>,
   roots: Pick<WorkspaceRoots, 'storage'>,
 ) {
-  const program = yield* registeredProgram(name, roots);
-  const named = files.outputFiles.filter(Boolean);
+  yield* registeredProgram(name, roots);
   return {
     label: name,
-    outputFiles: named.some((file) => !files.inputFiles.includes(file))
-      ? named
-      : [...(program.outputs ?? [])],
     script: { kind: 'program' as const, name, args },
   } satisfies Partial<AgentConfig>;
 });
@@ -224,86 +209,5 @@ export const scriptCallOf = Effect.fn('scriptCallOf')(function* (
     code: programScript(program.name, program.args, config),
     title: program.name,
     tools,
-  };
-});
-
-/** A program run's value as its registration reads it. */
-interface ProgramRunResult {
-  /** The program's name (`kind` on the delivery). */
-  readonly name: string;
-  /** The delivery body; empty when the program registers no result. */
-  readonly delivery: readonly string[];
-  readonly changes: readonly ProgramChange[];
-}
-
-/**
- * The result of the completed run `runId`, launched with `config`, or
- * undefined for a run that is no program's (or has no recorded config). A
- * program that registers no result reports no files. A run of a program no
- * plugin registers, with no row of the result's fact kind, or with a row
- * its schema refuses, is logged and read as no files; the refusal is also
- * the delivery, so the launching model sees it.
- */
-export const readProgramResult = Effect.fn('readProgramResult')(function* (
-  config: Pick<AgentConfig, 'script'> | null,
-  runId: RunId,
-  roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
-): Effect.fn.Return<
-  ProgramRunResult | undefined,
-  DatabaseReadFailed,
-  ToolRegistry | SessionLog
-> {
-  const program = config === null ? null : programOf(config);
-  if (program === null) return undefined;
-  const { name } = program;
-  const refused = (reason: string) =>
-    Effect.logWarning(
-      `Run ${runId} of the program '${name}' reports nothing its registration reads: ${reason}`,
-    ).pipe(
-      withLogChannel('ProgramResult'),
-      Effect.as({
-        name,
-        delivery: [`<invalid-result reason="${escapeAttr(reason)}" />`],
-        changes: [],
-      }),
-    );
-  // A program read from a file registers no result: its run delivers its
-  // reply alone.
-  if (programOrigin(name) !== 'listed')
-    return { name, delivery: [], changes: [] };
-  const { programs } = yield* ToolRegistry;
-  const registered = programs.get(name);
-  if (registered === undefined)
-    return yield* refused(
-      new ProgramNotRegistered({
-        name,
-        registered: [...programs.keys()],
-        withheld: [],
-      }).message,
-    );
-  const { result } = registered;
-  if (result === undefined) return { name, delivery: [], changes: [] };
-  const { schema } = result.fact;
-  const fact = factName(result.fact);
-  const row = (yield* (yield* SessionLog).facts(runId))?.facts[fact];
-  if (row === undefined)
-    return yield* refused(`the run recorded no '${fact}' row`);
-  const parsed = Schema.decodeUnknownResult(schema)(row.value, {
-    errors: 'all',
-  });
-  if (Result.isFailure(parsed)) {
-    return yield* refused(
-      SchemaIssue.makeFormatterStandardSchemaV1()(parsed.failure.issue)
-        .issues.map(
-          ({ path, message }) =>
-            `${(path ?? []).map(String).join('.') || 'value'}: ${message}`,
-        )
-        .join('; '),
-    );
-  }
-  return {
-    name,
-    delivery: result.delivery(parsed.success, runId),
-    changes: result.changes(parsed.success, roots),
   };
 });

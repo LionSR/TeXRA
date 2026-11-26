@@ -53,7 +53,6 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
       // on a program's proposal, so a launch carries none of them.
       inputFiles: [],
       contextFiles: [],
-      outputFiles: [],
       mediaFiles: launch.mediaFiles.map((file) =>
         isPastedImage(file) ? pastedImageFullPath(roots.storage, file) : file,
       ),

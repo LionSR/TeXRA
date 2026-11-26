@@ -54,7 +54,7 @@ export function isAgentRunRecord(record: RunRecord): record is AgentConfig {
 const HIDDEN_CONFIG_FIELDS_BY_CATEGORY: Readonly<
   Record<string, ReadonlySet<string>>
 > = {
-  agent: new Set(['inputFiles', 'contextFiles', 'outputFiles']),
+  agent: new Set(['inputFiles', 'contextFiles']),
   task: new Set(['script']),
 };
 

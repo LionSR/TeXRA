@@ -33,7 +33,6 @@ import {
   withWaitingGrandchild,
 } from '@test/shared/session/fanOutScenario';
 import type { MissingTool } from '@texra/shared/session/hostSnapshot';
-import { DOCUMENTS_OUTPUT_KIND } from '@texra/shared/plugins/documents';
 import {
   emptyHostSnapshot,
   type HostSnapshot,
@@ -79,17 +78,6 @@ function host(): HostSnapshot {
       },
     ],
     workspaceRoots: [{ value: '/paper', label: 'ldt-lean' }],
-    fileOptions: {
-      baseFile: ['main.tex', 'section2.tex', 'appendixB.tex'],
-      editedFile: ['main_polish.tex', 'main_review.tex'],
-      commit: [
-        'HEAD',
-        'HEAD~1',
-        'a1f3c2 Fix lemma B.3',
-        '9be0d4 Section 2 rewrite',
-      ],
-    },
-    isGitRepo: true,
   };
 }
 
@@ -103,8 +91,6 @@ function surface(view: SessionView, ...actions: SurfaceAction[]): Surface {
         inputFiles: ['main.tex'],
         contextFiles: ['library.bib'],
         model: 'gemini-3.8-flash',
-        baseFile: 'main.tex',
-        editedFile: 'main_polish.tex',
       },
     },
     { kind: 'expand', runId: ROOT, expanded: true },
@@ -508,24 +494,12 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = fanOutView();
     return editorTab(view, surface(view, { kind: 'select', runId: CHILD }));
   },
-  // Real-ExtensionTools: the Tools sheet with the real latexdiffs-section.
-  'ext-tools': () => {
-    const view = fanOutView();
-    return sidebar(
-      view,
-      surface(
-        view,
-        { kind: 'select', runId: CHILD },
-        { kind: 'toolsSheet', open: true },
-      ),
-    );
-  },
   // Real-ExtensionProposal: the script's agent request on the root.
   'ext-proposal': () => {
     const view = withProposal();
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
-  // A proposed `edit` program on the child, in place of its bash request:
+  // A proposed `annotate` program on the child, in place of its bash request:
   // the card's model menu over the host's models.
   'ext-proposal-pickers': () => {
     const log = new Log();
@@ -538,15 +512,14 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
           requestId: 'req-task',
           runId: CHILD,
           task: true,
-          label: 'edit',
+          label: 'annotate',
           system: '',
           tools: [],
           model: 'gemini-3.8-flash',
-          instruction: 'Fix the typos and notation slips in Section 2.',
+          instruction: 'Referee the argument of Section 2.',
           inputFiles: ['/paper/section2.tex'],
           contextFiles: [],
           mediaFiles: [],
-          outputFiles: ['/paper/section2_edit.tex'],
         },
       },
       answeredBy: 'superYolo',
@@ -592,62 +565,6 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     );
     const view = viewOf([...events, ...priced, local({ runsHere: ALL_RUNS })]);
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
-  },
-  // A document task past its second revision: the header's "Revision 2 of
-  // 3" chip.
-  'ext-workflow-pass': () => {
-    const log = new Log();
-    log.emit(ROOT, T.root, {
-      type: 'run.start',
-      maxCostUsd: null,
-      identity: { kind: 'agent', agent: 'review' },
-      worktree: { workingDirectory: '/paper' },
-      parent: null,
-      provenance: null,
-      takesFollowUps: false,
-      grants: NO_GRANTS,
-    });
-    log.emit(ROOT, T.root, {
-      type: 'run.config',
-      config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent: 'review',
-        script: { kind: 'program', name: 'annotate', args: {} },
-      }),
-    });
-    log.emit(ROOT, T.root, { type: 'run.activate' });
-    log.emit(ROOT, T.root + 1, {
-      type: 'plugin.fact',
-      plugin: DOCUMENTS_OUTPUT_KIND.plugin,
-      kind: DOCUMENTS_OUTPUT_KIND.kind,
-      version: DOCUMENTS_OUTPUT_KIND.version,
-      value: {
-        task: {
-          intro: '',
-          requests: ['Revise.', 'Review.', 'Finish.'],
-          templates: [],
-          creates: false,
-        },
-        rounds: [0, 1].map((round) => ({
-          round,
-          outputs: [],
-          compileFailures: [],
-          missingOutputs: [],
-          latexdiffs: [],
-          reply: null,
-        })),
-      },
-    });
-    log.emit(ROOT, T.root + 2, {
-      type: 'run.position',
-      payload: { at: 'turn.begin', turn: 2 },
-    });
-    const view = viewOf([
-      subscribe(ROOT),
-      ...log.events.map(tail),
-      log.drained(),
-      local({ runsHere: ALL_RUNS }),
-    ]);
-    return editorTab(view, surface(view, { kind: 'select', runId: ROOT }));
   },
   // The background process stream: its command strip over its raw output.
   'ext-process': () => {

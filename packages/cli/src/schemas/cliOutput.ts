@@ -19,17 +19,15 @@ import {
   RunEndSchema,
   RunIdSchema,
 } from '@texra-ai/worldline/schemas';
-import { DocumentsResultSchema } from '@texra/shared/plugins/documentOutputs';
 
 /**
  * The CLI output contract version, stamped on every NDJSON line as
  * `contract` (`version` is the `texra version` record's own field). Version 3
  * is 1.0's: `kind: "progress"` records carry a session row verbatim (`event`
  * is the row's `type`, `payload` the rest of it) and results carry `runId`.
- * Version 3 has no stage for a run, a turn or a script (read `run.activate`,
+ * Version 3 has no stage rows: for a run or a turn read `run.activate`,
  * `run.position` and `run.end`; a script's calls are the cards whose
- * `stageId` is its card), and no `stage.end` a run's end wrote for a stage it
- * left open.
+ * `stageId` is its card.
  */
 export const CLI_NDJSON_CONTRACT = 3;
 
@@ -55,23 +53,6 @@ const CliRunResultSchema = RunEndSchema.mapFields(
   }),
 );
 export type CliRunResult = typeof CliRunResultSchema.Type;
-
-/**
- * A document task's result: its output carries its documents (what its
- * documents row reports, in place of a `structured` value), with the run's storage folder
- * and where `--output` or `--output-dir` copied the outputs.
- */
-const CliDocumentTaskResultSchema = CliRunResultSchema.mapFields(
-  Struct.assign({
-    output: RunEndSchema.fields.output
-      .mapFields(Struct.omit(['structured']))
-      .mapFields(Struct.assign({ documents: DocumentsResultSchema })),
-    runDirectory: Schema.String,
-    copiedOutput: Schema.optional(Schema.String),
-    copiedOutputs: Schema.optional(Schema.Array(Schema.String)),
-  }),
-);
-export type CliDocumentTaskResult = typeof CliDocumentTaskResultSchema.Type;
 
 /** A command's result that is not a run's (`plugin`, `clone`): named by
  *  its command, its fields the command's own. */
@@ -127,5 +108,5 @@ export type CliNdjsonRecord =
   | { readonly kind: 'agent-result'; readonly result: CliRunResult }
   | {
       readonly kind: 'result';
-      readonly result: CliDocumentTaskResult | CliCommandResult;
+      readonly result: CliCommandResult;
     };

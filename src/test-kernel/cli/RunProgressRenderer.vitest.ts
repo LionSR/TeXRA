@@ -65,7 +65,6 @@ const publishRun = (
         inputFiles: ['paper.tex'],
         contextFiles: [],
         mediaFiles: [],
-        outputFiles: [],
         memories: [],
         instruction: '',
         workingDirectory: '/tmp/project',

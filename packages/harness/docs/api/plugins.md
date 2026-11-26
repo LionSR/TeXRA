@@ -46,8 +46,7 @@ plugin is written with. The built-in plugins are
   [`PromptSection`](#promptsection),
   [`ProcessPluginLayer`](#processpluginlayer),
   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
-  [`FactKind`](#factkind), and [`Program`](#program) (how its run
-  reads: [`ProgramResult`](#programresult)).
+  [`FactKind`](#factkind), and [`Program`](#program).
 
 ## AgentTrace
 
@@ -68,17 +67,7 @@ interface AgentTrace {
   /** A chunk of a process run's output, on its stream (`process.output`). */
   output(stream: ProcessOutputStream, text: string): void;
 
-  // ─── Stages and stream handles ──────────────────────────────────────
-  /**
-   * Run `use` as a labelled stage (`stage.start`): what it logs on the trace
-   * it is handed nests under the stage, which closes once `use` exits
-   * (`stage.end`): completed when it succeeds, else as its cause reads
-   * (`outcomeFromCause`).
-   */
-  stage<A, E, R>(
-    label: string,
-    use: (trace: AgentTrace) => Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, R>;
+  // ─── Stream handles ─────────────────────────────────────────────────
   /**
    * Open a streaming message. Its `stream.start` waits for the first
    * non-empty chunk (or a finalize that carries text): subscribers read
@@ -187,20 +176,9 @@ subscriber; "no equivalent surface" is a valid, and common, answer.
 ```ts
 interface AppSignalPayloads {
   /**
-   * GitHub rejected the configured token. Frontends can surface the failure
-   * and direct the user to token settings.
-   *
-   * Consumed by: extension (modal error + jump to Git settings), desktop
-   * (an error dialog). Not the CLI: a
-   * poller rejection arrives with no chat turn to attach it to, and the TUI
-   * has no out-of-band notice surface — the rejection is logged instead.
-   */
-  githubTokenInvalid: { message: string };
-
-  /**
    * A write or removal of one secret-store entry finished. Emitted by the
    * store itself, so every writer is covered — the settings controllers, the
-   * setup agent's `unset_api_key`, the GitHub token forms — without any of
+   * setup agent's `unset_api_key` — without any of
    * them remembering to. The one file store emits from its own commit
    * finalizer, and the process's watch of the directory (`FileSecrets.watch`,
    * started once by the app's process layer) emits for writes from other
@@ -238,18 +216,6 @@ interface AppSignalPayloads {
    * catalog.
    */
   modelAccessChanged: undefined;
-
-  /**
-   * The active GitHub subscriptions (PR, repo, or issue) or their stream owners
-   * changed. Keyless on purpose: every listener re-reads the full subscription
-   * list, so which kind changed carries no information.
-   *
-   * Consumed by: extension and desktop settings views, both re-reading the
-   * full subscription list for their Git tab. Not the CLI: it lists
-   * subscriptions on demand from a slash command and has no persistent panel
-   * that could go stale.
-   */
-  githubSubscriptionsChanged: undefined;
 
   /**
    * The approval policy was written from a settings view or the terminal's
@@ -509,16 +475,6 @@ interface ChildRunsShape {
     readonly exists: Effect.Effect<boolean, Error>;
     readonly end: Effect.Effect<RunEnd | null, Error>;
   };
-  /** The latest value of `factKind` among the run's own facts, decoded
-   *  by its schema; undefined while the run recorded none. */
-  readonly fact: <A>(
-    runId: RunId,
-    factKind: {
-      readonly plugin: string;
-      readonly kind: string;
-      readonly schema: Schema.Codec<A, unknown>;
-    },
-  ) => Effect.Effect<A | undefined, Error>;
   /** Whether the launching run's work runs unasked (the Auto-approve policy,
    *  or an all-agent-work grant on it or an ancestor), read on each call,
    *  since a grant may land mid-run: what a child's own sandbox or
@@ -877,11 +833,6 @@ interface FactKind {
    *  starts with of the run's row of the kind: `copy` the row the run held
    *  at the cut, `drop` none. */
   readonly fork: 'copy' | 'drop';
-  /** The workspace files a row of the kind says its run wrote past the
-   *  editor's own write path: every process that folds the run announces
-   *  them (`workspaceFilesWritten`), a window hearing a service task's
-   *  write as it hears its own. */
-  readonly writes?: (value: Schema.Json) => readonly string[];
 }
 ```
 
@@ -1756,75 +1707,19 @@ One of a plugin's script modules that a person or a model starts by name
 `async (args, launch) => result`, and a run opened on it
 (`AgentConfig.script` of kind `program`) is a script run that imports the
 module and calls that export with the launch's `args` and
-`{ instruction, inputFiles, contextFiles, mediaFiles }`. A program that
-returns text answers with it when it registers no `result`. The plugin wrote
+`{ instruction, inputFiles, contextFiles, mediaFiles }`; what it returns
+is the run's reply. The plugin wrote
 it, not a model, so the launch that chose it granted it: its tools are
 the listed ones past any switch, its `agent` calls run under the launch's
 approval, and its prompts and files pass as written.
 
 ```ts
-interface Program<R = unknown> {
+interface Program {
   /** One line: what the program does and the `args` it reads. The script
    *  tool's description lists it. */
   readonly description: string;
   /** The tools its run is offered, by name. */
   readonly tools: readonly string[];
-  /** How a completed run of it reads to whoever launched it. Without one,
-   *  the run delivers its reply alone. */
-  readonly result?: ProgramResult<R>;
-  /** The files its run writes when its launch names none, for a program
-   *  that creates documents (a deck, a transcript) and does not rewrite
-   *  its inputs. */
-  readonly outputs?: readonly string[];
-}
-```
-
-## ProgramChange
-
-One file a program wrote, as a script summary counts it.
-
-```ts
-interface ProgramChange {
-  /** The workspace path the file replaces. */
-  readonly path: string;
-  /** The file the program wrote. */
-  readonly absolutePath: string;
-  /** The file it was diffed against, when it continues one: an earlier
-   *  call's `absolutePath` continues that call's row. */
-  readonly base: string | null;
-  readonly added: number | null;
-  readonly removed: number | null;
-}
-```
-
-## ProgramResult
-
-How a completed program run reads: to the launching model, and to a
-script's summary of the files its calls wrote. What it reports is the
-run's latest row of the plugin's own `fact` kind (`Plugin.factKinds`),
-the one record of it; the program's return value is not read. The harness
-reads the row only through these.
-
-```ts
-interface ProgramResult<R = unknown> {
-  /** The plugin's row kind that records what the run did, and the schema
-   *  its value decodes with. A completed run with no such row, or one that
-   *  fails the schema, is delivered as an invalid result naming the issue,
-   *  never shaped. */
-  readonly fact: {
-    readonly plugin: string;
-    readonly kind: string;
-    readonly schema: Schema.Codec<R, unknown>;
-  };
-  /** The delivery body inside the harness's own result envelope. */
-  delivery(value: R, runId: RunId): readonly string[];
-  /** The files the program wrote, in the order it wrote them (a document
-   *  revised twice appears twice, the later entry its latest): the files a
-   *  parent may read of its child's storage, and a script's summary. */
-  changes(
-    value: R,
-    roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
-  ): readonly ProgramChange[];
 }
 ```
 

@@ -24,7 +24,7 @@
  *   [`CompactionActivityRow`](#compactionactivityrow),
  *   [`ContextManagementRow`](#contextmanagementrow),
  *   [`WebSearchRow`](#websearchrow), [`ErrorRow`](#errorrow),
- *   [`FileListRow`](#filelistrow), [`LogRow`](#logrow), and
+ *   [`LogRow`](#logrow), and
  *   [`ProgressStatusRow`](#progressstatusrow).
  * - **Structured tool cards**: [`ToolRowModel`](#toolrowmodel) and
  *   [`ToolSection`](#toolsection) (`ToolStatusSection`, `ToolBadgesSection`,
@@ -75,7 +75,6 @@ export type {
   ErrorDetailKey,
   ErrorRow,
   ErrorRowDetail,
-  FileListRow,
   LogRow,
   ProgressStatusRow,
   StatItem,

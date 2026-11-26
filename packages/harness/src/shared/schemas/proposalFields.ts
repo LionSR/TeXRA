@@ -51,7 +51,6 @@ export interface ProposalFileFields {
   readonly inputFiles?: readonly string[];
   readonly contextFiles?: readonly string[];
   readonly mediaFiles?: readonly string[];
-  readonly outputFiles?: readonly string[];
 }
 
 export interface ProposalFileGroup {
@@ -80,6 +79,5 @@ export function getProposalFileGroups(
       files: data.mediaFiles ?? [],
       clickable: true,
     },
-    { label: 'Output', files: data.outputFiles ?? [], clickable: true },
   ].filter((g) => g.files.length > 0);
 }
