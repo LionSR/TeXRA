@@ -5,8 +5,6 @@ import {
   getBasename,
   getProposalFileGroups,
   type AgentProposalRequest,
-  type ProposalEdit,
-  getModelLabel,
 } from '@texra-ai/worldline/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -16,15 +14,14 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { CHILD_AGENT_COPY } from '@ui/copy/delegationApproval';
+import { modelSelectionLabel } from '@texra/shared/model/modelPicker';
 import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
 
 // Local imports - shared utils
@@ -37,17 +34,14 @@ import { markdownStyles } from '@ui/styles/markdownStyles';
 
 // Local imports - shared utilities
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
-import { selectedItemValue } from '@ui/wa/selectTemplates';
 
 // Local imports - base class
-import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
-import { modelMenu } from './composerChipMenus';
+import { BaseRequestPanel } from './BaseRequestPanel';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { renderMarkdownHtml } from '../formatters/markdownRenderer';
 import { proposalLaunchPatch } from '../proposalEdit';
 import { delegateKeyActivation } from './composedPath';
-import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('proposal-request-panel')
 export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
@@ -60,34 +54,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   /** The host's catalogs, the lists the launch form offers. */
   @property({ attribute: false }) host: HostSnapshot | null = null;
 
-  /** The model the run starts on: the one picked here, else the proposal's. */
-  private get model(): string {
-    return this.draft.model ?? this.permission.data.model;
-  }
-
-  /** An approval's edit: the model, stated only when it is not the
-   *  proposal's. */
-  private get modelChange(): { readonly edit?: ProposalEdit } {
-    return this.model === this.permission.data.model
-      ? {}
-      : { edit: { kind: 'proposal', model: this.model } };
-  }
-
-  protected override submitPrimary(): void {
-    this.emitAction({ action: 'approve', ...this.modelChange });
-  }
-
-  // The grant carries the launch form's model change.
-  protected override get grant(): RunGrant | null {
-    const offered = super.grant;
-    return (
-      offered && {
-        ...offered,
-        decision: { action: APPROVE_SESSION_ACTION, ...this.modelChange },
-      }
-    );
-  }
-
   /** What the agent wants to start: the agent and the model. */
   protected override renderAsk(): TemplateResult {
     const data = this.permission.data;
@@ -95,35 +61,10 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       return html`${SCRIPT_REQUEST_COPY.title(data.script)}`;
     }
     const agent = html` <strong>${data.label}</strong>`;
-    const model = html` on ${this.renderModel()}`;
+    // The model is the agent's own choice; Edit opens the launch form for
+    // a person who wants another.
+    const model = ` on ${modelSelectionLabel(data.model)}`;
     return html`${REQUEST_ASK.proposal(data.task)}${agent}${model}`;
-  }
-
-  /** The model in the ask. On a card that can be answered it is a menu over
-   *  the host's models: changing only the model takes one pick here, where
-   *  Edit opens the whole launch form. */
-  private renderModel(): TemplateResult | string {
-    const { host } = this;
-    if (!this.editable || host === null) return getModelLabel(this.model);
-    const menu = modelMenu(this.model, host);
-    return html`<wa-dropdown
-      class="proposal-model"
-      @wa-select=${(event: WaSelectEvent) => {
-        const value = selectedItemValue(event);
-        if (!value.startsWith('model:')) return;
-        this.writeDraft({ ...this.draft, model: value.slice(6) });
-      }}
-    >
-      ${renderLabeledActionButton({
-        id: 'proposal-model-trigger',
-        text: menu.label,
-        kind: 'ghost',
-        className: 'proposal-model__trigger is-compact',
-        slot: 'trigger',
-        caret: true,
-      })}
-      ${menu.items}
-    </wa-dropdown>`;
   }
 
   protected override handleExtraKey(key: string): boolean {
@@ -150,10 +91,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       SessionUiEvents.surface({
         kind: 'editProposal',
         proposal: { runId: data.runId, requestId: data.requestId },
-        patch: {
-          ...proposalLaunchPatch(data),
-          model: this.model,
-        },
+        patch: proposalLaunchPatch(data),
       }),
     );
   }
@@ -203,7 +141,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       <div class="workflow-proposal__plan-note">
         ${scriptRequestFirstAgentLine(
           data.label,
-          getModelLabel(data.model),
+          modelSelectionLabel(data.model),
           data.instruction,
         )}
       </div>

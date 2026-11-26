@@ -84,6 +84,8 @@ const invokeCommand = Effect.fn('InvokeCommandTool.execute')(function* (
 
 export const InvokeCommandTool = defineTool({
   name: 'invoke_command',
+  // A function of scripts: offered with the script tool, never sent.
+  scriptGlobal: { positional: 'command', withScript: true },
   // Offered where the host passes its commands (VS Code).
   hostCapability: 'commands' satisfies keyof SetupPlatform['Service'],
   requiresApproval: true,

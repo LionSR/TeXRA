@@ -2,7 +2,7 @@
 
 Generated from `packages/llm/src/index.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 100
+Exports: 101
 
 - `API_KEY_ENV_NAMES` — `const API_KEY_ENV_NAMES: readonly string[]`
 - `API_KEY_PATTERN_SOURCE` — `const API_KEY_PATTERN_SOURCE: string`
@@ -66,6 +66,7 @@ Exports: 100
 - `modelRefOf` — `function modelRefOf: (id: string) => string | undefined`
 - `ModelRoute` — `type ModelRoute = { readonly kind: 'session'; readonly plan: 'chatgpt-subscription'; readonly endpoint: string; readonly contextWindow: number; } | { readonly kind: 'session'; readonly plan: Exclude<PlanRoute, KeyPlanRoute | 'chatgpt-subscription'>; readonly endpoint: string; } | { readonly kind: 'api-key'; readonly endpoint: string; readonly provider: ApiKeyProviderId; readonly plan: KeyPlanRoute | null; } | { readonly kind: 'no-api-key'; } | { readonly kind: 'unserved'; }; ≡ ModelRoute`
 - `MODELS` — ``const MODELS: (`anthropic/${string}` | `copilot/${string}` | `dashscope/${string}` | `deepseek/${string}` | `glm/${string}` | `google/${string}` | `meta/${string}` | `minimax/${string}` | `moonshot/${string}` | `openai/${string}` | `others/${string}` | `xai/${string}`)[]``
+- `nearestEffort` — `function nearestEffort: (accepted: readonly ReasoningEffort[], wanted: ReasoningEffort) => ReasoningEffort | undefined`
 - `originOf` — `const originOf: <P extends ModelOrigin["protocol"]>(config: Pick<{ readonly codecVersion: number; readonly deployment: { readonly credentialScope: string; readonly endpoint: string; }; readonly protocol: "anthropic-messages" | "google-interactions" | "openai-responses"; readonly requestedModel: string; }, "deployment" | "requestedModel"> & { readonly protocol: P; }) => Readonly<{ codecVersion: 1; deployment: { readonly credentialScope: string; readonly endpoint: string; }; protocol: P; requestedModel: string; }>`
 - `OWN_KEY_ROUTE_FACTS` — `const OWN_KEY_ROUTE_FACTS: RouteFacts`
 - `PLAN_ROUTES` — `const PLAN_ROUTES: Readonly<{ 'chatgpt-subscription': Readonly<{ credential: "session"; provider: "openai"; }>; 'glm-coding-plan-subscription': Readonly<{ credential: "key"; provider: "glm"; }>; 'kimi-code-subscription': Readonly<{ credential: "key"; provider: "kimiCode"; }>; 'xai-subscription': Readonly<{ credential: "session"; provider: "xai"; }>; }>`

@@ -33,15 +33,15 @@ export const conversationContentStyles: CSSResult = css`
     ${readingColumnStyles}
   }
 
-  /* Pending approvals sit above the transcript and are not height-capped
-     with the plan. A shared prelude max-height used to clip the Approve
+  /* Pending approvals sit where the conversation ends, above the composer,
+     and are not height-capped with the plan. A shared prelude max-height used to clip the Approve
      row when command details filled the pane (sticky actions alone could
      not recover once the whole card sat below the fold). */
   .conversation-approval-dock {
     flex: 0 1 auto;
     min-height: 0;
     max-height: min(52%, 30rem);
-    padding-block: var(--message-gap) 0;
+    padding-block: var(--wa-space-2xs) 0;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior-block: contain;

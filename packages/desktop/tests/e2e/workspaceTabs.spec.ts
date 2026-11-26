@@ -667,10 +667,7 @@ test('preserves each project’s grid and unsaved editor when switching projects
       .toBe('background');
     await expect(activeRow).toHaveAttribute('title', projectB);
     // Back through the palette: Switch Project lists the other open project.
-    await page
-      .locator('.shell-sidebar-primary .shell-sidebar-action')
-      .filter({ hasText: 'Commands' })
-      .click();
+    await page.locator('#shellCommands').click();
     const palette = page.locator('.desktop-command-palette');
     await palette
       .locator('[data-command-id="texra.desktop.switchProject"]')

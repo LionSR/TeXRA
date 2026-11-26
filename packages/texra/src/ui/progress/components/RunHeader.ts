@@ -24,6 +24,7 @@ import {
 } from '@ui/wa/actionButtons';
 import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
 import { inlineRenameField } from '@ui/wa/inlineRename';
+import { statusMark } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@ui/progress/components/ToolTimer';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
@@ -133,6 +134,14 @@ export class RunHeader extends TexraElement {
 
       .status-indicator {
         margin: 0 var(--wa-space-3xs);
+      }
+
+      /* A working run's mark is a spinner in the dot's place. */
+      .status-working {
+        display: inline-flex;
+        flex-shrink: 0;
+        font-size: var(--font-size-xs);
+        color: var(--tone-color);
       }
 
       .menu-status {
@@ -288,10 +297,12 @@ export class RunHeader extends TexraElement {
           role="img"
           aria-label=${status.word}
           class=${classMap({
-            'status-indicator': true,
+            'status-indicator': status.tone !== 'running',
+            'status-working': status.tone === 'running',
             [`tone-${status.tone}`]: true,
           })}
-        ></span>
+          >${status.tone === 'running' ? statusMark(status) : nothing}</span
+        >
         <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
           ${runNoticeText(run) ?? status.word}
         </wa-tooltip>

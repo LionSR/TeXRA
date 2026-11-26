@@ -156,6 +156,7 @@ export type {
 export {
   chooseReasoning,
   DEFAULT_EFFORT,
+  nearestEffort,
   ReasoningChoiceError,
   reasoningOnRoute,
 } from './models/reasoningChoice.js';

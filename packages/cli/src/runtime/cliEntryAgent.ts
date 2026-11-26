@@ -7,14 +7,7 @@ import type { ChatLaunch } from '@texra/shared/session/surface';
 
 import { VALIDATION_AGENT, VALIDATION_SWITCH } from './models/validationSwitch';
 
-const EDITOR_TOOLS = new Set([
-  'diagnostics',
-  'inline_comment',
-  'open_pdf',
-  'invoke_command',
-  'install_vscode_extension',
-  'send_to_terminal',
-]);
+const EDITOR_TOOLS = new Set(['diagnostics', 'inline_comment', 'open_pdf']);
 
 /** The tool declaration for a new conversation started in the terminal. */
 export function withoutEditorTools(launch: ChatLaunch): ChatLaunch {

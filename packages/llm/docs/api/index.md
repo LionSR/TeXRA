@@ -886,6 +886,21 @@ All model references.
 const MODELS: ModelRef[]
 ```
 
+## nearestEffort
+
+The accepted level nearest to `wanted`; a tie goes to the higher level, so
+a missing `medium` between `low` and `high` becomes `high`. Providers name
+different levels, so a level chosen on one model is carried to another by
+this rule: the run's own choice, and a picker moving a choice between
+models.
+
+```ts
+function nearestEffort(
+  accepted: readonly ReasoningEffort[],
+  wanted: ReasoningEffort,
+): ReasoningEffort | undefined
+```
+
 ## originOf
 
 The origin a wire model stamps on its turns: the one place `codecVersion` is written.

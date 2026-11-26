@@ -7,6 +7,7 @@ import type {
   SubscriptionUsageWindow,
 } from '@texra/shared/model/subscriptionUsage';
 import {
+  type PlanQuotaFailure,
   formatResetDuration,
   FACT_SEPARATOR,
   joinFacts,
@@ -71,6 +72,20 @@ export function formatSubscriptionUsageUpdated(
   return now - fetchedAt >= STALE_AFTER_MS
     ? joinFacts(['stale', `updated ${formatRelativeTime(fetchedAt, now)}`])
     : 'updated just now';
+}
+
+/** Why a plan's usage cannot be shown, as the settings page and the status
+ *  bar both say it. */
+export function subscriptionUsageUnavailable(reason: PlanQuotaFailure): string {
+  switch (reason) {
+    case 'invalid_credentials':
+      return 'The provider rejected the configured credentials.';
+    case 'malformed_response':
+      return 'The provider returned usage data TeXRA could not read.';
+    case 'missing_credentials':
+    case 'request_failed':
+      return 'The provider usage request failed. Try refreshing again shortly.';
+  }
 }
 
 /** Compact provider usage text shared by settings and the detailed CLI status. */

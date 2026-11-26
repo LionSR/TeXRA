@@ -82,6 +82,16 @@ function optionRow(verdict: ModelVerdict): ModelOptionData {
   }
   const { config, source, usageRoute } = verdict;
   const reasoning = reasoningLevelLabel(verdict);
+  const route = verdict.reasoning;
+  // A choice of level exists only where the route carries more than one.
+  const efforts =
+    route === undefined || route.efforts.length <= 1
+      ? undefined
+      : {
+          levels: [...route.efforts],
+          ...(!('refused' in route.sent) &&
+            route.sent.effort !== undefined && { sent: route.sent.effort }),
+        };
   // The row's identity stays the base model; the badge names the route.
   const routeLabel =
     kimiCodeServing(config) === 'with-plan'
@@ -103,6 +113,7 @@ function optionRow(verdict: ModelVerdict): ModelOptionData {
     // are the ones it runs with on its route.
     hint: modelHint(verdict.published),
     ...(reasoning ? { reasoning } : {}),
+    ...(efforts ? { efforts } : {}),
     ...(routeLabel ? { routeLabel } : {}),
     availability,
     ...(unavailableReason === undefined ? {} : { unavailableReason }),

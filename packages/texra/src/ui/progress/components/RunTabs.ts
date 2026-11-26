@@ -1,6 +1,7 @@
 // Third-party imports
 import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
@@ -32,6 +33,7 @@ import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from './composedPath';
 import { RunTab } from './RunTab';
 import {
+  needsUser,
   type SessionView,
   type RunView,
   type RunId,
@@ -174,6 +176,16 @@ export class RunTabs extends TexraElement {
     `;
   }
 
+  /** Whether `run` or a run under it is the one on screen. */
+  private holds(run: RunView, selected: RunId | null): boolean {
+    return (
+      run.id === selected ||
+      this.childrenOf(run).some((child) => this.holds(child, selected))
+    );
+  }
+
+  /** Each top-level run and its tree in one box, marked when it holds the
+   *  run on screen, so a list can draw that task as one card. */
   private renderRows(
     runs: readonly RunView[],
     selected: RunId | null,
@@ -181,7 +193,15 @@ export class RunTabs extends TexraElement {
     return html`${repeat(
       runs,
       (run) => run.id,
-      (run) => this.renderNode(run, selected),
+      (run) =>
+        html`<div
+          class=${classMap({
+            'run-node': true,
+            'holds-shown': this.holds(run, selected),
+          })}
+        >
+          ${this.renderNode(run, selected)}
+        </div>`,
     )}`;
   }
 
@@ -195,7 +215,14 @@ export class RunTabs extends TexraElement {
       .map((id) => this.runOfEvent(id))
       .filter((run): run is RunView => run !== undefined)
       .filter((run) => !this.activeOnly || runStatus(run).section !== 'recent')
-      .filter((run) => this.matchesSearch(run, query));
+      .filter((run) => this.matchesSearch(run, query))
+      // A list without section headings leads with what needs the person;
+      // a sort keeps the rest in the view's order.
+      .toSorted((a, b) =>
+        !this.sections && view
+          ? Number(needsUser(b, view.runs)) - Number(needsUser(a, view.runs))
+          : 0,
+      );
 
     let body: TemplateResult;
     if (!this.sections) {

@@ -148,18 +148,6 @@ const ModelSelectionItemSchema = Schema.Struct({
   deprecated: Schema.Boolean,
   contextWindow: Schema.optional(Schema.String),
   cost: Schema.optional(Schema.String),
-  /** The row's reasoning choice; absent where its route carries one level
-   *  or none. */
-  reasoning: Schema.optional(
-    Schema.Struct({
-      /** The levels the route can carry. */
-      levels: Schema.Array(ReasoningEffortSchema),
-      /** The level a run sends with none saved. */
-      default: Schema.optional(ReasoningEffortSchema),
-      /** The level a run sends for the saved one. */
-      saved: Schema.optional(ReasoningEffortSchema),
-    }),
-  ),
   /** Whether this model's API pricing earns the premium warning (price-based). */
   isExpensive: Schema.Boolean,
   // Resolved once by modelOptionsFrom and carried verbatim so the
@@ -423,15 +411,6 @@ const SetModelEnabledMessageSchema = modelCommand(
   SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
 ).mapFields(Struct.assign({ enabled: Schema.Boolean }));
 
-const SetModelReasoningLevelMessageSchema = modelCommand(
-  SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL,
-).mapFields(
-  Struct.assign({
-    /** The reasoning level to set, or undefined/null to reset to model default. */
-    level: Schema.NullOr(ReasoningEffortSchema),
-  }),
-);
-
 // Tool dashboard inbound messages
 const InstallExtensionMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION),
@@ -541,7 +520,6 @@ export const SettingsViewInboundMessageSchema = Schema.Union([
   OpenExternalUrlMessageSchema,
   // Model selection messages
   SetModelEnabledMessageSchema,
-  SetModelReasoningLevelMessageSchema,
   // Subscription sign-in messages
   SignInSubscriptionMessageSchema,
   SignOutSubscriptionMessageSchema,

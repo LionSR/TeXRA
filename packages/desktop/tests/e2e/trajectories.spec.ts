@@ -387,10 +387,7 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
 test('command palette opens and dismisses', async () => {
   const { page } = launched;
   await showLauncher(launched);
-  await page
-    .locator('.shell-sidebar-primary .shell-sidebar-action')
-    .filter({ hasText: 'Commands' })
-    .click();
+  await page.locator('#shellCommands').click();
   const palette = page.locator('.desktop-command-palette');
   await expect(palette).toHaveAttribute('open');
   await expect(palette.getByRole('option').first()).toBeVisible();

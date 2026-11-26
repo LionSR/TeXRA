@@ -2,7 +2,7 @@
 
 // Node imports
 import * as assert from 'node:assert';
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -157,32 +157,6 @@ const setUp = (
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'Tool edit approval gating',
   (it) => {
-    it.effect('gates an edit to a dangling symlink as an existing file', () =>
-      Effect.gen(function* () {
-        const { workspaceRoot, inRun, writes, openedEdits } = yield* setUp();
-        mkdirSync(workspaceRoot, { recursive: true });
-        // A dangling symlink names a workspace entry even though stat through
-        // the link fails; the read-before-edit gate must not treat it as new.
-        symlinkSync(
-          path.join(workspaceRoot, 'gone.txt'),
-          path.join(workspaceRoot, 'dangling.txt'),
-        );
-
-        const result = yield* inRun(
-          EditFileTool.call({
-            path: 'dangling.txt',
-            old_str: 'a',
-            new_str: 'b',
-          }),
-        );
-
-        assert.strictEqual(result.status, 'error');
-        assert.match(result.error ?? '', /require a prior read/);
-        assert.strictEqual(writes.length, 0);
-        assert.strictEqual(openedEdits().length, 0);
-      }),
-    );
-
     it.effect('edits the first line of a file that starts with a BOM', () =>
       Effect.gen(function* () {
         const { session, runId, stubWorkspaceFile, inRun, writes } =

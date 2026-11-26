@@ -35,7 +35,6 @@ export const SETTINGS_VIEW_COMMANDS = Object.freeze({
   OPEN_EXTERNAL_URL: 'openExternalUrl',
   // Model selection commands
   SET_MODEL_ENABLED: 'setModelEnabled',
-  SET_MODEL_REASONING_LEVEL: 'setModelReasoningLevel',
   // Generic settings-view scalar write. The backend looks up {key, value} in the
   // unified catalog, validates and persists it using the row's metadata, then
   // refreshes the row's owning snapshot.

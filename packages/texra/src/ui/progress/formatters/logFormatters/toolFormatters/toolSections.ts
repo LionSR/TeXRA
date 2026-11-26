@@ -210,13 +210,19 @@ function renderToolSection(
   }
 }
 
-/** Paint every section of a tool row, in model order. */
+/** Paint every section of a tool row, in model order. A file section that
+ *  only names `said`, the path the row's own line already shows, is not
+ *  drawn again. */
 export function renderToolSections(
   sections: readonly ToolSection[],
+  said: string,
 ): TemplateResult[] {
   let filePath = '';
-  return sections.map((section) => {
-    if (section.kind === 'file') filePath = section.path;
-    return renderToolSection(section, filePath);
+  return sections.flatMap((section) => {
+    if (section.kind === 'file') {
+      filePath = section.path;
+      if (section.path === said) return [];
+    }
+    return [renderToolSection(section, filePath)];
   });
 }

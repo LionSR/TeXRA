@@ -32,7 +32,9 @@ export const stageStyles = css`
   }
 
   .stage-status-icon {
+    display: inline-flex;
     margin-inline-end: var(--wa-space-2xs);
+    color: var(--tone-color);
   }
 
   .stage-title {

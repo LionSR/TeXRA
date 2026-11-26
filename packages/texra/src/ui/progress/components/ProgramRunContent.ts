@@ -21,11 +21,12 @@ export class ProgramRunContent extends BaseRunContent {
     if (!run || !view || !surface || !run.program) return nothing;
     return html`
       <div class="conversation-content">
-        ${this.renderApprovalDock()} ${this.renderLog()}
+        ${this.renderLog()}
 
         <div class="conversation-column conversation-epilogue">
           ${this.renderUsagePanel(run)}
         </div>
+        ${this.renderApprovalDock()}
       </div>
       ${
         run.holder === 'here'

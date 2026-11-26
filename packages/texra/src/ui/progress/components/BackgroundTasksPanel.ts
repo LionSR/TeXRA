@@ -49,6 +49,7 @@ import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
 import type { WaVariant } from '@ui/wa/waVariant';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import { statusMark } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, nestedCountsLabel } from '@ui/copy/nestedRuns';
 import { TIME_OF_DAY } from '../formatters/timestampUtils';
@@ -322,7 +323,7 @@ export class BackgroundTasksPanel extends TexraElement {
         aria-label=${label}
         @click=${() => this.navigateToRun(child.id)}
       >
-        ${waIcon(status.glyph, { className: 'task-icon' })}
+        ${statusMark(status, 'task-icon')}
         <span class="task-name">${child.label}</span>
         ${latest ? html`<span class="task-latest">${latest}</span>` : nothing}
         ${renderClock(child, child.approval === 'own', this._ticker.now)}

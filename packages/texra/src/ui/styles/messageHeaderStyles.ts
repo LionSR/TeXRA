@@ -61,7 +61,41 @@ export const messageHeaderStyles = css`
   }
 `;
 
-/** Identical disclosure geometry for user, assistant and error messages. */
+/**
+ * The line under a message: its time and its actions. It takes no space
+ * from reading, so it shows only while its message is pointed at or
+ * focused; the newest answer keeps it.
+ */
+export const messageMetaStyles = css`
+  .message-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    min-height: var(--control-size-s);
+    margin-block-start: var(--wa-space-3xs);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+  }
+  :is(.assistant-message, .user-message):is(:hover, :focus-within)
+    > .message-meta,
+  .assistant-message:last-child > .message-meta {
+    opacity: var(--opacity-full);
+  }
+  @media (hover: none) {
+    .message-meta {
+      opacity: var(--opacity-full);
+    }
+  }
+  .message-meta > .message-timestamp {
+    margin-inline: var(--wa-space-2xs);
+  }
+  .message-meta .banner-content-copy {
+    margin: 0;
+    opacity: var(--opacity-full);
+  }
+`;
+
+/** Disclosure geometry for an error message with details. */
 export const messageDisclosureStyles = css`
   wa-details.message-disclosure::part(summary) {
     width: 100%;
