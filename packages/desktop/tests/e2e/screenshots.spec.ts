@@ -110,10 +110,7 @@ test('settings across themes and window sizes', async () => {
       path: test.info().outputPath(`launcher-${theme}.png`),
       animations: 'disabled',
     });
-    await page
-      .locator('.shell-sidebar-footer .shell-sidebar-action')
-      .filter({ hasText: 'Settings' })
-      .click();
+    await page.locator('#shellSettings').click();
     const settings = page.locator('wa-dialog.desktop-settings-overlay');
     await expect(settings).toHaveJSProperty('open', true);
     const tabs = settings

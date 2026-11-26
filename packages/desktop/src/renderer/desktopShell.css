@@ -102,14 +102,15 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   background: var(--wa-color-surface-lowered);
 }
 .shell-sidebar-primary {
-  display: flex;
-  align-items: center;
-  gap: var(--wa-space-2xs);
-  padding: var(--wa-space-xs) var(--wa-space-s) 0;
+  display: grid;
+  gap: var(--wa-space-3xs);
+  padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-2xs);
 }
-.shell-sidebar-primary > .shell-sidebar-action {
-  flex: 1 1 auto;
-  min-width: 0;
+/* Search reads as a field: it opens the palette, where typing happens. */
+.shell-sidebar-search::part(base) {
+  justify-content: flex-start;
+  background: var(--wa-color-surface-raised);
+  color: var(--color-text-secondary);
 }
 .shell-sidebar-scroll {
   min-height: 0;
@@ -145,9 +146,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   padding-inline-end: var(--wa-space-2xs);
   border-radius: var(--row-radius);
 }
-.shell-project-item.is-active {
-  background: var(--wa-color-surface-raised);
-}
 .shell-project-item:hover {
   background: var(--surface-hover);
 }
@@ -157,9 +155,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-project-name {
   display: block;
   font-size: var(--font-size-sm);
-}
-.shell-project-item.is-active .shell-project-name {
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-semibold);
 }
 /* A row's menu shows once the row is pointed at, focused or open. */
 .shell-project-item:not(:hover, :focus-within) .shell-project-menu {
@@ -178,12 +174,12 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-project-toggle {
   color: var(--color-text-secondary);
 }
-/* A project's tasks sit under its row, indented to its name. A task row
-   is its title, when it last moved, and its status. */
+/* A project's tasks sit under its row. A task row leads with its status,
+   in the column the project's folder stands in, then its title and when it
+   last moved; the agents it started sit under it. The task on screen is
+   one raised card, its shown row tinted. */
 .shell-project-runs {
-  --run-tab-padding-inline-start: calc(
-    var(--height-control-compact) + var(--wa-space-s)
-  );
+  --run-tab-padding-inline-start: var(--wa-space-xs);
   --run-tab-row-gap: 0;
   --run-tab-radius: var(--row-radius);
   --run-tab-meta-display: none;
@@ -191,12 +187,24 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   --run-tab-rollup-display: none;
   --run-tab-time-display: inline;
   --run-tab-status-width: var(--height-control-compact);
+  --run-tab-status-order: -1;
+  --run-tab-idle-status-display: inline-flex;
   --run-tab-status-label-display: none;
+  --run-tab-nested-icon-display: none;
+  --run-tab-expand-order: 1;
+  --run-tab-child-indent: 0;
+  --run-tab-child-margin: var(--wa-space-s);
+  --wa-color-list-active-bg: var(--surface-hover);
+  --wa-color-list-active-fg: var(--wa-color-text-normal);
+  --run-node-shown-background: var(--wa-color-surface-raised);
+  --run-node-shown-border: var(--wa-color-surface-border);
+  margin-block-end: var(--wa-space-xs);
 }
-/* One row reads as selected in the rail: the shown project's. */
+/* One task reads as shown in the rail: the shown project's. */
 .shell-project-runs:not(.is-active) {
   --wa-color-list-active-bg: transparent;
-  --wa-color-list-active-fg: var(--wa-color-text-normal);
+  --run-node-shown-background: transparent;
+  --run-node-shown-border: transparent;
 }
 .shell-sidebar-sessions > run-tabs {
   display: flex;
@@ -205,7 +213,8 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   --color-border: transparent;
 }
 .shell-sidebar-footer {
-  padding: var(--wa-space-xs) var(--wa-space-s);
+  display: flex;
+  padding: var(--wa-space-2xs) var(--wa-space-s);
 }
 
 /* Task reading surface. The transcript owns its one bounded content column. */

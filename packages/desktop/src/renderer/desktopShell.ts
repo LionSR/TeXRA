@@ -144,9 +144,9 @@ function projectSection(
     >
       ${renderIconActionButton({
         id: `${idBase}-toggle`,
+        icon: collapsed ? 'folder' : 'folder-open',
         label: collapsed ? `Show ${name}'s tasks` : `Hide ${name}'s tasks`,
         className: 'shell-project-toggle',
-        expanded: !collapsed,
         onClick: () => callbacks.onToggleProject(key),
       })}
       ${
@@ -195,7 +195,6 @@ function projectSection(
             <run-tabs
               .view=${project.view}
               .surface=${project.surface}
-              .topLevelOnly=${true}
               ?activeOnly=${collapsed}
               removable
             ></run-tabs>
@@ -213,19 +212,21 @@ export function shellSidebarTemplate(
     <aside class="shell-sidebar" aria-label="Projects and tasks">
       <nav class="shell-sidebar-primary" aria-label="Quick actions">
         ${renderLabeledActionButton({
+          id: 'shellCommands',
+          icon: 'magnifying-glass',
+          text: 'Search',
+          title: model.commandsTitle,
+          kind: 'ghost',
+          className: 'shell-sidebar-search is-row',
+          onClick: callbacks.onOpenCommands,
+        })}
+        ${renderLabeledActionButton({
           id: 'shellNewTask',
           icon: 'plus',
           text: 'New task',
           kind: 'ghost',
           className: 'shell-sidebar-action is-row',
           onClick: callbacks.onNewTask,
-        })}
-        ${renderIconActionButton({
-          id: 'shellCommands',
-          icon: 'magnifying-glass',
-          label: model.commandsLabel,
-          tooltip: model.commandsTitle,
-          onClick: callbacks.onOpenCommands,
         })}
       </nav>
       <div class="shell-sidebar-scroll">
@@ -237,7 +238,7 @@ export function shellSidebarTemplate(
             <span class="shell-sidebar-section-label">Projects</span>
             ${renderIconActionButton({
               id: 'shellProjectAdd',
-              icon: 'folder-open',
+              icon: 'plus',
               label: 'Open project folder',
               tooltip: 'Open project folder',
               className: 'shell-project-add',
@@ -266,7 +267,13 @@ export function shellSidebarTemplate(
         </section>
       </div>
       <footer class="shell-sidebar-footer">
-        ${sidebarAction({ icon: 'gear', label: 'Settings', onClick: callbacks.onOpenSettings })}
+        ${renderIconActionButton({
+          id: 'shellSettings',
+          icon: 'gear',
+          label: 'Settings',
+          tooltip: 'Settings',
+          onClick: callbacks.onOpenSettings,
+        })}
       </footer>
     </aside>
   `;

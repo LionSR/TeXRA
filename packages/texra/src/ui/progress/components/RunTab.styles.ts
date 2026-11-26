@@ -106,6 +106,21 @@ export const runTabStyles = css`
     white-space: nowrap;
     justify-content: center;
     width: var(--run-tab-status-width, auto);
+    order: var(--run-tab-status-order, 0);
+  }
+
+  /* A run with nothing to say: no lane where the status trails the row, a
+     quiet dot where it leads it (the rail sets both properties). */
+  .tab-status:empty {
+    display: var(--run-tab-idle-status-display, none);
+  }
+
+  .tab-status:empty::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wa-color-neutral-border-normal, var(--color-border));
   }
 
   .tab-status-icon {
@@ -218,6 +233,8 @@ export const runTabStyles = css`
   }
 
   .tab-actions {
+    /* Last in the row wherever a list puts the status and the chevron. */
+    order: 2;
     display: block;
     width: var(--control-size-s);
     height: var(--control-size-s);
@@ -237,6 +254,7 @@ export const runTabStyles = css`
   }
 
   .nested-run-icon {
+    display: var(--run-tab-nested-icon-display, inline-block);
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
     flex-shrink: 0;
@@ -248,6 +266,7 @@ export const runTabStyles = css`
    * sheet, so the reset lives locally rather
    * than through .action-icon-button's cross-component rules. */
   .tab-expand {
+    order: var(--run-tab-expand-order, 0);
     display: flex;
     align-items: center;
     justify-content: center;

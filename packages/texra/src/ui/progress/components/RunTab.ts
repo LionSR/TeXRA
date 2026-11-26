@@ -361,17 +361,11 @@ export class RunTab extends LitElement {
           ${status.shown ? html`<wa-tooltip for="run-tab-status">${status.word}</wa-tooltip>` : nothing}
         </div>
         ${
-          status.shown
-            ? html`<span
-                id="run-tab-status"
-                class="tab-status"
-                role="img"
-                aria-label=${status.word}
-              >
-                ${statusMark(status, 'tab-status-icon')}
-                ${status.waiting ? html`<span class="tab-status-label">${status.word}</span>` : nothing}
-              </span>`
-            : nothing
+          // Always in the row, so a list that puts the status first has a
+          // lane every title lines up after; empty for a run with nothing
+          // to say.
+          // prettier-ignore
+          html`<span id="run-tab-status" class="tab-status" role=${status.shown ? 'img' : 'none'} aria-label=${status.shown ? status.word : nothing}>${status.shown ? html`${statusMark(status, 'tab-status-icon')}${status.waiting ? html`<span class="tab-status-label">${status.word}</span>` : nothing}` : nothing}</span>`
         }
         <wa-tooltip for="run-tab-kind">${this.decorator.label}</wa-tooltip>
         ${
