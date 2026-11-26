@@ -120,23 +120,23 @@ const promptGitMissing = Effect.fnUntraced(function* () {
  *  `@latex/overleafClone`. */
 function buildOverleafClonePorts(
   secrets: PlatformSecrets,
-  label: string,
+  remote: OverleafRemote,
 ): OverleafCloneWorkflowPorts {
   return {
     // A credential store this host cannot reach fails the clone with its
     // `SecretsFailed`, which the workflow's `Error` channel carries.
     secrets,
-    promptToken: (spec) =>
+    promptToken: () =>
       promptInput(
-        spec.tokenTitle,
-        spec.tokenHint ?? 'Enter your Git authentication token.',
+        CLONE_COPY.tokenTitle(remote),
+        CLONE_COPY.tokenPrompt(remote),
         true,
       ),
     showProgress: (clone) =>
       withVSCodeProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: `Cloning ${label}…`,
+          title: `Cloning ${cloneProviderLabel(remote)}…`,
         },
         () => clone,
       ),
@@ -185,7 +185,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
 
     const remote = parseLatexGitUrl(input);
     if (!remote) {
-      yield* showLoggedMessage('Invalid project URL or ID.');
+      yield* showLoggedMessage(CLONE_COPY.invalidProject);
       return;
     }
 
@@ -196,11 +196,10 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
       yield* showLoggedMessage('Open a project folder first.');
       return;
     }
-    const label = cloneProviderLabel(remote);
     const outcome = yield* runOverleafClone(
       remote,
       workspaceRoot,
-      buildOverleafClonePorts(yield* Secrets, label),
+      buildOverleafClonePorts(yield* Secrets, remote),
     );
     yield* presentCloneOutcome(remote, outcome);
   },

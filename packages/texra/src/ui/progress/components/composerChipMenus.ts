@@ -189,12 +189,12 @@ function approvalMenu(
         .checked=${live(overridden)}
         ?disabled=${policy === 'never'}
         ><span class="menu-choice"
-          ><span>Auto-approve this task</span>
+          ><span>${TASK_APPROVAL.autoApprove.menuLabel}</span>
           <small
             >${
               policy === 'never'
-                ? 'Blocked by your approval settings.'
-                : 'Allow file edits, commands and agent work without asking.'
+                ? TASK_APPROVAL.autoApprove.blocked
+                : TASK_APPROVAL.autoApprove.menuDescription
             }</small
           ></span
         ></wa-dropdown-item
