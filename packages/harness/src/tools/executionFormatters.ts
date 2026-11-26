@@ -98,7 +98,7 @@ export function formatListingLine(run: RunView, marks: string): string {
 
 /** Format a single child run as a summary line. */
 export function formatChildLine(child: RunView): string {
-  const ts = listingTime(child.launchedAt);
+  const ts = formatUtcSecond(child.launchedAt);
   const desc = child.description ? `: ${child.description}` : '';
   return `${child.id}  ${ts}  ${child.label}  [${formatRunStatus(child)}]${desc}`;
 }
