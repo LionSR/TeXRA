@@ -3,8 +3,9 @@
  * (`MODEL_SELECTION_KEY.key`) is owned by the harness —
  * `getEnabledModels` reads it, `setModelEnabled` writes it and enforces the
  * "at least one enabled" and "never enable a retired model" invariants for
- * every host. This module only resolves CLI argument spellings and shapes the
- * rows `texra models enabled` and the `/models` form print.
+ * every host, and `enableableModels` is the catalog every host lists. This
+ * module only resolves CLI argument spellings and shapes the rows
+ * `texra models enabled` and the `/models` form print.
  *
  * The global state store arrives from the caller (the CLI composition root's
  * own `CliPlatformServices`, or the `AppState` service), so the read and the
@@ -12,25 +13,21 @@
  */
 import { Effect } from 'effect';
 
+import { modelRefOf, resolveModelSource } from '@texra-ai/llm';
 import {
-  isUnservedModel,
-  modelConfig,
-  modelRefOf,
-  MODELS,
-} from '@texra-ai/llm';
-import {
+  enableableModels,
   getEnabledModels,
   setModelEnabled,
-  MODEL_SELECTION_KEY,
 } from '@texra-ai/worldline/host';
-import {
-  type SettingsStores,
+import type {
+  SettingsStores,
+  StateReadFailed,
   StateWriteFailed,
-  type StateReadFailed,
 } from '@texra-ai/worldline/plugins';
 import { getModelLabel } from '@texra-ai/worldline/schemas';
 
 import { resolveKnownCliModelId } from '../platform/cliConfig';
+import { type CliUsageError, failUsage } from '../platform/cliContext';
 
 export interface CliEnabledModelRow {
   readonly id: string;
@@ -41,27 +38,22 @@ export interface CliEnabledModelRow {
 }
 
 /**
- * Full catalog for enable/disable UIs: every CLI-supported model TeXRA can
- * still serve, marked with whether it is currently enabled.
+ * The catalog for enable/disable UIs: every model a person can switch on,
+ * under the provider the Models tab groups it by, marked with whether it is
+ * currently enabled.
  */
 export const listCliEnabledModelCatalog = Effect.fn(
   'listCliEnabledModelCatalog',
 )(function* (stores: Pick<SettingsStores, 'config' | 'globalState'>) {
   const enabled = new Set(yield* getEnabledModels(stores));
-  return MODELS.filter((id) => {
-    const config = modelConfig(id);
-    return config === undefined || !isUnservedModel(config);
-  })
-    .map((id) => {
-      const config = modelConfig(id);
-      return {
-        id,
-        label: getModelLabel(id),
-        provider: config?.provider ?? 'unknown',
-        enabled: enabled.has(id),
-        deprecated: config?.deprecated ?? false,
-      };
-    })
+  return enableableModels()
+    .map((config) => ({
+      id: config.ref,
+      label: getModelLabel(config.ref),
+      provider: resolveModelSource(config),
+      enabled: enabled.has(config.ref),
+      deprecated: config.deprecated ?? false,
+    }))
     .toSorted((a, b) => {
       if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
       return a.label.localeCompare(b.label);
@@ -73,10 +65,9 @@ export const listCliEnabledModelCatalog = Effect.fn(
  * (`grok-4.7` → `xai/grok-4.7`) before handing the id to the shared writer.
  *
  * One program: the caller runs it on the process runtime, so this refusal and
- * the writer's own invariant refusals land in the same channel — the
- * unknown-id case as a `StateWriteFailed`, the writer's as its own typed
- * refusals — and `Effect.suspend` keeps both inside the program rather than
- * at the call site.
+ * the writer's own invariant refusals land in the same channel — an unknown
+ * id as a `CliUsageError`, the writer's as its own typed refusals — and
+ * both stay inside the program rather than at the call site.
  */
 export function setCliModelEnabled(
   stores: Pick<SettingsStores, 'config' | 'globalState'>,
@@ -88,28 +79,17 @@ export function setCliModelEnabled(
     readonly enabled: boolean;
     readonly list: readonly string[];
   },
-  StateWriteFailed | StateReadFailed
+  CliUsageError | StateWriteFailed | StateReadFailed
 > {
-  return Effect.suspend(() => {
+  return Effect.gen(function* () {
     // Enablement belongs to the model, not to an effort or mode suffix.
     const resolved = resolveKnownCliModelId(modelInput);
     const model = resolved && (modelRefOf(resolved) ?? resolved);
-    if (!model) {
-      // A refusal in the channel this signature declares, not a defect: the
-      // caller shows it to the user, and a defect would reach that caller as a
-      // FiberFailure with the message buried in the pretty-printed cause.
-      const message = `Unknown model "${modelInput}". Use an id from \`texra models list --all\`.`;
-      return Effect.fail(
-        new StateWriteFailed({
-          key: MODEL_SELECTION_KEY.key,
-          message,
-          cause: new Error(message),
-        }),
+    if (!model)
+      return yield* failUsage(
+        `Unknown model "${modelInput}". Use an id from \`texra models list --all\`.`,
       );
-    }
-
-    return setModelEnabled({ model, enabled, stores }).pipe(
-      Effect.map((list) => ({ model, enabled: list.includes(model), list })),
-    );
+    const list = yield* setModelEnabled({ model, enabled, stores });
+    return { model, enabled: list.includes(model), list };
   });
 }

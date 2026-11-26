@@ -2,29 +2,7 @@ import { Context, Effect, Layer, Schema } from 'effect';
 
 import { TurnProtocolSchema } from '@texra-ai/llm';
 import type { ConfigProvider } from '@shared/config/settings';
-import {
-  UsageRouteSchema,
-  NonNegativeIntSchema,
-  programOf,
-  programOrigin,
-  type AgentConfig,
-} from '@shared/schemas';
-
-/**
- * The program name a usage entry may carry (`agentName`). Telemetry is
- * metadata only, and a run's label, an installed plugin's program name or
- * an agent's own program name can be any private string, so only the name
- * of a program a listed plugin registers goes out; a chat run, or any other
- * program's, carries none.
- */
-export function usageAgentName(
-  config: Pick<AgentConfig, 'script'>,
-): string | undefined {
-  const program = programOf(config);
-  return program !== null && programOrigin(program.name) === 'listed'
-    ? program.name
-    : undefined;
-}
+import { UsageRouteSchema, NonNegativeIntSchema } from '@shared/schemas';
 
 const Count = NonNegativeIntSchema;
 

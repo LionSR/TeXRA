@@ -159,7 +159,6 @@ export function registerCommands(
     runtime,
     fork,
     roots,
-    progressViewProvider,
   );
 
   const settingsTabHandlers = EffectRecord.map(

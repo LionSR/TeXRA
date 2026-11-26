@@ -63,10 +63,8 @@ export const ToolsOfferedPayloadSchema = Schema.Struct({
 });
 
 /**
- * What the run's `agent` tool can launch: the installed plugins' agents;
- * the models available for delegation (null when they could not be read);
- * and whether worktrees are on (null on a row an earlier build wrote for a step that
- * offered no `agent`).
+ * What the run's `agent` tool can launch: the installed plugins' agents and
+ * the models available for delegation (null when they could not be read).
  */
 const DelegationTargetsSchema = Schema.Struct({
   agents: Schema.Array(
@@ -77,7 +75,6 @@ const DelegationTargetsSchema = Schema.Struct({
     }),
   ),
   models: Schema.NullOr(Schema.Array(Schema.String)),
-  worktree: Schema.NullOr(Schema.Boolean),
 });
 export type DelegationTargets = typeof DelegationTargetsSchema.Type;
 

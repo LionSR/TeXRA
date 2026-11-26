@@ -61,9 +61,6 @@ export type RunFacts = {
   };
   /** The workspace files the run's calls edited, first edit first. */
   readonly edited: readonly string[];
-  /** The files the run's calls read (an edited file counts), first read first,
-   *  as the results spell them: what editing an existing file requires. */
-  readonly read: readonly string[];
   /** Results `executed` or `failed`: tool bodies and script host answers. */
   readonly toolCalls: number;
   /** The result value of a `submit_output` call, whether the response or
@@ -103,7 +100,6 @@ export const NO_FACTS: RunFacts = Object.freeze({
   answer: '',
   input: Object.freeze({}),
   edited: Object.freeze([]),
-  read: Object.freeze([]),
   toolCalls: 0,
   structured: null,
   handedDown: null,
@@ -144,12 +140,10 @@ export function resultFacts(
   const fresh = (paths: readonly string[], known: readonly string[]) =>
     [...new Set(paths)].filter((path) => path !== '' && !known.includes(path));
   const edited = fresh(edits, facts.edited);
-  const read = fresh([...(executed?.reads ?? []), ...edits], facts.read);
   const output = outputOf(pending, p.callId);
   const value = executed?.value;
   return {
     edited: edited.length === 0 ? facts.edited : [...facts.edited, ...edited],
-    read: read.length === 0 ? facts.read : [...facts.read, ...read],
     toolCalls: facts.toolCalls + (ran ? 1 : 0),
     structured:
       output !== null && value !== undefined ? { value } : facts.structured,

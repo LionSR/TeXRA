@@ -12,8 +12,9 @@
  * its answer is its card's typed result (`childAnswer`); its duration and
  * cost are its child's rows.
  */
-import { Predicate } from 'effect';
+import { Array as Arr, Predicate } from 'effect';
 import {
+  AGENT_TOOL_NAME,
   PROGRAM_TOOL_NAME,
   TOOL_CALL_STATUS,
   type RequestPayload,
@@ -29,7 +30,11 @@ import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import { toolCallTexts } from '@shared/toolUse';
 import { formatScriptCallFiles } from '@shared/transcript/scriptCall';
 import { getBasename } from '@utils/core/pathBasics';
-import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
+import {
+  firstLine,
+  formatCompactDuration,
+  formatCostUsd,
+} from '@utils/text/stringUtils';
 
 import { childAnswer } from './toolRowSections';
 import type { ToolRow as AppliedToolRow, TranscriptRow } from './transcriptRow';
@@ -42,7 +47,7 @@ const nameOf = (input: Readonly<Record<string, unknown>>): string | undefined =>
 /** The calls that run a child: `agent()`, `program()`, and `self()`, this
  *  agent again. */
 const CHILD_TOOLS: ReadonlySet<string> = new Set([
-  'agent',
+  AGENT_TOOL_NAME,
   PROGRAM_TOOL_NAME,
   'self',
 ]);
@@ -259,16 +264,6 @@ function sectionsOf(calls: readonly ScriptCallView[]): ScriptSectionView[] {
   );
 }
 
-/** The first non-blank line of `text`, trimmed. */
-function firstLine(text: string): string {
-  return (
-    text
-      .split('\n')
-      .map((line) => line.trim())
-      .find((line) => line.length > 0) ?? ''
-  );
-}
-
 /**
  * Whether a row is a script's call: a tool card under a stage. Only the
  * loop's script dispatch puts a card under a stage, so the stages that hold
@@ -334,8 +329,8 @@ export function scriptStages(
         outcome: stage.end?.outcome ?? null,
         calls,
         sections: sectionsOf(calls),
-        agents: calls.filter((call) => CHILD_TOOLS.has(call.toolName)).length,
-        needsYou: calls.filter((call) => call.needsYou).length,
+        agents: Arr.countBy(calls, (call) => CHILD_TOOLS.has(call.toolName)),
+        needsYou: Arr.countBy(calls, (call) => call.needsYou),
         costUsd,
       },
     ];

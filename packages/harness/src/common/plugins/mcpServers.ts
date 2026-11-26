@@ -11,13 +11,12 @@ import { createHmac, randomBytes } from 'node:crypto';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Result, Schema } from 'effect';
+import { Array as Arr, Effect, Result, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 // Local imports - shared contracts
 import type { SettingsStores } from '@shared/config/settings';
 import type { StateKey } from '@shared/state/stateSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** One configured stdio server, as the MCP plugin spawns it. */
 export interface McpServerConfig {
@@ -125,43 +124,24 @@ export function parseMcpServers(
   where: string,
   servers: Readonly<Record<string, unknown>>,
 ): { servers: McpServerConfig[]; warnings: string[] } {
-  const parsed: McpServerConfig[] = [];
-  const warnings: string[] = [];
-  for (const [name, raw] of Object.entries(servers)) {
-    // The name is checked first, so a bad name is the failure reported.
-    const server = Result.all([
-      Schema.decodeUnknownResult(ServerNameSchema)(name),
-      Schema.decodeUnknownResult(McpServerEntrySchema)(raw),
-    ]);
-    if (Result.isFailure(server)) {
-      warnings.push(
-        `MCP server "${name}" in ${where} is skipped (only stdio servers with a command are supported): ${server.failure.message}`,
-      );
-      continue;
-    }
-    const [, entry] = server.success;
-    parsed.push({
-      name,
-      command: entry.command,
-      args: entry.args ?? [],
-      env: entry.env ?? {},
-    });
-  }
+  const [parsed, warnings] = Arr.partition(
+    Object.entries(servers),
+    ([name, raw]) =>
+      Result.all([
+        Schema.decodeUnknownResult(ServerNameSchema)(name),
+        Schema.decodeUnknownResult(McpServerEntrySchema)(raw),
+      ]).pipe(
+        Result.mapBoth({
+          onSuccess: ([, entry]) => ({
+            name,
+            command: entry.command,
+            args: entry.args ?? [],
+            env: entry.env ?? {},
+          }),
+          onFailure: (error) =>
+            `MCP server "${name}" in ${where} is skipped (only stdio servers with a command are supported): ${error.message}`,
+        }),
+      ),
+  );
   return { servers: parsed, warnings };
-}
-
-/**
- * What `JSON.parse` rejected, without the file's text. V8 quotes an excerpt
- * of the source in double quotes, and a server config holds credentials, so
- * the message is cut at its first double quote before anything else reads
- * it; one with no position is cut at its first single quote too, which
- * quotes a source character.
- */
-export function jsonSyntaxError(error: unknown): string {
-  const kind = toErrorMessage(error)
-    .split('"', 1)[0]
-    .replace(/[,\s]+$/, '');
-  return /at position \d+/.test(kind)
-    ? kind
-    : kind.split("'", 1)[0].replace(/[,\s]+$/, '') || 'Unexpected content';
 }

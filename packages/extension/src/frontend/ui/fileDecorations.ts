@@ -1,12 +1,8 @@
-import { Effect, Stream, type Scope } from 'effect';
+import { Effect, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
 import { onAppSignal } from '@texra-ai/worldline/host';
-import { logFailure, type AppSignals } from '@texra-ai/worldline/plugins';
-import { outputFilesProduced } from '@texra/controllers/session/outputFilesProduced';
-import type { Session } from '@texra-ai/worldline';
-
-const CHANNEL = 'FileDecorations';
+import type { AppSignals } from '@texra-ai/worldline/plugins';
 
 // Session-scoped: the touched set is not persisted across window reloads so
 // the badges clear on restart and track only the current session's activity.
@@ -52,49 +48,24 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
 }
 
 /** Badge the files TeXRA wrote, for as long as the caller's scope lasts:
- *  both listeners are fibers of it (activation's, in the extension). */
-export const registerFileDecorations = Effect.fn('registerFileDecorations')(
-  function* (
-    context: vscode.ExtensionContext,
-    session: Pick<Session, 'view'>,
-  ): Effect.fn.Return<void, never, Scope.Scope | AppSignals> {
-    const provider = new TeXRAFileDecorationProvider();
-    yield* Effect.forkScoped(
-      Stream.runForEach(outputFilesProduced(session), (files) =>
-        Effect.sync(() => {
-          // Only mark the primary output location. Lineage entries (base,
-          // document) are reference points; marking them would badge the
-          // source file as "Modified by TeXRA" before the user has actually
-          // accepted the document task output.
-          const paths = new Set<string>();
-          for (const info of files) {
-            if (info.location.kind === 'workspace') {
-              paths.add(info.location.absolutePath);
-            }
-          }
-          provider.markTouched(paths);
-        }),
-      ).pipe(
-        // The listener ends with a failed read; it says so rather than
-        // leaving the badges quietly stale.
-        Effect.catchCause(
-          logFailure(
-            CHANNEL,
-            'TeXRA stopped badging output files: the session read failed',
-          ),
-        ),
-      ),
-      { startImmediately: true },
-    );
-    yield* Effect.forkScoped(
-      onAppSignal('workspaceFilesWritten', ({ absolutePaths }) => {
-        provider.markTouched(absolutePaths);
-      }),
-      { startImmediately: true },
-    );
-    context.subscriptions.push(
-      vscode.window.registerFileDecorationProvider(provider),
-      provider,
-    );
-  },
-);
+ *  the listener is a fiber of it (activation's, in the extension). */
+export const registerFileDecorations: Effect.Effect<
+  void,
+  never,
+  Scope.Scope | AppSignals
+> = Effect.gen(function* () {
+  const provider = yield* Effect.acquireRelease(
+    Effect.sync(() => new TeXRAFileDecorationProvider()),
+    (provider) => Effect.sync(() => provider.dispose()),
+  );
+  yield* Effect.acquireRelease(
+    Effect.sync(() => vscode.window.registerFileDecorationProvider(provider)),
+    (registration) => Effect.sync(() => registration.dispose()),
+  );
+  yield* Effect.forkScoped(
+    onAppSignal('workspaceFilesWritten', ({ absolutePaths }) => {
+      provider.markTouched(absolutePaths);
+    }),
+    { startImmediately: true },
+  );
+});

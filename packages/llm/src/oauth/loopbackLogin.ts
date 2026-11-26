@@ -11,7 +11,7 @@
  */
 import http from 'node:http';
 
-import { Deferred, Duration, Effect, Result, Schema } from 'effect';
+import { Deferred, Duration, Effect, Option, Result, Schema } from 'effect';
 import type { HttpClient } from 'effect/http';
 
 import { toErrorMessage } from '../errors.js';
@@ -133,12 +133,17 @@ const bindLoopbackServer = Effect.fnUntraced(function* (
   { server: http.Server; port: number },
   LoopbackTransportUnavailableError
 > {
-  for (const port of ports) {
-    const server = yield* listenAttempt(port);
-    const address = server?.address();
-    if (server && address !== null && typeof address === 'object')
-      return { server, port: address.port };
-  }
+  const bound = yield* Effect.findFirstFilter(ports, (port) =>
+    listenAttempt(port).pipe(
+      Effect.map((server) => {
+        const address = server?.address();
+        return server && address !== null && typeof address === 'object'
+          ? Result.succeed({ server, port: address.port })
+          : Result.failVoid;
+      }),
+    ),
+  );
+  if (Option.isSome(bound)) return bound.value;
   const portList = ports.join(' or ');
   return yield* new LoopbackTransportUnavailableError({
     message:

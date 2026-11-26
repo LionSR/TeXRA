@@ -88,10 +88,7 @@ test('first-run screenshot', async () => {
 test('command palette', async () => {
   await showLauncher(launched);
   await expect(launched.page.locator('.shell-conversation')).toBeVisible();
-  await launched.page
-    .locator('.shell-sidebar-primary .shell-sidebar-action')
-    .filter({ hasText: 'Commands' })
-    .click();
+  await launched.page.locator('#shellCommands').click();
   await expect(
     launched.page.locator('.desktop-command-palette'),
   ).toHaveAttribute('open');
@@ -113,10 +110,7 @@ test('settings across themes and window sizes', async () => {
       path: test.info().outputPath(`launcher-${theme}.png`),
       animations: 'disabled',
     });
-    await page
-      .locator('.shell-sidebar-footer .shell-sidebar-action')
-      .filter({ hasText: 'Settings' })
-      .click();
+    await page.locator('#shellSettings').click();
     const settings = page.locator('wa-dialog.desktop-settings-overlay');
     await expect(settings).toHaveJSProperty('open', true);
     const tabs = settings
@@ -210,13 +204,11 @@ test('settings across themes and window sizes', async () => {
             {
               name: '5-hour',
               percentUsed: 1,
-              percentRemaining: 99,
               resetAt: now + 34 * 60_000,
             },
             {
               name: '7-day',
               percentUsed: 0,
-              percentRemaining: 100,
               resetAt: now + 6 * 86_400_000,
             },
           ],

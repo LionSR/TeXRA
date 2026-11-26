@@ -160,12 +160,12 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
           Effect.andThen(runs.awaitDrained(runId)),
         ),
   );
-  yield* start.pipe(Effect.onInterrupt(() => release));
-  const live = runs.get(runId);
   // What the child's fiber failed on, when it did: the reason an end is
   // missing below (the store refused it).
-  const unsaved =
-    live && (yield* live.drained.pipe(Effect.onInterrupt(() => release)));
+  const unsaved = yield* start.pipe(
+    Effect.andThen(() => runs.get(runId)?.drained ?? Effect.undefined),
+    Effect.onInterrupt(() => release),
+  );
   const result = yield* getRunRecords(runId).readRunEnd();
   if (result === null)
     return yield* unsaved === undefined

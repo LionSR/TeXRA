@@ -90,11 +90,11 @@ export {
 } from '@agent/runtime/modelAccess/planQuotas';
 // The canned model a package-validation build provides beneath the process.
 export { ValidationModel } from '@agent/runtime/modelAccess/routeDecision';
-// The models a host offers: each visible model's option, the enabled list and
-// its writer, run-model precedence, the reasoning policy, the helper model.
+// The models a host offers: each visible model's option, the models a person
+// can enable, the enabled list and its writer, run-model precedence, the reasoning policy, the helper model.
 export {
+  enableableModels,
   getEnabledModels,
-  MODEL_SELECTION_KEY,
   readModelOptions,
   setModelEnabled,
   type ModelVerdict,
@@ -112,6 +112,8 @@ export {
   type SentReasoning,
 } from '@model/reasoningLevel';
 export { helperCall, type HelperPrompt } from '@agent/runtime/helperModel';
+// The token counts a helper call answers with.
+export type { NormalizedUsage } from '@shared/schemas';
 // The process's retry gate every model call (a helper call's too) waits on.
 export type { RouteRetries } from '@agent/runtime/ModelRetryGate';
 // Who a helper call's usage is billed to, and why a model call can fail.
@@ -154,7 +156,7 @@ export {
 export type { PluginListing, PluginReview } from '@common/plugins/pluginTrust';
 export type { NativeEntry } from '@common/plugins/nativeEntry';
 export type { ConfiguredHook } from '@common/plugins/hookConfig';
-export type { InstalledPlugin } from '@shared/schemas';
+export type { HookEvent, InstalledPlugin } from '@shared/schemas';
 // The files a run left in its storage directory, under a session's storage
 // (the executions tool's listing, for a host that shows it outside a run).
 export {

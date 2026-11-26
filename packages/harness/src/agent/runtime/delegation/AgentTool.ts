@@ -15,13 +15,14 @@
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
-import { programLaunch, readProgramResult } from '@agent/runtime/programRun';
+import { programLaunch } from '@agent/runtime/programRun';
 import { capReached } from '@agent/runtime/spendCap';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
+import { sourceLocationUnder } from '@common/storage/storageLayout';
 import {
   runEndErrorMessage,
   AgentConfigSchema,
@@ -33,6 +34,7 @@ import {
   type RunId,
   type ToolResult,
   programGrants,
+  RUN_OUTCOME,
   AGENT_TOOL_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
@@ -139,14 +141,16 @@ type ChildLaunch = {
         readonly name: string;
         readonly args: Readonly<Record<string, Schema.Json>>;
       };
-      readonly files: {
-        readonly inputFiles: readonly string[];
-        readonly contextFiles: readonly string[];
-        readonly mediaFiles: readonly string[];
-        readonly outputFiles: readonly string[];
-      };
+      readonly files: ChildFiles;
     }
 );
+
+/** The four lists of files a child is handed. */
+type ChildFiles = {
+  readonly inputFiles: readonly string[];
+  readonly contextFiles: readonly string[];
+  readonly mediaFiles: readonly string[];
+};
 
 /**
  * One request shared by a script's `agent` calls and all its attempts
@@ -210,7 +214,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
   { runId, result }: { readonly runId: RunId; readonly result: RunEnd },
   key: string | undefined,
 ) {
-  if (result.outcome === 'cancelled') {
+  if (result.outcome === RUN_OUTCOME.CANCELLED) {
     const capped = capReached(
       yield* (yield* SessionViewAccess).read([]),
       runId,
@@ -229,7 +233,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
       },
     );
   }
-  if (result.outcome !== 'completed')
+  if (result.outcome !== RUN_OUTCOME.COMPLETED)
     return errorResult(
       `The agent run ${runId} for '${agentName}' ended ${result.outcome}${result.error ? `: ${runEndErrorMessage(result.error)}` : '.'}`,
       { name: 'AgentFailed', summary: `'${agentName}' failed` },
@@ -242,14 +246,11 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
     return yield* Effect.die(
       new Error(`The agent run ${runId} completed without a report.`),
     );
-  const config = yield* records.readConfig();
   const view = yield* (yield* SessionViewAccess).read([]);
-  const program = yield* readProgramResult(config, runId, call.env.roots);
   return {
     ...executed(report, `Completed '${agentName}'`),
     value: toJsonValue({
       ...result.output,
-      ...(program !== undefined && { changes: program.changes }),
       runId,
       outcome: result.outcome,
       cost: treeCostOf(view, runId),
@@ -312,58 +313,61 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const script = call.script ?? undefined;
   const { runId: parentId } = run;
   const { program } = launch;
-  // A name no plugin registers fails before anyone is asked to approve it.
-  if (program !== null) {
+  // What the child is, decided once, the one place a chat and a program
+  // differ in it. A program's child is the program's own run, named for it,
+  // over the program's four lists; a name no plugin registers fails here,
+  // before anyone is asked to approve it. A chat's is what the call wrote,
+  // or an installed plugin's agent read now, so the child's config holds
+  // its system text and tools and a resume reads no file; its files are the
+  // media on its prompt.
+  let child: {
+    readonly agent: {
+      readonly name: string;
+      readonly system: string;
+      readonly tools: readonly string[];
+      readonly toolScope?: AgentConfig['toolScope'];
+    };
+    readonly files: ChildFiles;
+  };
+  if (launch.program !== null) {
+    const { name, args } = launch.program;
     const known = yield* Effect.result(
-      programLaunch(program.name, program.args, launch.files, call.env.roots),
+      programLaunch(name, args, call.env.roots),
     );
     if (Result.isFailure(known)) return errorResult(known.failure.message);
-  }
-  // A chat's files are the media on its prompt; a program names its four
-  // lists.
-  const files =
-    launch.program === null
-      ? {
-          inputFiles: [],
-          contextFiles: [],
-          mediaFiles: launch.mediaFiles,
-          outputFiles: [],
-        }
-      : launch.files;
-  // A program's child is the program's own run, named for it; a chat's is
-  // what the call wrote, or an installed plugin's agent read now, so the
-  // child's config holds its system text and tools and a resume reads no
-  // file.
-  let agent: {
-    name: string;
-    system: string;
-    tools: readonly string[];
-    toolScope?: AgentConfig['toolScope'];
-  };
-  if (launch.program !== null)
-    agent = { name: launch.program.name, system: '', tools: [] };
-  else if (launch.agentName != null) {
-    if (launch.system != null || launch.tools != null)
-      return errorResult(
-        '`agentName` runs an installed plugin’s agent with its own system text and tools: drop `system` and `tools`, or drop `agentName`.',
-      );
-    const named = yield* Effect.result(
-      pluginAgent(launch.agentName, call.env.roots),
-    );
-    if (Result.isFailure(named)) return errorResult(named.failure.message);
-    agent = named.success;
-  } else if (launch.system == null)
-    return errorResult(
-      'Give the child a `system` text (and the `tools` it needs), or name an installed plugin’s agent with `agentName`.',
-    );
-  else
-    agent = {
-      name: launch.label?.trim() || 'agent',
-      system: launch.system,
-      tools: launch.tools ?? [],
+    child = { agent: { name, system: '', tools: [] }, files: launch.files };
+  } else {
+    const files: ChildFiles = {
+      inputFiles: [],
+      contextFiles: [],
+      mediaFiles: launch.mediaFiles,
     };
+    if (launch.agentName != null) {
+      if (launch.system != null || launch.tools != null)
+        return errorResult(
+          '`agentName` runs an installed plugin’s agent with its own system text and tools: drop `system` and `tools`, or drop `agentName`.',
+        );
+      const named = yield* Effect.result(
+        pluginAgent(launch.agentName, call.env.roots),
+      );
+      if (Result.isFailure(named)) return errorResult(named.failure.message);
+      child = { agent: named.success, files };
+    } else if (launch.system == null)
+      return errorResult(
+        'Give the child a `system` text (and the `tools` it needs), or name an installed plugin’s agent with `agentName`.',
+      );
+    else
+      child = {
+        agent: {
+          name: launch.label?.trim() || 'agent',
+          system: launch.system,
+          tools: launch.tools ?? [],
+        },
+        files,
+      };
+  }
+  const { agent, files } = child;
   const unusable = yield* rejectUnusableWorkingDirectory(
-    call.env.roots,
     launch.workingDirectory ?? undefined,
   );
   if (unusable) return unusable;
@@ -383,7 +387,13 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         ['Media file', files.mediaFiles] as const,
       ].map(([label, list]) =>
         verbatim
-          ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
+          ? Effect.succeed(
+              list.map((file) => ({
+                file,
+                absolutePath: sourceLocationUnder(call.env.roots, file)
+                  .absolutePath,
+              })),
+            )
           : resolveInvocationFileList(parentId, label, list),
       ),
       { concurrency: 'unbounded' },
@@ -484,7 +494,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       inputFiles: inputs.map(({ file }) => file),
       contextFiles,
       mediaFiles: media.map(({ file }) => file),
-      outputFiles: files.outputFiles,
       // The arguments, shown as the proposal's options.
       ...(program !== null && { options: program.args }),
       ...(program === null && { rootUserInstruction: call.instruction }),
@@ -514,7 +523,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     program === null
       ? null
       : yield* Effect.result(
-          programLaunch(program.name, program.args, approved, call.env.roots),
+          programLaunch(program.name, program.args, call.env.roots),
         );
   if (relaunched !== null && Result.isFailure(relaunched))
     return errorResult(relaunched.failure.message);

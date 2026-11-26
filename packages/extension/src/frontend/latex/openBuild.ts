@@ -12,13 +12,13 @@ import {
   Effect,
   Exit,
   FileSystem,
-  Option,
   Schedule,
   type Path,
   type PlatformError,
   type Scope,
 } from 'effect';
 
+import { pathExists } from '@texra-ai/worldline/node';
 import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
@@ -34,8 +34,7 @@ const CHANNEL = 'OpenBuildUtils';
 
 /**
  * Resolve `latex-workshop.latex.outDir` by expanding all LaTeX Workshop
- * placeholders for the given file.  Longer placeholders are replaced first
- * so that e.g. `%DOC_EXT%` is not partially consumed by `%DOC%`.
+ * placeholders for the given file.
  *
  * Falls back to a relative path resolved against the file's directory when the
  * result is not absolute.
@@ -64,25 +63,27 @@ function resolveLatexWorkshopOutDir(
   const relativeDir = path.relative(workspaceFolder, dir);
   const relativeDoc = path.relative(workspaceFolder, doc);
 
-  // Order matters: longer/more-specific placeholders first to avoid partial matches.
-  const replacements: [string, string][] = [
-    ['%DOC_EXT_W32%', filePath.replaceAll('/', '\\')],
-    ['%DOCFILE_EXT%', path.basename(filePath)],
-    ['%DOC_EXT%', filePath],
-    ['%DOCFILE%', docfile],
-    ['%DOC_W32%', doc.replaceAll('/', '\\')],
-    ['%DOC%', doc],
-    ['%DIR_W32%', dir.replaceAll('/', '\\')],
-    ['%DIR%', dir],
-    ['%WORKSPACE_FOLDER%', workspaceFolder],
-    ['%RELATIVE_DIR%', relativeDir],
-    ['%RELATIVE_DOC%', relativeDoc],
-    ['%TMPDIR%', os.tmpdir()],
-  ];
+  const values: Readonly<Record<string, string>> = {
+    '%DOC_EXT_W32%': filePath.replaceAll('/', '\\'),
+    '%DOCFILE_EXT%': path.basename(filePath),
+    '%DOC_EXT%': filePath,
+    '%DOCFILE%': docfile,
+    '%DOC_W32%': doc.replaceAll('/', '\\'),
+    '%DOC%': doc,
+    '%DIR_W32%': dir.replaceAll('/', '\\'),
+    '%DIR%': dir,
+    '%WORKSPACE_FOLDER%': workspaceFolder,
+    '%RELATIVE_DIR%': relativeDir,
+    '%RELATIVE_DOC%': relativeDoc,
+    '%TMPDIR%': os.tmpdir(),
+  };
 
-  const resolved = replacements.reduce(
-    (acc, [placeholder, value]) => acc.replaceAll(placeholder, value),
-    normalizedRaw,
+  // One pass over whole placeholders (each name ends at its `%`, so none is
+  // a prefix of another), each value from a function: a path holding `$&` or
+  // a placeholder's name is inserted as written.
+  const resolved = normalizedRaw.replaceAll(
+    new RegExp(Object.keys(values).join('|'), 'g'),
+    (placeholder) => values[placeholder] ?? placeholder,
   );
 
   return path.isAbsolute(resolved) ? resolved : path.resolve(dir, resolved);
@@ -215,7 +216,7 @@ const prepareFileForDisplay = Effect.fn('openBuild.prepareFileForDisplay')(
     const absolutePath = fileLocation.absolutePath;
 
     const fs = yield* FileSystem.FileSystem;
-    if (!(yield* fs.exists(absolutePath))) {
+    if (!(yield* pathExists(fs, absolutePath))) {
       yield* showLoggedMessage(`File not found: ${absolutePath}`);
       return false;
     }
@@ -291,18 +292,19 @@ const PDF_POLL_INTERVAL = Duration.millis(250);
 const openViewer = Effect.fn('openBuild.openViewer')(
   function* (pdfPath: string) {
     const fs = yield* FileSystem.FileSystem;
-    const written = yield* fs.exists(pdfPath).pipe(
+    yield* pathExists(fs, pdfPath).pipe(
       Effect.repeat({
         schedule: Schedule.spaced(PDF_POLL_INTERVAL),
         until: (exists) => exists,
       }),
-      Effect.timeoutOption(PDF_WRITE_BUDGET),
+      Effect.timeoutOrElse({
+        duration: PDF_WRITE_BUDGET,
+        orElse: () =>
+          Effect.logWarning(
+            `The build had not written ${pdfPath} after ${Duration.format(PDF_WRITE_BUDGET)}; opening the PDF viewer anyway`,
+          ).pipe(withLogChannel(CHANNEL)),
+      }),
     );
-    if (Option.isNone(written)) {
-      yield* Effect.logWarning(
-        `The build had not written ${pdfPath} after ${Duration.format(PDF_WRITE_BUDGET)}; opening the PDF viewer anyway`,
-      ).pipe(withLogChannel(CHANNEL));
-    }
     yield* executeVscodeCommand('latex-workshop.view');
     yield* executeVscodeCommand('latex-workshop.refresh-viewer');
   },

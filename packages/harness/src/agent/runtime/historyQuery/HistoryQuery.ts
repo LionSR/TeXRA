@@ -16,10 +16,9 @@ import {
   Array as Arr,
   type Context,
   Effect,
-  Exit,
-  Option,
   Schema,
-  Scope,
+  type Scope,
+  ScopedRef,
   Semaphore,
   Stream,
 } from 'effect';
@@ -68,9 +67,9 @@ import {
 const CHANNEL = 'HistoryQuery';
 const QUERY_DEADLINE = '5 seconds';
 /** Rows one query returns; the page says when more exist. */
-const HISTORY_QUERY_ROW_CAP = 200;
+export const HISTORY_QUERY_ROW_CAP = 200;
 /** Serialized page ceiling before a result leaves the query process. */
-const HISTORY_QUERY_PAGE_LIMIT_BYTES = 4 * 1024 * 1024;
+export const HISTORY_QUERY_PAGE_LIMIT_BYTES = 4 * 1024 * 1024;
 /** Capped writes per append keep requests bounded for any history length. */
 const APPEND_OPS = 500;
 
@@ -273,24 +272,23 @@ export class HistoryQueryStore implements Context.Service.Shape<
   > = Effect.gen(function* () {
     return new HistoryQueryStore(
       { log: yield* SessionLog, view: yield* SessionViewAccess },
-      yield* Effect.scope,
+      yield* ScopedRef.make<Store | undefined>(() => undefined),
       yield* ChildProcessSpawner,
     );
   });
 
   private readonly lane = Semaphore.makeUnsafe(1);
-  private store: Store | undefined;
 
   private readonly session: HistorySession;
-  private readonly scope: Scope.Scope;
+  private readonly store: ScopedRef.ScopedRef<Store | undefined>;
   private readonly spawner: ChildProcessSpawner['Service'];
   private constructor(
     session: HistorySession,
-    scope: Scope.Scope,
+    store: ScopedRef.ScopedRef<Store | undefined>,
     spawner: ChildProcessSpawner['Service'],
   ) {
     this.session = session;
-    this.scope = scope;
+    this.store = store;
     this.spawner = spawner;
   }
 
@@ -336,12 +334,20 @@ export class HistoryQueryStore implements Context.Service.Shape<
         failedWith('The session view stopped before this query could read it.'),
       );
       // A cleared database restarts its commits below what the store holds.
-      if (this.store && target < this.store.cursor) {
-        yield* this.discard('the session database was cleared');
+      let store = yield* ScopedRef.get(this.store);
+      if (store === undefined || target < store.cursor) {
+        if (store !== undefined)
+          yield* this.discard('the session database was cleared');
+        yield* ScopedRef.set(
+          this.store,
+          Effect.interruptible(spawnQueryStore(this.spawner)),
+        );
+        store = yield* ScopedRef.get(this.store);
+        if (store === undefined)
+          return yield* Effect.die(
+            new Error('The history query store did not retain its process.'),
+          );
       }
-      const store =
-        this.store ?? (yield* spawnQueryStore(this.scope, this.spawner));
-      this.store = store;
       // View snapshots are immutable: the same `runs` at the same cursor is
       // already in the store.
       if (target > store.cursor || runs !== store.runs) {
@@ -356,17 +362,23 @@ export class HistoryQueryStore implements Context.Service.Shape<
         params,
         cap: HISTORY_QUERY_ROW_CAP,
         maxBytes: HISTORY_QUERY_PAGE_LIMIT_BYTES,
-      }).pipe(Effect.timeoutOption(QUERY_DEADLINE));
-      if (Option.isNone(reply)) {
-        yield* this.discard('a query ran past its deadline');
-        return yield* new HistoryQueryRefused({
-          reason: 'timeout',
-          message: `The query did not finish within ${QUERY_DEADLINE} and was stopped. Narrow it (filter by run_id, add LIMIT) and retry.`,
-        });
-      }
-      if (reply.value instanceof HistoryQueryRefused) return yield* reply.value;
+      }).pipe(
+        Effect.timeoutOrElse({
+          duration: QUERY_DEADLINE,
+          orElse: () =>
+            this.discard('a query ran past its deadline').pipe(
+              Effect.andThen(
+                new HistoryQueryRefused({
+                  reason: 'timeout',
+                  message: `The query did not finish within ${QUERY_DEADLINE} and was stopped. Narrow it (filter by run_id, add LIMIT) and retry.`,
+                }),
+              ),
+            ),
+        }),
+      );
+      if (reply instanceof HistoryQueryRefused) return yield* reply;
       return yield* Schema.decodeUnknownEffect(HistoryPageSchema)(
-        reply.value.value,
+        reply.value,
       ).pipe(failedWith('The history query process sent an unreadable page.'));
     },
   );
@@ -416,15 +428,13 @@ export class HistoryQueryStore implements Context.Service.Shape<
   }
 
   private discard(why: string): Effect.Effect<void> {
-    return Effect.suspend(() => {
-      const store = this.store;
+    return Effect.flatMap(ScopedRef.get(this.store), (store) => {
       if (store === undefined) return Effect.void;
-      this.store = undefined;
       return Effect.logWarning(
         `History query store closed: ${why}; the next query rebuilds it.`,
       ).pipe(
         withLogChannel(CHANNEL),
-        Effect.andThen(Scope.close(store.scope, Exit.void)),
+        Effect.andThen(ScopedRef.set(this.store, Effect.undefined)),
       );
     });
   }

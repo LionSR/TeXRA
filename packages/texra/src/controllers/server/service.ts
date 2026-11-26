@@ -10,8 +10,11 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  Array as Arr,
   Cause,
   Effect,
+  Iterable,
+  Number as Num,
   Result,
   Schema,
   Scope,
@@ -94,9 +97,10 @@ export interface ServiceControl {
  *  hold, the service's load and a drain's end all ask it. */
 export const runsAtWork = (session: LocalSession): number => {
   const { runs } = session.view.current();
-  return session
-    .held()
-    .filter(({ runId }) => runs.get(runId)?.position !== 'waiting').length;
+  return Arr.countBy(
+    session.held(),
+    ({ runId }) => runs.get(runId)?.position !== 'waiting',
+  );
 };
 
 /**
@@ -119,10 +123,11 @@ export const runningTasks = Effect.fn('server.runningTasks')(function* (
   projects: ServiceProjects,
   atWork = false,
 ): Effect.fn.Return<number> {
-  let running = 0;
-  for (const session of (yield* projects.opened).values())
-    running += atWork ? runsAtWork(session) : session.held().length;
-  return running;
+  return Num.sumAll(
+    Iterable.map((yield* projects.opened).values(), (session) =>
+      atWork ? runsAtWork(session) : session.held().length,
+    ),
+  );
 });
 
 /** A handler that died answers `Internal` under a reference the service

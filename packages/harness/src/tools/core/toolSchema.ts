@@ -7,6 +7,7 @@
  * from it; the structured-output tool builder shares it.
  */
 import {
+  Iterable,
   type JsonSchema,
   Predicate,
   Record as EffectRecord,
@@ -205,11 +206,7 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
           )
           .join(' | ') || undefined;
     } else {
-      const shapes = [
-        ...new Map(
-          copies.map(({ shape }) => [JSON.stringify(shape), shape]),
-        ).values(),
-      ];
+      const shapes = distinct(Iterable.map(copies, ({ shape }) => shape));
       value = shapes.length === 1 ? shapes[0] : { anyOf: shapes };
       description = describe(copies);
     }
@@ -349,9 +346,11 @@ function withArrayItems(node: unknown): unknown {
   };
 }
 
-/** The schemas of `nodes` with structural duplicates dropped, first kept. */
-const distinct = (nodes: readonly unknown[]): unknown[] => [
-  ...new Map(nodes.map((node) => [JSON.stringify(node), node])).values(),
+/** Schemas in first appearance order by serialized shape. */
+const distinct = <A>(nodes: Iterable<A>): A[] => [
+  ...new Map(
+    Iterable.map(nodes, (node) => [JSON.stringify(node), node] as const),
+  ).values(),
 ];
 
 /** A tool's input as JSON Schema, unflattened: its Effect Schema converted

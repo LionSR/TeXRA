@@ -80,30 +80,23 @@ export type {
 } from '@shared/session/database';
 // Where a run stands, the pair of `RunView` fields a renderer reads.
 export type { RunStanding } from '@shared/session/runRowReads';
-// A follow-up queued for a run, as its row holds it (a message, a delivery, or the run's own `control`).
-export type { QueuedFollowUp } from '@shared/session/runRows';
 // The data shapes the public signatures name: session events and their
 // owners, run facts, tool definitions and results, log and transcript
 // payloads, follow-ups and requests.
 export type {
   AgentConfigInput,
-  AgentProposal,
   CompactionActivityData,
   CompactionActivityOutcome,
-  ContextManagementData,
   DeclinableUsageRoute,
   DispatchFacts,
   DisplayRow,
   ExternalFileLocation,
-  FileListEntry,
   FileLocation,
   FinishedToolResult,
   FollowUpContent,
   FollowUpControl,
   FollowUpSender,
-  HookEvent,
   HarnessInstructionKey,
-  LoadedMediaMetadata,
   LocalRuntimeState,
   LogLevel,
   MediaAttachmentKind,
@@ -117,7 +110,6 @@ export type {
   RequestShowErrorPayload,
   RequestShowInstructionPayload,
   ResponseCut,
-  ResumeRefusal,
   RunAction,
   RunId,
   RunIdentity,
@@ -137,7 +129,6 @@ export type {
   ToolFact,
   ToolUseLog,
   UsageRoute,
-  WorkspaceFileLocation,
 } from '@shared/schemas';
 export { ResumeRefusalSchema } from '@shared/schemas';
 // Default a schema field to a plain constant when it decodes from an absent
@@ -201,7 +192,6 @@ export {
   TraceMissingSchema,
   type AssembleTraceResult,
   type TraceDocument,
-  type TraceFactKind,
 } from '@shared/schemas/traceDocument';
 // Path basics that hold in a browser: forward slashes, a path's base name,
 // its base name without the extension, and a case-free extension check.
@@ -226,7 +216,6 @@ export {
   GIT_AUTHOR_EMAIL_SETTING,
   GIT_AUTHOR_NAME_SETTING,
   GIT_MARK_COMMITS_SETTING,
-  GIT_WORKTREE_SUPPORT_SETTING,
   GLM_CODING_PLAN_SETTING,
   GOAL_MAX_COST_SETTING,
   GOOGLE_INTERACTIONS_SERVER_STATE_SETTING,
@@ -321,7 +310,6 @@ export {
   type ActiveSkillSourceScope,
   ActiveSkillSourceScopeSchema,
   AgentConfigSchema,
-  labelFileName,
   type AgentProposalRequest,
   type BashRequest,
   type ContextStateData,
@@ -355,7 +343,6 @@ export {
   MODEL_AVAILABILITY_STATUS,
   ModelAvailabilityKindSchema,
   DeclinableUsageRouteSchema,
-  type NormalizedUsage,
   FileFieldsSchema,
   type Plan,
   type PlanApprovalRequest,
@@ -399,7 +386,6 @@ export {
   type StoredMedia,
   StoredMediaSchema,
   sumUsageStats,
-  toJsonValue,
   type TokenUsageStats,
   type UserQuestionAnswers,
   UserQuestionAnswersSchema,

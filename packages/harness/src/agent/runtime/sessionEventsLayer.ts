@@ -251,29 +251,37 @@ export const sessionEventsLayer = Layer.effect(
           // Read after subscribing: every batch past it reaches the
           // subscription, or shows as a gap.
           const published = head;
-          let at = Math.max(fromCommit, published);
           return Stream.concat(
             fromCommit < published
               ? readThrough(log.readDisplay, fromCommit, published)
               : Stream.empty,
             Stream.flattenTake(Stream.fromSubscription(subscription)).pipe(
-              Stream.flatMap((batch) => {
-                // Published before `head` was read: the store read has it.
-                if (batch.through <= at) return Stream.empty;
-                const missed =
-                  batch.from > at
-                    ? Stream.unwrap(
-                        Effect.as(
-                          Effect.logWarning(
-                            `A reader of the session's events fell more than ${KEPT_BATCHES} batches behind; reading commits ${at + 1} to ${batch.from} from the store.`,
-                          ).pipe(withLogChannel(CHANNEL)),
-                          readThrough(log.readDisplay, at, batch.from),
-                        ),
-                      )
-                    : Stream.empty;
-                at = batch.through;
-                return Stream.concat(missed, Stream.succeed(batch));
-              }),
+              Stream.mapAccum(
+                () => Math.max(fromCommit, published),
+                (at, batch) => {
+                  if (batch.through <= at) return [at, []];
+                  // A requested starting position can fall inside a batch.
+                  const rows =
+                    batch.from < at
+                      ? batch.rows.filter((row) => row.commit > at)
+                      : batch.rows;
+                  const live = Stream.succeed({ rows, through: batch.through });
+                  if (batch.from <= at) return [batch.through, [live]];
+                  const missed = readThrough(
+                    log.readDisplay,
+                    at,
+                    batch.from,
+                  ).pipe(
+                    Stream.onStart(
+                      Effect.logWarning(
+                        `A reader of the session's events fell more than ${KEPT_BATCHES} batches behind; reading commits ${at + 1} to ${batch.from} from the store.`,
+                      ).pipe(withLogChannel(CHANNEL)),
+                    ),
+                  );
+                  return [batch.through, [missed, live]];
+                },
+              ),
+              Stream.flatten,
             ),
           );
         }),
@@ -290,21 +298,29 @@ export const sessionEventsLayer = Layer.effect(
       subscribe: PubSub.subscribe(committed),
       batches,
       all: (fromCommit, drained) =>
-        released(batches(fromCommit), fromCommit, drained),
+        batches(fromCommit).pipe(
+          Stream.flatMap(({ rows, through }) => {
+            const display = Stream.fromIterable(rows);
+            return drained === undefined
+              ? display
+              : display.pipe(
+                  Stream.onEnd(SubscriptionRef.set(drained, through)),
+                );
+          }),
+        ),
     };
   }),
 );
 
-/** One read of the rows above `fromCommit` through `upTo`, never past it,
- *  as batches: a page at a time, then the whole range, rows the store no
- *  longer held included. */
+/** Read through `upTo` one page at a time. The final batch marks that
+ *  commit even if the store has already collected rows in the range. */
 const readThrough = (
   read: (
     fromCommit: CommitOrdinal,
   ) => Stream.Stream<DisplayRow, DatabaseReadFailed>,
   fromCommit: CommitOrdinal,
   upTo: CommitOrdinal,
-): Stream.Stream<CommittedBatch, DatabaseReadFailed> =>
+) =>
   Stream.concat(
     read(fromCommit).pipe(
       Stream.takeWhile((event) => event.commit <= upTo),
@@ -312,32 +328,5 @@ const readThrough = (
         { rows, through: Arr.lastNonEmpty(rows).commit },
       ]),
     ),
-    Stream.succeed({ rows: [], through: Math.max(fromCommit, upTo) }),
-  ).pipe(
-    Stream.mapAccum(
-      () => fromCommit,
-      (from, batch) => [batch.through, [{ ...batch, from }]] as const,
-    ),
+    Stream.succeed({ rows: [], through: upTo }),
   );
-
-/** The rows of `batches` above `fromCommit`, each once. `drained`, when
- *  given, receives the commit each batch covered, rows the store no longer
- *  held included, only once its rows have reached the reader (as the reader
- *  pulls past them). A row the store no longer holds emits nothing, so a
- *  reader that must know the tail passed an ordinal (the NDJSON detach
- *  drain) waits on this coordinate, never on the events alone. */
-const released = <E>(
-  batches: Stream.Stream<CommittedBatch, E>,
-  fromCommit: CommitOrdinal,
-  drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-): Stream.Stream<DisplayRow, E> =>
-  Stream.suspend(() => {
-    let at = fromCommit;
-    return Stream.flatMap(batches, ({ rows, through }) => {
-      const fresh = Stream.fromIterable(rows.filter((row) => row.commit > at));
-      at = Math.max(at, through);
-      if (drained === undefined) return fresh;
-      const covered = Stream.fromEffect(SubscriptionRef.set(drained, at));
-      return Stream.concat(fresh, Stream.drain(covered));
-    });
-  });

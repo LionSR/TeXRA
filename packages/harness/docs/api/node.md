@@ -70,17 +70,6 @@ Absent, none.
 const CommandDirs: Reference<() => readonly string[]>
 ```
 
-## commitExists
-
-Whether `hash` names a commit in the history of the repository at `cwd`.
-
-```ts
-function commitExists(
-  cwd: string,
-  hash: string,
-): Effect.Effect<boolean, never, ChildProcessSpawner>
-```
-
 ## ConfigStore
 
 The store surface one config target needs. `JsonStore` satisfies it; so does
@@ -517,19 +506,6 @@ the process could not run; a non-zero exit is the caller's to word.
 const machineGit: (args: readonly string[], options?: { readonly cwd?: string | undefined; readonly env?: Readonly<Record<string, string>> | undefined; readonly input?: string | undefined; } | undefined) => Effect<{ stdout: string; stderr: string; code: ExitCode; }, PlatformError, ChildProcessSpawner>
 ```
 
-## MachineGitResult
-
-How a {@link machineGit} command ended.
-
-```ts
-interface MachineGitResult {
-  readonly stdout: string;
-  /** Trimmed. */
-  readonly stderr: string;
-  readonly code: number;
-}
-```
-
 ## meansAbsent
 
 Whether a failure means nothing is at the path: it is not there
@@ -720,12 +696,8 @@ dirent type the platform left `Unknown` is probed, and only that probe's
 failure costs a row. The strict form stays with the containment and
 deletion walkers, where a refused answer is the safe one.
 
-It reads the dirents through Node's `readdir` directly, so its callers need
-only `Path`; the strict form gets the same typed listing from
-`FileSystem.readDirectoryEntries`.
-
 ```ts
-const readDirectoryTypedTolerant: (target: string) => Effect<(readonly [string, Type])[], PlatformError, Path>
+const readDirectoryTypedTolerant: (target: string) => Effect<(readonly [string, Type])[], PlatformError, FileSystem | Path>
 ```
 
 ## readNormalizedFile
@@ -740,17 +712,6 @@ the paths inside its root and the process filesystem answers for the rest.
 
 ```ts
 const readNormalizedFile: (fs: FileSystem, target: string) => Effect<string, PlatformError, never>
-```
-
-## recentCommitLabels
-
-Up to `limit` recent commits, each labelled `<shortHash>: <subject>
-(<relativeDate>)`, or null when `cwd` is not a work tree. A repository
-with no commit has none; a `git log` that fails on one that has commits
-(unreadable objects, a timeout) is logged at warn and reads as none.
-
-```ts
-const recentCommitLabels: (cwd: string, limit: number) => Effect<readonly string[] | null, never, ChildProcessSpawner>
 ```
 
 ## relativeToRoot

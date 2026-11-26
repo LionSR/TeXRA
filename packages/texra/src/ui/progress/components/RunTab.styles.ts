@@ -106,6 +106,21 @@ export const runTabStyles = css`
     white-space: nowrap;
     justify-content: center;
     width: var(--run-tab-status-width, auto);
+    order: var(--run-tab-status-order, 0);
+  }
+
+  /* A run with nothing to say: no lane where the status trails the row, a
+     quiet dot where it leads it (the rail sets both properties). */
+  .tab-status:empty {
+    display: var(--run-tab-idle-status-display, none);
+  }
+
+  .tab-status:empty::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wa-color-neutral-border-normal, var(--color-border));
   }
 
   .tab-status-icon {
@@ -120,10 +135,6 @@ export const runTabStyles = css`
   .tab-status-label {
     display: var(--run-tab-status-label-display, inline);
     ${truncateDeclarations}
-  }
-
-  .tone-running .tab-status-icon {
-    font-size: 8px;
   }
 
   .tab-meta {
@@ -177,9 +188,20 @@ export const runTabStyles = css`
     color: inherit;
   }
 
+  /* When the run last moved, on a list whose rows are one line (the rail
+     sets the property); a list with a meta line says it there. */
+  .tab-time {
+    display: var(--run-tab-time-display, none);
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
   /* A collapsed parent's descendants, in words: how many it hides and how
      many of them are running. */
   .tab-rollup {
+    display: var(--run-tab-rollup-display, inline);
     flex-shrink: 0;
     margin-inline-end: var(--wa-space-2xs);
     color: var(--color-text-secondary);
@@ -204,8 +226,15 @@ export const runTabStyles = css`
     display: none;
   }
 
-  /* Always-present actions keep renaming/deletion reachable by keyboard and screen reader. */
+  /* The menu stays in the row, so keyboard and screen reader reach rename
+     and delete; it is drawn once the row is pointed at or focused. */
+  .tab-container:not(:hover, :focus-within) .tab-actions {
+    opacity: 0;
+  }
+
   .tab-actions {
+    /* Last in the row wherever a list puts the status and the chevron. */
+    order: 2;
     display: block;
     width: var(--control-size-s);
     height: var(--control-size-s);
@@ -225,6 +254,7 @@ export const runTabStyles = css`
   }
 
   .nested-run-icon {
+    display: var(--run-tab-nested-icon-display, inline-block);
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
     flex-shrink: 0;
@@ -236,6 +266,7 @@ export const runTabStyles = css`
    * sheet, so the reset lives locally rather
    * than through .action-icon-button's cross-component rules. */
   .tab-expand {
+    order: var(--run-tab-expand-order, 0);
     display: flex;
     align-items: center;
     justify-content: center;

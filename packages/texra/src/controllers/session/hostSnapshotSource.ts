@@ -20,6 +20,7 @@
  * each snapshot is mapped.
  */
 import {
+  Array as Arr,
   Effect,
   type FileSystem,
   Option,
@@ -32,6 +33,7 @@ import {
 } from 'effect';
 import {
   appSignalStream,
+  PlanQuotas,
   subscribeAppSignal,
   workspaceEnvironmentLayer,
 } from '@texra-ai/worldline/host';
@@ -47,17 +49,16 @@ import {
   APPROVAL_POLICY_SETTING,
   ensureError,
 } from '@texra-ai/worldline/schemas';
-import { isPathWithin, recentCommitLabels } from '@texra-ai/worldline/node';
+import { isPathWithin } from '@texra-ai/worldline/node';
 import { apiKeyEntry } from '@texra-ai/llm';
-import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
+import type { HttpClient } from 'effect/http';
 import type {
-  FileOptions,
   HostSnapshot,
   MissingTool,
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
-import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
+import { workspaceInputFiles } from '@texra/controllers/session/workspaceFileOptions';
 import {
   hasUsableSetupCredential,
   loadModelOptions,
@@ -82,7 +83,7 @@ type DismissibleBanner = Extract<
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
   tools: HostSnapshot['tools'];
-  /** The project folder the launcher's file lists and the recent commits
+  /** The project folder the launcher's input files
    *  are read from and whose `.env` the credential check reads; `undefined`
    *  for a session with no folder open, which is never a repository. */
   root: string | undefined;
@@ -113,9 +114,11 @@ interface Inputs {
    *  so the shell never paints an empty model list. */
   readonly loaded: boolean;
   readonly modelOptions: HostSnapshot['modelOptions'];
+  readonly planUsage: HostSnapshot['planUsage'];
   readonly workspaceRoots: HostSnapshot['workspaceRoots'];
-  readonly fileOptions: FileOptions;
-  readonly commits: { readonly commits: string[]; readonly isGitRepo: boolean };
+  /** The project's files a program can take as input; a project with
+   *  none is offered the getting-started card. */
+  readonly inputFiles: readonly string[];
   readonly missingTools: readonly MissingTool[];
   readonly recording: HostSnapshot['recording'];
   readonly service: HostSnapshot['banners']['service'];
@@ -141,6 +144,8 @@ export interface HostSnapshotSource {
     void,
     never,
     | Secrets
+    | PlanQuotas
+    | HttpClient.HttpClient
     | SubscriptionAccounts
     | FileSystem.FileSystem
     | Path.Path
@@ -157,7 +162,12 @@ export interface HostSnapshotSource {
   /** Each write TeXRA made inside the project, for a host view of the
    *  project's files beside the launcher (the desktop's file tree). */
   readonly filesWritten: Stream.Stream<void, never, AppSignals>;
-  readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
+  /** Read the plans' quotas again, each as the process knows it now. */
+  readonly refreshUsage: Effect.Effect<
+    void,
+    never,
+    PlanQuotas | HttpClient.HttpClient | Secrets
+  >;
   /** A tool may have been installed: the missing tools are checked again,
    *  with the credential. */
   readonly refreshHostBanners: Effect.Effect<
@@ -209,17 +219,20 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     | AppSignals
     | Secrets
     | SubscriptionAccounts
+    | PlanQuotas
+    | HttpClient.HttpClient
     | FileSystem.FileSystem
     | Path.Path
   > {
     const { stores } = options;
+    const sourceScope = yield* Effect.scope;
     const appState = yield* AppState;
     const inputs = yield* SubscriptionRef.make<Inputs>({
       loaded: false,
       modelOptions: [],
+      planUsage: [],
       workspaceRoots: options.workspaceRoots(),
-      fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
-      commits: { commits: [], isGitRepo: false },
+      inputFiles: [],
       missingTools: [],
       recording: null,
       service: null,
@@ -272,24 +285,58 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         SubscriptionRef.update(inputs, (s) => ({ ...s, modelOptions })),
       ).pipe(underProjectEnv),
     );
+    // The plans the listed models bill, each as the process knows its
+    // quota now: an endpoint's answer (asked when the kept one has expired)
+    // or the last reply's word. A plan nothing states the quota of has no
+    // meter.
+    const loadUsage = yield* producer(
+      'the plan usage',
+      Effect.gen(function* () {
+        const { modelOptions } = yield* SubscriptionRef.get(inputs);
+        const plans = Arr.dedupe(
+          modelOptions.flatMap((option) =>
+            option.usageRoute === undefined ? [] : [option.usageRoute],
+          ),
+        );
+        const quotas = yield* PlanQuotas;
+        const planUsage = yield* Effect.forEach(
+          plans,
+          (plan) =>
+            Effect.map(quotas.read(plan, stores), (quota) => {
+              switch (quota.state) {
+                case 'read':
+                case 'observed':
+                  return [
+                    {
+                      plan,
+                      ...(quota.state === 'read' &&
+                        quota.planName && { planName: quota.planName }),
+                      at: quota.at,
+                      windows: quota.windows.map((window) => ({
+                        name: window.name,
+                        percentUsed: window.percentUsed,
+                        resetAt: window.resetAt,
+                      })),
+                    },
+                  ];
+                case 'failed':
+                  return [{ plan, windows: [], unknown: quota.reason }];
+                case 'unobserved':
+                  return [{ plan, windows: [], unknown: quota.state }];
+                case 'unread':
+                  return [];
+              }
+            }),
+          { concurrency: 'unbounded' },
+        );
+        yield* write({ planUsage: planUsage.flat() });
+      }).pipe(underProjectEnv),
+    );
     const loadFiles = yield* producer(
       'the project files',
-      Effect.flatMap(workspaceFileOptions(options.root), (fileOptions) =>
-        write({ fileOptions }),
+      Effect.flatMap(workspaceInputFiles(options.root), (inputFiles) =>
+        write({ inputFiles }),
       ),
-    );
-    const loadCommits = yield* producer(
-      'the recent commits',
-      Effect.gen(function* () {
-        if (options.root === undefined) return;
-        const labels = yield* recentCommitLabels(
-          options.root,
-          yield* Settings.get(stores, GIT_COMMITS_TO_SHOW_SETTING),
-        );
-        yield* write({
-          commits: { commits: [...(labels ?? [])], isGitRepo: labels !== null },
-        });
-      }),
     );
     const loadDependencies = yield* producer(
       'the missing tools',
@@ -364,7 +411,9 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         ),
         yield* subscribeAppSignal('modelAccessChanged'),
       ),
-      Effect.andThen(loadCredential, loadModels),
+      Effect.andThen(loadCredential, loadModels).pipe(
+        Effect.andThen(loadUsage),
+      ),
     );
     // A write TeXRA made inside the project (an accepted output or diff, a
     // service task's file) can add a file the launcher lists, on every host
@@ -416,12 +465,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         APPROVAL_POLICY_SETTING,
       ),
       modelOptions: s.modelOptions,
+      planUsage: s.planUsage,
       workspaceRoots: s.workspaceRoots,
-      fileOptions: {
-        ...s.fileOptions,
-        commit: ['HEAD', ...s.commits.commits],
-      },
-      isGitRepo: s.commits.isGitRepo,
       recording: s.recording,
       banners: {
         // A credential that worked stopped working: raised only once a task
@@ -436,7 +481,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
             : null,
         gettingStarted:
           options.shows.gettingStarted &&
-          s.fileOptions.baseFile.length === 0 &&
+          s.inputFiles.length === 0 &&
           !s.dismissed.has('gettingStarted'),
         service: s.service,
       },
@@ -461,16 +506,22 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         Stream.filter((credential) => credential !== undefined),
         Stream.changes,
       ),
-      refresh: Effect.all(
-        [loadModels, loadFiles, loadCommits, hostBanners, loadFlags],
-        { concurrency: 'unbounded', discard: true },
-      ).pipe(Effect.andThen(write({ loaded: true }))),
+      // The usage meters are optional: the snapshot is published first, and
+      // a slow quota endpoint fills them in afterwards.
+      refresh: Effect.all([loadModels, loadFiles, hostBanners, loadFlags], {
+        concurrency: 'unbounded',
+        discard: true,
+      }).pipe(
+        Effect.andThen(write({ loaded: true })),
+        Effect.andThen(Effect.forkIn(loadUsage, sourceScope)),
+        Effect.asVoid,
+      ),
       refreshFiles: loadFiles,
       filesWritten: appSignalStream('workspaceFilesWritten').pipe(
         Stream.filter(writtenInProject),
         Stream.as(undefined),
       ),
-      refreshCommits: loadCommits,
+      refreshUsage: loadUsage,
       refreshHostBanners: hostBanners,
       refreshWorkspaceRoots: Effect.suspend(() =>
         write({ workspaceRoots: options.workspaceRoots() }),

@@ -26,11 +26,11 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result } from 'effect';
+import { Array as Arr, Effect, FileSystem, Result } from 'effect';
 
 // Local imports
 import { meansAbsent } from '@utils/files/fsEntryExists';
-import { formatWordList } from '@utils/text/stringUtils';
+import { collapseWhitespace, formatWordList } from '@utils/text/stringUtils';
 
 /** The directory of a plugin that holds its programs. */
 const PROGRAMS_DIRECTORY = 'programs';
@@ -216,7 +216,7 @@ function readDeclarations(
       // shows the literal is the whole value (`'a' + b` is an expression).
       if (text === undefined || take(/;/) === null)
         return refuse(wrong.description);
-      description = text.replaceAll(/\s+/g, ' ').trim();
+      description = collapseWhitespace(text);
       if (description === '') return refuse('`description` is empty');
       if (description.length > DESCRIPTION_MAX_LENGTH)
         return refuse(
@@ -322,12 +322,8 @@ export const readPrograms = Effect.fn('readPrograms')(function* ({
       }),
     { concurrency: 8 },
   );
-  return {
-    loaded: read.flatMap((one) => (Result.isSuccess(one) ? [one.success] : [])),
-    refused: read.flatMap((one) =>
-      Result.isFailure(one) ? [one.failure] : [],
-    ),
-  };
+  const [loaded, refused] = Arr.separate(read);
+  return { loaded, refused };
 });
 
 /** The programs the plugin `plugin` at `dir` carries: those of its

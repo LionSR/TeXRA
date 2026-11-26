@@ -7,17 +7,21 @@ import {
   type Scope,
   SubscriptionRef,
 } from 'effect';
-import {
-  agentErrorPresentation,
-  classifyAgentError,
-  primaryAgentError,
-} from '@common/errors/agentErrorClassification';
 import { LaunchRefused } from '@common/errors/agentErrors';
 import { logFailure, withLogChannel } from '@logger/effectLog';
-import type { SessionRow } from '@shared/schemas';
+import {
+  HARNESS_INSTRUCTION_KEY,
+  runEndErrorMessage,
+  type RunEnd,
+  type SessionRow,
+} from '@shared/schemas';
 import { Rejected } from '@shared/session/runtimeRequest';
 import { SessionLog } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  classifyAgentError,
+  primaryAgentError,
+} from './agentErrorClassification';
 import {
   HostPresentationFailed,
   type AgentRuntimeEmitOptions,
@@ -274,12 +278,16 @@ export const attachInteractions = (
           ),
         );
       if (!isPresenter(attached)) return;
-      for (const notice of yield* Queue.clear(interactions.notices))
-        yield* presentLogged(
-          notice,
-          attached,
-          'Failed to replay a session presentation notice',
-        );
+      yield* Effect.forEach(
+        yield* Queue.clear(interactions.notices),
+        (notice) =>
+          presentLogged(
+            notice,
+            attached,
+            'Failed to replay a session presentation notice',
+          ),
+        { discard: true },
+      );
     }),
     () =>
       SubscriptionRef.modify(interactions.host, (current) =>
@@ -294,18 +302,29 @@ export const attachInteractions = (
   ).pipe(Effect.asVoid);
 
 /**
- * Present a classified failure on a host: its instruction (a missing API key)
- * or its error toast. Replayed to a surface that attaches later, so no
- * guidance is lost for want of an attached host.
+ * Present a classified failure on a host: the missing-key instruction, in
+ * the route's own words (they name the provider), or an
+ * error toast with a model failure's verdict beside its message, which a
+ * host may word in its place. Replayed to a surface that attaches later, so
+ * no guidance is lost for want of an attached host.
  */
 function presentAgentFailure(
   interactions: Notices,
-  error: Parameters<typeof agentErrorPresentation>[0],
+  error: NonNullable<RunEnd['error']>,
 ): Effect.Effect<void> {
-  const toast = agentErrorPresentation(error);
-  return toast.type === 'instruction'
-    ? interactions.emit('requestShowInstruction', toast.payload)
-    : interactions.emit('requestShowError', toast.payload);
+  if (
+    error.kind === 'model' &&
+    error.failure.source === 'route' &&
+    error.failure.missingApiKey === true
+  )
+    return interactions.emit('requestShowInstruction', {
+      key: HARNESS_INSTRUCTION_KEY.MISSING_API_KEY,
+      message: runEndErrorMessage(error),
+    });
+  return interactions.emit('requestShowError', {
+    message: runEndErrorMessage(error),
+    ...(error.kind === 'model' && { failure: error.failure }),
+  });
 }
 
 /**

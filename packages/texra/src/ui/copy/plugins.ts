@@ -54,12 +54,20 @@ export const PLUGINS_PAGE = Object.freeze({
   addPrompt:
     'Add a Claude Code or Codex plugin: github.com/<owner>/<repo>[@ref], a git URL, or a folder',
   addPlaceholder: 'github.com/owner/repo',
-  added: (names: readonly string[]) =>
-    `Installed ${names.join(', ')}. Switch ${names.length === 1 ? 'it' : 'them'} on to review and trust.`,
+  /** What an install reports; `where`: the place to switch it on, for a
+   *  host that is not already showing the list ('/plugins'). */
+  added: (names: readonly string[], where?: string) =>
+    `Installed ${names.join(', ')}. Switch ${names.length === 1 ? 'it' : 'them'} on${where === undefined ? '' : ` in ${where}`} to review and trust.`,
   trustQuestion: (name: string, version: string | null) =>
-    `Trust ${name}${version ? ` ${version}` : ''} and enable it?`,
-  trustAction: 'Trust and enable',
+    `Trust ${name}${version ? ` ${version}` : ''} and switch it on?`,
+  trustAction: 'Trust and switch on',
   declined: (name: string) => `${name} was not trusted, so it stays off.`,
+  /** The MCP config file is edited by hand: a missing one is named. */
+  noMcpConfig: (path: string) =>
+    `No MCP servers configured yet. Create ${path} (same format as Claude Code's .mcp.json).`,
+  mcpOpenFailed: 'Could not open the MCP config file',
+  /** What a failed row action is reported under, before its cause. */
+  actionFailed: (action: string) => `Plugin ${action} failed`,
 });
 
 /** The row's identity, unique across the three kinds: the page's repeat key

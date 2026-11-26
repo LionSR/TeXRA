@@ -241,24 +241,6 @@
       ]
     },
     {
-      "id": "DOC-user-edit-on-task-run",
-      "candidate": "the user's Accept-time edit recorded on the document task's own run: the revision record gains `userEdit: { round, diff } | null`, written by the progress view's Accept (ProgressDocumentTaskFileActionsController.userEdit), and document_context reads it into the next revision's prompt",
-      "why": "No supported write reaches the run's documents fact from the host's Accept path. A run's `plugin.fact` rows are committed only by the run's own tool calls (`ToolResult.facts`, in the call's `tool.result` batch); the one other plugin write, `RequestDecisionHook.record`, runs only while a pending plugin request of the run is being decided and commits facts about the plugin's own aggregate (`factRow` hangs a fact that names an `aggregate` under the run as `plugin:<aggregate>`), which `RunView.facts` and `documentRoundsOf` never read. A host-side append to an ended run would be a new session-store write path in the harness. It would also have no reader: Accept acts on outputs the task already proposed, a completed program does not run another revision on resume, a fork drops the documents fact (`fork: 'drop'`), and Run again is a new run with fresh documents. An Accept while the task still runs would race the program's whole-list commit (`withRound`), which drops the other writer's change. The launcher note #14713 sends (`followUpLauncher`) is the reader that exists; a task with no launcher has no later turn to read the edit.",
-      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#c-plugins",
-      "symbols": [
-        {
-          "file": "packages/texra/src/shared/plugins/documents.ts",
-          "symbol": "documentsOutputFact",
-          "signature": "export function documentsOutputFact( task: DocumentTaskSpec, rounds: readonly RoundOutput[], diffs: DocumentDiffs = {}, ): ToolFact {…}"
-        },
-        {
-          "file": "packages/harness/src/tools/plugins.ts",
-          "symbol": "factRow",
-          "signature": "export const factRow = ( { aggregate, ...fact }: ToolFact, runId: RunId, ): FactRow => aggregate === undefined ? {…} : {…};"
-        }
-      ]
-    },
-    {
       "id": "LLM-one-no-completed-turn-check",
       "candidate": "one \"no completed turn\" check: assembleTurn's terminal check alone, deleting the public completedTurn fold's and the harness invoker's empty-stream failures (storage-errors note §6, round-3 audit V R13), with the codec layout move (input lowering into each *Codec.ts) beside it",
       "why": "The three checks guard three boundaries of the Model interface, not one fact said three times. assembleTurn ends llm's own codecs' streams; completedTurn folds any Model's streamTurn, an embedder's included, which the package does not assemble; and ModelInvoker.consume reads any bound Model, the canned validation model among them, which emits its own events. A Model that ends its stream without a completed event is outside llm's codecs, so deleting either outer check turns that into a silent null turn. The abnormal-end kinds the note named have already converged (Google's live and background non-completed statuses and OpenAI's failed/cancelled are all provider-rejection) and the SyntaxError pre-checks are gone, so the remaining three checks are the boundary guards. The codec layout move is a file move with no fact behind it and was left with them.",
@@ -351,24 +333,6 @@
           "file": "packages/texra/src/latex/arxivProcessor.ts",
           "symbol": "downloadFile",
           "signature": "function downloadFile( url: string, destBasePath: string, ): Effect.Effect<string, ArxivSourceError, DownloadServices> {…}"
-        }
-      ]
-    },
-    {
-      "id": "DOCS-prepare-run-workspace-per-call-stays",
-      "candidate": "the documents plugin's per-tool-call prepareRunWorkspace moved into document_context's first-revision step, so later calls of a revision skip it",
-      "why": "A later call cannot skip it: RunWorkspace is built per activation (runWorkspaceOf keys it by the activation's scope), so after a resume the first call to reach the documents may be any revision's, and every call reads the snapshot list (computeOutputDiffStats's diff base). The repeat call is already one field read (preparedBaseFiles); what openDocuments re-does around it is supportFiles and the source locations, pure path math over the config's file lists with no I/O, and the run's documents fact read (`ChildRuns.fact`), which the call needs anyway for its task and rounds. Moving the snapshot to the first revision would make a resumed run's diff base depend on which tool it called first. Found as I12 (round 2); refused in package C's follow-up.",
-      "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/I-latex-documents.md#finding-12-batched-smaller-flags-each-one-pr",
-      "symbols": [
-        {
-          "file": "packages/texra/src/tools/documents/documentState.ts",
-          "symbol": "openDocuments",
-          "signature": "export const openDocuments = Effect.fn('documents.open')(function* ( { env: { roots, run }, requests }: DocumentCall, described?: DocumentTaskSpec, ) {…});"
-        },
-        {
-          "file": "packages/texra/src/tools/documents/runWorkspace.ts",
-          "symbol": "RunWorkspace.prepareRunWorkspace",
-          "signature": "readonly prepareRunWorkspace = Effect.fn('RunWorkspace.prepare')( { self: this }, function* ( baseFiles: FileLocation[], options: { linkFiles?: FileLocation[]; } = {}, ): Effect.fn.Return< FileLocation[], SnapshotCaptureFailed | PlatformError.PlatformError, FileSystem.FileSystem > {…}, );"
         }
       ]
     },
@@ -525,7 +489,7 @@
     {
       "id": "CLI-tui-bell-from-attention",
       "candidate": "the chat TUI's \"agent finished\" bell reads attentionOf's finished list instead of its own four conditions over the root run's position and outcome",
-      "why": "attentionOf is the attention rule of the extension's chime and the desktop's notifications: a run is news when its outcome lands, whoever stopped it. The terminal's bell is a turn end for the one conversation on screen: a conversation's turn ends at waiting with no outcome (the chat's cue to type), a run that ends after waiting was already announced, and a stop (a cancelled outcome) is not news. Moving either rule into attentionOf would change what the desktop and the extension announce; giving attentionOf a mode for the terminal is an option for one caller. The bell's conditions read the session view and nothing else, which is the design (hosts read the view). Found in round 2 (K-cli.md, finding 11); refused by package A in its TUI lifecycle PR.",
+      "why": "attentionOf is the attention rule of the extension's badge and reveal and the desktop's notifications: a run is news when its outcome lands, whoever stopped it. The terminal's bell is a turn end for the one conversation on screen: a conversation's turn ends at waiting with no outcome (the chat's cue to type), a run that ends after waiting was already announced, and a stop (a cancelled outcome) is not news. Moving either rule into attentionOf would change what the desktop and the extension announce; giving attentionOf a mode for the terminal is an option for one caller. The bell's conditions read the session view and nothing else, which is the design (hosts read the view). Found in round 2 (K-cli.md, finding 11); refused by package A in its TUI lifecycle PR.",
       "ruling": ".agents/docs/evidence/2026-11-06-design-red-flags-round-2/K-cli.md#finding-11-batched-smaller-findings-in-the-same-species",
       "symbols": [
         {
@@ -613,7 +577,7 @@
     {
       "id": "RUN-trusted-script-launch-grants",
       "candidate": "a program run's launch grants stored on the run's run.start or run.config (a second copy of what run.config already stores as script.kind), rather than derived where they are read (E4's trust half, option (a))",
-      "why": "Storing the grants on the run stores a second copy of a fact run.config already stores as script.kind, which the documents plugin, readProgramResult and programOf read: two owners that a resume or a fork could see disagree, for a run.config/run.start row-version bump and no deleted branch. A goal grant on the run's approval.policy is not that record either: goal grants pass down the run's ancestry (resolveBypass), so a program's children would start auto-approving their own delegations, and only one of the grants is an approval. Resume and fork need no stored grant: a resume re-reads the run's run.config, and forkRun refuses a script run (runsScript). The derive-once half, option (b) — a grants record each site reads — LANDED on 2026-11-23 as programGrants (shared/schemas/runRecords.ts), beside programOrigin: the #15145 three-way programOrigin split (listed/installed/own) made its two columns genuinely divergent (appAuthored = origin==='listed'; startsApproved = origin!=='own'), so the original refusal's basis for (b) — 'a table with two rows whose columns are always equal, a special case written as data' — no longer holds (it reasoned about the earlier binary program-or-not world). The three re-spellings in step.ts, proposalFlow.ts and AgentTool.ts now read one owner that keeps the exhaustive satisfies Record<ProgramOrigin,...>. Only (a), a stored copy, remains refused.",
+      "why": "Storing the grants on the run stores a second copy of a fact run.config already stores as script.kind, which programOf reads: two owners that a resume or a fork could see disagree, for a run.config/run.start row-version bump and no deleted branch. A goal grant on the run's approval.policy is not that record either: goal grants pass down the run's ancestry (resolveBypass), so a program's children would start auto-approving their own delegations, and only one of the grants is an approval. Resume and fork need no stored grant: a resume re-reads the run's run.config, and forkRun refuses a script run (runsScript). The derive-once half, option (b) — a grants record each site reads — LANDED on 2026-11-23 as programGrants (shared/schemas/runRecords.ts), beside programOrigin: the #15145 three-way programOrigin split (listed/installed/own) made its two columns genuinely divergent (appAuthored = origin==='listed'; startsApproved = origin!=='own'), so the original refusal's basis for (b) — 'a table with two rows whose columns are always equal, a special case written as data' — no longer holds (it reasoned about the earlier binary program-or-not world). The three re-spellings in step.ts, proposalFlow.ts and AgentTool.ts now read one owner that keeps the exhaustive satisfies Record<ProgramOrigin,...>. Only (a), a stored copy, remains refused.",
       "ruling": ".agents/docs/evidence/2026-11-05-design-red-flags/E-loop-tools.md#finding-4-a-script-run-is-a-model-less-run-dressed-as-a-tool-use-run-and-the-costume-shows-in-five-loop-branches",
       "symbols": [
         {
@@ -980,6 +944,35 @@
           "file": "packages/harness/src/controllers/session/storeSchema.ts",
           "symbol": "openStore",
           "signature": "export const openStore = Effect.fnUntraced(function* <E, R>(connect: Effect.Effect<Sql, E, R | Scope.Scope>, path: string, filename: string, schema: StoreSchema) {…})"
+        }
+      ]
+    },
+    {
+      "id": "LOOP-phase-split-long-functions",
+      "candidate": "Make a long core function read as its outline by extracting its sequential phases into single-caller named steps: finishCall into invokeCall, resultOfExit and commitOutcome over a CallOutcome hand-off; openStep's skills, memory and change report into stepSkills, stepMemory and changeWarnings; agentCall's program-or-chat decision into childOf; invocationBody's history lowering into lowerMessages",
+      "why": "Each step has one caller and only cuts the function into phases in time order, which root AGENTS.md refuses twice: single-caller extractions are banned, and temporal decomposition is a named red flag. The split moves lines without removing a decision, adds a hand-off record and a doc comment per step, and grew the code (+169 lines on 2026-11-24). What the same functions did yield is the duplication inside them: cardOf and stagedOf (three row builders), one contributedBy filter (openStep and resolveActivations), the child decided once in agentCall, the thinking parameter as one expression.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-24-duplication-and-complexity-scan.md#complex-functions-worth-a-dedicated-decomposition",
+      "reopenWhen": "a phase gains a second caller, or root AGENTS.md drops its ban on single-caller extractions",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/runtime/loop/toolUseDispatch.ts",
+          "symbol": "finishCall",
+          "signature": "const finishCall = Effect.fn('toolUse.finishCall')(function* ( call: Call, place: Pick<RunCallShape, 'script' | 'scriptCalls'>, ended = false, ): Effect.fn.Return<void, InvokeError, AgentRunServices> {…})"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/loop/step.ts",
+          "symbol": "openStep",
+          "signature": "const openStep = Effect.fn('Step.open')(function* ( run: AgentRunShape, state: RunState, recorded: readonly OfferedTool[] | null, holding: boolean, recordedHooks: readonly string[] | null, ) {…})"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/delegation/AgentTool.ts",
+          "symbol": "agentCall",
+          "signature": "const agentCall = Effect.fn('AgentTool.agentCall')(function* ( call: RunToolCall, launch: ChildLaunch, ) {…})"
+        },
+        {
+          "file": "packages/llm/src/api/anthropicMessages.ts",
+          "symbol": "invocationBody",
+          "signature": "const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* ( input: ResolvedTurn, origin: ModelOrigin & { readonly protocol: 'anthropic-messages' }, config: AnthropicMessagesConfiguration, uploads: UploadCache, ) {…})"
         }
       ]
     }

@@ -13,12 +13,16 @@ import {
   defineTool,
   type ToolResult,
 } from '@texra-ai/worldline/plugins';
-import { toErrorMessage, formatResultCount } from '@texra-ai/worldline/schemas';
+import {
+  collapseWhitespace,
+  formatResultCount,
+  toErrorMessage,
+} from '@texra-ai/worldline/schemas';
 import {
   countBySeverity,
   formatCounts,
   formatGroupedSections,
-} from '@texra/utils/diagnostics/diagnosticFormatting';
+} from '@texra/tools/diagnosticFormatting';
 import {
   LEAN_PROJECT_COMMANDS,
   extractHoverText,
@@ -178,7 +182,9 @@ function declaredAxioms(source: string): string[] {
     ...code.matchAll(
       /(?<![\p{L}\p{N}_.«'!?])axiom\s+(\S[^\n]*(?:\n[ \t]+[^\n]*)*)/gu,
     ),
-  ].flatMap(([, declared]) => declared?.replaceAll(/\s+/g, ' ').trim() ?? []);
+  ].flatMap(([, declared]) =>
+    declared === undefined ? [] : collapseWhitespace(declared),
+  );
 }
 
 const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.

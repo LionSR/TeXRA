@@ -5,6 +5,7 @@
 import {
   isLoopDriven,
   isPlainAgentIdentity,
+  RUN_OUTCOME,
   type RunAction,
 } from '@shared/schemas';
 
@@ -28,7 +29,7 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * removes a run's files or history is offered while it is live. Any run this
  * process can act on can be renamed, and a conversation whose first turn has
  * ended forked (at its latest finished point, before any turn it is in now). After, a
- * run can be deleted and its files worked on (`run.files`); a plain
+ * run can be deleted; a plain
  * agent's conversation run again from the launch form. Resume is offered
  * where it is the way to continue: on any loop-driven run that was
  * interrupted, and on a background script that did not complete. A finished
@@ -63,12 +64,12 @@ export function runActions(
       ...inspectActions(),
     ];
   }
-  const actions: RunAction[] = ['delete', 'rename', 'files'];
+  const actions: RunAction[] = ['delete', 'rename'];
   const ended = run.outcome !== null;
   if (
     continuesFromRows({ ...run, ended }) &&
     (isInterrupted(run) ||
-      (run.identity.kind === 'script' && run.outcome !== 'completed'))
+      (run.identity.kind === 'script' && run.outcome !== RUN_OUTCOME.COMPLETED))
   )
     actions.push('resume');
   if (isPlainAgentIdentity(run.identity)) {
@@ -116,7 +117,6 @@ const ACTION_LABEL: Record<RunAction, string> = {
   resume: 'Resume',
   runAgain: 'Run again',
   fork: 'Forking',
-  files: "Working with the run's files",
   delete: 'Deleting',
   rename: 'Renaming',
   openRunStorage: 'Opening the run folder',

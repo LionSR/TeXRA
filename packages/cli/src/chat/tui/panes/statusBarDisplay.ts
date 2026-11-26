@@ -37,8 +37,8 @@ import {
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
 import {
-  formatSubscriptionUsagePercent,
   subscriptionQuotaTone,
+  subscriptionQuotaUsed,
 } from '@ui/copy/subscriptionUsage';
 import { RUN_GRANT_TONE, runStatus, type RunTone } from '@ui/copy/runStatus';
 import {
@@ -153,22 +153,22 @@ interface StatusBarChrome {
    *  has no start time. */
   readonly turn: StatusBarTurnInput | undefined;
   readonly transientNotice: TransientNotice | undefined;
-  readonly commandName?: string;
+  readonly commandName: string;
   readonly approvalDepth: number;
   readonly approvalKind: ApprovalQueueStatusKind;
   readonly modelAccess: UsageRoute | undefined;
   /** The prospective subscription route could not be resolved. */
-  readonly subscriptionProbeFailed?: boolean;
+  readonly subscriptionProbeFailed: boolean;
   /** Latest quota snapshot for the subscription serving this model. */
-  readonly subscriptionQuota?: SubscriptionUsageSnapshot;
+  readonly subscriptionQuota: SubscriptionUsageSnapshot | undefined;
   /** Session approval policy; a non-default policy earns a segment. */
   readonly approvalPolicy: ApprovalPolicy;
   /** Terminal width in columns. */
   readonly width: number;
   readonly ctrlCAction: CtrlCAction;
-  /** Nested-session location (the focused child's label). Omitted on the
+  /** Nested-session location (the focused child's label); undefined on the
    *  root session, where the header already names the conversation. */
-  readonly location?: { readonly label: string };
+  readonly locationLabel: string | undefined;
   /** Which surface currently owns input and global chat shortcuts: a
    *  foreground surface (approval, detail, form, slash palette, reverse
    *  search) or the persistent child list. Neither active means the normal
@@ -245,17 +245,16 @@ function subscriptionQuotaSegment(
   snapshot: SubscriptionUsageSnapshot | undefined,
 ): StatusBarSegment | undefined {
   if (snapshot?.state !== 'available') return undefined;
-  // The window the plan runs out of first, worded as every usage
-  // percentage is, so the bar and `/status` read one number.
+  // The bar shows the window the plan runs out of first: the most used.
   const limiting = snapshot.windows.toSorted(
     (left, right) => right.percentUsed - left.percentUsed,
   )[0];
   if (!limiting) return undefined;
-  const left = formatSubscriptionUsagePercent(limiting.percentRemaining);
+  const used = subscriptionQuotaUsed(limiting);
   const tone = subscriptionQuotaTone(limiting);
   return {
-    text: `${snapshot.planName} ${left} left`,
-    compactText: `${left} left`,
+    text: `${snapshot.planName} ${used}`,
+    compactText: used,
     ...(tone === undefined ? { dim: true } : { color: TONE_PAINT[tone].color }),
     priority: STATUS_BAR_PRIORITY.subscriptionQuota,
     policy: 'drop',
@@ -721,9 +720,9 @@ export function buildStatusBarDisplay(
           : accessModeSegment(input.modelAccess),
         subscriptionQuotaSegment(input.subscriptionQuota),
         approvalPolicySegment(input.approvalPolicy),
-        input.location
+        input.locationLabel !== undefined
           ? {
-              text: input.location.label,
+              text: input.locationLabel,
               dim: true,
               priority: STATUS_BAR_PRIORITY.location,
               policy: 'drop',

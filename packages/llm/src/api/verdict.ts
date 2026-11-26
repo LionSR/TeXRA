@@ -9,7 +9,7 @@
  * SDK error (a terminal event's own error object) is judged on its message
  * and status alone.
  */
-import { Effect, Stream, Struct } from 'effect';
+import { Array as Arr, Effect, Option, Stream, Struct } from 'effect';
 
 import {
   isRetryableStatus,
@@ -217,11 +217,12 @@ const PLAN_LIMITS = Object.freeze({
 
 /** The quota a reply says ran out: a plan's first, then the account's credit. */
 function exhaustedQuota(reply: Reply, route: BillingRoute): Quota | undefined {
-  for (const plan of Struct.keys(PLAN_LIMITS)) {
-    const quota = PLAN_LIMITS[plan](reply, plan === route);
-    if (quota !== undefined) return quota;
-  }
-  return creditDepleted(reply.body) ? { plan: null } : undefined;
+  const quota = Arr.findFirst(Struct.keys(PLAN_LIMITS), (plan) =>
+    Option.fromNullishOr(PLAN_LIMITS[plan](reply, plan === route)),
+  );
+  return Option.getOrElse(quota, () =>
+    creditDepleted(reply.body) ? { plan: null } : undefined,
+  );
 }
 
 /** A limit the provider scoped to one model, not the whole credential. */

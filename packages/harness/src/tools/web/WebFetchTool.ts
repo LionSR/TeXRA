@@ -21,7 +21,7 @@ import { defineTool } from '@tools/core/definition';
 import { optionalInput } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
+import { createHtmlToMarkdown } from '@tools/web/htmlToMarkdown';
 import { formatCount } from '@utils/text/stringUtils';
 import type { LookupFunction } from 'node:net';
 

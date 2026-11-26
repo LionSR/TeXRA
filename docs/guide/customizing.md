@@ -19,14 +19,17 @@ later conversations. Read [Memory](./memory.md).
 ## Plugins on and off
 
 **Settings → Plugins** (or `/plugins` in the terminal chat) switches each
-group of tools on or off: web search, Zotero, Lean, Wolfram, the Codex and
+group of tools on or off: web search, Lean, Wolfram, the Codex and
 Claude Code integrations, multi-agent work and more. A plugin that is off
 adds nothing to the conversation.
 
 ## Skills
 
 A skill is a folder with a `SKILL.md` that tells the assistant how to do one
-kind of work. TeXRA reads skills from installed plugins, from `.texra/skills/`
+kind of work. TeXRA ships three of its own (`arxiv` and `zotero`, read
+[Research tools](./research-tools.md); `github`, read
+[Agent integrations](./agent-integrations.md))
+and reads more from installed plugins, from `.texra/skills/`
 in the project, from your own skills folder, and, once you switch that
 source on, from the `.agents`, `.claude`, `.codex` and `.gemini` skill folders
 beside the project and in your home folder. Turn skills on with **Enable
@@ -84,12 +87,12 @@ assistant their tools while the plugin is enabled. Read
 You need no new agent to change how a job is done. The programs take their
 scope and point of view from the instruction: "read as a referee for a
 physics journal and mark every unsupported claim" is `annotate` with that
-sentence. To combine steps, ask the assistant to chain programs, for example
-`annotate`, then `apply`.
+sentence. To combine steps, ask the assistant, for example to run
+`annotate` and then fix what it flagged.
 
 ::: info If you used 0.40
 Custom agent YAML files, the custom agents folder, the Agents library in
-Settings, customizing a built-in agent, and TeXRA's bundled skills are gone.
+Settings, and customizing a built-in agent are gone.
 Move an agent's standing rules into `AGENTS.md`, a checklist into a skill,
 and a repeatable procedure into a plugin program. The skill collections
 listed on the [Open source](./open-source.md) page are published as Claude

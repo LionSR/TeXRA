@@ -23,6 +23,7 @@ import {
 
 // Local imports - common
 import { SKILL_FILE_NAME, SkillNameSchema } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { meansAbsent, pathExists } from '@utils/files/fsEntryExists';
 import { isPathWithin } from '@utils/core/pathCore';
 import { formatWordList } from '@utils/text/stringUtils';
@@ -36,7 +37,6 @@ import {
 import { readNativeEntry, type NativeEntry } from './nativeEntry';
 import { readPluginPrograms, type PluginPrograms } from './pluginPrograms';
 import {
-  jsonSyntaxError,
   parseMcpServers,
   ServerNameSchema,
   type McpServerConfig,
@@ -129,6 +129,22 @@ const exists = (target: string) =>
   FileSystem.FileSystem.use((fs) => pathExists(fs, target)).pipe(
     Effect.mapError(ioError),
   );
+
+/**
+ * What `JSON.parse` rejected, without the file's text. V8 quotes an excerpt
+ * of the source in double quotes, and an MCP server config holds credentials, so
+ * the message is cut at its first double quote before anything else reads
+ * it; one with no position is cut at its first single quote too, which
+ * quotes a source character.
+ */
+function jsonSyntaxError(error: unknown): string {
+  const kind = toErrorMessage(error)
+    .split('"', 1)[0]
+    .replace(/[,\s]+$/, '');
+  return /at position \d+/.test(kind)
+    ? kind
+    : kind.split("'", 1)[0].replace(/[,\s]+$/, '') || 'Unexpected content';
+}
 
 /** Read and validate one JSON file, or `undefined` when it is absent. */
 export const readJsonFile = Effect.fn('readJsonFile')(function* <T>(
@@ -240,11 +256,7 @@ export function readPluginManifests(dir: string) {
     PLUGIN_MANIFEST_FILES,
     (file) => readJsonFile(path.join(dir, file), PluginManifestSchema),
     { concurrency: 'unbounded' },
-  ).pipe(
-    Effect.map((found) =>
-      found.filter((manifest): manifest is PluginManifest => !!manifest),
-    ),
-  );
+  ).pipe(Effect.map((found) => found.filter(Predicate.isNotUndefined)));
 }
 
 /**
@@ -277,13 +289,11 @@ const markdownFiles = Effect.fn('markdownFiles')(function* (
         : [resolved];
     // Every entry is checked together; the first failure in listing order
     // is the one reported.
-    const checked = yield* Effect.forEach(
-      entries,
-      (entry) => Effect.result(containedPath(dir, path.relative(dir, entry))),
-      { concurrency: 16 },
+    const checked = yield* Effect.all(
+      entries.map((entry) => containedPath(dir, path.relative(dir, entry))),
+      { concurrency: 16, mode: 'result' },
     );
-    for (const result of checked) {
-      const file = yield* Effect.fromResult(result);
+    for (const file of yield* Effect.fromResult(Result.all(checked))) {
       if (file !== undefined) files.add(path.relative(dir, file));
     }
   }
@@ -331,17 +341,22 @@ const mcpServersOf = Effect.fn('mcpServersOf')(function* (
     const inner = Schema.decodeUnknownResult(McpFileSchema)(json.mcpServers);
     maps.push({
       where: resolved,
-      servers: Result.isSuccess(inner) ? inner.success : json,
+      servers: Result.getOrElse(inner, () => json),
     });
   }
-  const servers: McpServerConfig[] = [];
+  const servers = new Map<string, McpServerConfig>();
   const warnings: string[] = [];
   for (const { where, servers: map } of maps) {
     const parsed = parseMcpServers(where, map);
     warnings.push(...parsed.warnings);
     for (const server of parsed.servers) {
-      servers.push({
-        name: `plugin_${name}_${server.name}`,
+      const serverName = `plugin_${name}_${server.name}`;
+      if (servers.has(serverName))
+        return yield* failPlugin(
+          `Plugin ${name} declares ${serverName} twice.`,
+        );
+      servers.set(serverName, {
+        name: serverName,
         command: expandRoot(dir, server.command),
         args: server.args.map((arg) => expandRoot(dir, arg)),
         env: EffectRecord.map(server.env, (value) => expandRoot(dir, value)),
@@ -349,11 +364,7 @@ const mcpServersOf = Effect.fn('mcpServersOf')(function* (
       });
     }
   }
-  const names = servers.map((server) => server.name);
-  const clash = names.find((server, index) => names.indexOf(server) !== index);
-  if (clash !== undefined)
-    return yield* failPlugin(`Plugin ${name} declares ${clash} twice.`);
-  return { servers, warnings };
+  return { servers: [...servers.values()], warnings };
 });
 
 /** The conventional hooks file, read when present. */
@@ -532,9 +543,8 @@ export const readPlugin = Effect.fn('readPlugin')(function* (
     { concurrency: 'unbounded', mode: 'result' },
   );
   const skills = new Set<string>();
-  for (const root of yield* Effect.forEach(
-    yield* Effect.fromResult(parts.skills),
-    Effect.fromResult,
+  for (const root of yield* Effect.fromResult(
+    Result.flatMap(parts.skills, Result.all),
   ))
     if (root !== undefined) skills.add(path.relative(dir, root) || '.');
   const mcp = yield* Effect.fromResult(parts.mcp);

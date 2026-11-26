@@ -56,8 +56,7 @@ const ScriptInputSchema = Schema.Struct({
     'Run the script as a background run of its own: the call returns its run id at once, and the result and a summary arrive as one follow-up when it ends. A one-shot run runs it in the foreground.',
   ),
   timeoutMs: timeoutMsField.annotate({
-    description:
-      'Wall-clock limit in milliseconds, tool calls included: 1 s to 24 h, default 60 min.',
+    description: `Wall-clock limit in milliseconds, tool calls included: 1 s to 24 h, default ${DEFAULT_TIMEOUT_MS / 60_000} min.`,
   }),
 });
 type ScriptInput = typeof ScriptInputSchema.Type;
@@ -331,12 +330,12 @@ const SURFACE = [
     'Globals:',
     '- `tools.<name>(args)` calls a tool you are offered, other than `script`, with the arguments of a direct call, and resolves to `{ output, summary }`. A failed call rejects with an Error named `ToolFailed`; use try/catch to recover.',
     '- Calls start in the order the script issues them. A call to a tool that runs alongside others (the reading and searching tools, and child runs: `agent()`, `self()`, `program()`; the declared ones are named after the declarations below) runs together with the calls around it; every other call (a command, an edit, most MCP and plugin tools) first waits for every call issued before it to finish, and the calls issued after it wait for it. So `Promise.all` runs reads, searches and child runs together, and commands and edits one after another.',
-    '- `searchTools(query, { limit })` ranks every tool you can call, those not declared below included (MCP and plugin tools), and resolves to the best `limit` (default 8, at most 50) as `{ name, line }[]`.',
+    `- \`searchTools(query, { limit })\` ranks every tool you can call, those not declared below included (MCP and plugin tools), and resolves to the best \`limit\` (default ${DEFAULT_SEARCH_LIMIT}, at most 50) as \`{ name, line }[]\`.`,
     "- `describeTool(name)` resolves to a tool's full declaration, with the description of each field, or to the source of a module or program named `name`.",
     '- A tool declared below as a function is also a global: its first argument is one field of its arguments, its second an object of the rest. A tool that resolves to more than `{ output, summary }` declares what, and its description names the errors it rejects with other than `ToolFailed`.',
     '- `self(prompt, { fork, schema, model, timeoutMs, maxCostUsd, label })` runs you again on `prompt` and resolves to its `{ response, structured?, cost, spent, … }`: forked (the default) from this conversation as it stood when the script started, or with `fork: false` with no earlier conversation; either way it is told `prompt` is its one part of the work. `model` runs it on another model, with your prompt and tools. A loop of `self()` calls that checks each reply is how a goal runs until it is met.',
     '- Every child run (`agent()`, `self()`, `program()`) takes `maxCostUsd`, a spend cap in USD on the child and the runs it starts, and one a script waits for takes `timeoutMs`: past either the child is stopped and the call rejects with an Error named `TimedOut` or `BudgetExceeded`. A background child stopped at its cap says so in its follow-up.',
-    '- `section(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
+    `- \`section(title)\` labels the calls that follow; \`console.log\` lines stream to the card and the last ${RUN_LOG_MAX_LINES} return with the result.`,
   ].join('\n'),
   '`const { name } = await import(specifier)` loads a module by its specifier (`builtIn:<module>`, listed below when you may import any); a static `import` line does not parse in a function body.',
   'There are no timers, no `Date.now()` and no `Math.random()`: the script replays exactly after an interruption, on the modules it first loaded, and calls that finished are not run again.',

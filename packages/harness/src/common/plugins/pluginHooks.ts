@@ -25,6 +25,7 @@ import {
   whichOnExtendedPath,
   withExtendedPath,
 } from '@utils/system/platformPaths';
+import { appendHead } from '@utils/text/appendTail';
 
 // Local imports - this module's neighbours
 import { PluginError } from './pluginManifest';
@@ -321,8 +322,7 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
         Stream.runForEach((chunk) =>
           Effect.sync(() => {
             if (out[key].length + chunk.length > READ_MAX) cut = true;
-            if (out[key].length < READ_MAX)
-              out[key] = (out[key] + chunk).slice(0, READ_MAX);
+            out[key] = appendHead(out[key], chunk, READ_MAX);
           }),
         ),
       );

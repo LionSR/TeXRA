@@ -1,6 +1,5 @@
-/** Git commit author + GitHub token + PR subscription settings. */
+/** The identity agent commits carry. */
 
-import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -11,21 +10,12 @@ import {
   GIT_MARK_COMMITS_SETTING,
   type SettingRow,
 } from '@texra-ai/worldline/schemas';
-import type { CredentialOrigin } from '@texra-ai/llm';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import { postToHost } from '@ui/settings/messageDispatcher';
-import { type PRSubscriptionEntry } from '@texra/shared/settingsView/settingsViewMessages';
-import { credentialOriginLabel, TOKEN_ACTION_COPY } from '@ui/copy/credentials';
-import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
-import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { TexraSignalElement } from '@ui/litBase';
 
 // Web Awesome icon bundle (side-effect import)
-import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - catalog-driven settings rows
@@ -49,7 +39,6 @@ const DEFAULT_GIT_AUTHOR_EMAIL = defaultIdentity(GIT_AUTHOR_EMAIL_SETTING);
 export class GitTab extends TexraSignalElement {
   static override styles = [
     TexraSignalElement.styles,
-    statusCheckIconStyles,
     css`
       :host {
         display: block;
@@ -81,99 +70,10 @@ export class GitTab extends TexraSignalElement {
         padding-inline-start: var(--wa-space-s);
         border-inline-start: var(--border-medium) solid var(--color-border);
       }
-
-      .token-row {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        margin-top: var(--wa-space-2xs);
-        flex-wrap: wrap;
-      }
-
-      .token-row-label {
-        font-size: var(--font-size-sm);
-        color: var(--wa-color-text-normal);
-      }
-
-      .token-actions {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        flex-wrap: wrap;
-      }
-
-      .instructions {
-        margin: var(--wa-space-2xs) 0 0 0;
-        font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-      }
-      .instructions ol {
-        margin: var(--wa-space-3xs) 0 0 0;
-        padding-inline-start: 1.25em;
-      }
-      .instructions li {
-        margin: var(--wa-space-3xs) 0;
-      }
-      .instructions code {
-        background: var(--color-bg-secondary);
-        padding: 0 var(--wa-space-2xs);
-        border-radius: var(--border-radius);
-        font-size: var(--font-size-sm);
-      }
-
-      .subscriptions-list {
-        list-style: none;
-        padding: 0;
-        margin: var(--wa-space-2xs) 0 0 0;
-      }
-      .subscriptions-list li {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: start;
-        gap: var(--wa-space-2xs);
-        padding: var(--wa-space-3xs) 0;
-      }
-      .subscriptions-list code {
-        background: var(--color-bg-secondary);
-        padding: var(--border-thin) var(--wa-space-xs);
-        border-radius: var(--border-radius);
-        font-size: var(--font-size-sm);
-      }
-      .subscription-meta {
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: var(--wa-space-2xs);
-      }
-      .subscription-key {
-        overflow-wrap: anywhere;
-      }
-      .subscription-owners {
-        display: flex;
-        flex-direction: column;
-        gap: var(--wa-space-3xs);
-      }
-      .subscription-owner-row {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        flex-wrap: wrap;
-      }
-      .subscription-owner-label,
-      .subscription-owner-placeholder {
-        font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-      }
-      .subscription-owner-placeholder {
-        margin: 0;
-      }
     `,
   ];
 
   @property({ attribute: false }) toggleDisabled = true;
-  @property({ attribute: false }) githubTokenStatus: CredentialOrigin = 'none';
-  @property({ attribute: false })
-  prSubscriptions: readonly PRSubscriptionEntry[] = [];
 
   private handleIdentityInputChange(
     event: Event,
@@ -186,190 +86,9 @@ export class GitTab extends TexraSignalElement {
     postStateSetting(row.key, value || null);
   }
 
-  private handleSetGitHubToken(): void {
-    postToHost({ command: SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN });
-  }
-
-  private handleRemoveGitHubToken(): void {
-    postToHost({ command: SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN });
-  }
-
-  private handleOpenGitHubTokenUrl(): void {
-    postToHost({ command: SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL });
-  }
-
-  private handleUnsubscribePR(key: string): void {
-    postToHost({ command: SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR, key });
-  }
-
-  private handleOpenPRSubscriptionStream(runId: string): void {
-    postToHost({
-      command: SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM,
-      runId,
-    });
-  }
-
-  private renderTokenStatusBadge(): TemplateResult {
-    return renderSetStatusIcon({
-      status: this.githubTokenStatus,
-      success: 'secret',
-      title: credentialOriginLabel('secret', 'token'),
-      fallbacks: {
-        env: {
-          label: credentialOriginLabel('env', 'token'),
-          variant: 'neutral',
-        },
-        none: { label: credentialOriginLabel('none', 'token') },
-      },
-    });
-  }
-
   override render(): TemplateResult {
-    const tokenIsSet = this.githubTokenStatus !== 'none';
     return html`
       <div class="git-container tab-content-container">
-        <div class="settings-section">
-          ${renderSettingsSectionHeading({
-            title: 'GitHub personal access token',
-            description:
-              'Used to poll GitHub for pull request events, reviews, comments, and failed checks.',
-            icon: 'key',
-          })}
-          <div class="token-row">
-            <span class="token-row-label">Status:</span>
-            ${this.renderTokenStatusBadge()}
-            <span class="token-actions">
-              ${renderLabeledActionButton({
-                icon: 'key',
-                text: tokenIsSet
-                  ? TOKEN_ACTION_COPY.replace
-                  : TOKEN_ACTION_COPY.set,
-                kind: 'secondary',
-                onClick: this.handleSetGitHubToken,
-              })}
-              ${
-                this.githubTokenStatus === 'secret'
-                  ? renderLabeledActionButton({
-                      icon: 'trash',
-                      text: TOKEN_ACTION_COPY.remove,
-                      kind: 'danger',
-                      onClick: this.handleRemoveGitHubToken,
-                    })
-                  : nothing
-              }
-              ${renderLabeledActionButton({
-                icon: 'arrow-up-right-from-square',
-                text: TOKEN_ACTION_COPY.create,
-                kind: 'secondary',
-                onClick: this.handleOpenGitHubTokenUrl,
-              })}
-            </span>
-          </div>
-          <wa-details
-            class="panel-collapsible instructions"
-            summary="How to get a token"
-          >
-            <ol>
-              <li>
-                Select <em>Create on GitHub…</em> to open the token-creation
-                page in your browser.
-              </li>
-              <li>
-                Choose scopes: <code>repo</code> for private repos or
-                <code>public_repo</code> for public only. Read-only usage; no
-                write scopes needed.
-              </li>
-              <li>
-                Pick an expiration (90 days is common) and select
-                <em>Generate token</em>.
-              </li>
-              <li>
-                Copy the token (shown only once) and paste it here via
-                <em>Set token</em>.
-              </li>
-            </ol>
-          </wa-details>
-          ${
-            this.githubTokenStatus === 'env'
-              ? html`<p class="instructions">
-                  A token is currently being read from the
-                  <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code>
-                  environment variable. Setting one above will override it.
-                </p>`
-              : nothing
-          }
-        </div>
-        ${
-          this.prSubscriptions.length > 0
-            ? html`
-                <div class="settings-section">
-                  ${renderSettingsSectionHeading({
-                    title: 'Active GitHub subscriptions',
-                    description:
-                      'Agents monitoring repositories, pull requests, or issues for new activity.',
-                    icon: 'comments',
-                  })}
-                  <ul class="subscriptions-list">
-                    ${this.prSubscriptions.map(
-                      (subscription) => html`
-                        <li>
-                          <div class="subscription-meta">
-                            <code class="subscription-key" dir="ltr"
-                              ><bdi>${subscription.key}</bdi></code
-                            >
-                            ${
-                              subscription.owners.length > 0
-                                ? html`
-                                    <div class="subscription-owners">
-                                      ${subscription.owners.map(
-                                        (owner) => html`
-                                          <div class="subscription-owner-row">
-                                            <span
-                                              class="subscription-owner-label"
-                                              ><bdi dir="auto"
-                                                >${owner.label}</bdi
-                                              ></span
-                                            >
-                                            ${renderLabeledActionButton({
-                                              icon: 'comments',
-                                              text: 'Jump to agent',
-                                              label: `Jump to ${owner.label}`,
-                                              kind: 'secondary',
-                                              onClick: () =>
-                                                this.handleOpenPRSubscriptionStream(
-                                                  owner.runId,
-                                                ),
-                                            })}
-                                          </div>
-                                        `,
-                                      )}
-                                    </div>
-                                  `
-                                : html`
-                                    <p class="subscription-owner-placeholder">
-                                      Started by an agent that is no longer
-                                      active.
-                                    </p>
-                                  `
-                            }
-                          </div>
-                          ${renderLabeledActionButton({
-                            icon: 'circle-stop',
-                            text: 'Stop monitoring',
-                            label: `Stop monitoring ${subscription.key}`,
-                            kind: 'secondary',
-                            onClick: () =>
-                              this.handleUnsubscribePR(subscription.key),
-                          })}
-                        </li>
-                      `,
-                    )}
-                  </ul>
-                </div>
-              `
-            : nothing
-        }
-
         <div class="settings-section">
           ${renderSettingsSectionHeading({
             title: 'Agent commit attribution',

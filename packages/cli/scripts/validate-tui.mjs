@@ -839,7 +839,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     // Reuses the shared Select instance across linked form -> list ->
     // category. `/config` leads with two action rows ("API keys", "GitHub
-    // token") before the setting categories, and "Git and worktrees" is the
+    // token") before the setting categories, and "Git" is the
     // fourth category, so it is the sixth row (index 5). The keystrokes walk
     // the list with ↑/↓ so the scenario does not depend on which hotkey a row
     // happens to get.
@@ -856,11 +856,10 @@ const SCENARIOS = [
     ],
     frame: 'viewport',
     expect: [
-      '/config · Git and worktrees',
+      '/config · Git',
       'Mark agent commits',
       'Agent commit author',
       'Agent commit email',
-      'Agent worktrees',
       '↑/↓ navigate',
       'Enter toggle / edit / open',
       'Esc back',

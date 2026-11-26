@@ -25,6 +25,10 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { RunsShape } from '@agent/runtime/runs';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
+import {
+  HISTORY_QUERY_PAGE_LIMIT_BYTES,
+  HISTORY_QUERY_ROW_CAP,
+} from '@agent/runtime/historyQuery/HistoryQuery';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots, StorageFs } from '@platform/rootedFs';
@@ -68,6 +72,7 @@ import { queryHistory } from './executions/queryAction';
 import { showOutput } from './executions/processOutput';
 import { listRunGeneratedFiles } from './executions/runGeneratedFiles';
 import {
+  EXECUTIONS_DEFAULT_LIMIT,
   ExecutionsToolInputSchema,
   type ExecutionsToolInput,
 } from './executions/toolInput';
@@ -102,26 +107,23 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
     runIds: readonly RunId[],
     settled: (view: SessionView) => boolean,
   ) {
-    const phases = (view: SessionView): string =>
-      runIds
-        .map((id) => {
-          const run = view.runs.get(id);
-          return run === undefined ? '' : (run.outcome ?? run.position);
-        })
-        .join(',');
-    const sent = (view: SessionView): readonly string[] =>
-      (view.runs.get(context.runId)?.queuedFollowUps ?? []).map(
-        (f) => f.followUpId,
-      );
-    const started = phases(initial);
-    const held = new Set(sent(initial));
+    const phase = (view: SessionView, id: RunId) => {
+      const run = view.runs.get(id);
+      return run?.outcome ?? run?.position;
+    };
+    const followUps = (view: SessionView) =>
+      view.runs.get(context.runId)?.queuedFollowUps ?? [];
+    const started = runIds.map((id) => phase(initial, id));
+    const held = new Set(
+      followUps(initial).map(({ followUpId }) => followUpId),
+    );
     // The stream starts with the current view, so a wait that is already
     // over, or ends with no change of phase, is seen as soon as a view says so.
     yield* (yield* SessionViewAccess).changes.pipe(
       Stream.filter(
         (view) =>
-          phases(view) !== started ||
-          sent(view).some((id) => !held.has(id)) ||
+          runIds.some((id, index) => phase(view, id) !== started[index]) ||
+          followUps(view).some(({ followUpId }) => !held.has(followUpId)) ||
           settled(view),
       ),
       Stream.runHead,
@@ -229,35 +231,35 @@ const EXECUTION_ROUTES: ReadonlyArray<{
     path: '/executions/{id}/config',
     summary: 'Agent configuration JSON',
     kinds: ALL_KINDS,
-    actions: { view: ({ context, runId }) => showConfig(context, runId) },
+    actions: { view: ({ runId }) => showConfig(runId) },
   },
   {
     path: '/executions/{id}/conversation',
     summary: 'Full message history (subagents)',
     kinds: ['agent', 'task', 'script'],
     actions: {
-      view: ({ context, input, runId }) =>
+      view: ({ input, runId }) =>
         input.view_range
           ? Effect.fail(
               new ToolError(
                 'Conversation pagination is message-based. Use offset and limit; view_range applies only to file and background-command output.',
               ),
             )
-          : showConversation(context, runId, input.offset, input.limit),
+          : showConversation(runId, input.offset, input.limit),
     },
   },
   {
     path: '/executions/{id}/report',
     summary: 'Result report (persists after context compaction)',
     kinds: ALL_KINDS,
-    actions: { view: ({ context, runId }) => showReport(context, runId) },
+    actions: { view: ({ runId }) => showReport(runId) },
   },
   {
     path: '/executions/{id}/result',
     summary:
       'Final result envelope (JSON) for chaining; process result for background commands',
     kinds: ALL_KINDS,
-    actions: { view: ({ context, runId }) => showResultMeta(context, runId) },
+    actions: { view: ({ runId }) => showResultMeta(runId) },
   },
   {
     path: '/executions/{id}/output',
@@ -279,8 +281,8 @@ const EXECUTION_ROUTES: ReadonlyArray<{
     path: '/executions/{id}/files/{path}',
     summary: 'Read specific generated file (task runs only)',
     actions: {
-      view: ({ context, input, runId, rest }) =>
-        readFile(context, runId, rest, input.view_range ?? undefined),
+      view: ({ input, runId, rest }) =>
+        readFile(runId, rest, input.view_range ?? undefined),
     },
   },
   {
@@ -288,15 +290,15 @@ const EXECUTION_ROUTES: ReadonlyArray<{
     summary: 'Workspace files edited by tool-use runs',
     kinds: ['agent'],
     actions: {
-      view: ({ context, runId }) => listWorkspaceFiles(context, runId),
+      view: ({ runId }) => listWorkspaceFiles(runId),
     },
   },
   {
     path: '/executions/{id}/workspace-files/{path}',
     summary: 'Read a workspace file edited by a tool-use run',
     actions: {
-      view: ({ context, input, runId, rest }) =>
-        readWorkspaceFile(context, runId, rest, input.view_range ?? undefined),
+      view: ({ input, runId, rest }) =>
+        readWorkspaceFile(runId, rest, input.view_range ?? undefined),
     },
   },
 ];
@@ -320,6 +322,11 @@ const EXECUTION_PATH_LIST = EXECUTION_ROUTES.map(
   ({ path, summary }) => `- ${path} - ${summary}`,
 ).join('\n');
 
+const EXECUTION_ROUTE_PATTERNS = EXECUTION_ROUTES.map((route) => {
+  const parts = route.path.split('/').slice(1);
+  return { route, parts, greedy: parts.at(-1) === '{path}' };
+});
+
 /**
  * Every line of logic below is one Effect program. A storage or filesystem
  * read failure stays in the error channel: nothing here recovers from one,
@@ -331,16 +338,13 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
 ) {
   const context = { runId: run.runId, runs: yield* RunRegistry };
   const segments = getPathSegments(input.path);
-  const route = EXECUTION_ROUTES.find(({ path }) => {
-    const parts = path.split('/').slice(1);
-    const greedy = parts.at(-1) === '{path}';
-    return (
+  const route = EXECUTION_ROUTE_PATTERNS.find(
+    ({ parts, greedy }) =>
       (greedy
         ? segments.length >= parts.length
         : segments.length === parts.length) &&
-      parts.every((part, i) => part.startsWith('{') || part === segments[i])
-    );
-  });
+      parts.every((part, i) => part.startsWith('{') || part === segments[i]),
+  )?.route;
   if (!route) {
     return yield* new ToolError(
       `Unknown path: ${input.path}.\nValid paths:\n${EXECUTION_PATH_LIST}`,
@@ -492,7 +496,6 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
 });
 
 const showReport = Effect.fn('ExecutionsTool.showReport')(function* (
-  context: RunToolContext,
   runId: RunId,
 ) {
   const report = yield* getRunRecords(runId).readReport();
@@ -509,7 +512,6 @@ const showReport = Effect.fn('ExecutionsTool.showReport')(function* (
  * later stage without parsing the prose report.
  */
 const showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(function* (
-  context: RunToolContext,
   runId: RunId,
 ) {
   const result = yield* getRunRecords(runId).readResult();
@@ -522,7 +524,6 @@ const showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(function* (
 });
 
 const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
-  context: RunToolContext,
   runId: RunId,
 ) {
   const records = getRunRecords(runId);
@@ -546,12 +547,7 @@ const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
 });
 
 const showConversation = Effect.fn('ExecutionsTool.showConversation')(
-  function* (
-    context: RunToolContext,
-    runId: RunId,
-    offset: number,
-    limit: number,
-  ) {
+  function* (runId: RunId, offset: number, limit: number) {
     const records = getRunRecords(runId);
     const conversation = yield* readCompletedRunConversation(
       runId,
@@ -605,7 +601,6 @@ const listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
 });
 
 const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
-  context: RunToolContext,
   runId: RunId,
   filePath: string,
   viewRange?: LineRange,
@@ -638,7 +633,7 @@ const readRecordAndWorkspaceFiles = (runId: RunId) => {
 };
 
 const listWorkspaceFiles = Effect.fn('ExecutionsTool.listWorkspaceFiles')(
-  function* (context: RunToolContext, runId: RunId) {
+  function* (runId: RunId) {
     const [record, paths] = yield* readRecordAndWorkspaceFiles(runId);
     const entries = yield* listRunWorkspaceFiles(record, paths);
 
@@ -656,12 +651,7 @@ const listWorkspaceFiles = Effect.fn('ExecutionsTool.listWorkspaceFiles')(
 );
 
 const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
-  function* (
-    context: RunToolContext,
-    runId: RunId,
-    filePath: string,
-    viewRange?: LineRange,
-  ) {
+  function* (runId: RunId, filePath: string, viewRange?: LineRange) {
     const [record, paths] = yield* readRecordAndWorkspaceFiles(runId);
     const recordedPaths = new Set(
       paths.flatMap((candidate) => {
@@ -715,13 +705,13 @@ Paths:
 ${EXECUTION_PATH_LIST}
 
 Use "current" as {id} to access the active run.
-Use offset/limit to paginate the /executions listing or conversation messages (default: offset 0, limit 100).
+Use offset/limit to paginate the /executions listing or conversation messages (default: offset 0, limit ${EXECUTIONS_DEFAULT_LIMIT}).
 Use view_range: [start, end] to paginate file and background-command output content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed runs to change.
 Use action: "kill" on /executions/{id} to terminate a live run.
 Use action: "send" with message on /executions/{id} to message any other run in this project: your subagent (a follow-up it continues from), your orchestrator, a sibling, or any other run. It reads the message after its current turn; an idle or ended run wakes to read it. A run that takes none (a headless one-shot run, a background command, an agent-CLI turn) refuses it.
-Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). In a script, query returns { columns, rows, more }; other actions return { output, summary }. Queries return at most 200 rows and refuse a JSON page larger than 4 MiB; use LIMIT or substr() to narrow it. Children: SELECT * FROM runs WHERE parent_id = ?. Views:
+Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). In a script, query returns { columns, rows, more }; other actions return { output, summary }. Queries return at most ${HISTORY_QUERY_ROW_CAP} rows and refuse a JSON page larger than ${HISTORY_QUERY_PAGE_LIMIT_BYTES / (1024 * 1024)} MiB; use LIMIT or substr() to narrow it. Children: SELECT * FROM runs WHERE parent_id = ?. Views:
 ${HISTORY_VIEW_SUMMARY}
 Delegated subagent and document task results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
   schema: ExecutionsToolInputSchema,

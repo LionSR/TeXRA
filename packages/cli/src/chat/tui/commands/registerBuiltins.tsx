@@ -11,6 +11,7 @@ import { startOver } from '@texra/controllers/session/projectAgent';
 import type { ConnectService } from '../state/attachedTask';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
+import { PLUGINS_PAGE } from '@ui/copy/plugins';
 import { PLUGINS_TUI } from './pluginsCopy';
 import {
   ApprovalPolicyForm,
@@ -216,7 +217,12 @@ export function builtinSlashCommands(options: {
       pick === undefined ? [] : [pick],
       roots,
     );
-    appendLocalNotice(PLUGINS_TUI.added(added.map(({ name }) => name)));
+    appendLocalNotice(
+      PLUGINS_PAGE.added(
+        added.map(({ name }) => name),
+        '/plugins',
+      ),
+    );
   });
 
   const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => (

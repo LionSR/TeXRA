@@ -22,7 +22,7 @@ import {
   meansAbsent,
   canonicalizeWorkspaceRoot,
 } from '@texra-ai/worldline/node';
-import { ensureError, toErrorMessage } from '@texra-ai/worldline/schemas';
+import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import {
   AppState,
   StateStores,
@@ -148,11 +148,14 @@ const partitionFolders = Effect.fn('desktopProjects.partitionFolders')(
     const unique = [...new Set(candidates.map(canonicalizeWorkspaceRoot))];
     const stats = yield* Effect.forEach(
       unique,
-      (root) => fs.stat(root).pipe(Effect.result),
+      (root) =>
+        fs.stat(root).pipe(
+          Effect.result,
+          Effect.map((stat) => ({ root, stat })),
+        ),
       { concurrency: 8 },
     );
-    for (const [index, root] of unique.entries()) {
-      const stat = stats[index];
+    for (const { root, stat } of stats) {
       if (Result.isSuccess(stat)) {
         if (stat.success.type === 'Directory') {
           roots.push(root);
@@ -353,7 +356,7 @@ export const openDesktopProjectRegistry: (
             byRoot(root) ? Effect.void : Scope.close(projectScope, Exit.void),
           ),
         );
-      }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
+      }).pipe(withPerKeyLane(lanes, root));
     },
     list: () => current().projects,
     active,
@@ -392,7 +395,7 @@ export const openDesktopProjectRegistry: (
             yield* project.dispose();
           }).pipe(selectionLane.withPermit),
         );
-      }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
+      }).pipe(withPerKeyLane(lanes, root));
     },
     clearRecent: () =>
       records.replaceRecent([]).pipe(
@@ -400,7 +403,6 @@ export const openDesktopProjectRegistry: (
           SubscriptionRef.update(state, (s) => ({ ...s, recent })),
         ),
         selectionLane.withPermit,
-        Effect.mapError(ensureError),
       ),
     dispose: () =>
       Effect.suspend(() =>
@@ -422,4 +424,4 @@ export const openDesktopProjectRegistry: (
         ),
       ),
   } satisfies DesktopProjectRegistry;
-}, Effect.mapError(ensureError));
+});

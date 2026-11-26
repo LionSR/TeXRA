@@ -15,13 +15,15 @@ import {
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
 import type { InitAnswers } from '../runtime/platform/initConfig';
-import { isModelOptionAvailable } from '@texra-ai/worldline/schemas';
+import { isModelOptionAvailable, joinFacts } from '@texra-ai/worldline/schemas';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { cliModelStatus } from '../runtime/models/modelAccess';
 import { CANCEL_HINT, KeyHints, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
 
 interface InitWizardOptions {
   readonly models: readonly ModelOptionData[];
+  /** The model the picker opens on: the one `--yes` would write. */
+  readonly defaultModel: string;
   readonly colorEnabled?: boolean;
 }
 
@@ -118,7 +120,9 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
           key={step}
           initialIndex={Math.max(
             0,
-            props.options.models.findIndex(isModelOptionAvailable),
+            props.options.models.findIndex(
+              (model) => model.value === props.options.defaultModel,
+            ),
           )}
           items={initWizardModelSelectItems(props.options.models)}
           onSelect={(model) => commit({ model })}
@@ -168,9 +172,9 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
       <Text bold color={COLOR_HINT}>
         texra init
       </Text>
-      <Text
-        dimColor
-      >{`Step ${index + 1}/${stepCount} · ${STEP_TITLES[step]}`}</Text>
+      <Text dimColor>
+        {joinFacts([`Step ${index + 1}/${stepCount}`, STEP_TITLES[step]])}
+      </Text>
       <Box marginTop={1} flexDirection="column">
         {picker}
       </Box>

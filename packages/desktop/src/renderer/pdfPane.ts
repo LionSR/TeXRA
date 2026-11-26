@@ -2,12 +2,10 @@
 // across tab switches like the editor and terminal surfaces, so the viewer's
 // scroll position and zoom survive a layout change.
 
-import { html, nothing, render } from 'lit';
-
-import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { nothing, render } from 'lit';
 
 import type { WorkbenchTab } from '../shared/desktopShellState';
-import { renderNoticeCallout } from './editorFileNotice';
+import { createPathToolbar, renderNoticeCallout } from './editorFileNotice';
 
 interface PdfView {
   readonly element: HTMLElement;
@@ -77,20 +75,12 @@ export function createPdfPane(options: {
     // around a PDF, which shares the app page's origin and process: that it
     // runs no script is Chromium's behavior, which nothing here enforces.
     const view: PdfView = { element, frame, notice };
-    const footer = document.createElement('footer');
-    footer.className = 'shell-editor-toolbar';
     const path = filePathOf(tab.target ?? '');
-    render(
-      html`<span class="shell-editor-path truncate" title=${path}>${path}</span>
-        ${renderLabeledActionButton({
-          text: 'Open externally',
-          icon: 'arrow-up-right-from-square',
-          kind: 'ghost',
-          className: 'is-compact',
-          onClick: () => options.openExternally(path),
-        })}`,
-      footer,
-    );
+    const footer = createPathToolbar(path, {
+      text: 'Open externally',
+      icon: 'arrow-up-right-from-square',
+      onClick: () => options.openExternally(path),
+    });
     element.append(notice, frame, footer);
     views.set(tab.id, view);
     load(view, tab);

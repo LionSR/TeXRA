@@ -24,47 +24,66 @@ import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 export const DEVICE_CODE_DESCRIPTION =
   'One-time code; works over SSH or in any browser' as const;
 
-/** ChatGPT subscription account — OpenAI models via Plus/Pro/Team. */
-export const CHATGPT_AUTH = Object.freeze({
-  label: 'ChatGPT',
-  subscriptionLabel: 'ChatGPT subscription',
-  signInLabel: 'Sign in with ChatGPT',
-  signInDescription: 'Use a ChatGPT subscription',
-  /** The row that connects a model through it before any is connected: the
-   *  welcome card, the credential banner and the terminal's connect panel. */
-  connect: Object.freeze({
-    label: 'Use ChatGPT subscription',
-    description:
+/** What tells one subscription account from another: its brand name (the
+ *  name used verbatim in prompts, titles and errors), the account its browser
+ *  session belongs to, where a copied sign-in link is pasted, the models it
+ *  unlocks, and the two lines that offer it. Every other label of the account
+ *  is one sentence over the brand name. */
+interface SubscriptionAccountNames {
+  readonly label: string;
+  readonly sessionName: string;
+  readonly copyTarget: string;
+  readonly modelFamily: string;
+  readonly signInDescription: string;
+  readonly connectDescription: string;
+}
+
+/** One account's copy: its names and the sentences over its brand name. */
+function accountCopy({
+  connectDescription,
+  ...names
+}: SubscriptionAccountNames) {
+  const { label } = names;
+  return Object.freeze({
+    ...names,
+    subscriptionLabel: `${label} subscription`,
+    signInLabel: `Sign in with ${label}`,
+    /** The row that connects a model through it before any is connected:
+     *  the welcome card, the credential banner and the terminal's connect
+     *  panel. */
+    connect: Object.freeze({
+      label: `Use ${label} subscription`,
+      description: connectDescription,
+    }),
+    signOutLabel: `Sign out of ${label}`,
+    deviceCodeLabel: `Sign in with ${label} (one-time code)`,
+    startingDevice: `Starting ${label} device-code sign-in.`,
+    startingNoBrowser: `Starting ${label} sign-in.`,
+    startingBrowser: `Opening browser for ${label} sign-in…`,
+  });
+}
+
+/** Each OAuth subscription's copy, keyed by the provider id it belongs to:
+ *  the ChatGPT account (OpenAI models through Plus, Pro or Team) and the
+ *  Grok / xAI account. */
+export const SUBSCRIPTION_AUTH_COPY = Object.freeze({
+  chatgpt: accountCopy({
+    label: 'ChatGPT',
+    sessionName: 'ChatGPT',
+    copyTarget: 'ChatGPT',
+    modelFamily: 'OpenAI models',
+    signInDescription: 'Use a ChatGPT subscription',
+    connectDescription:
       'OpenAI models through ChatGPT Plus, Pro, or Team; no API key needed',
   }),
-  signOutLabel: 'Sign out of ChatGPT',
-  deviceCodeLabel: 'Sign in with ChatGPT (one-time code)',
-  startingDevice: 'Starting ChatGPT device-code sign-in.',
-  startingNoBrowser: 'Starting ChatGPT sign-in.',
-  startingBrowser: 'Opening browser for ChatGPT sign-in…',
-} as const);
-
-/** Grok / xAI subscription account. */
-export const GROK_AUTH = Object.freeze({
-  label: 'Grok',
-  subscriptionLabel: 'Grok subscription',
-  signInLabel: 'Sign in with Grok',
-  signInDescription: 'Use a Grok / SuperGrok subscription',
-  connect: Object.freeze({
-    label: 'Use Grok subscription',
-    description: 'Grok models through SuperGrok; no API key needed',
+  grok: accountCopy({
+    label: 'Grok',
+    sessionName: 'xAI',
+    copyTarget: 'Grok / xAI',
+    modelFamily: 'xAI models',
+    signInDescription: 'Use a Grok / SuperGrok subscription',
+    connectDescription: 'Grok models through SuperGrok; no API key needed',
   }),
-  signOutLabel: 'Sign out of Grok',
-  deviceCodeLabel: 'Sign in with Grok (one-time code)',
-  startingDevice: 'Starting Grok device-code sign-in.',
-  startingNoBrowser: 'Starting Grok sign-in.',
-  startingBrowser: 'Opening browser for Grok sign-in…',
-} as const);
-
-/** Each OAuth subscription's copy, keyed by the provider id it belongs to. */
-export const SUBSCRIPTION_AUTH_COPY = Object.freeze({
-  chatgpt: CHATGPT_AUTH,
-  grok: GROK_AUTH,
 } as const satisfies Record<
   (typeof SUBSCRIPTION_AUTH_PROVIDERS)[number],
   unknown
@@ -72,10 +91,16 @@ export const SUBSCRIPTION_AUTH_COPY = Object.freeze({
 
 /**
  * The two prompts a subscription sign-in shows (`SubscriptionSignInPresenter`),
- * worded once, with their buttons. A host adds only its title and waiting
- * line.
+ * worded once, with their buttons and the line a host shows while one waits.
  */
 export const SIGN_IN_PROMPT = Object.freeze({
+  /** A GUI host's title while the sign-in runs. */
+  inProgress: (providerDisplayName: string): string =>
+    `Signing in with ${providerDisplayName}…`,
+  /** The host could not put the one-time code on the clipboard; the steps
+   *  still show it to type. */
+  codeCopyFailed: (providerDisplayName: string, reason: string): string =>
+    `Could not copy the ${providerDisplayName} sign-in code: ${reason}`,
   /** Where to enter the one-time code. `copied`: the host put the code on
    *  the clipboard. */
   deviceCodeSteps: (
@@ -124,6 +149,10 @@ export const ACCOUNT_OUTCOME = Object.freeze({
     modelFamily: string,
   ): string =>
     `Signed in with ${providerDisplayName} as ${accountLabel} (${modelFamily} enabled).`,
+  /** A plan's switch turned off (`planName`: the switch's own name, "ChatGPT
+   *  subscription", "Kimi Code subscription"), by a sign-out or by hand. */
+  planDisabled: (planName: string, modelFamily: string): string =>
+    `${planName} disabled for ${modelFamily}.`,
   /** A sign-out that could not turn the subscription off afterwards. */
   subscriptionNotDisabled: (
     providerDisplayName: string,

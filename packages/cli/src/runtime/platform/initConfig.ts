@@ -21,7 +21,6 @@ export interface InitAnswers {
 export interface InitConfigShape {
   readonly 'texra.model': string;
   readonly 'texra.outputFormat': CliOutputFormat;
-  readonly 'texra.chat': { readonly model: string };
 }
 
 /** Map wizard answers to the canonical config object. */
@@ -29,7 +28,6 @@ export function buildInitConfig(answers: InitAnswers): InitConfigShape {
   return {
     'texra.model': answers.model,
     'texra.outputFormat': answers.outputFormat,
-    'texra.chat': { model: answers.model },
   };
 }
 

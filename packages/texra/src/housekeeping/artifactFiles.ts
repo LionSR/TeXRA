@@ -1,72 +1,16 @@
-/**
- * The files a housekeeping command packs or cleans: the filesystem a path is
- * handled through, the artifacts a pattern names, the timestamp a packed name
- * carries.
- */
+/** The files a housekeeping command cleans: the artifacts a pattern names. */
 // Standard library imports
 import * as path from 'node:path';
 
 // Third-party imports
-import { Clock, Effect, FileSystem, type PlatformError } from 'effect';
+import { Effect, FileSystem, Option, type PlatformError } from 'effect';
 
 // Local imports
-import {
-  meansAbsent,
-  relativeToRoot,
-  workspaceRelativePath,
-} from '@texra-ai/worldline/node';
-import {
-  withLogChannel,
-  type RootedFileSystem,
-} from '@texra-ai/worldline/plugins';
+import { meansAbsent, workspaceRelativePath } from '@texra-ai/worldline/node';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 
 import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import { CHANNEL } from './constants';
-
-/**
- * The filesystem a housekeeping path is handled through, with the path in
- * absolute form. The extension's picker keeps a selection outside the
- * workspace as an absolute path, and this passes such paths through whole:
- * every path of an external selection —
- * its sources, the `History/` or `Diffs/` folder beside it, the artifacts
- * swept there — is absolute and goes through the process `FileSystem` at its
- * own location. Every other path goes through the confined workspace view,
- * which is never loosened: a relative path as written, and an absolute one as
- * the workspace-relative path the symlink-aware `relativeToRoot` computes for
- * it — so a selection made through a symlinked directory whose target is
- * inside the workspace resolves, and the one computation that decides the
- * side is also the path handed to that side. Deciding per path also covers a
- * multi-file pack that copies an external output file into the workspace
- * folder beside its main input.
- */
-export const filesystemFor = Effect.fn('housekeeping.filesystemFor')(function* (
-  workspaceFs: RootedFileSystem,
-  target: string,
-) {
-  let workspaceRoot: string | undefined = target;
-  if (path.isAbsolute(target)) {
-    workspaceRoot =
-      workspaceFs.root === undefined
-        ? undefined
-        : relativeToRoot(workspaceFs.root, target);
-  }
-  if (workspaceRoot === undefined) {
-    const fs: FileSystem.FileSystem = yield* FileSystem.FileSystem;
-    return { fs, absolutePath: target };
-  }
-  const fs: FileSystem.FileSystem = workspaceFs;
-  return { fs, absolutePath: yield* workspaceFs.resolve(workspaceRoot) };
-});
-
-/**
- * The fiber clock's time as an ISO-8601 timestamp stripped of separators,
- * for a file or folder name (e.g. `20260422T003541`). Second-level
- * granularity.
- */
-export const fileNameTimestamp: Effect.Effect<string> = Effect.map(
-  Clock.currentTimeMillis,
-  (ms) => new Date(ms).toISOString().replaceAll(/[-:]/g, '').split('.')[0],
-);
 
 /**
  * The LaTeX artifacts of a base name: the files named `pattern` + `extension`
@@ -161,11 +105,12 @@ export const collectFilesFromPatterns = Effect.fn(
       if (!ext.endsWith('*')) {
         // Exact extensions prefer the input directory; `build/` is only the
         // fallback when the corresponding root-level artifact is absent.
-        for (const dir of searchDirs) {
-          const match = path.join(dir, pattern + ext);
-          if (yield* isFile(match)) return [match];
-        }
-        return [];
+        return Option.toArray(
+          yield* Effect.findFirst(
+            searchDirs.map((dir) => path.join(dir, pattern + ext)),
+            isFile,
+          ),
+        );
       }
       const wanted = foldCase(pattern + ext.slice(0, -1));
       const candidates = searchDirs.flatMap((dir) =>
@@ -173,13 +118,10 @@ export const collectFilesFromPatterns = Effect.fn(
           .filter((name) => foldCase(name).startsWith(wanted))
           .map((name) => path.join(dir, name)),
       );
-      const found = yield* Effect.forEach(candidates, isFile, {
-        concurrency: 16,
-      });
-      return candidates.filter((_, i) => found[i]);
+      return yield* Effect.filter(candidates, isFile, { concurrency: 16 });
     }),
     { concurrency: 8 },
   );
-  for (const match of matches.flat()) yield* record(match);
+  yield* Effect.forEach(matches.flat(), record, { discard: true });
   return files;
 });

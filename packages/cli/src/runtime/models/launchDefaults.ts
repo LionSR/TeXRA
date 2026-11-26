@@ -30,11 +30,18 @@ export function assertExplicitModelKnown(
   const resolved = resolveKnownCliModelId(trimmed);
   if (!resolved) {
     throw new CliUsageError({
-      message: `Model not found: ${trimmed}. Use \`texra models list\` to see available models.`,
+      message: `Model not found: ${trimmed}. Use \`texra models list --all\` to see every model.`,
     });
   }
   return resolved;
 }
+
+/** The last tier: the model a launch takes when nothing names one, which
+ *  `texra init` also offers as its default. */
+export const CLI_DEFAULT_MODEL_CANDIDATE = Object.freeze({
+  model: CLI_CHEAP_START_MODEL,
+  reason: 'builtin-default',
+} as const satisfies RunModelCandidate);
 
 /**
  * The one four-tier model lookup every `texra` command starts from:
@@ -52,7 +59,7 @@ function cliModelCandidates(
     { model: explicit, reason: 'explicit-override' },
     { model: envModel, reason: 'environment' },
     { model: cliCommandDefaults(stores, role).model, reason: 'command-config' },
-    { model: CLI_CHEAP_START_MODEL, reason: 'builtin-default' },
+    CLI_DEFAULT_MODEL_CANDIDATE,
   ];
 }
 

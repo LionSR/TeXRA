@@ -20,6 +20,7 @@ import { startCompactionActivity } from '@agent/trace/traceLogs';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { Settings, type SettingsStores } from '@shared/config/settings';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
+import { pluralize } from '@utils/text/stringUtils';
 import { type RunId } from '@shared/schemas';
 import type { RunCell } from '@shared/session/runHistory';
 import { turnText } from '@shared/session/runFacts';
@@ -66,7 +67,7 @@ Write a structured summary with enough context to continue the task. Output only
 const compactionUserPrompt = (kept: number) =>
   kept === 0
     ? 'Summarize the conversation history above now. Follow the compaction instructions exactly and output only the summary.'
-    : `The conversation above opens with ${kept} earlier ${kept === 1 ? 'summary' : 'summaries'}, each marked "${COMPACTION_SUMMARY_PREFIX.trim()}". They stay in the conversation as they are: summarize only what comes after them, and do not repeat what they already say. Follow the compaction instructions exactly and output only the summary.`;
+    : `The conversation above opens with ${kept} earlier ${pluralize(kept, 'summary')}, each marked "${COMPACTION_SUMMARY_PREFIX.trim()}". They stay in the conversation as they are: summarize only what comes after them, and do not repeat what they already say. Follow the compaction instructions exactly and output only the summary.`;
 
 /** The share of the threshold a threshold summary leaves as written: the
  *  newest messages, which the model goes on reading whole. */
@@ -140,8 +141,7 @@ interface CompactionInput {
   readonly bound: BoundModel;
   /** The run's invoker, which makes the summary call. */
   readonly invoker: ModelInvoker['Service'];
-  /** The run's cell: a token renewal reads its declined routes, and the
-   *  summary lands on it. */
+  /** The run's cell, which the summary lands on. */
   readonly cell: RunCell;
   /** The session's setting slots: the threshold is a live per-check read. */
   readonly stores: SettingsStores;
@@ -187,7 +187,7 @@ const thresholdTokens = Effect.fn('compaction.thresholdTokens')(function* (
  */
 const summarize = Effect.fn('compaction.summarize')(function* (
   state: RunState,
-  input: Pick<CompactionInput, 'logger' | 'bound' | 'invoker' | 'cell'>,
+  input: Pick<CompactionInput, 'logger' | 'bound' | 'invoker'>,
   trigger: Trigger,
   /** The tokens a threshold summary leaves as written. */
   tail: number,
@@ -226,7 +226,7 @@ const summarize = Effect.fn('compaction.summarize')(function* (
   // up to the model's limit; a limit too small for a manual thinking budget
   // runs without thinking (the model's rule, not this one's).
   const summarized = yield* Effect.exit(
-    input.invoker.call(input.cell, {
+    input.invoker.call({
       mode: 'foreground',
       system: COMPACTION_SYSTEM_PROMPT,
       messages: [
@@ -353,35 +353,39 @@ export const agentEditsAtBoundary = Effect.fn('compaction.agentEdits')(
     input: Pick<CompactionInput, 'runId' | 'logger' | 'cell'>,
     contextWindow: number,
   ) {
-    let state = yield* input.cell.current;
-    for (const { from, to, with: text } of state.contextEdits) {
-      const activity = startCompactionActivity(input.logger);
-      const tokensBefore = contextTokens(state);
-      state = yield* input.cell.append([
-        {
-          type: 'context.edit',
-          aggregateId: input.runId,
-          payload: {
-            cause: 'edit',
-            trigger: null,
-            range: { from, to },
-            messages: [agentReplacement(text)],
-            usage: null,
+    const initial = yield* input.cell.current;
+    return yield* Effect.reduce(
+      initial.contextEdits,
+      () => initial,
+      Effect.fnUntraced(function* (state, { from, to, with: text }) {
+        const activity = startCompactionActivity(input.logger);
+        const tokensBefore = contextTokens(state);
+        const updated = yield* input.cell.append([
+          {
+            type: 'context.edit',
+            aggregateId: input.runId,
+            payload: {
+              cause: 'edit',
+              trigger: null,
+              range: { from, to },
+              messages: [agentReplacement(text)],
+              usage: null,
+            },
           },
-        },
-      ]);
-      // The count after is the run's own after the edit (an estimate, as an
-      // edit leaves no provider count for the new view), the figure the
-      // context gauge then shows; the tool's `freed` stays the agent's.
-      completed(
-        activity,
-        tokensBefore,
-        contextTokens(state),
-        contextWindow,
-        to - from,
-      );
-    }
-    return state;
+        ]);
+        // The count after is the run's own after the edit (an estimate, as an
+        // edit leaves no provider count for the new view), the figure the
+        // context gauge then shows; the tool's `freed` stays the agent's.
+        completed(
+          activity,
+          tokensBefore,
+          contextTokens(updated),
+          contextWindow,
+          to - from,
+        );
+        return updated;
+      }),
+    );
   },
 );
 

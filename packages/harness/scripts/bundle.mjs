@@ -1,13 +1,10 @@
 import { build } from 'esbuild';
-import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import { harnessBundleOptions } from '../../../scripts/code-sandbox-worker.mjs';
+import manifest from '../package.json' with { type: 'json' };
 
 const packageRoot = new URL('..', import.meta.url);
-const manifest = JSON.parse(
-  await readFile(new URL('package.json', packageRoot), 'utf8'),
-);
 // One bundle per published entry, named as its `import` file and built from
 // the source its declaration comes from.
 const entryPoints = Object.fromEntries(

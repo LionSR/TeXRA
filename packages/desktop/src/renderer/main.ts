@@ -57,7 +57,11 @@ import {
   desktopCommandPaletteShortcut,
 } from './desktopShortcutRegistry';
 import './desktopShell.css';
-import { shellSidebarTemplate, type RailProject } from './desktopShell';
+import {
+  shellSidebarTemplate,
+  shellStatusBarTemplate,
+  type RailProject,
+} from './desktopShell';
 import {
   initialDesktopShellState,
   openWorkbenchTab,
@@ -65,6 +69,7 @@ import {
   renameWorkbenchTab,
   setSidebarWidth,
   toggleSidebar,
+  WORKBENCH_KIND_META,
   type DesktopShellState,
 } from '../shared/desktopShellState';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
@@ -345,7 +350,8 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
             code.
           </li>
           <li>
-            Review every edit as a diff and approve commands before they run.
+            It works on its own: runs commands, edits files, and shows what it
+            changed.
           </li>
           <li>Bring your own model keys or subscriptions.</li>
         </ul>
@@ -440,8 +446,8 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
       <nav class="shell-view-switch" aria-label="Project views">
         ${renderLabeledActionButton({
           id: 'shellToggleAgent',
-          text: 'Agent',
-          icon: 'comment',
+          text: WORKBENCH_KIND_META.agent.label,
+          icon: WORKBENCH_KIND_META.agent.icon,
           kind: 'ghost',
           className: 'is-compact',
           disabled: !hasWorkspace(),
@@ -451,8 +457,8 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
       <div class="shell-workspace-tools">
         ${renderLabeledActionButton({
           id: 'shellToggleSidePanel',
-          icon: 'folder-tree',
-          text: 'Files',
+          icon: WORKBENCH_KIND_META.files.icon,
+          text: WORKBENCH_KIND_META.files.label,
           kind: 'ghost',
           className: 'is-compact',
           disabled: !hasWorkspace(),
@@ -460,8 +466,8 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
         })}
         ${renderLabeledActionButton({
           id: 'shellToggleTerminalPanel',
-          icon: 'terminal',
-          text: 'Terminal',
+          icon: WORKBENCH_KIND_META.terminal.icon,
+          text: WORKBENCH_KIND_META.terminal.label,
           kind: 'ghost',
           className: 'is-compact',
           disabled: !hasWorkspace(),
@@ -560,6 +566,13 @@ function shellTemplate(): TemplateResult {
                   root,
                 }),
               onSelectProject: selectProject,
+              onToggleProject: (key) =>
+                setShell({
+                  ...shell,
+                  collapsed: shell.collapsed.includes(key)
+                    ? shell.collapsed.filter((other) => other !== key)
+                    : [...shell.collapsed, key],
+                }),
               onProjectAction: (key, action) => {
                 if (action !== 'rename')
                   return projectRail.runProjectAction(key, action);
@@ -579,6 +592,15 @@ function shellTemplate(): TemplateResult {
           <div class="shell-workspace-layout">${main}</div>
         </div>
       </wa-split-panel>
+      ${
+        hasWorkspace()
+          ? shellStatusBarTemplate({
+              active: shell.active,
+              planUsage:
+                projectSessions.get(shell.active)?.host$.get()?.planUsage ?? [],
+            })
+          : nothing
+      }
     </div>
   `;
 }

@@ -48,6 +48,7 @@ describe('injectStandaloneTrace', () => {
   it('escapes a literal </script> inside trace data instead of truncating the page', () => {
     const payload = '</script><img src=x onerror=alert(1)>';
     const html = injectStandaloneTrace(TEMPLATE, trace(payload));
+    assert.isDefined(html);
 
     // The dangerous substring must not appear literally in the output.
     expect(html).not.toContain('</script><img');
@@ -59,5 +60,14 @@ describe('injectStandaloneTrace', () => {
     );
 
     expect(embeddedTrace(html).events[0]).toMatchObject({ message: payload });
+  });
+
+  it('answers no page for a bundle without its module script, instead of throwing', () => {
+    // A throw inside `traceHtml` is a defect, which no host's export
+    // failure handler sees; the missing script must reach them as
+    // `TraceViewerMissing`.
+    expect(
+      injectStandaloneTrace('<!doctype html><html></html>', trace()),
+    ).toBeUndefined();
   });
 });

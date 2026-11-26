@@ -88,7 +88,7 @@ class VscodeUiHost implements Dialogs {
     return this.showMessage(level, message, {}).pipe(
       Effect.catch((failure) =>
         Effect.logWarning(
-          `Could not show notification: ${failure.message}`,
+          `Could not show notification (${failure.message}): ${message}`,
         ).pipe(withLogChannel('VscodeUiHost')),
       ),
       Effect.forkDetach,

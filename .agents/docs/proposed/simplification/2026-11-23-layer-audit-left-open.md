@@ -47,6 +47,12 @@ and the settings view print the percent used
 "70% left" and "30%". The owner is that copy module: the limiting-window
 pick and one wording. Decision needed: used or left.
 
+Taken on 2026-11-24: percent used, everywhere. The status bar picks the
+most used window itself, and `subscriptionQuotaUsed` words it ("30% used") for the
+status bar, `/login status` and the settings meters; it takes the window, so
+no caller can pass `percentRemaining` through clamps written for the percent
+used, and `subscriptionQuotaTone` reads the same number.
+
 ## 2. The harness names one plan in the model listing
 
 `listedModels` (`packages/harness/src/model/computeModelOptions.ts`) lists
@@ -83,17 +89,27 @@ session-carried, or the service forwards it and the TUI follows it.
   at <path>" in the warning tone in the terminal
   (`packages/cli/src/chat/tui/panes/DocumentTaskRunDetails.tsx`).
   `ROUND_ALERT` (`packages/texra/src/ui/copy/documentOutputs.ts`) has no
-  entry for it. Decision needed: its tone.
+  entry for it. Decision needed: its tone. Taken on 2026-11-24:
+  `ROUND_ALERT.replyKept` ("Reply kept at", warning, since a kept reply
+  means the round produced no document or missed one); the web shows the
+  path as the link that opens it, the terminal prints the path.
 - The TUI's key-save tip names Kimi K3 by hand
   (`packages/cli/src/chat/tui/commands/handlers/modelAccessCommands.ts`);
-  it belongs with item 2 of the 2026-11-21 layer note.
+  it belongs with item 2 of the 2026-11-21 layer note. Taken on
+  2026-11-24: the tip names the switch by its row's title and says what it
+  routes with the row's description (which states K3), so no model is
+  named by hand; both plans' tips point at `/login` or `/config`. Item 2 of
+  the 2026-11-21 note (which setting switches each plan on) stays open.
 - The loopback sign-in error names port 1455
   (`packages/texra/src/controllers/modelAccess/subscriptionProviders.ts`),
   which is llm's `CHATGPT_CALLBACK_PORTS`; it is wrong when that port was
   taken and the fallback port is used.
 - The settings view words the helper-model control itself
   (`packages/texra/src/ui/settings/components/profile/ModelSelectionList.ts`)
-  beside the row's title and description.
+  beside the row's title and description. Taken on 2026-11-24: the control
+  reads `HELPER_MODEL_SETTING`'s title and description; the description
+  drops "Leave empty to use the task's own model", which is false in any
+  app whose catalog names a default (an empty setting reads the default).
 - The harness still spells the product in two temp-file prefixes
   (`packages/harness/src/agent/runtime/run/img.ts`), the shell wrapper's
   variable names (`packages/harness/src/utils/system/execUtils.ts`) and one
@@ -103,6 +119,49 @@ session-carried, or the service forwards it and the TUI follows it.
   variables `_lifeline_pid` and `_command_status`, and the export
   `harnessToolOfClaudeTool`.
 
+## 5. Modules that sit in a layer their readers are not (2026-11-24)
+
+A sweep of the app outside `ui/` and the hosts' non-UI code for modules
+whose readers are all in another layer, or that reach up a layer.
+**Landed 2026-11-24:**
+
+- The revision layout (`revisionLayout.ts`) left `shared/constants/` for
+  `packages/texra/src/agent/output/`: every reader is Node-side, and
+  `shared/` holds wire contracts and webview-shared types.
+- The CLI's result writer (`emitCliResult`, `writeCliResult`) left
+  `commands/_helpers/` for `packages/cli/src/runtime/platform/output.ts`,
+  so `runtime/doctor.ts` no longer imports a command helper to print.
+- The slash palette's typo distance (`editDistance.ts`) moved beside its
+  one reader, `packages/cli/src/chat/tui/commands/slashRegistry.ts`; its
+  subcommand half went when the command tree moved to effect/cli.
+- `texra run`'s target wording (`runtime/runTarget.ts`) and the settings
+  view's `commandOnly` (`messageFactories.ts`) folded into their one reader.
+
+Still open, each blocked only by the files open PR #15216 holds:
+
+- **The CLI runtime reads the chat TUI's state for a resume command.**
+  `formatResumeCommand` and `oneShotResumeNotice`
+  (`packages/cli/src/chat/tui/state/resumeHint.ts`) are read by the
+  headless runtime (`packages/cli/src/runtime/headless/interruptedResumeHint.ts`)
+  and by `texra resume` (`packages/cli/src/commands/resumeRun.ts`). Both
+  belong in the runtime, beside the context they format; the TUI keeps
+  the exit hint's usage lines. `chatSessionController.ts` imports
+  `oneShotResumeNotice` from the TUI module, so the move waits for #15216.
+- **Each GUI host stages a tool edit's two files its own way.** The
+  desktop makes a directory per request and removes it
+  (`packages/desktop/src/main/desktopToolEditApproval.ts`); the extension
+  writes into one storage directory and removes the two files
+  (`packages/extension/src/frontend/approval/VscodeToolEditApprovalHost.ts`).
+  Both call `writeApprovalTempFiles`
+  (`packages/texra/src/controllers/approval/tempFileManager.ts`), whose
+  header names the split. The controller could stage both the same way and
+  hand the host only the paths; the extension's directory is passed in by
+  `ProgressViewProvider.ts`.
+- **Two desktop "shared" modules only the renderer reads**
+  (`packages/desktop/src/shared/desktopShellState.ts`,
+  `packages/desktop/src/shared/postMessageOrigin.ts`) belong under
+  `packages/desktop/src/renderer/`.
+
 ## Checked and left alone
 
 - **A clone's recovery steps** (2026-11-20 item 2). Both hosts read
@@ -110,3 +169,39 @@ session-carried, or the service forwards it and the TUI follows it.
   against a command to type).
 - **The dispatched-children rollup** (2026-11-22 item 1). Still needs the
   decision on whether the terminal counts a script's calls.
+
+## Re-checked 2026-11-24 (the harness and llm)
+
+A sweep of the layers inside and at the edge of `packages/harness/src` and
+`packages/llm/src`, on `main` at `dda1913b13`. Every open item of
+this note and the 2026-11-15 to 2026-11-22 layer notes that falls in the
+harness or llm still needs its decision (2026-11-23 item 2, 2026-11-22
+item 3, 2026-11-21 item 2, 2026-11-19 items 1, 2 and 4, 2026-11-15 item
+9), or sits in subscription code this sweep stayed out of.
+
+**Landed 2026-11-24:** the harness carried a process port nothing in the
+harness read, `HostResources` (the app's packaged resources root), typed
+into `PlatformServices`, built by `processLayer` from
+`AgentPlatform.resourcesRoot` and exported on `./plugins`. Only TeXRA's
+theory templates and its transcript export read it. The app serves its own
+`ResourcesRoot` reference beneath every session
+(`packages/texra/src/hosts/resourcesRoot.ts`), and the port, the platform
+field and the process option are gone. The 2026-11-07 ruling that kept
+`resourcesRoot` held because the harness then read it for the plugins'
+agent directories; those went with the agent catalog.
+
+Found and left:
+
+- **Two GitHub signals in the harness's signal table.**
+  `githubTokenInvalid` and `githubSubscriptionsChanged`
+  (`packages/harness/src/platform/appSignals.ts`) name one app plugin's
+  facts; the harness neither emits nor reads either. The table could take
+  the app's signals as data (an interface the app augments) or the plugin
+  could own its stream. Left: the choice is the owner's, and the token
+  signal's one subscriber is in `windowNotices.ts`, which open #15216
+  edits.
+- **`GlobalStorageFs` has no reader.** The process builds it
+  (`globalStorageFsLayer`) and `PlatformServices` lists it, but no program
+  in any package reads it; every reader of global storage takes the path
+  as data. Removing it from `./plugins` is the published surface, which
+  item 12 of the 2026-11-21 plugin note leaves to the owner.

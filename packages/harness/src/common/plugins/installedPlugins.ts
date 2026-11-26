@@ -202,47 +202,46 @@ const installFromRoot = Effect.fn('installFromRoot')(function* (
           message: `${candidate.url} is listed by a marketplace that was itself listed by one; only one level is followed.`,
         });
       }
-      records.push(...(yield* installOrigin(candidate, [], run, true)));
+      for (const record of yield* installOrigin(candidate, [], run, true))
+        records.push(record);
       continue;
     }
     const plugin = yield* readPlugin(candidate.dir, candidate.entry);
     yield* claimName(run, plugin.name);
-    if (fetched.kind === 'local') {
-      records.push({
-        name: plugin.name,
+    let location: Pick<InstalledPlugin, 'source' | 'path' | 'ref' | 'commit'> =
+      {
         source: candidate.dir,
         path: candidate.dir,
-        skills: plugin.skills.map((skill) => path.join(candidate.dir, skill)),
-        ...standIn(candidate),
-        enabled: false,
-      });
-      continue;
+      };
+    if (fetched.kind === 'git') {
+      // Each fetched plugin gets its own managed copy of the checkout, so
+      // update and remove act on one plugin without touching another.
+      const dest = managedDir(run.env, plugin.name);
+      // A plain mkdir claims the directory: it fails if anything is there.
+      yield* fs.makeDirectory(dest).pipe(
+        Effect.mapError((error) =>
+          error.reason._tag === 'AlreadyExists'
+            ? new PluginError({
+                message: `${dest} already exists but no installed plugin records it. Delete it, then install again.`,
+              })
+            : ioError(error),
+        ),
+      );
+      run.created.push(dest);
+      // The checkout holds no symlinks (`checkoutDetached` writes them as
+      // plain files), so the copy has none to rewrite.
+      yield* fs.copy(root, dest).pipe(Effect.mapError(ioError));
+      location = {
+        source: fetched.url,
+        ...(fetched.ref ? { ref: fetched.ref } : {}),
+        commit: fetched.commit,
+        path: path.join(dest, path.relative(root, candidate.dir)),
+      };
     }
-    // Each fetched plugin gets its own managed copy of the checkout, so
-    // update and remove act on one plugin without touching another.
-    const dest = managedDir(run.env, plugin.name);
-    // A plain mkdir claims the directory: it fails if anything is there.
-    yield* fs.makeDirectory(dest).pipe(
-      Effect.mapError((error) =>
-        error.reason._tag === 'AlreadyExists'
-          ? new PluginError({
-              message: `${dest} already exists but no installed plugin records it. Delete it, then install again.`,
-            })
-          : ioError(error),
-      ),
-    );
-    run.created.push(dest);
-    // The checkout holds no symlinks (`checkoutDetached` writes them as
-    // plain files), so the copy has none to rewrite.
-    yield* fs.copy(root, dest).pipe(Effect.mapError(ioError));
-    const pluginPath = path.join(dest, path.relative(root, candidate.dir));
     records.push({
       name: plugin.name,
-      source: fetched.url,
-      ...(fetched.ref ? { ref: fetched.ref } : {}),
-      commit: fetched.commit,
-      path: pluginPath,
-      skills: plugin.skills.map((skill) => path.join(pluginPath, skill)),
+      ...location,
+      skills: plugin.skills.map((skill) => path.join(location.path, skill)),
       ...standIn(candidate),
       enabled: false,
     });
@@ -336,9 +335,8 @@ const installPlugins = Effect.fn('installPlugins')(function* (
   return yield* installOrigin(origin, only, run, false).pipe(
     Effect.tap((records) =>
       modifyInstalled(env, (current) => {
-        const clash = records.find((record) =>
-          current.some((plugin) => plugin.name === record.name),
-        );
+        const installed = new Set(current.map(({ name }) => name));
+        const clash = records.find(({ name }) => installed.has(name));
         return clash === undefined
           ? Result.succeed([[...current, ...records], undefined] as const)
           : Result.fail(nameTaken(clash.name));
@@ -427,39 +425,45 @@ const updatePlugins = Effect.fn('updatePlugins')(function* (
       : yield* Effect.forEach(names, (name) =>
           Effect.fromResult(findInstalled(installed, name)),
         );
-  const updates: PluginUpdate[] = [];
-  for (const plugin of targets) {
-    const dir = managedDir(env, plugin.name);
-    const commit =
-      plugin.commit === undefined
-        ? undefined
-        : yield* fetchPinned(dir, plugin.source, plugin.ref);
-    const skills = yield* rereadPlugin(plugin).pipe(
-      Effect.map((resolved) =>
-        resolved.skills.map((skill) => path.join(plugin.path, skill)),
-      ),
-      Effect.tapError(() =>
+  return yield* Effect.forEach(
+    targets,
+    Effect.fnUntraced(function* (plugin) {
+      const dir = managedDir(env, plugin.name);
+      const commit =
         plugin.commit === undefined
-          ? Effect.void
-          : checkoutDetached(dir, plugin.commit).pipe(
-              // The reread failure is the one to report; a failed restore
-              // is named beside it.
-              Effect.catch((error) =>
-                Effect.logWarning(
-                  `Could not restore ${dir} to ${plugin.commit}: ${error.message}`,
+          ? undefined
+          : yield* fetchPinned(dir, plugin.source, plugin.ref);
+      const skills = yield* rereadPlugin(plugin).pipe(
+        Effect.map((resolved) =>
+          resolved.skills.map((skill) => path.join(plugin.path, skill)),
+        ),
+        Effect.tapError(() =>
+          plugin.commit === undefined
+            ? Effect.void
+            : checkoutDetached(dir, plugin.commit).pipe(
+                // The reread failure is the one to report; a failed restore
+                // is named beside it.
+                Effect.catch((error) =>
+                  Effect.logWarning(
+                    `Could not restore ${dir} to ${plugin.commit}: ${error.message}`,
+                  ),
                 ),
               ),
-            ),
-      ),
-    );
-    yield* updateInstalled(env, plugin.name, (found) => ({
-      ...found,
-      ...(commit ? { commit } : {}),
-      skills,
-    }));
-    updates.push({ name: plugin.name, from: plugin.commit, to: commit });
-  }
-  return updates;
+        ),
+      );
+      yield* updateInstalled(env, plugin.name, (found) => ({
+        ...found,
+        ...(commit ? { commit } : {}),
+        skills,
+      }));
+      const update: PluginUpdate = {
+        name: plugin.name,
+        from: plugin.commit,
+        to: commit,
+      };
+      return update;
+    }),
+  );
 });
 
 /**

@@ -6,6 +6,7 @@ import { Box, Text } from 'ink';
 import { useState, type ReactNode } from 'react';
 
 import { BACK_HINT, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 
 import { PromptInput } from '@cli/chat/tui/input/TextInput';
@@ -77,7 +78,7 @@ export function TextEntryForm(props: TextEntryFormProps): React.JSX.Element {
       {status || props.saving ? (
         <Box marginTop={1} flexDirection="column">
           {status}
-          {props.saving ? <Text dimColor>Saving…</Text> : null}
+          {props.saving ? <LoadingIndicator label="Saving…" /> : null}
         </Box>
       ) : null}
     </FormFrame>

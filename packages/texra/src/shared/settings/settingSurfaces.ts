@@ -30,7 +30,6 @@ import {
   GIT_AUTHOR_EMAIL_SETTING,
   GIT_AUTHOR_NAME_SETTING,
   GIT_MARK_COMMITS_SETTING,
-  GIT_WORKTREE_SUPPORT_SETTING,
   GLM_CODING_PLAN_SETTING,
   GLM_REGION_SETTING,
   GOOGLE_INTERACTIONS_SERVER_STATE_SETTING,
@@ -98,7 +97,6 @@ export const SettingCategorySchema = Schema.Literals([
   'git',
   'agents',
   'ai-agents',
-  'documents',
   'model',
   'latex',
   'latexdiff',
@@ -239,10 +237,6 @@ export const HARNESS_ROW_SURFACES: Readonly<
     ...GIT_AUTHOR_AND_CLI,
   }),
   [GIT_AUTHOR_EMAIL_SETTING.key]: Object.freeze({
-    category: 'git',
-    ...GIT_AUTHOR_AND_CLI,
-  }),
-  [GIT_WORKTREE_SUPPORT_SETTING.key]: Object.freeze({
     category: 'git',
     ...GIT_AUTHOR_AND_CLI,
   }),

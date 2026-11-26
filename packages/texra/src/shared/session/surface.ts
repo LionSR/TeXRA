@@ -11,7 +11,7 @@
  * where a `Map` serializes to `{}`, so the persisted form beside it is a
  * schema whose maps are entry arrays, rebuilt into `Map`s at load.
  */
-import { Option, Schema, SchemaGetter, Struct } from 'effect';
+import { Schema, Struct } from 'effect';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -36,21 +36,6 @@ import { markShownRunSeen } from './unseenRuns';
 import type { CommitOrdinal } from '@texra-ai/worldline/transcript';
 import type { HostSnapshot } from './hostSnapshot';
 
-/** The launcher's file lists; an absent or null `editedFile` reads ''. */
-const UIFileFieldsSchema = FileFieldsSchema.mapFields(
-  Struct.assign({
-    editedFile: Schema.optional(Schema.NullOr(Schema.String)).pipe(
-      Schema.decodeTo(Schema.String, {
-        // An absent key reads '' too, not only a present null.
-        decode: SchemaGetter.transformOptional((v) =>
-          Option.some(Option.getOrUndefined(v) ?? ''),
-        ),
-        encode: SchemaGetter.transform((v) => v),
-      }),
-    ),
-  }),
-);
-
 /** The fields of a run's config that say what chat it is. */
 const CHAT_FIELDS = ['label', 'system', 'tools', 'toolScope'] as const;
 
@@ -71,11 +56,10 @@ export const chatOf = (config: AgentConfig): ChatLaunch =>
  * one instruction for the entry agent, which chats. The file lists are what a
  * program's proposal, opened in the form, is edited with.
  */
-export const LaunchSurfaceSchema = UIFileFieldsSchema.mapFields(
+export const LaunchSurfaceSchema = FileFieldsSchema.mapFields(
   Struct.assign({
     workingDirectory: decodingDefault(Schema.String, ''),
     model: decodingDefault(Schema.String, DEFAULT_AGENT_MODEL),
-    commit: decodingDefault(Schema.String, 'HEAD'),
     instruction: decodingDefault(Schema.String, ''),
     /** The skills of the run Run again… opened the form on, which its
      *  launch activates again; a new task clears them. */
@@ -84,7 +68,6 @@ export const LaunchSurfaceSchema = UIFileFieldsSchema.mapFields(
      *  ({@link chatOf}), which its launch starts again; null, the entry
      *  agent. A new task clears it. */
     chat: decodingDefault(Schema.NullOr(ChatLaunchSchema), null),
-    baseFile: decodingDefault(Schema.String, ''),
     /** Per-task approval, applied at launch by `launchApprovalOptions`. */
     approval: decodingDefault(
       Schema.Literals(['policy', 'autoApprove']),
@@ -256,9 +239,6 @@ export interface Surface {
   /** Each request card's unsent answer, under its request id. */
   readonly requestDrafts: ReadonlyMap<string, RequestDraft>;
   readonly drawerOpen: boolean;
-  readonly toolsSheetOpen: boolean;
-  /** The output list's "where files are stored" hint, dismissed once. */
-  readonly storageHintDismissed: boolean;
   /** The drawer's filter. Never persisted. */
   readonly search: string;
   readonly workbench: WorkbenchLayout | null;
@@ -277,7 +257,6 @@ function entries<K extends Schema.Top, V extends Schema.Top>(key: K, value: V) {
  */
 const RequestDraftSchema = Schema.Struct({
   note: Schema.optionalKey(Schema.String),
-  model: Schema.optionalKey(Schema.String),
   answers: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({
@@ -312,7 +291,6 @@ export const PersistedSurfaceSchema = Schema.Struct({
   ),
   requestDrafts: entries(Schema.String, RequestDraftSchema),
   drawerOpen: decodingDefault(Schema.Boolean, false),
-  storageHintDismissed: decodingDefault(Schema.Boolean, false),
   workbench: decodingDefault(
     Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
     null,
@@ -355,8 +333,6 @@ export function loadSurface(
     launch: persisted.launch,
     requestDrafts: new Map(persisted.requestDrafts),
     drawerOpen: persisted.drawerOpen,
-    toolsSheetOpen: false,
-    storageHintDismissed: persisted.storageHintDismissed,
     search: '',
     workbench: persisted.workbench,
   };
@@ -379,7 +355,6 @@ export function persistSurface(surface: Surface): PersistedSurface {
     ]),
     requestDrafts: [...surface.requestDrafts],
     drawerOpen: surface.drawerOpen,
-    storageHintDismissed: surface.storageHintDismissed,
     workbench: surface.workbench,
   };
 }
@@ -529,7 +504,6 @@ export type SurfaceAction =
   | { readonly kind: 'reportError'; readonly reason: string }
   | { readonly kind: 'toggleDrawer' }
   | { readonly kind: 'drawer'; readonly open: boolean }
-  | { readonly kind: 'toolsSheet'; readonly open: boolean }
   | { readonly kind: 'search'; readonly value: string }
   | {
       readonly kind: 'draft';
@@ -561,7 +535,6 @@ export type SurfaceAction =
       readonly expanded: boolean;
     }
   | { readonly kind: 'workbench'; readonly layout: WorkbenchLayout | null }
-  | { readonly kind: 'dismissStorageHint' }
   | { readonly kind: 'seen'; readonly view: SessionView };
 
 function withEntry<K, V>(map: ReadonlyMap<K, V>, key: K, value: V | null) {
@@ -629,10 +602,6 @@ export function applySurfaceAction(
       return { ...surface, drawerOpen: !surface.drawerOpen };
     case 'drawer':
       return { ...surface, drawerOpen: action.open };
-    case 'toolsSheet':
-      return { ...surface, toolsSheetOpen: action.open };
-    case 'dismissStorageHint':
-      return { ...surface, storageHintDismissed: true };
     case 'search':
       return { ...surface, search: action.value };
     case 'draft':

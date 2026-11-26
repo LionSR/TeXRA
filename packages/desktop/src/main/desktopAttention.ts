@@ -5,7 +5,14 @@
 // its run.
 
 import { app, Notification, type BrowserWindow } from 'electron';
-import { Effect, Queue, Stream, SubscriptionRef } from 'effect';
+import {
+  Effect,
+  Iterable,
+  Number as Num,
+  Queue,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import { attentionOf } from '@texra-ai/worldline/schemas';
 import { runAttentionLine, runStatus } from '@ui/copy/runStatus';
@@ -80,19 +87,15 @@ export function electronAttentionPort(options: {
       liveNotifications.delete(key);
       shown?.close();
     },
-    focused: Stream.callback<void>(
-      Effect.fnUntraced(function* (queue) {
-        const onFocus = () => {
-          Queue.offerUnsafe(queue, undefined);
-        };
-        app.on('browser-window-focus', onFocus);
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => {
-            app.off('browser-window-focus', onFocus);
-          }),
-        );
-      }),
-    ),
+    focused: Stream.callback<void>((queue) => {
+      const onFocus = () => {
+        Queue.offerUnsafe(queue, undefined);
+      };
+      return Effect.acquireRelease(
+        Effect.sync(() => app.on('browser-window-focus', onFocus)),
+        () => Effect.sync(() => app.off('browser-window-focus', onFocus)),
+      );
+    }),
   };
 }
 
@@ -157,9 +160,12 @@ export const followDesktopAttention = Effect.fnUntraced(function* (
           });
         }
       }
-      let waiting = 0;
-      for (const each of latest.values())
-        waiting += attentionOf(each).requests.length;
+      const waiting = Num.sumAll(
+        Iterable.map(
+          latest.values(),
+          (view) => attentionOf(view).requests.length,
+        ),
+      );
       if (waiting !== badge) {
         badge = waiting;
         port.setBadgeCount(waiting);

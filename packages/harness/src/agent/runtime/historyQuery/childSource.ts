@@ -12,7 +12,8 @@
  * statement, which also keeps `PRAGMA` out. Stdin closing (its host exited,
  * by any means) ends the process.
  */
-import { type Cause, Effect, Exit, Queue, Schema, Scope, Stream } from 'effect';
+import { type Cause, Effect, Queue, Schema, Scope, Stream } from 'effect';
+import { Ndjson } from 'effect/encoding';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
 import type { CommitOrdinal, RunId } from '@shared/schemas';
@@ -119,7 +120,7 @@ const ReplySchema = Schema.Union([
   Schema.Struct({ ok: Schema.Literal(true), value: Schema.Unknown }),
   HistoryQueryRefused,
 ]);
-const ReplyLineSchema = Schema.fromJsonString(ReplySchema);
+const PROCESS_EXITED = 'The history query process exited.';
 
 /** The positions the store's `tool_calls` rows are inserted at: one per
  *  issued call, so a provider's reused call id never shares one. */
@@ -130,9 +131,11 @@ export interface CallPositions {
 
 /** One open store process and what the session side last fed it. */
 export interface Store {
-  readonly scope: Scope.Closeable;
-  readonly requests: Queue.Queue<string>;
-  readonly replies: Queue.Queue<string, Cause.Done | PlatformError>;
+  readonly requests: Queue.Queue<Record<string, unknown>>;
+  readonly replies: Queue.Queue<
+    typeof ReplySchema.Type,
+    Cause.Done | HistoryQueryFailed
+  >;
   /** The commit every fed call fact is at or below. */
   cursor: CommitOrdinal;
   /** The view's `runs` the store's `runs` table was last filled from. */
@@ -161,12 +164,12 @@ export const request = Effect.fn('HistoryQuery.request')(function* (
   store: Store,
   message: Record<string, unknown>,
 ) {
-  yield* Queue.offer(store.requests, JSON.stringify(message));
-  const line = yield* Queue.take(store.replies).pipe(
-    failedWith('The history query process exited.'),
-  );
-  return yield* Schema.decodeUnknownEffect(ReplyLineSchema)(line).pipe(
-    failedWith('The history query process sent an unreadable reply.'),
+  yield* Queue.offer(store.requests, message);
+  return yield* Queue.take(store.replies).pipe(
+    Effect.catchTag(
+      'Done',
+      (cause) => new HistoryQueryFailed({ message: PROCESS_EXITED, cause }),
+    ),
   );
 });
 
@@ -182,71 +185,80 @@ export const failedStep =
         )
       : Effect.void;
 
-/** Start a store process in a scope forked from `parent`, its schema made. */
+/** Start a store process in its generation's scope and initialize its schema. */
 export const spawnQueryStore = Effect.fn('HistoryQuery.spawn')(function* (
-  parent: Scope.Scope,
   spawner: ChildProcessSpawner['Service'],
 ) {
-  const scope = yield* Scope.fork(parent);
-  return yield* Effect.gen(function* () {
-    const handle = yield* spawner
-      .spawn(
-        ChildProcess.make(
-          process.execPath,
-          ['-e', HISTORY_QUERY_CHILD_SOURCE],
-          {
-            // An Electron host (the desktop app, the VS Code extension
-            // host) runs its own binary as plain Node only when asked.
-            env: { ELECTRON_RUN_AS_NODE: '1' },
-            extendEnv: true,
-            stdin: 'pipe',
-            stdout: 'pipe',
-            stderr: 'ignore',
-            killSignal: 'SIGKILL',
-          },
-        ),
-      )
-      .pipe(
-        Scope.provide(scope),
-        Effect.mapError(
-          (cause) =>
-            new HistoryQueryFailed({
-              message: 'The history query process could not start.',
-              cause,
-            }),
-        ),
-      );
-    // One request at a time: each offers its line and takes its reply
-    // before the next (the store's lane), so one of each is ever waiting.
-    const requests = yield* Queue.bounded<string>(1);
-    const replies = yield* Queue.bounded<string, Cause.Done | PlatformError>(1);
-    // A failed write ends the reply queue with its cause, so the request
-    // waiting on a reply fails as `HistoryQueryFailed` instead of hanging.
-    yield* Stream.fromQueue(requests).pipe(
-      Stream.map((line) => `${line}\n`),
-      Stream.encodeText,
-      Stream.run(handle.stdin),
-      Effect.catch((error) => Queue.fail(replies, error)),
-      Effect.forkIn(scope),
+  const scope = yield* Scope.Scope;
+  const handle = yield* spawner
+    .spawn(
+      ChildProcess.make(process.execPath, ['-e', HISTORY_QUERY_CHILD_SOURCE], {
+        // An Electron host (the desktop app, the VS Code extension
+        // host) runs its own binary as plain Node only when asked.
+        env: { ELECTRON_RUN_AS_NODE: '1' },
+        extendEnv: true,
+        stdin: 'pipe',
+        stdout: 'pipe',
+        stderr: 'ignore',
+        killSignal: 'SIGKILL',
+      }),
+    )
+    .pipe(
+      Effect.mapError(
+        (cause) =>
+          new HistoryQueryFailed({
+            message: 'The history query process could not start.',
+            cause,
+          }),
+      ),
     );
-    yield* Stream.runIntoQueue(
-      handle.stdout.pipe(Stream.decodeText(), Stream.splitLines),
-      replies,
-    ).pipe(Effect.forkIn(scope));
-    const store: Store = {
-      scope,
-      requests,
-      replies,
-      cursor: 0,
-      fed: new Map(),
-      calls: { last: 0, byCard: new Map() },
-    };
-    yield* request(store, {
-      kind: 'init',
-      schema: HISTORY_SCHEMA_SQL,
-      writes: HISTORY_WRITE_SQL,
-      heapLimit: STORE_HEAP_LIMIT_BYTES,
-    }).pipe(Effect.flatMap(failedStep('schema')));
-    return store;
-  }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
+  // One request at a time: each offers its line and takes its reply
+  // before the next (the store's lane), so one of each is ever waiting.
+  const requests = yield* Queue.bounded<Record<string, unknown>>(1);
+  const replies = yield* Queue.bounded<
+    typeof ReplySchema.Type,
+    Cause.Done | HistoryQueryFailed
+  >(1);
+  // A failed write ends the reply queue with its cause, so the request
+  // waiting on a reply fails as `HistoryQueryFailed` instead of hanging.
+  yield* Stream.fromQueue(requests).pipe(
+    Stream.pipeThroughChannel(Ndjson.encode()),
+    Stream.run(handle.stdin),
+    failedWith(PROCESS_EXITED),
+    Effect.catch((error) => Queue.fail(replies, error)),
+    Effect.forkIn(scope),
+  );
+  yield* Stream.runIntoQueue(
+    handle.stdout.pipe(
+      Stream.decodeText(),
+      Stream.pipeThroughChannel(
+        Ndjson.decodeSchemaString(ReplySchema)<PlatformError>(),
+      ),
+      Stream.mapError(
+        (cause) =>
+          new HistoryQueryFailed({
+            message:
+              Ndjson.isNdjsonError(cause) || cause instanceof Schema.SchemaError
+                ? 'The history query process sent an unreadable reply.'
+                : PROCESS_EXITED,
+            cause,
+          }),
+      ),
+    ),
+    replies,
+  ).pipe(Effect.forkIn(scope));
+  const store: Store = {
+    requests,
+    replies,
+    cursor: 0,
+    fed: new Map(),
+    calls: { last: 0, byCard: new Map() },
+  };
+  yield* request(store, {
+    kind: 'init',
+    schema: HISTORY_SCHEMA_SQL,
+    writes: HISTORY_WRITE_SQL,
+    heapLimit: STORE_HEAP_LIMIT_BYTES,
+  }).pipe(Effect.flatMap(failedStep('schema')));
+  return store;
 });

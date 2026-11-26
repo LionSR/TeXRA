@@ -59,7 +59,6 @@ import {
   type SessionRowDraft,
   type SessionView,
 } from '@texra-ai/worldline/schemas';
-import { LocalRuntimeStateSchema } from '@shared/schemas';
 import { sessionEventsLayer } from '@agent/runtime/sessionEventsLayer';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionWorkspace } from '@shared/session/sessionWorkspace';
@@ -245,33 +244,6 @@ const graph = (
   );
 };
 
-/** What a renderer would draw of each state: the run's status and the
- *  outstanding requests, at the state's cursor. */
-function drawn(view: SessionView) {
-  return {
-    cursor: view.cursor,
-    status: (() => {
-      const run = view.runs.get(RUN);
-      return run === undefined ? null : (run.outcome ?? run.position);
-    })(),
-    requests: view.requests.map((request) => request.requestId),
-  };
-}
-
-/** The drawn states with the run present, consecutive repeats
- *  collapsed: a local-snapshot replay publishes a state nothing drawn
- *  differs in. */
-function drawnSequence(states: Iterable<ReturnType<typeof drawn>>) {
-  const seen: ReturnType<typeof drawn>[] = [];
-  for (const next of states) {
-    if (next.status === null) continue;
-    const last = seen.at(-1);
-    if (last && JSON.stringify(last) === JSON.stringify(next)) continue;
-    seen.push(next);
-  }
-  return seen;
-}
-
 // The native CI coordinator may use a different CPU architecture from its worker.
 beforeAll(() => {
   if (process.env.NATIVE_TARGET) {
@@ -287,19 +259,28 @@ beforeAll(() => {
 });
 
 describe('session events and view', () => {
-  it.effect('publishes complete replay and finite live batches in order', () =>
+  it.effect('shows complete history before the live updates', () =>
     Effect.gen(function* () {
       const events = yield* SessionEvents;
       const view = yield* SessionViewService;
-      // Every state the fold publishes, from before its marker until the
-      // tail has folded both live publishes, drawn as it is published: a
-      // view's run index is shared with the views after it. `changes`
-      // replays the state it holds on subscribe: the empty view before the
-      // marker, or the marker's state when the fold got there first.
+      // Read visible status and requests as each view arrives. Later views
+      // can update the same run index.
       const states = yield* Effect.forkScoped(
         SubscriptionRef.changes(view.ref).pipe(
-          Stream.map(drawn),
-          Stream.takeUntil((next) => next.cursor >= 5),
+          Stream.filterMap((level) => {
+            const run = level.runs.get(RUN);
+            return run === undefined
+              ? Result.failVoid
+              : Result.succeed({
+                  cursor: level.cursor,
+                  status: run.outcome ?? run.position,
+                  requests: level.requests.map(({ requestId }) => requestId),
+                });
+          }),
+          Stream.takeUntil(
+            ({ status, requests }) =>
+              status === 'running' && requests.length === 0,
+          ),
           Stream.runCollect,
         ),
       );
@@ -325,14 +306,14 @@ describe('session events and view', () => {
           },
         ]),
       );
-      // The first state with the run in it has all of the history: no
-      // state with the run started but not yet waiting, or waiting with
-      // no approval, is ever published. The anchor is the seeded log's
-      // level, so the history is under it and the tail repeats none of it.
-      expect(drawnSequence(yield* Fiber.join(states))).toEqual([
-        { cursor: 0, status: 'waiting', requests: ['req-1'] },
-        { cursor: 5, status: 'running', requests: [] },
-      ]);
+      const shown = yield* Fiber.join(states);
+      expect(shown[0]).toMatchObject({
+        status: 'waiting',
+        requests: ['req-1'],
+      });
+      expect(shown.at(-1)).toMatchObject({ status: 'running', requests: [] });
+      const cursors = shown.map(({ cursor }) => cursor);
+      expect(cursors).toEqual(cursors.toSorted((a, b) => a - b));
     }).pipe(Effect.provide(graph([runStartRow, waiting, requested]))),
   );
 

@@ -1,4 +1,4 @@
-import { Schema, Struct } from 'effect';
+import { Schema } from 'effect';
 import {
   NonNegativeIntSchema,
   PlanQuotaFailureSchema,
@@ -21,12 +21,9 @@ const SubscriptionUsageProviderSchema = Schema.Literals(
 export type SubscriptionUsageProvider =
   (typeof SubscriptionUsageProviderSchema)['Type'];
 
-const SubscriptionUsageWindowSchema = Schema.Struct({
+export const SubscriptionUsageWindowSchema = Schema.Struct({
   name: Schema.NonEmptyString,
   percentUsed: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).check(
-    Schema.isLessThanOrEqualTo(100),
-  ),
-  percentRemaining: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).check(
     Schema.isLessThanOrEqualTo(100),
   ),
   resetAt: Schema.optional(NonNegativeIntSchema),
@@ -34,29 +31,20 @@ const SubscriptionUsageWindowSchema = Schema.Struct({
 export type SubscriptionUsageWindow =
   (typeof SubscriptionUsageWindowSchema)['Type'];
 
-const SubscriptionUsageSnapshotBaseSchema = Schema.Struct({
-  providerName: Schema.NonEmptyString,
-  planName: Schema.NonEmptyString,
-  fetchedAt: NonNegativeIntSchema,
-});
-
 const SubscriptionUsageSnapshotSchema = Schema.Union([
-  SubscriptionUsageSnapshotBaseSchema.mapFields(
-    Struct.assign({
-      state: Schema.Literal('available'),
-      windows: Schema.Array(SubscriptionUsageWindowSchema).check(
-        Schema.isMinLength(1),
-      ),
-    }),
-  ),
-
-  SubscriptionUsageSnapshotBaseSchema.mapFields(
-    Struct.assign({
-      state: Schema.Literal('unavailable'),
-      windows: Schema.Tuple([]),
-      reason: PlanQuotaFailureSchema,
-    }),
-  ),
+  Schema.Struct({
+    state: Schema.Literal('available'),
+    providerName: Schema.NonEmptyString,
+    planName: Schema.NonEmptyString,
+    fetchedAt: NonNegativeIntSchema,
+    windows: Schema.Array(SubscriptionUsageWindowSchema).check(
+      Schema.isMinLength(1),
+    ),
+  }),
+  Schema.Struct({
+    state: Schema.Literal('unavailable'),
+    reason: PlanQuotaFailureSchema,
+  }),
 ]);
 export type SubscriptionUsageSnapshot =
   (typeof SubscriptionUsageSnapshotSchema)['Type'];

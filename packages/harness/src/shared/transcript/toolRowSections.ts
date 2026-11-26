@@ -6,6 +6,7 @@
  * and the fold itself — the dispatch table is the only boundary between them.
  */
 import {
+  Array as Arr,
   Option,
   Predicate,
   Record as EffectRecord,
@@ -112,11 +113,12 @@ export function outputLineChanges(
   output: unknown,
 ): ReadonlyMap<string, typeof LineChangesSchema.Type> {
   return new Map(
-    outputEdits(output).flatMap((raw) =>
-      Option.toArray(decodeOutputEdit(raw)).flatMap(({ path, lineChanges }) =>
-        path && lineChanges ? [[path, lineChanges] as const] : [],
-      ),
-    ),
+    Arr.filterMap(outputEdits(output), (raw) => {
+      const edit = Option.getOrUndefined(decodeOutputEdit(raw));
+      return edit?.path && edit.lineChanges
+        ? Result.succeed([edit.path, edit.lineChanges] as const)
+        : Result.failVoid;
+    }),
   );
 }
 
@@ -321,7 +323,6 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
       inputFiles: toStringArray(input.inputFiles),
       contextFiles: toStringArray(input.contextFiles),
       mediaFiles: toStringArray(input.mediaFiles),
-      outputFiles: toStringArray(input.outputFiles),
     }),
   );
   if (files) sections.push(files);
@@ -376,8 +377,9 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
   const blocks = Array.isArray(parsed?.contentBlocks)
     ? parsed.contentBlocks
     : [];
-  const textBlocks = blocks.filter(isMcpTextBlock).map((block) => block.text);
-  const otherBlocks = blocks.filter((block) => !isMcpTextBlock(block));
+  const [textBlocks, otherBlocks] = Arr.partition(blocks, (block) =>
+    isMcpTextBlock(block) ? Result.succeed(block.text) : Result.fail(block),
+  );
   let structured = false;
 
   if (parsed?.status != null) {

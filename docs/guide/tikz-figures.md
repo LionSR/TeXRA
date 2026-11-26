@@ -6,7 +6,7 @@ import TikzTroubleshootCards from '../.vitepress/components/TikzTroubleshootCard
 
 [TikZ](https://github.com/pgf-tikz/pgf) is a LaTeX package for creating vector graphics programmatically. It is widely used in academia for diagrams, plots, and technical illustrations because of its output quality and its integration with LaTeX. Learning TikZ can feel like learning a new language. TeXRA helps with that, so the figures that illustrate a derivation or a result take less of your time than the theory itself.
 
-TeXRA offers features built for TikZ, centered on the assistant, which writes TikZ, compiles it, and visually verifies the result, together with automatic extraction for document programs and a compile command. This guide covers the TikZ-specific workflows.
+TeXRA offers features built for TikZ, centered on the assistant, which writes TikZ, compiles it, and visually verifies the result together with a compile command. This guide covers the TikZ-specific workflows.
 
 ::: tip General media handling
 For other figure types (standard images, PDFs) and media selection in the UI, read the [Working with figures](./working-with-figures.md) guide.

@@ -4,10 +4,7 @@ import { Array as Arr, Order } from 'effect';
 import { createContext, useContext } from 'react';
 
 import { API_KEY_PATTERN_SOURCE } from '@texra-ai/llm';
-import {
-  editDistance,
-  typoSuggestionThreshold,
-} from '@cli/commands/_helpers/editDistance';
+import { editDistance, typoSuggestionThreshold } from './editDistance';
 
 import type {
   SlashCommandContext,

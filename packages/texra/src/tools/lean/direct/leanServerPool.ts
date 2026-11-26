@@ -23,6 +23,7 @@ import {
   Effect,
   Exit,
   FileSystem,
+  Iterable,
   Layer,
   LayerMap,
   Option,
@@ -276,18 +277,15 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
         }
         // Every root gets its restart attempt: a failing respawn must not
         // interrupt a sibling's. The first failure is reported once all finish.
-        const restarts = yield* Effect.forEach(
-          live,
-          (held) =>
-            Effect.result(
-              stop(held).pipe(
-                Effect.andThen(Effect.scoped(lease(held.root, owner))),
-              ),
+        const restarts = yield* Effect.all(
+          live.map((held) =>
+            stop(held).pipe(
+              Effect.andThen(Effect.scoped(lease(held.root, owner))),
             ),
-          { concurrency: 'unbounded' },
+          ),
+          { concurrency: 'unbounded', mode: 'result' },
         );
-        const failed = restarts.find(Result.isFailure);
-        if (failed) return yield* Effect.fail(failed.failure);
+        yield* Effect.fromResult(Result.all(restarts));
         return;
       }
       case 'stop_server':
@@ -452,24 +450,34 @@ function isFileTableExhausted(error: unknown): boolean {
 /** Walk up from `filePath` looking for a Lake project root. */
 const resolveWorkspaceRoot = Effect.fn('LeanServerPool.resolveWorkspaceRoot')(
   function* (fs: FileSystem.FileSystem, filePath: string) {
-    let dir = path.dirname(path.resolve(filePath));
-    const root = path.parse(dir).root;
-    for (;;) {
-      // Both lakefiles are probed at once; the answer is read as the
-      // sequential `lean || toml` would, so a failed `.toml` probe counts
-      // only when there is no `lakefile.lean`.
-      const [lean, toml] = yield* Effect.all(
-        [
-          pathExists(fs, path.join(dir, 'lakefile.lean')),
-          pathExists(fs, path.join(dir, 'lakefile.toml')),
-        ],
-        { concurrency: 2, mode: 'result' },
-      );
-      if ((yield* Effect.fromResult(lean)) || (yield* Effect.fromResult(toml)))
-        return dir;
-      if (dir === root) return null;
-      dir = path.dirname(dir);
-    }
+    const start = path.dirname(path.resolve(filePath));
+    const root = path.parse(start).root;
+    const ancestors = Iterable.unfold<string | undefined, string>(
+      start,
+      (dir) =>
+        dir === undefined
+          ? Option.none()
+          : Option.some([dir, dir === root ? undefined : path.dirname(dir)]),
+    );
+    const found = yield* Effect.findFirst(
+      ancestors,
+      Effect.fnUntraced(function* (dir) {
+        // Both lakefiles are probed at once; the answer is read as the
+        // sequential `lean || toml` would, so a failed `.toml` probe counts
+        // only when there is no `lakefile.lean`.
+        const [lean, toml] = yield* Effect.all(
+          [
+            pathExists(fs, path.join(dir, 'lakefile.lean')),
+            pathExists(fs, path.join(dir, 'lakefile.toml')),
+          ],
+          { concurrency: 2, mode: 'result' },
+        );
+        return (
+          (yield* Effect.fromResult(lean)) || (yield* Effect.fromResult(toml))
+        );
+      }),
+    );
+    return Option.getOrNull(found);
   },
 );
 

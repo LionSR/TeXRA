@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
+import { Array as Arr, Effect, FileSystem, Iterable, Result } from 'effect';
 
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { pathExists } from '@texra-ai/worldline/node';
@@ -158,12 +158,8 @@ const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
     );
 
     return {
-      outputs: results
-        .map((result) => result.output)
-        .filter(Predicate.isNotNull),
-      errors: results
-        .map((result) => result.error)
-        .filter(Predicate.isNotNullish),
+      outputs: [...Iterable.flatMapNullishOr(results, ({ output }) => output)],
+      errors: [...Iterable.flatMapNullishOr(results, ({ error }) => error)],
     };
   },
 );
@@ -238,17 +234,10 @@ const TEXCOUNT_STAT_PATTERNS: readonly [RegExp, string][] = [
 
 /** Parse texcount's raw text output into the headline stats it reports. */
 export function parseTeXCountStats(output: string): TeXCountStat[] {
-  return TEXCOUNT_STAT_PATTERNS.map(([pattern, template]) => {
+  return Arr.filterMap(TEXCOUNT_STAT_PATTERNS, ([pattern, template]) => {
     const match = output.match(pattern);
-    return match ? { label: template.replace('$1', match[1]) } : null;
-  }).filter(Predicate.isNotNull);
+    return match
+      ? Result.succeed({ label: template.replace('$1', match[1]) })
+      : Result.failVoid;
+  });
 }
-
-export const getTeXCountStats = Effect.fn('texcount.getTeXCountStats')(
-  function* (workspaceRoot: string | undefined, filePaths: string | string[]) {
-    const { output } = yield* getTeXCount(workspaceRoot, filePaths);
-    return output
-      ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`
-      : null;
-  },
-);

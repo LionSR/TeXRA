@@ -44,10 +44,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
 > {
   const { old_str, new_str, replace_all } = input;
   const prepared = yield* resolveWritableTarget(input.path);
-  if ('blocked' in prepared) {
-    return prepared.blocked;
-  }
-  const { path, displayPath, exists, originalContent } = prepared.target;
+  const { path, displayPath, exists, originalContent } = prepared;
   if (old_str.length === 0) {
     return yield* new ToolError(
       `old_str must not be empty for ${displayPath}. ` +

@@ -69,7 +69,7 @@ function replacementsOf(base: string, next: string): Replacement[] | undefined {
       at += change.count;
       open.end = at;
     } else {
-      open.lines.push(...toTerminatedLines(change.value));
+      for (const line of toTerminatedLines(change.value)) open.lines.push(line);
     }
   }
   if (open) replacements.push(open);
@@ -139,10 +139,11 @@ export function mergeEditOnto(
   for (const change of [...ours, ...theirs].toSorted(
     (a, b) => a.start - b.start,
   )) {
-    merged.push(...base.slice(at, change.start), ...change.lines);
+    for (; at < change.start; at++) merged.push(base[at]);
+    for (const line of change.lines) merged.push(line);
     at = change.end;
   }
-  merged.push(...base.slice(at));
+  for (; at < base.length; at++) merged.push(base[at]);
   return merged.join('');
 }
 

@@ -23,14 +23,14 @@ import {
 import {
   type DecisionOf,
   type HookOutcomePayload,
+  asToolError,
   type RefusalDecision,
   type RequestPayload,
   type RunId,
   toJsonValue,
-  ToolError,
   type ToolResult,
 } from '@shared/schemas';
-import { refusalCopy } from '@shared/session/approvalDecision';
+import { refusalCopy } from '@tools/approval/refusalCopy';
 import {
   callRequestId,
   type AttemptRequests,
@@ -44,7 +44,6 @@ import type {
 } from '@shared/session/sessionApprovals';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
-import { ensureError } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 
 import { Interactions } from '../HostInteractions';
@@ -53,7 +52,7 @@ import { RunCall } from '../RunCall';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { SessionServices } from '../rootLaunch';
 import type { PluginToolServices } from '../ToolServices';
-import type { StepHooks } from './hooks';
+import type { ToolCallHooks } from './hooks';
 
 const DEFAULT_BASH_REJECTION_GUIDANCE =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
@@ -140,10 +139,7 @@ function commandRejectedResult(
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 
 /** A call's recorded `PreToolUse` outcomes, and how a rewrite reads. */
-type CallHooks = Pick<
-  Effect.Success<ReturnType<StepHooks['preToolUse']>>,
-  'outcomes' | 'fromHook'
->;
+type CallHooks = Pick<ToolCallHooks, 'outcomes' | 'fromHook'>;
 
 /** What a call's `PreToolUse` hooks said together, `deny` over `ask` over
  *  `allow`, and the input they rewrote it to. Two different rewrites deny:
@@ -236,15 +232,16 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   // becoming a defect.
   const targets = yield* Effect.try({
     try: () => guard?.writes?.(decoded) ?? [],
-    catch: (cause) =>
-      cause instanceof ToolError
-        ? cause
-        : new ToolError(ensureError(cause).message, { cause }),
+    catch: asToolError,
   });
-  for (const target of targets) {
-    const path = yield* resolveToolPath(call.env, target);
-    yield* assertWritable(path, path.display);
-  }
+  yield* Effect.forEach(
+    targets,
+    (target) =>
+      resolveToolPath(call.env, target).pipe(
+        Effect.flatMap((path) => assertWritable(path, path.display)),
+      ),
+    { discard: true },
+  );
 
   if (!asks) return undefined;
   // The call as the prompt shows it: the guard's spelling, else the tool's

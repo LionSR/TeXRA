@@ -4,7 +4,6 @@ import { Flag } from 'effect/cli';
 import { pathExists } from '@texra-ai/worldline/node';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 
-import { CLI_CHEAP_START_MODEL } from '@texra/model/curatedModels';
 import { failUsage, type CliContext } from '../runtime/platform/cliContext';
 import {
   buildInitConfig,
@@ -16,20 +15,14 @@ import {
 } from '../runtime/platform/initConfig';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
+import { CLI_DEFAULT_MODEL_CANDIDATE } from '../runtime/models/launchDefaults';
 import { CLI_SETUP_RECOVERY } from '../runtime/models/modelAccess';
 import { isModelOptionAvailable } from '@texra-ai/worldline/schemas';
-import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import { chooseLaunchModel } from '@texra/model/setupCredentialAccess';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 
 import { boolFlag, cliCommand } from './_helpers/cliCommand';
-import { cliResult, emitCliResult } from './_helpers/output';
-
-function defaultInitAnswers(models: readonly ModelOptionData[]): InitAnswers {
-  return {
-    model: models.find(isModelOptionAvailable)?.value ?? CLI_CHEAP_START_MODEL,
-    outputFormat: 'text',
-  };
-}
+import { cliResult, emitCliResult } from '../runtime/platform/output';
 
 interface InitSummary {
   readonly path: string;
@@ -133,7 +126,12 @@ const runInit = Effect.fn('runInit')(function* (
     );
   }
 
-  const models = yield* loadModelOptions(services);
+  // The default is the model a launch with nothing configured takes, so
+  // accepting it changes no run.
+  const { decision, rows: models } = yield* chooseLaunchModel(services, [
+    CLI_DEFAULT_MODEL_CANDIDATE,
+  ]);
+  const defaultModel = decision?.model ?? CLI_DEFAULT_MODEL_CANDIDATE.model;
 
   const interactive =
     !opts.yes &&
@@ -150,6 +148,7 @@ const runInit = Effect.fn('runInit')(function* (
     );
     const result = yield* runInitWizard({
       models,
+      defaultModel,
       colorEnabled: context.stdoutColorEnabled,
     });
     if (!result) {
@@ -159,7 +158,7 @@ const runInit = Effect.fn('runInit')(function* (
     answers = result.answers;
     gitignore = result.gitignore;
   } else {
-    answers = defaultInitAnswers(models);
+    answers = { model: defaultModel, outputFormat: 'text' };
     gitignore = opts.gitignore ?? false;
   }
 

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Result, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
@@ -13,10 +13,17 @@ import { boundTurn, resolveTurn } from './turnInput.js';
 import { onOpenAiEndpoint } from './responsesConfiguration.js';
 import { ModelError } from '../errors.js';
 import { responseInput } from './openaiResponsesLower.js';
+import { refuseAmbientHeaders } from './transport.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
 import type { UploadCache } from './uploadCache.js';
 import type { SessionToken } from '../node.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
+
+/** Both Responses transports refuse an ambient header override the same way. */
+export const refuseAmbientOpenAiHeaders = refuseAmbientHeaders(
+  'OPENAI_CUSTOM_HEADERS',
+  'Ambient OpenAI headers cannot override the selected deployment.',
+);
 
 /** Resolves controls before the request is built; a route with no output limit
  *  ignores the request's, and the lowering refuses a continuation on a
@@ -210,11 +217,16 @@ export const authorized = <A, R>(
     const current = tokenOf(bearer).pipe(Effect.interruptible);
     const token = yield* current;
     if (typeof bearer === 'string') return yield* request(token);
-    const first = yield* Effect.result(request(token));
-    if (Result.isSuccess(first)) return first.success;
-    if (first.failure.kind !== 'authentication') return yield* first.failure;
-    yield* bearer.rejected(token).pipe(Effect.interruptible);
-    return yield* request(yield* current);
+    return yield* request(token).pipe(
+      Effect.catchIf(
+        (error) => error.kind === 'authentication',
+        () =>
+          Effect.gen(function* () {
+            yield* bearer.rejected(token).pipe(Effect.interruptible);
+            return yield* request(yield* current);
+          }),
+      ),
+    );
   });
 
 /** The `Authorization` header a request sends `token` in. */

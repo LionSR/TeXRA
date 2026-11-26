@@ -65,7 +65,6 @@ const publishRun = (
         inputFiles: ['paper.tex'],
         contextFiles: [],
         mediaFiles: [],
-        outputFiles: [],
         memories: [],
         instruction: '',
         workingDirectory: '/tmp/project',
@@ -197,8 +196,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 // the child's own row, derived beside the line that folded
                 // them. Both runs land in one batch, so the projection's
                 // first sight of the parent already holds its child.
-                const detach =
-                  yield* attachCliSessionProgressProjection(session);
+                yield* attachCliSessionProgressProjection(session);
                 yield* publishTestRows(handle, [
                   {
                     type: 'run.start',
@@ -225,8 +223,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 ]);
                 yield* holdTestRun(handle, childRunId);
                 yield* Effect.promise(() => settle());
-                yield* detach;
-              }),
+              }).pipe(Effect.scoped),
             );
 
             const records = ndjsonRecords(output).filter(

@@ -105,7 +105,7 @@ export function defineTool<T, R = never, const Name extends string = string>(
       ...(card !== undefined && {
         card: (rawInput: unknown) => {
           const input = Schema.decodeUnknownResult(schema)(rawInput);
-          return Result.isSuccess(input) ? card(input.success) : undefined;
+          return Result.getOrUndefined(Result.map(input, card));
         },
       }),
     },

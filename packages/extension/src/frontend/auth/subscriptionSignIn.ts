@@ -19,7 +19,7 @@ import {
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { SIGN_IN_PROMPT } from '@ui/copy/accountAuth';
+import { SIGN_IN_PROMPT, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import type { AppSignals, SettingsStores } from '@texra-ai/worldline/plugins';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
@@ -33,20 +33,25 @@ function vscodePresenter(
   const { displayName, sessionName, copyTarget } = provider;
   return {
     presentDeviceCode: Effect.fn('presentDeviceCode')(
-      function* (prompt) {
+      function* (prompt, reason) {
         const copied = yield* fromHost('clipboard.writeText', () =>
           vscode.env.clipboard.writeText(prompt.userCode),
         ).pipe(
           Effect.as(true),
           Effect.catch((error) =>
             Effect.logWarning(
-              `Could not copy the ${displayName} sign-in code: ${error.message}`,
+              SIGN_IN_PROMPT.codeCopyFailed(displayName, error.message),
             ).pipe(Effect.as(false)),
           ),
         );
+        const steps = SIGN_IN_PROMPT.deviceCodeSteps(
+          displayName,
+          prompt,
+          copied,
+        );
         const choice = yield* vscodeUi.ask(
           'info',
-          SIGN_IN_PROMPT.deviceCodeSteps(displayName, prompt, copied),
+          reason === undefined ? steps : `${reason}\n\n${steps}`,
           { items: [SIGN_IN_PROMPT.openVerificationLabel] },
         );
         if (choice === SIGN_IN_PROMPT.openVerificationLabel) {
@@ -73,7 +78,7 @@ function vscodePresenter(
         // link they can paste there instead.
         const choice = yield* vscodeUi.ask(
           'info',
-          `Sign in with ${displayName}. ${SIGN_IN_PROMPT.otherBrowser(sessionName)}`,
+          `${SUBSCRIPTION_AUTH_COPY[provider.id].signInLabel}. ${SIGN_IN_PROMPT.otherBrowser(sessionName)}`,
           {
             modal: true,
             items: [OPEN_DEFAULT_BROWSER, SIGN_IN_PROMPT.copyLinkLabel],
@@ -115,7 +120,7 @@ export function signInWithSubscription(
   return withVSCodeProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Signing in with ${provider.displayName}...`,
+      title: SIGN_IN_PROMPT.inProgress(provider.displayName),
       cancellable: false,
     },
     () =>

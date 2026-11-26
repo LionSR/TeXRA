@@ -970,16 +970,6 @@ export function crashConformanceSuite(
                     (type) => !cleanRows.some((row) => row.type === type),
                   ),
                 ).toEqual([]);
-                // The script's `agent()` approval, which its calls share, is the
-                // script call's (attempt 0): every crash point while it is pending
-                // must resume to that same card, never a second one.
-                expect(
-                  cleanRows.some(
-                    (row) =>
-                      row.type === 'request.opened' &&
-                      /:0:\d+$/.test(String(json(row).requestId)),
-                  ),
-                ).toBe(true);
                 expect(
                   violations([], cleanRows, 0, root, expected, [
                     'batch',

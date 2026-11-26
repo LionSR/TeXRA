@@ -28,6 +28,7 @@ import {
   stopServices,
 } from './texra-services.mjs';
 import { walkFiles } from './walkFiles.mjs';
+import extensionManifest from '../packages/extension/package.json' with { type: 'json' };
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const extensionPath = path.join(repoRoot, 'packages/extension');
@@ -41,9 +42,7 @@ const {
 });
 const version =
   requested === 'minimum'
-    ? JSON.parse(
-        readFileSync(path.join(extensionPath, 'package.json'), 'utf8'),
-      ).engines.vscode.replace(/^[^\d]*/, '')
+    ? extensionManifest.engines.vscode.replace(/^[^\d]*/, '')
     : requested;
 
 // VS Code's IPC socket lives under the user-data dir and must fit in ~100

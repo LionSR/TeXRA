@@ -8,13 +8,28 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 // Local imports
 import { credentialOriginLabel } from '@ui/copy/credentials';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
+import type { IconName } from '@ui/wa/iconNames';
+import { waSpinner } from '@ui/wa/spinner';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import type { WaVariant } from '@ui/wa/waVariant';
 
-type WaTagVariant = 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
+/**
+ * A status's mark: a spinner while its tone is running, so work in progress
+ * moves and a finished run does not, else its glyph. Decorative: the words
+ * beside it, or its holder's label, say the status.
+ */
+export function statusMark(
+  status: { readonly tone: string; readonly glyph: IconName },
+  className?: string,
+): TemplateResult {
+  return status.tone === 'running'
+    ? waSpinner(className)
+    : waIcon(status.glyph, { className });
+}
 
 interface SetStatusFallback {
   readonly label: string;
-  readonly variant?: WaTagVariant;
+  readonly variant?: WaVariant;
 }
 
 /** `wa-tag` reads compact and inline; `wa-badge` reads as a filled pill. */
@@ -108,10 +123,10 @@ export function renderKeyStatusIcon(
   return renderSetStatusIcon({
     status,
     success: 'secret',
-    title: credentialOriginLabel('secret', 'key'),
+    title: credentialOriginLabel('secret'),
     fallbacks: {
-      env: { label: credentialOriginLabel('env', 'key') },
-      none: { label: credentialOriginLabel('none', 'key') },
+      env: { label: credentialOriginLabel('env') },
+      none: { label: credentialOriginLabel('none') },
     },
   });
 }

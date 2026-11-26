@@ -2,9 +2,10 @@
  * Subscription sign-in and routing preference for one provider.
  *
  * ChatGPT (Codex) and Grok (xAI) render the identical section — a "prefer this
- * subscription" switch plus a sign-in/sign-out account row — so the copy, the
- * provider id the commands carry, and the account-label function are a descriptor
- * ({@link SubscriptionSectionProvider}) and the markup is written once.
+ * subscription" switch plus a sign-in/sign-out account row — so the markup is
+ * written once. Its words are the account copy every host shows
+ * (`SUBSCRIPTION_AUTH_COPY`) and the switch's setting row; the descriptor
+ * ({@link SubscriptionSectionProvider}) holds only what differs otherwise.
  */
 
 import { html, css, nothing, type TemplateResult } from 'lit';
@@ -15,23 +16,19 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  CHATGPT_PREFER_SUBSCRIPTION_SETTING,
+  type SettingRow,
   type SubscriptionAuthProvider,
+  XAI_PREFER_SUBSCRIPTION_SETTING,
 } from '@texra-ai/worldline/schemas';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import {
-  codexAccountLabel,
-  type SubscriptionAccountNames,
+  subscriptionAccountLabel,
   type SubscriptionAuthStatus,
-  xaiAccountLabel,
 } from '@texra/shared/model/subscriptionAuthStatus';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postToHost } from '@ui/settings/messageDispatcher';
-import {
-  ACCOUNT_OUTCOME,
-  CHATGPT_AUTH,
-  GROK_AUTH,
-  SUBSCRIPTION_AUTH_COPY,
-} from '@ui/copy/accountAuth';
+import { ACCOUNT_OUTCOME, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { TexraSignalElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {
@@ -56,22 +53,12 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 interface SubscriptionSectionProvider {
   /** DOM id of the rendered `<section>`, used by settings deep links. */
   readonly sectionId: string;
-  readonly title: string;
-  readonly description: string;
   /** Caveat shown under the heading (client registration, …). */
   readonly note?: string;
-  /** The routing switch's label: the subscription's own name, verbless. */
-  readonly preferLabel: string;
-  readonly preferDescription: string;
-  /** Account-row label while signed out. */
-  readonly accountTitle: string;
-  /** Account-row help while signed out. */
-  readonly connectDescription: string;
-  readonly signInText: string;
+  /** The routing switch, whose title and description the switch shows. */
+  readonly preference: SettingRow<boolean>;
   /** The provider the section's sign-in, sign-out and preference commands address. */
   readonly providerId: SubscriptionAuthStatus['provider'];
-  /** Human-readable account name for the signed-in row. */
-  readonly accountLabel: (account: SubscriptionAccountNames) => string;
   /** Optional advanced input-budget control for this subscription route. */
   readonly contextWindowSetting?: typeof CHATGPT_CODEX_CONTEXT_WINDOW_SETTING;
 }
@@ -116,17 +103,21 @@ export class SubscriptionSection extends TexraSignalElement {
 
   override render(): TemplateResult {
     const provider = this.provider;
+    const copy = SUBSCRIPTION_AUTH_COPY[provider.providerId];
     const headingId = `${provider.sectionId}-heading`;
     const contextWindowSetting = provider.contextWindowSetting;
     const signedIn = this.auth?.signedIn ?? false;
     const preferSubscription = this.auth?.preferSubscription ?? false;
-    const account = provider.accountLabel(this.auth ?? {});
+    const account = subscriptionAccountLabel(
+      provider.providerId,
+      this.auth ?? {},
+    );
     return html`
       <section id=${provider.sectionId} aria-labelledby=${headingId}>
         ${renderSettingsSectionHeading({
           id: headingId,
-          title: provider.title,
-          description: provider.description,
+          title: copy.subscriptionLabel,
+          description: copy.connect.description,
           icon: 'circle-user',
           actions: html`<wa-tag variant="neutral" size="s"
             >Experimental</wa-tag
@@ -142,8 +133,8 @@ export class SubscriptionSection extends TexraSignalElement {
         }
         <div class="settings-section">
           ${renderSettingsToggleRow({
-            label: provider.preferLabel,
-            description: provider.preferDescription,
+            label: provider.preference.title,
+            description: provider.preference.description,
             checked: preferSubscription,
             onChange: this.handlePreferSubscriptionChange,
           })}
@@ -155,18 +146,18 @@ export class SubscriptionSection extends TexraSignalElement {
                     ? html`${waIcon('circle-check')}
                         <bdi dir="auto"
                           >${ACCOUNT_OUTCOME.signedInAs(
-                            SUBSCRIPTION_AUTH_COPY[provider.providerId].label,
+                            copy.label,
                             account,
                           ).replace(/\.$/, '')}</bdi
                         >`
-                    : provider.accountTitle
+                    : 'Account'
                 }
               </span>
               <span class="settings-row-help">
                 ${
                   signedIn
                     ? 'Your subscription is ready to use.'
-                    : provider.connectDescription
+                    : copy.signInDescription
                 }
               </span>
             </div>
@@ -175,7 +166,7 @@ export class SubscriptionSection extends TexraSignalElement {
                 signedIn
                   ? renderLabeledActionButton({
                       text: 'Sign out',
-                      label: `Sign out of ${provider.title}`,
+                      label: copy.signOutLabel,
                       kind: 'secondary',
                       onClick: () =>
                         postToHost({
@@ -185,7 +176,7 @@ export class SubscriptionSection extends TexraSignalElement {
                     })
                   : renderLabeledActionButton({
                       icon: 'right-to-bracket',
-                      text: provider.signInText,
+                      text: copy.signInLabel,
                       kind: 'primary',
                       onClick: () =>
                         postToHost({
@@ -202,11 +193,7 @@ export class SubscriptionSection extends TexraSignalElement {
             contextWindowSetting
               ? html`<wa-details class="panel-collapsible" summary="Advanced">
                   ${renderStateSettingNumberRow(contextWindowSetting, {
-                    label: 'Input token budget',
-                    description:
-                      'How much context TeXRA sends per request on your ChatGPT plan. Leave it empty for the window Codex grants each model.',
                     placeholder: 'Model default',
-                    unit: 'K tokens',
                     // An empty field is each model's own window.
                     onClear: () =>
                       postStateSetting(contextWindowSetting.key, null),
@@ -230,17 +217,9 @@ export const SUBSCRIPTION_SECTIONS = Object.freeze({
    */
   chatgpt: Object.freeze({
     sectionId: 'chatgpt-subscription',
-    title: CHATGPT_AUTH.subscriptionLabel,
-    description:
-      'Use OpenAI models through ChatGPT Plus, Pro, or Team without an API key.',
     contextWindowSetting: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-    preferLabel: CHATGPT_AUTH.subscriptionLabel,
-    preferDescription: 'Route eligible OpenAI models through this plan.',
-    accountTitle: 'Account',
-    connectDescription: 'Sign in with your ChatGPT account.',
-    signInText: CHATGPT_AUTH.signInLabel,
+    preference: CHATGPT_PREFER_SUBSCRIPTION_SETTING,
     providerId: 'chatgpt',
-    accountLabel: codexAccountLabel,
   }),
 
   /**
@@ -250,17 +229,9 @@ export const SUBSCRIPTION_SECTIONS = Object.freeze({
    */
   grok: Object.freeze({
     sectionId: 'grok-subscription',
-    title: GROK_AUTH.subscriptionLabel,
-    description:
-      'Use xAI Grok models through SuperGrok without an xAI API key.',
     note: 'Uses the public Grok CLI OAuth client, which xAI may change or revoke.',
-    preferLabel: GROK_AUTH.subscriptionLabel,
-    preferDescription: 'Route xAI models through this plan.',
-    accountTitle: 'Account',
-    connectDescription: 'Sign in with your xAI account.',
-    signInText: GROK_AUTH.signInLabel,
+    preference: XAI_PREFER_SUBSCRIPTION_SETTING,
     providerId: 'grok',
-    accountLabel: xaiAccountLabel,
   }),
 } satisfies {
   readonly [P in SubscriptionAuthProvider]: SubscriptionSectionProvider & {

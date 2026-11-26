@@ -34,7 +34,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import '@ui/wa/spinner';
-import { documentRevisionsOf } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { shownRun, type Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
@@ -62,7 +61,6 @@ import './components/SessionComposer';
 import './components/NewTaskHero';
 import './components/LaunchAttachments';
 import './components/SessionDrawer';
-import './components/ToolsSheet';
 import './components/FileSelectGroup';
 import './components/GettingStartedBanner';
 import './components/OnboardingWelcomeCard';
@@ -97,8 +95,7 @@ export class ProgressApp extends LitElement {
     this.dispatchEvent(SessionUiEvents.host({ kind: 'onboarding', action }));
   }
 
-  /** The window's own items: pop the view out or back, the LaTeXDiffs
-   *  sheet. The New-task header shows them in its menu; a run's header
+  /** The window's own items: pop the view out or back. The New-task header shows them in its menu; a run's header
    *  appends them to the run's. An embedded shell's host owns its window. */
   private windowItems(): ActionMenuItem[] {
     if (this.placement === 'embedded') return [];
@@ -117,14 +114,6 @@ export class ProgressApp extends LitElement {
             label: 'Open tasks in editor',
             activate: host('popOut'),
           },
-      {
-        icon: 'code-compare',
-        label: 'latexdiff…',
-        activate: () =>
-          this.dispatchEvent(
-            SessionUiEvents.surface({ kind: 'toolsSheet', open: true }),
-          ),
-      },
     ];
   }
 
@@ -164,14 +153,6 @@ export class ProgressApp extends LitElement {
                 .host=${host}
                 .placement=${this.placement}
               ></session-drawer>`
-            : nothing
-        }
-        ${
-          surface.toolsSheetOpen
-            ? html`<tools-sheet
-                .surface=${surface}
-                .host=${host}
-              ></tools-sheet>`
             : nothing
         }
       </div>
@@ -252,7 +233,6 @@ export class ProgressApp extends LitElement {
                     .run=${run}
                     .view=${view}
                     .menuItems=${this.windowItems()}
-                    .plannedPasses=${documentRevisionsOf(run)}
                     >${start.map((b) => b.button)}${end.map((b) => b.button)}</run-header
                   >${start.map((b) => b.tooltip)}${end.map((b) => b.tooltip)}`
               : html`${start.map((b) => [b.button, b.tooltip])}

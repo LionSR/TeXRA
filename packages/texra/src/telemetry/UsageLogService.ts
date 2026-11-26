@@ -8,6 +8,7 @@ import {
   Effect,
   Fiber,
   Layer,
+  Option,
   Predicate,
   Queue,
   Result,
@@ -130,14 +131,16 @@ export const USAGE_LOGGING_ENV_OPT_OUT = formatWordList(
 const telemetryOptOutEnvVar = Effect.fnUntraced(function* (
   env?: Readonly<Record<string, string | undefined>>,
 ) {
-  for (const name of TELEMETRY_OPT_OUT_ENV_VARS) {
-    if (
-      (yield* envFlag(name, process.env)) ||
-      (env !== undefined && (yield* envFlag(name, env)))
-    )
-      return name;
-  }
-  return undefined;
+  const found = yield* Effect.findFirst(
+    TELEMETRY_OPT_OUT_ENV_VARS,
+    Effect.fnUntraced(function* (name) {
+      return (
+        (yield* envFlag(name, process.env)) ||
+        (env !== undefined && (yield* envFlag(name, env)))
+      );
+    }),
+  );
+  return Option.getOrUndefined(found);
 });
 
 /**
@@ -401,32 +404,26 @@ export const usageLogLayer = (
             ).pipe(withLogChannel(CHANNEL));
           }
           if (kept.length === 0) return;
-          batch = { ...batch, entries: kept };
+          const pending = { ...batch, entries: kept };
 
           yield* Effect.logDebug(
-            `Flushing ${batch.entries.length} entries (batch: ${batch.batchId})`,
+            `Flushing ${pending.entries.length} entries (batch: ${pending.batchId})`,
           ).pipe(withLogChannel(CHANNEL));
 
-          // From here on a failure keeps the batch for the retry.
-          const pending = batch;
-          const keepForRetry = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-            Effect.tapError(effect, () =>
-              Effect.sync(() => {
-                retryBatch = pending;
-              }),
-            );
           // The install ID is created only here, after every opt-out has passed.
-          const installId = yield* readOrCreateInstallId().pipe(
+          const response = yield* readOrCreateInstallId().pipe(
             Effect.mapError(
               (error) =>
                 new UsageBatchUndelivered({
                   reason: `install ID unavailable: ${toErrorMessage(error)}`,
                 }),
             ),
-            keepForRetry,
-          );
-          const response = yield* sendBatch(batch, installId).pipe(
-            keepForRetry,
+            Effect.flatMap((installId) => sendBatch(pending, installId)),
+            Effect.tapError(() =>
+              Effect.sync(() => {
+                retryBatch = pending;
+              }),
+            ),
           );
           // The endpoint answered: a run of delivery failures is over.
           warnedUndelivered = false;
@@ -436,12 +433,12 @@ export const usageLogLayer = (
             // and this build disagree. A retry cannot change that and would
             // hold back every entry behind it, so the batch is dropped.
             yield* Effect.logWarning(
-              `Usage endpoint rejected batch ${batch.batchId} for good (${rejectionReason(response)}); dropped ${batch.entries.length} entries`,
+              `Usage endpoint rejected batch ${pending.batchId} for good (${rejectionReason(response)}); dropped ${pending.entries.length} entries`,
             ).pipe(
               Effect.annotateLogs({
                 data: {
-                  batchId: batch.batchId,
-                  entryCount: batch.entries.length,
+                  batchId: pending.batchId,
+                  entryCount: pending.entries.length,
                   errorCode: response.errorCode,
                   error: response.error,
                 },
@@ -451,7 +448,7 @@ export const usageLogLayer = (
             return;
           }
           yield* Effect.logDebug(
-            `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
+            `Batch ${pending.batchId} sent successfully (${response.accepted} entries)`,
           ).pipe(withLogChannel(CHANNEL));
         },
       );
@@ -485,11 +482,10 @@ export const usageLogLayer = (
         }
       });
 
-      const backoff = Schedule.exponential(FLUSH_INTERVAL).pipe(
-        Schedule.modifyDelay(({ duration }) =>
-          Effect.succeed(Duration.min(duration, MAX_RETRY_DELAY)),
-        ),
-      );
+      const backoff = Schedule.min([
+        Schedule.exponential(FLUSH_INTERVAL),
+        Schedule.spaced(MAX_RETRY_DELAY),
+      ]);
 
       /**
        * A flush nobody awaits: the periodic one and the batch-size trigger. An

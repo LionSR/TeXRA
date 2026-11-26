@@ -17,7 +17,7 @@
 
 import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
 import type { IconName } from '@ui/wa/iconNames';
-import { CHATGPT_AUTH } from './accountAuth';
+import { SUBSCRIPTION_AUTH_COPY } from './accountAuth';
 import { OWN_API_KEYS } from './modelAccess';
 
 /** The one credential prompt: the extension/desktop card and the CLI's
@@ -25,14 +25,13 @@ import { OWN_API_KEYS } from './modelAccess';
 export const ONBOARDING_CARD_TITLE = 'Connect a model';
 
 /**
- * What TeXRA is, in one line, wherever a first impression forms: a capable
- * theorist, and one that works with you rather than around you.
+ * What TeXRA is, in one line, wherever a first impression forms.
  */
-export const TEXRA_TAGLINE = 'Your AI theorist. It proposes; you decide.';
+export const TEXRA_TAGLINE = 'Your AI theorist. Hand it the problem.';
 
 /** State 0 choice 1: the ChatGPT subscription's connect row, as the
  *  terminal's connect panel words it. */
-export const ONBOARDING_CHOICE_CHATGPT = CHATGPT_AUTH.connect;
+export const ONBOARDING_CHOICE_CHATGPT = SUBSCRIPTION_AUTH_COPY.chatgpt.connect;
 
 /**
  * State 0 choice 2. Same name as the model-access setting's option, so the

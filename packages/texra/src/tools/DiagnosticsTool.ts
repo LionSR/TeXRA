@@ -20,7 +20,7 @@ import {
   countBySeverity,
   formatCounts,
   formatMessageList,
-} from '@texra/utils/diagnostics/diagnosticFormatting';
+} from '@texra/tools/diagnosticFormatting';
 
 // Local file imports
 import {

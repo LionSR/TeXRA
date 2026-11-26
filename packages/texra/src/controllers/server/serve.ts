@@ -37,6 +37,7 @@ import {
   Exit,
   FileSystem,
   Layer,
+  Option,
   Path,
   RcMap,
   Schema,
@@ -319,9 +320,9 @@ export const serve = Effect.fn('server.serve')(function* (
   ProcessServices | Sessions | HostWindows | Scope.Scope
 > {
   if (IS_WINDOWS)
-    return yield* new ServiceListenFailed({
-      socket: '',
-      cause: new Error(WINDOWS_UNSUPPORTED),
+    return yield* new ServiceUnavailable({
+      reason: WINDOWS_UNSUPPORTED,
+      failure: { kind: 'none' },
     });
   const fs = yield* FileSystem.FileSystem;
   // In a scope of their own, which the exit below closes before the socket:
@@ -370,10 +371,11 @@ export const serve = Effect.fn('server.serve')(function* (
   );
   // No task starts from here on. The first reason stands.
   const leave = (why: 'drain' | 'end') =>
-    SubscriptionRef.update(state, (now) => ({
-      ...now,
-      leaving: now.leaving ?? why,
-    }));
+    SubscriptionRef.updateSome(state, (now) =>
+      now.leaving === null
+        ? Option.some({ ...now, leaving: why })
+        : Option.none(),
+    );
   // Every end leaves first, so no task starts once the run has ended.
   const end = (exit: ServeExit) =>
     leave('end').pipe(
@@ -403,10 +405,10 @@ export const serve = Effect.fn('server.serve')(function* (
       (now) => now.leaving !== null,
     ),
     holdStart: Effect.acquireRelease(
-      SubscriptionRef.modify(state, (now) =>
+      SubscriptionRef.modifySome(state, (now) =>
         now.leaving !== null
-          ? [false, now]
-          : [true, { ...now, starting: now.starting + 1 }],
+          ? [false, Option.none()]
+          : [true, Option.some({ ...now, starting: now.starting + 1 })],
       ),
       (held) =>
         held

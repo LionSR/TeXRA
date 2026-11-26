@@ -6,11 +6,13 @@ import {
   Effect,
   Exit,
   Fiber,
-  FiberHandle,
   FileSystem,
   Latch,
+  Option,
+  Stream,
   SubscriptionRef,
 } from 'effect';
+import type { Scope } from 'effect';
 import { MODEL_CONFIGS } from '@texra-ai/llm';
 import { transcribeAudio } from '@texra-ai/llm/node';
 
@@ -19,7 +21,7 @@ import { ownKeyCredential } from '@texra-ai/worldline/host';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import { polishTextWithAI } from '@texra/agent/runtime/textEnhancement';
+import { polishTextWithAI } from '@texra/controllers/session/draftPolish';
 import {
   recordingsDir,
   startRecording,
@@ -54,6 +56,12 @@ interface Take {
   readonly stopped: Latch.Latch;
 }
 
+interface ActiveTake {
+  readonly take: Take;
+  readonly fiber: Fiber.Fiber<HostOutcome, Rejected>;
+  readonly recording: Recording | null;
+}
+
 /** One instance per host process, shared by its session request handlers.
  *  The take runs in one fiber of the process's scope; `recording` is what
  *  every open project shows of it. */
@@ -62,22 +70,27 @@ export class HostDraftRequests {
    *  still running and waits for sox to exit. */
   static readonly make = Effect.gen(function* () {
     return new HostDraftRequests(
-      yield* SubscriptionRef.make<Recording | null>(null),
-      yield* FiberHandle.make<HostOutcome, Rejected>(),
+      yield* SubscriptionRef.make<ActiveTake | undefined>(undefined),
+      yield* Effect.scope,
     );
   });
 
   /** The take recording now and where it is going; null once it stopped. */
-  readonly recording: SubscriptionRef.SubscriptionRef<Recording | null>;
-  private readonly takes: FiberHandle.FiberHandle<HostOutcome, Rejected>;
-  /** The running take's owner; undefined while none runs. */
-  private take: Take | undefined;
+  readonly recording: Stream.Stream<Recording | null>;
+  private readonly scope: Scope.Scope;
+  private readonly active: SubscriptionRef.SubscriptionRef<
+    ActiveTake | undefined
+  >;
   private constructor(
-    recording: SubscriptionRef.SubscriptionRef<Recording | null>,
-    takes: FiberHandle.FiberHandle<HostOutcome, Rejected>,
+    active: SubscriptionRef.SubscriptionRef<ActiveTake | undefined>,
+    scope: Scope.Scope,
   ) {
-    this.recording = recording;
-    this.takes = takes;
+    this.active = active;
+    this.recording = SubscriptionRef.changes(active).pipe(
+      Stream.map((state) => state?.recording ?? null),
+      Stream.changes,
+    );
+    this.scope = scope;
   }
 
   /** Bind one session's requests for the caller's scope; closing it
@@ -138,16 +151,19 @@ export class HostDraftRequests {
    *  transcription: the take is interrupted, which stops sox through its
    *  scope, or the upload when Stop came first. */
   cancel(roots: WorkspaceRoots, port?: string): Effect.Effect<void> {
-    return Effect.suspend(() => {
-      const take = this.take;
-      if (
-        !take ||
-        take.roots !== roots ||
-        (port !== undefined && take.port !== port)
-      )
-        return Effect.void;
-      return FiberHandle.clear(this.takes);
-    });
+    // Read under the same lock as Start, then interrupt that specific fiber
+    // outside the lock so its finalizer can release the take.
+    return SubscriptionRef.modifySome(this.active, (state) => [
+      state?.take.roots === roots &&
+      (port === undefined || state.take.port === port)
+        ? state.fiber
+        : undefined,
+      Option.none(),
+    ]).pipe(
+      Effect.flatMap((fiber) =>
+        fiber === undefined ? Effect.void : Fiber.interrupt(fiber),
+      ),
+    );
   }
 
   private readonly start = Effect.fn('HostDraftRequests.start')(function* (
@@ -157,44 +173,36 @@ export class HostDraftRequests {
     target: string,
   ) {
     const stopped = yield* Latch.make(false);
-    // The reservation, its publication and the hand-over to the recorder's
-    // fiber cannot be parted: interrupted between them, Start would leave
-    // the microphone reserved by a take nothing runs. The fiber releases
-    // it.
-    const fiber = yield* Effect.uninterruptible(
+    const take: Take = { roots, port, stopped };
+    const fiber = yield* SubscriptionRef.modifyEffect(this.active, (active) =>
       Effect.gen({ self: this }, function* () {
-        if (this.take) {
+        if (active !== undefined) {
           return yield* new Rejected({
             reason: 'A recording is already in progress.',
           });
         }
-        // The check above and this reservation are one synchronous step: a
-        // `yield*` between them would let a second Start pass the check
-        // too and put two recorders on the microphone.
-        const take: Take = { roots, port, stopped };
-        this.take = take;
-        yield* SubscriptionRef.set(this.recording, {
-          session: roots.storage,
-          target,
-        });
-        // The take runs in the recorder's own fiber, not the Start
-        // request's: Start can be interrupted (its window closing) while
-        // the take still has to wait for the microphone and kill it.
-        return yield* FiberHandle.run(
-          this.takes,
+        // Publish the take and its process-owned fiber together. A request
+        // can exit while the process still needs to wait for sox.
+        const fiber = yield* Effect.forkIn(
           this.runTake(take).pipe(
             Effect.ensuring(
-              Effect.andThen(
-                Effect.sync(() => {
-                  if (this.take === take) this.take = undefined;
-                }),
-                SubscriptionRef.set(this.recording, null),
+              SubscriptionRef.updateSome(this.active, (current) =>
+                current?.take === take ? Option.some(undefined) : Option.none(),
               ),
             ),
           ),
+          this.scope,
+          { startImmediately: true },
         );
+        // A closed process scope returns an already interrupted fiber.
+        if (fiber.pollUnsafe() !== undefined)
+          return [fiber, undefined] as const;
+        return [
+          fiber,
+          { take, fiber, recording: { session: roots.storage, target } },
+        ] as const;
       }),
-    );
+    ).pipe(Effect.uninterruptible);
     // An interrupted take is a cancelled one.
     const exit = yield* Fiber.await(fiber);
     return yield* Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)
@@ -204,89 +212,66 @@ export class HostDraftRequests {
 
   /** The take from microphone startup to its answer. Completion belongs to
    *  Start, even when another project or view stops the recorder. */
-  private readonly runTake = Effect.fn('HostDraftRequests.take')(function* (
-    this: HostDraftRequests,
-    take: Take,
-  ) {
-    const takeProgram: Effect.Effect<
-      HostOutcome,
-      Rejected,
-      Secrets | FileSystem.FileSystem | ChildProcessSpawner
-    > = Effect.gen(function* () {
-      // sox lives in this block's scope. Its close (SIGTERM, then a join on
-      // the exit) is the stop, so the microphone is off before anything
-      // below reads a credential. The recorder writes under the take's own
-      // session storage, so its roots travel with the call.
-      const capturedPath = yield* Effect.scoped(
-        Effect.gen(function* () {
-          const recorder = yield* startRecording(take.roots).pipe(
-            Effect.mapError((error) => new Rejected({ reason: error.message })),
-          );
-          // sox exiting before Stop ends the take, a clean exit included:
-          // the microphone is no longer recording. Cancel interrupts.
-          yield* Effect.raceFirst(
-            take.stopped.await,
-            recorder.handle.exitCode.pipe(
-              Effect.mapError((error) => error.message),
-              Effect.flatMap((code) =>
-                Effect.fail(`sox exited with code ${code}`),
-              ),
-              Effect.mapError(
-                (reason) =>
-                  new Rejected({
-                    reason: `Recording stopped unexpectedly: ${reason}`,
-                  }),
-              ),
-              Effect.tapError((error) => Effect.logWarning(error.reason)),
+  private readonly runTake = Effect.fn('HostDraftRequests.take')(function* ({
+    roots,
+    stopped,
+  }: Take): Effect.fn.Return<
+    HostOutcome,
+    Rejected,
+    Secrets | FileSystem.FileSystem | ChildProcessSpawner
+  > {
+    const reject = (error: { message: string }) =>
+      new Rejected({ reason: error.message });
+    // Closing this scope stops sox and waits for its file before transcription.
+    const captured = yield* Effect.scoped(
+      Effect.gen(function* () {
+        const recorder = yield* startRecording(roots).pipe(
+          Effect.mapError(reject),
+        );
+        const unexpectedExit = recorder.handle.exitCode.pipe(
+          Effect.match({
+            onFailure: (error) => error.message,
+            onSuccess: (code) => `sox exited with code ${code}`,
+          }),
+          Effect.flatMap((reason) =>
+            Effect.fail(
+              new Rejected({
+                reason: `Recording stopped unexpectedly: ${reason}`,
+              }),
             ),
-          );
-          return recorder.path;
-        }),
-      );
-      const recordingPath = yield* validateRecordingFile(capturedPath).pipe(
-        Effect.mapError((error) => new Rejected({ reason: error.message })),
-      );
-      // Transcription takes an OpenAI key, read here as a pinned OpenAI
-      // model's own-key route. The take holds no session frame to enter —
-      // its roots travel with each call — so the endpoint read runs in the
-      // calling frame, and the resolved credential reaches the
-      // transcription as data.
-      const postStop = Effect.gen(function* () {
-        const credential = yield* ownKeyCredential(
-          take.roots,
-          MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
-        ).pipe(
-          Effect.mapError((error) => new Rejected({ reason: error.message })),
-        );
-        const text = yield* transcribeAudio(recordingPath, credential).pipe(
-          Effect.tapError((error) =>
-            Effect.logError(`Transcription failed: ${error.message}`),
           ),
-          Effect.mapError((error) => new Rejected({ reason: error.message })),
+          Effect.tapError((error) => Effect.logWarning(error.reason)),
         );
-        // The sweep is rooted by the take's storage root, as data, rather
-        // than by an ambient read of the calling fiber's roots.
-        yield* sweepStaleFiles(
-          yield* FileSystem.FileSystem,
-          recordingsDir(take.roots),
-        );
-        return { kind: 'text', text } satisfies HostOutcome;
-      });
-      // A Cancel after Stop interrupts the upload.
-      return yield* postStop;
-    });
-    // The take's warnings (an unexpected sox exit, the stale-take sweep)
-    // stay on this channel.
-    return yield* takeProgram.pipe(withLogChannel(CHANNEL));
-  });
+        yield* Effect.raceFirst(stopped.await, unexpectedExit);
+        return recorder.path;
+      }),
+    );
+    const recordingPath = yield* validateRecordingFile(captured).pipe(
+      Effect.mapError(reject),
+    );
+    const credential = yield* ownKeyCredential(
+      roots,
+      MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
+    ).pipe(Effect.mapError(reject));
+    const text = yield* transcribeAudio(recordingPath, credential).pipe(
+      Effect.tapError((error) =>
+        Effect.logError(`Transcription failed: ${error.message}`),
+      ),
+      Effect.mapError(reject),
+    );
+    yield* sweepStaleFiles(yield* FileSystem.FileSystem, recordingsDir(roots));
+    return { kind: 'text', text };
+  }, withLogChannel(CHANNEL));
 
   /** Stop acknowledges its own request; the take transcribes. */
-  private readonly stop = Effect.suspend(() => {
-    const take = this.take;
-    if (!take) return Effect.void;
-    return Effect.andThen(
-      SubscriptionRef.set(this.recording, null),
-      take.stopped.open,
-    );
-  });
+  private readonly stop = Effect.suspend(() =>
+    SubscriptionRef.modifySome(this.active, (state) =>
+      state === undefined || state.recording === null
+        ? [undefined, Option.none()]
+        : [state.take.stopped, Option.some({ ...state, recording: null })],
+    ).pipe(
+      Effect.flatMap((stopped) => stopped?.open ?? Effect.void),
+      Effect.uninterruptible,
+    ),
+  );
 }

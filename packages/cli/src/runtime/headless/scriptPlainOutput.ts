@@ -27,7 +27,7 @@ interface ScriptPlainOutputOptions {
   /** The launched run: the output prints the script runs under it. */
   readonly runId: RunId;
   readonly writeLine: (line: string) => void;
-  readonly beforeWrite?: () => void;
+  readonly beforeWrite: () => void;
 }
 
 /** The lines a run's script stages say (`scriptStages`): each section's
@@ -74,7 +74,7 @@ export const attachScriptPlainOutput = Effect.fn('attachScriptPlainOutput')(
     let subscribed = '';
     let rootRunId: RunId | undefined;
     const write = (line: string): void => {
-      options.beforeWrite?.();
+      options.beforeWrite();
       options.writeLine(line);
     };
     const printRun = (run: RunView, view: SessionView): void => {

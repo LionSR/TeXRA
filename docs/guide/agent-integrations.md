@@ -115,6 +115,14 @@ Both tools deliver their result as a follow-up message, so they are not availabl
 <DelegatedStreamHero />
 <p class="hero-caption">The delegated session streams live in its own Tasks view tab (reasoning, commands, file changes, and web searches), then shows <strong>Completed</strong> and hands its result back to the calling agent.</p>
 
+## GitHub activity
+
+The assistant follows a pull request's reviews and CI, an issue or a repository with the [`gh` command line](https://cli.github.com) in its shell, and comes back to check again by scheduling itself a later turn. The bundled `github` skill has the commands; the assistant reads it only while **Enable skills for agents** is on (**Settings → Agents → Skills**, or `texra.skills.enabled`; off by default).
+
+- Sign in with `gh auth login` in a terminal, or start TeXRA with `GH_TOKEN` set. TeXRA stores no GitHub token of its own.
+- Nothing polls in the background: each look is a turn the assistant scheduled, at least a minute after the last. A scheduled turn is kept by the running TeXRA process; if TeXRA is closed when one is due, it runs once, late, the next time the project is opened. Stopping the task cancels what it scheduled.
+- A one-shot run such as `texra run` cannot be continued later, so it can check once (or wait on `gh pr checks --watch`) but not follow over time.
+
 ## MCP servers
 
 TeXRA supports local stdio [Model Context Protocol](https://modelcontextprotocol.io) servers:

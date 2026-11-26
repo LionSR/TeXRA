@@ -1,6 +1,6 @@
 import { Result, Schema } from 'effect';
 
-import { factName, RunIdSchema, type FactName } from './identifiers';
+import { factName, RunIdSchema } from './identifiers';
 import { GOAL_PLAN_KIND } from './plan';
 import { RETIRED_PLUGIN_FACTS, unavailableFactReason } from './rowVersions';
 import { RunRecordFieldsSchema } from './runRecords';
@@ -40,38 +40,22 @@ export const AssembleTraceResultSchema = Schema.Union([
 
 export type AssembleTraceResult = typeof AssembleTraceResultSchema.Type;
 
-/** A plugin row kind as an imported trace reads it: a `Plugin` fact kind. */
-export interface TraceFactKind {
-  readonly plugin: string;
-  readonly kind: string;
-  readonly version: number;
-  readonly schema: Schema.Codec<unknown, unknown>;
-}
-
 /**
  * A parsed trace with each plugin fact checked as the store checks it,
- * against the harness's built-in fact kind (the goal's plan) and the app's
- * plugin fact kinds (`appFactKinds`). A fact at another version than its
+ * against the harness's built-in fact kind (the goal's plan). A fact at another version than its
  * kind's, or whose value the kind's schema rejects, throws, naming it, as
  * does a retired built-in fact no current plugin owns; one whose plugin
  * this build lacks is kept as written, marked `unavailable`, as the store
  * reads it.
  */
-export function readTraceFacts(
-  document: TraceDocument,
-  appFactKinds: readonly TraceFactKind[],
-): TraceDocument {
-  const factKinds = new Map(
-    [GOAL_PLAN_KIND, ...appFactKinds].map(
-      (factKind): [FactName, TraceFactKind] => [factName(factKind), factKind],
-    ),
-  );
+export function readTraceFacts(document: TraceDocument): TraceDocument {
   const events = document.events.map((event) => {
     if (event.type !== 'plugin.fact') return event;
     // The exporting build's reason is not this build's.
     const { unavailable: _unavailable, ...fact } = event;
     const name = factName(fact);
-    const factKind = factKinds.get(name);
+    const factKind =
+      name === factName(GOAL_PLAN_KIND) ? GOAL_PLAN_KIND : undefined;
     if (factKind === undefined && RETIRED_PLUGIN_FACTS.has(name))
       throw new Error(
         `the plugin fact ${name} was written by an earlier build; this build no longer reads it.`,

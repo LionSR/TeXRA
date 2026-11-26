@@ -379,7 +379,6 @@ export const TURN_ROW_HANDLERS: {
             at: row.commit,
             attempt: p.attempt,
             disposition: p.disposition,
-            duplicateOf: p.duplicateOf,
             result: p.result,
             attachments: p.attachments,
           },

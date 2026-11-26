@@ -18,10 +18,7 @@ export function jsonResponse(
   body: Record<string, unknown>,
   status: number,
 ): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' },
-  });
+  return Response.json(body, { status, headers: getCorsHeaders(req) });
 }
 
 /** JSON `{ error }` response, the failure shape shared by the auth functions. */

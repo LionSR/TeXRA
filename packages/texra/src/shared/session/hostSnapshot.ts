@@ -12,7 +12,11 @@ import {
   ApprovalPolicySchema,
   APPROVAL_POLICY_DEFAULT,
   RunIdSchema,
+  DeclinableUsageRouteSchema,
+  NonNegativeIntSchema,
+  PlanQuotaFailureSchema,
 } from '@texra-ai/worldline/schemas';
+import { SubscriptionUsageWindowSchema } from '@texra/shared/model/subscriptionUsage';
 import { ModelOptionDataSchema } from '@texra/shared/pickerOptions';
 
 /** Open workspace folder offered as a run working directory. */
@@ -34,13 +38,6 @@ const MissingToolSchema = Schema.Struct({
   usedFor: Schema.String,
 });
 export type MissingTool = typeof MissingToolSchema.Type;
-
-const FileOptionsSchema = Schema.Struct({
-  baseFile: Schema.Array(Schema.String),
-  editedFile: Schema.Array(Schema.String),
-  commit: Schema.Array(Schema.String),
-});
-export type FileOptions = typeof FileOptionsSchema.Type;
 
 /** How a project is named in a rail row, a chip, and the hero title. */
 const ProjectDisplaySchema = Schema.Struct({
@@ -77,6 +74,26 @@ const OnboardingFunnelStateSchema = Schema.Literals([
 ]);
 export type OnboardingFunnelState = typeof OnboardingFunnelStateSchema.Type;
 
+/**
+ * What the process knows of one subscription plan's quota: its windows as
+ * last learned and when, or why none is known. `unobserved` is a plan whose
+ * replies state its quota and none has arrived in this process yet.
+ */
+const PlanUsageSchema = Schema.Struct({
+  plan: DeclinableUsageRouteSchema,
+  /** The plan's tier as its provider names it, when it says: plans of one
+   *  route differ in their windows and limits, so the name is the
+   *  provider's and no window is assumed. */
+  planName: Schema.optional(Schema.NonEmptyString),
+  windows: Schema.Array(SubscriptionUsageWindowSchema),
+  /** When the windows were learned, in epoch milliseconds. */
+  at: Schema.optional(NonNegativeIntSchema),
+  unknown: Schema.optional(
+    Schema.Literals(['unobserved', ...PlanQuotaFailureSchema.literals]),
+  ),
+});
+export type PlanUsage = typeof PlanUsageSchema.Type;
+
 export const HostSnapshotSchema = Schema.Struct({
   project: ProjectDisplaySchema,
   /** The project's agent: the run the window opens on, listed first and
@@ -84,6 +101,9 @@ export const HostSnapshotSchema = Schema.Struct({
    *  no folder. */
   agent: Schema.NullOr(RunIdSchema),
   modelOptions: Schema.Array(ModelOptionDataSchema),
+  /** The quota of each subscription plan a listed model bills, for the
+   *  status bar's meters; a plan nothing states the quota of is left out. */
+  planUsage: Schema.Array(PlanUsageSchema),
   /** How a tool call is painted, from what the process's plugins declare
    *  (`TexraPlugin`): its icon by normalized tool name, and the tools whose
    *  output reads as a terminal session. */
@@ -94,8 +114,6 @@ export const HostSnapshotSchema = Schema.Struct({
   workspaceRoots: Schema.Array(WorkspaceRootOptionDataSchema),
   /** The project's configured policy, shown before a task is launched. */
   approvalPolicy: ApprovalPolicySchema,
-  fileOptions: FileOptionsSchema,
-  isGitRepo: Schema.Boolean,
   /** The one recorder per process and where its take is going. */
   recording: Schema.NullOr(
     Schema.Struct({ session: Schema.String, target: Schema.String }),
@@ -134,11 +152,10 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     project,
     agent: null,
     modelOptions: [],
+    planUsage: [],
     tools: { icons: {}, terminalOutput: [] },
     workspaceRoots: [],
     approvalPolicy: APPROVAL_POLICY_DEFAULT,
-    fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
-    isGitRepo: false,
     recording: null,
     banners: {
       apiKey: false,

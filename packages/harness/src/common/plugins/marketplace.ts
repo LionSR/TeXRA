@@ -8,7 +8,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Array as Arr, Effect, Schema } from 'effect';
+import { Array as Arr, Effect, Option, Result, Schema } from 'effect';
 
 // Local imports - this module's neighbours
 import {
@@ -123,37 +123,38 @@ export const readPluginCandidates = Effect.fn('readPluginCandidates')(
       }
       return [{ kind: 'dir', dir: root }] satisfies PluginCandidate[];
     }
-    for (const file of MARKETPLACE_FILES) {
-      const marketplace = yield* readJsonFile(
-        path.join(root, file),
-        MarketplaceSchema,
-      );
-      if (!marketplace) continue;
-      const names = marketplace.plugins.map((entry) => entry.name);
-      const unknown = Arr.difference(only, names);
-      if (unknown.length > 0) {
-        return yield* new PluginRequestError({
-          message: `Marketplace ${marketplace.name} has no plugin named ${unknown.join(', ')}. It lists: ${names.join(', ')}.`,
-        });
-      }
-      if (only.length === 0 && names.length > 1) {
-        return yield* new PluginRequestError({
-          message: `Marketplace ${marketplace.name} lists ${names.length} plugins (${names.join(', ')}). Choose with --plugin <name>.`,
-        });
-      }
-      const selected = marketplace.plugins.filter(
-        (entry) => only.length === 0 || only.includes(entry.name),
-      );
-      return yield* Effect.forEach(selected, (entry) =>
-        marketplaceCandidate(
-          root,
-          marketplace.metadata?.pluginRoot ?? '.',
-          entry,
-        ),
+    const found = yield* Effect.findFirstFilter(MARKETPLACE_FILES, (file) =>
+      readJsonFile(path.join(root, file), MarketplaceSchema).pipe(
+        Effect.map(Result.fromNullishOr(() => undefined)),
+      ),
+    );
+    if (Option.isNone(found)) {
+      return yield* failPlugin(
+        `No plugin found in ${root}: expected ${[...PLUGIN_MANIFEST_FILES, ...MARKETPLACE_FILES].join(', ')}.`,
       );
     }
-    return yield* failPlugin(
-      `No plugin found in ${root}: expected ${[...PLUGIN_MANIFEST_FILES, ...MARKETPLACE_FILES].join(', ')}.`,
+    const marketplace = found.value;
+    const names = marketplace.plugins.map((entry) => entry.name);
+    const unknown = Arr.difference(only, names);
+    if (unknown.length > 0) {
+      return yield* new PluginRequestError({
+        message: `Marketplace ${marketplace.name} has no plugin named ${unknown.join(', ')}. It lists: ${names.join(', ')}.`,
+      });
+    }
+    if (only.length === 0 && names.length > 1) {
+      return yield* new PluginRequestError({
+        message: `Marketplace ${marketplace.name} lists ${names.length} plugins (${names.join(', ')}). Choose with --plugin <name>.`,
+      });
+    }
+    const selected = marketplace.plugins.filter(
+      (entry) => only.length === 0 || only.includes(entry.name),
+    );
+    return yield* Effect.forEach(selected, (entry) =>
+      marketplaceCandidate(
+        root,
+        marketplace.metadata?.pluginRoot ?? '.',
+        entry,
+      ),
     );
   },
 );

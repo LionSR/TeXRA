@@ -10,7 +10,7 @@
  * recorded effect is used instead.
  */
 import { callKey } from '@shared/session/runFacts';
-import { ancestorIds } from '@shared/session/runRelation';
+import { ancestorIds } from '@agent/runtime/runRelation';
 import * as path from 'node:path';
 
 import {
@@ -24,6 +24,7 @@ import {
 } from 'effect';
 
 import type { FollowUpBatch } from '@agent/followUp/FollowUpReader';
+import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import {
   claudeToolCall,
   matchesHook,
@@ -367,8 +368,11 @@ export function stepHooks(
         ['startup'],
       );
       // The prompt is what the user asked; the launch's request text wraps it.
-      const asked =
-        run.config.displayInstruction || run.config.instruction || text;
+      // `getDisplayedInstruction` is the one owner of that choice (the display
+      // override when it carries content, else the instruction, both trimmed),
+      // so the SessionStart prompt cannot diverge from the stream tab and
+      // session description over a blank or padded override.
+      const asked = getDisplayedInstruction(run.config) || text;
       const submit = yield* prompt(state, 'open', asked);
       return {
         rows: [...start.rows, ...submit.rows],
@@ -507,6 +511,10 @@ export function stepHooks(
 
 /** What a step's hooks run at each of the loop's points. */
 export type StepHooks = ReturnType<typeof stepHooks>;
+
+/** What one call's `PreToolUse` hooks recorded, and what its body's start
+ *  and its result then run of them. */
+export type ToolCallHooks = Effect.Success<ReturnType<StepHooks['preToolUse']>>;
 
 /** The hooks of `run`'s current step; none before its first step opens. */
 export const hooksOf = (run: AgentRunShape) =>

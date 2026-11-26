@@ -132,16 +132,13 @@ function launchOn(
  * owns the common request lifecycle, so document task and chat runs
  * cannot drift on validation, run ids, host lifecycle or outcome handling.
  *
- * A classified run failure (AgentRunLifecycle already ran it through
- * `classifyAgentError` and wrote the terminal outcome before rethrowing an
- * `AgentError` for the extension host) is consumed here into a non-zero exit
- * code instead of being rethrown — otherwise it reaches `bin/texra.ts`'s
- * crash handler and gets misreported as an unexpected crash, printed a
- * second time alongside a "please report it" line (issue #7645). Only
- * `AgentError` — the classified, already-handled shape — takes this path;
- * any other rejection (e.g. `registerRun` disk I/O, `workspaceState.update`
- * failures) is genuinely unexpected and is rethrown so the crash handler
- * still reports it.
+ * A run that opened never fails its launch: its end is its `run.end` row's,
+ * and the exit code follows that outcome. A launch that failed before the
+ * run opened with an `AgentError` or `LaunchRefused` (a classified, worded
+ * failure) is presented once and exits non-zero, so the crash handler in
+ * `bin/texra.ts` does not report it a second time as a bug. Any other
+ * failure (a `registerRun` write that failed, a defect) is unexpected and
+ * reaches that handler.
  */
 export const executeCliConfig: (
   config: AgentConfigPayload,
@@ -179,12 +176,14 @@ export const executeCliConfig: (
       projectApprovalPolicy(session.roots.config),
     );
     if (refused !== undefined) writeTextStderr(refused);
-    const presentationHost = createCliRuntimeHost(runContext);
     // Everything the run attaches to the session for its output: closed once,
     // after the last result read, so the last line is on the wire before the
-    // result record. Finalizers run last-attached first.
-    const presentationScope = yield* Scope.make();
-    yield* Scope.addFinalizer(presentationScope, presentationHost.close());
+    // result record. The caller's scope also closes it on partial startup.
+    const presentationScope = yield* Scope.fork(yield* Effect.scope);
+    const presentationHost = yield* Effect.acquireRelease(
+      Effect.sync(() => createCliRuntimeHost(runContext)),
+      (host) => host.close(),
+    ).pipe(Scope.provide(presentationScope));
     let failurePresented = false;
     const renderPlainProgress =
       runContext.outputFormat === 'text' && shouldRenderRunProgress(runContext);
@@ -192,7 +191,7 @@ export const executeCliConfig: (
       .attachRunProgressRenderer(session, request.runId)
       .pipe(Scope.provide(presentationScope));
     const host = yield* createHeadlessCliHostInteractions(session, {
-      prompting: () => presentationHost.holdForPrompt?.(),
+      prompting: () => presentationHost.holdForPrompt(),
       emit: (event, payload) => {
         if (event === 'requestShowError') failurePresented = true;
         presentationHost.emit(event, payload);
@@ -223,15 +222,14 @@ export const executeCliConfig: (
       Effect.forkIn(presentationScope),
     );
     if (runContext.outputFormat === 'ndjson') {
-      yield* Scope.addFinalizer(
-        presentationScope,
-        yield* attachCliSessionProgressProjection(session),
+      yield* attachCliSessionProgressProjection(session).pipe(
+        Scope.provide(presentationScope),
       );
     }
     if (renderPlainProgress) {
       yield* attachScriptPlainOutput(session, {
         runId: request.runId,
-        beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
+        beforeWrite: () => presentationHost.prepareInteractivePrompt(),
         writeLine: writeTextStderr,
       }).pipe(Scope.provide(presentationScope));
     }
@@ -316,10 +314,6 @@ export const executeCliConfig: (
       | { readonly ok: false } = { ok: false };
     let primaryRunFailure: { readonly error: unknown } | undefined;
     let refusal: CliUsageError | undefined;
-    // Closing a closed scope is a no-op: the early close below is taken only
-    // on a path that then throws or returns before the success tail that
-    // `ensuring`s it.
-    const detachPresentation = Scope.close(presentationScope, Exit.void);
     const exit = yield* Fiber.await(launched);
     // An interrupts-only exit after a shutdown is the process's own
     // interruption of the wait (exit 130): the run has no end.
@@ -332,10 +326,9 @@ export const executeCliConfig: (
       // The session words a launch's failure as a `RunFailure` (what it
       // failed with is its cause), or a refused one as `LaunchRefused`.
       const err = failure instanceof RunFailure ? failure.cause : failure;
-      // Only a refused launch or a classified, already-handled AgentError
-      // resolves to a non-zero exit code here; anything else (e.g.
-      // registerRun disk I/O, workspaceState.update failures) is unexpected
-      // and must keep propagating to bin/texra.ts's crash handler.
+      // Only a refused resume, a refused launch or a classified AgentError
+      // resolves to a non-zero exit code here; anything else is unexpected
+      // and keeps propagating to the crash handler.
       if (err instanceof CliUsageError) {
         refusal = err; // a refused resume: the caller's usage exit
       } else {
@@ -388,9 +381,7 @@ export const executeCliConfig: (
     // step the close below runs finds nothing left to do.
     yield* Deferred.succeed(finalized, undefined);
     yield* Scope.close(shutdownStatusScope, Exit.void);
-    if (!runResult.ok || Result.isFailure(finalization)) {
-      yield* detachPresentation;
-    }
+    yield* Scope.close(presentationScope, Exit.void);
     if (Result.isFailure(finalization)) {
       return yield* Effect.die(
         primaryRunFailure
@@ -412,11 +403,11 @@ export const executeCliConfig: (
       };
     }
 
-    yield* detachPresentation;
     return {
       ...runResult,
       exitCode: runOutcomeExitCode(runResult.result.outcome),
     };
   },
+  Effect.scoped,
   Effect.catchCause((cause) => Effect.fail(ensureError(cause))),
 );

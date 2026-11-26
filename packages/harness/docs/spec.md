@@ -414,9 +414,7 @@ also read by `applyRunRows`.
 
 The transcript tier is display rows too
 (`shared/schemas/traceEvent.ts#TraceRowFieldsSchema`):
-`log`, `stage.start` and `stage.end` (a labelled span no other row bounds,
-such as a plugin's section; a stage still open when its run ends closes with
-that `run.end`), `tool.start` (a call's card opens; a script's call names
+`log`, `tool.start` (a call's card opens; a script's call names
 the `script` card that issued it as its `stageId`, the script's stage),
 `tool.end` (it closes, with the call's output and the files it edited),
 `usage` (one priced turn; a run with a run history stores none),
@@ -994,7 +992,7 @@ its title.
   `#'reopens at the committed ordinal and never reuses one'`,
   `#'stores a large string once, compressed, and reads it exact'`
 - **2.3 publisher**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#'publishes complete replay and finite live batches in order'`;
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#'shows complete history before the live updates'`;
   `src/test-kernel/support/crashConformance.ts#'a crash between two appends of one job leaves neither'`
 - **2.4 versions and gate**:
   `src/test-kernel/schemas/rowVersions.vitest.ts#'names every stored kind once'`,

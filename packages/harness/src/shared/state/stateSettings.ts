@@ -179,7 +179,7 @@ export const GOAL_STRATEGY_SETTING = {
 // The provider toggles below are `configTarget: 'global'`: they describe how
 // you talk to a provider, not a property of one project. Writes go to the
 // global file past the open-workspace write guard, and reads take the global
-// value only: a project file's value for one is ignored (#11173). Server-side
+// value only: a project file's value for one is ignored. Server-side
 // state (data retention) and the fast tier (price) are user choices with a
 // settings-view row; the transport knob has none and is set in the global
 // `config.json`.
@@ -413,15 +413,6 @@ export const GIT_AUTHOR_EMAIL_SETTING = {
     'Author and committer email used for agent-authored commits when commit marking is enabled.',
 } as const satisfies SettingRow<string | undefined>;
 
-export const GIT_WORKTREE_SUPPORT_SETTING = {
-  key: 'git.worktreeSupport',
-  slot: 'repoState',
-  schema: booleanWithDefault(false),
-  title: 'Agent worktrees',
-  description:
-    'Run parallel agents in isolated git worktrees so edits do not conflict.',
-} as const satisfies SettingRow<boolean>;
-
 // --- Agent coordination ---------------------------------------------
 // Both child-work policy toggles live in `globalState`: they describe how
 // *this user* wants child runs handled, not anything about a particular
@@ -466,8 +457,7 @@ export const HELPER_MODEL_SETTING = {
   slot: 'globalState',
   schema: Schema.UndefinedOr(Schema.NonEmptyString),
   title: 'Helper model',
-  description:
-    "Model for quick helper steps like task titles and small fixes. Leave empty to use the task's own model.",
+  description: 'Model for quick helper steps like task titles and small fixes.',
 } as const satisfies SettingRow<string | undefined>;
 
 export const KIMI_CODE_PREFER_SETTING = {
@@ -489,16 +479,17 @@ export const GLM_CODING_PLAN_SETTING = {
 } as const satisfies SettingRow<boolean>;
 
 /**
- * Keep file-oriented tools inside the active working directory unless the
- * user explicitly grants them access to arbitrary filesystem paths.
+ * Keep file-oriented tools inside the active working directory, for a
+ * person who wants that boundary; without it they reach any path the
+ * process can.
  */
 export const TOOL_PATH_PROTECTION_SETTING = {
   key: 'tools.restrictPathsToWorkingDirectory',
   slot: 'workspaceState',
-  schema: booleanWithDefault(true),
+  schema: booleanWithDefault(false),
   title: 'Restrict tools to project folder',
   description:
-    'Keep file read/edit, search, diagnostics, and PDF tools inside the current project folder. Turn off only if an agent needs outside files.',
+    'Keep file read/edit, search, diagnostics, and PDF tools inside the current project folder. Off by default: an agent reads and edits the files its work needs.',
 } as const satisfies SettingRow<boolean>;
 
 // ============================================================================
@@ -525,7 +516,6 @@ const HARNESS_SETTINGS = [
   GIT_MARK_COMMITS_SETTING,
   GIT_AUTHOR_NAME_SETTING,
   GIT_AUTHOR_EMAIL_SETTING,
-  GIT_WORKTREE_SUPPORT_SETTING,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
   MEMORY_ENABLED_SETTING,
   WEBSOCKET_OPENAI_SETTING,

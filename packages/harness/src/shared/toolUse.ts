@@ -1,6 +1,6 @@
 // Host-neutral normalization for tool cards.
 //
-// Both the VS Code progress view and the CLI TUI read the same tool card
+// The progress view and the CLI TUI read the same tool card
 // (`ToolCallLog`) off a transcript row: this module derives the texts a card
 // states and its output, once, so hosts don't drift.
 
@@ -27,10 +27,10 @@ export const TOOL_RESULT_METADATA_FIELDS: ReadonlySet<string> = new Set([
 /** A stored result's fields as its card reads them: without the `status`
  *  the card states, and without a key left `undefined`. */
 function resultFields(result: FinishedToolResult): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(result).filter(
-      ([field, value]) => field !== 'status' && value !== undefined,
-    ),
+  const fields: Readonly<Record<string, unknown>> = result;
+  return EffectRecord.filter(
+    fields,
+    (value, field) => field !== 'status' && value !== undefined,
   );
 }
 

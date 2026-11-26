@@ -14,7 +14,7 @@
  * `forkSeed` is the same cut as a child its caller launches at once: a
  * script's `self()`.
  */
-import { Effect } from 'effect';
+import { Effect, Option, Result } from 'effect';
 
 import { agentConfigOf } from '@agent/storage/runOwnership';
 import { registrationRows } from '@agent/storage/runLifecycle';
@@ -103,30 +103,26 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
       : row.commit < before &&
         ['waiting', 'turn.begin'].includes(row.payload.at),
   );
-  const cutAt = (seq: number) =>
+  // By default, take the latest boundary whose state is quiet.
+  const candidates =
+    at === null
+      ? boundaries.toReversed()
+      : boundaries.filter((row) => row.seq === at);
+  const cut = yield* Effect.findFirstFilter(candidates, ({ seq }) =>
     Effect.map(runHistory.load(from, seq), (state) =>
       state !== null &&
       state.at !== null &&
       (before === undefined ? isAtTurnBoundary(state) : isQuiet(state))
-        ? { seq, state }
-        : null,
-    );
-  let found: Effect.Success<ReturnType<typeof cutAt>> = null;
-  if (at !== null) {
-    if (boundaries.some((row) => row.seq === at)) found = yield* cutAt(at);
-  } else {
-    // The latest turn boundary whose state is quiet: the last wait of a
-    // conversation, or the one before the turn it is in now.
-    for (const boundary of boundaries.toReversed()) {
-      found = yield* cutAt(boundary.seq);
-      if (found !== null) break;
-    }
-  }
-  if (found === null) {
+        ? Result.succeed({ seq, state })
+        : Result.failVoid,
+    ),
+  );
+  if (Option.isNone(cut)) {
     return yield* refused(
       'A fork starts at a quiet point of a conversation: the end of one of its turns.',
     );
   }
+  const found = cut.value;
   // A child's fork is a root: the task its ancestors were given, and the
   // structured result its parent's call asked for, are not its. It runs on
   // the model its source was on at the cut, bound as it was.

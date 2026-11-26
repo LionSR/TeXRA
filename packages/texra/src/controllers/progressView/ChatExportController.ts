@@ -16,10 +16,10 @@ import {
   StorageFs,
   WorkspaceFs,
   pathToLocationIn,
-  HostResources,
 } from '@texra-ai/worldline/plugins';
 import { toErrorMessage, Rejected } from '@texra-ai/worldline/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
+import { ResourcesRoot } from '@texra/hosts/resourcesRoot';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
 import { formatChatAsLatex } from '@texra/agent/export/chatExport/latexSpec';
 import { generateExportFilename } from '@texra/agent/export/chatExport/filenames';
@@ -32,6 +32,12 @@ import {
 import { TranscriptExportFailed } from './exportTranscript';
 import type { Session } from '@texra-ai/worldline';
 import type { RunId } from '@texra-ai/worldline/schemas';
+
+/** Why a run has nothing to export, in every format. */
+const EXPORT_UNAVAILABLE = {
+  no_record: 'This task has no saved data to export.',
+  no_rows: 'No conversation was saved for this task.',
+} as const;
 
 /** Write one export beneath its run's storage directory. */
 const writeExport = Effect.fn('writeTranscript.writeExport')(function* (
@@ -67,12 +73,12 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
 ) {
   // The packaged resources hold the trace-viewer bundle and the LaTeX
   // export's preamble.
-  const { resourcesRoot } = yield* HostResources;
+  const resourcesRoot = yield* ResourcesRoot;
   if (resourcesRoot === undefined) {
-    const cause = new Error(
-      'Export assets are missing in this build, so this conversation cannot be exported.',
-    );
-    return yield* new TranscriptExportFailed({ message: cause.message, cause });
+    return yield* new TranscriptExportFailed({
+      message:
+        'Export assets are missing in this build, so this conversation cannot be exported.',
+    });
   }
   if (format === 'html') {
     const { html, trace, record } = yield* traceHtml(
@@ -85,20 +91,16 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
           if (error instanceof TraceUnavailable)
             return Effect.fail(
               new Rejected({
-                reason: {
-                  no_record: 'This task has no saved data to export.',
-                  no_rows: 'No conversation was saved for this task.',
-                }[error.status],
+                reason: EXPORT_UNAVAILABLE[error.status],
               }),
             );
-          if (error instanceof TraceViewerMissing) {
-            const cause = new Error(
-              `HTML export template is missing (${error.path}). Reinstall or rebuild TeXRA.`,
-            );
+          if (error instanceof TraceViewerMissing)
             return Effect.fail(
-              new TranscriptExportFailed({ message: cause.message, cause }),
+              new TranscriptExportFailed({
+                message: `HTML export template is missing (${error.path}). Reinstall or rebuild TeXRA.`,
+                cause: error,
+              }),
             );
-          }
           return Effect.fail(
             new TranscriptExportFailed({
               message: toErrorMessage(error),
@@ -111,13 +113,10 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     // The first row, the creation row when the run has one, carries the
     // launch time the filename is stamped with.
     const firstEvent = trace.events.at(0);
-    if (firstEvent === undefined) {
-      const cause = new Error(`The assembled trace of run ${runId} is empty.`);
+    if (firstEvent === undefined)
       return yield* new TranscriptExportFailed({
-        message: cause.message,
-        cause,
+        message: `The assembled trace of run ${runId} is empty.`,
       });
-    }
     const filename = generateExportFilename(
       {
         timestamp: new Date(firstEvent.at).toISOString(),
@@ -130,13 +129,9 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
 
   const loaded = yield* loadChatExportInput(runId, options.session);
   if (loaded._tag === 'noConfig')
-    return yield* new Rejected({
-      reason: 'This task has no saved data to export.',
-    });
+    return yield* new Rejected({ reason: EXPORT_UNAVAILABLE.no_record });
   if (loaded._tag === 'noConversation')
-    return yield* new Rejected({
-      reason: 'No conversation was saved for this task.',
-    });
+    return yield* new Rejected({ reason: EXPORT_UNAVAILABLE.no_rows });
   const exportInput = loaded.input;
 
   const result = yield* writeExport(

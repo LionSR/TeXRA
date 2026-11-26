@@ -15,7 +15,7 @@ export const removeBestEffort = Effect.fn('removeBestEffort')(function* (
   what: string,
   options: { readonly recursive?: boolean } = {},
 ) {
-  const removed = yield* Effect.forEach(
+  return yield* Effect.filter(
     paths,
     (target) =>
       fs.remove(target, { force: true, recursive: options.recursive }).pipe(
@@ -29,5 +29,4 @@ export const removeBestEffort = Effect.fn('removeBestEffort')(function* (
       ),
     { concurrency: 8 },
   );
-  return paths.filter((_, index) => removed[index]);
 });

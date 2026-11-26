@@ -8,6 +8,7 @@ import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
 import { setModelAccessPreference } from '@texra/controllers/modelAccess/modelAccessPreference';
 import { subscriptionProvider } from '@texra/controllers/modelAccess/subscriptionProviders';
 
+import { ACCOUNT_OUTCOME, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import {
   shouldUseSubscriptionDeviceCode,
@@ -40,11 +41,11 @@ export const updateCliModelAccess = Effect.fn(
     selection.state === 'on',
   );
   if (isSubscriptionAuthProvider(provider)) {
-    const { displayName, modelFamily, getStatus } =
-      subscriptionProvider(provider);
+    const { modelFamily, getStatus } = subscriptionProvider(provider);
+    const { subscriptionLabel } = SUBSCRIPTION_AUTH_COPY[provider];
     if (outcome === 'disabled') {
       return {
-        message: `${displayName} subscription disabled for ${modelFamily}.`,
+        message: ACCOUNT_OUTCOME.planDisabled(subscriptionLabel, modelFamily),
       };
     }
     // Signing in turns the preference on.
@@ -64,7 +65,7 @@ export const updateCliModelAccess = Effect.fn(
           )
         : yield* getStatus();
     return {
-      message: `${displayName} subscription enabled for ${modelFamily} (${account.label}).`,
+      message: `${subscriptionLabel} enabled for ${modelFamily} (${account.label}).`,
     };
   }
   const plan = CODING_PLAN_SUBSCRIPTIONS.find(({ id }) => id === provider);
@@ -76,7 +77,7 @@ export const updateCliModelAccess = Effect.fn(
   const { title } = plan.preference;
   switch (outcome) {
     case 'disabled':
-      return { message: `${title} disabled for ${plan.modelFamily}.` };
+      return { message: ACCOUNT_OUTCOME.planDisabled(title, plan.modelFamily) };
     case 'needs-key':
       // The provider API key is the plan's credential: there is no sign-in.
       return {

@@ -25,6 +25,7 @@ import {
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settings';
+import { MCP_TOOL_PREFIX } from '@shared/tools/toolDisplayName';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
@@ -89,7 +90,7 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
           .map((entry) => entry.trim())
           .filter(Boolean);
   const mapped = (declared ?? []).map((tool) =>
-    tool.startsWith('mcp__') ? tool : harnessToolOfClaudeTool(tool),
+    tool.startsWith(MCP_TOOL_PREFIX) ? tool : harnessToolOfClaudeTool(tool),
   );
   // Naming only tools the harness lacks must not read as naming none, which
   // would widen the agent to everything it inherits.

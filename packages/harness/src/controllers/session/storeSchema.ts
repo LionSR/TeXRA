@@ -15,6 +15,7 @@
  */
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { logFailure, withLogChannel } from '@logger/effectLog';
+import { pathExists } from '@utils/files/fsEntryExists';
 import {
   isDamaged,
   pragmaValue,
@@ -243,17 +244,24 @@ const prepareStore = Effect.fnUntraced(function* (
   yield* run(sql, 'PRAGMA synchronous = NORMAL');
   yield* verifyPragma(sql, 'journal_mode', persistent ? 'wal' : 'memory');
   yield* verifyPragma(sql, 'foreign_keys', 1);
+  const applyAdditions = Effect.forEach(
+    schema.additive,
+    (statement) => run(sql, statement),
+    { discard: true },
+  );
+  let initialized = false;
   if (!(yield* checkStamps(sql, path, schema))) {
     if (persistent) yield* incrementalVacuum(sql);
-    yield* Effect.gen(function* () {
+    initialized = yield* Effect.gen(function* () {
       // Another process may have stamped the file while this one waited.
-      if (yield* checkStamps(sql, path, schema)) return;
-      for (const statement of [...schema.tables, ...schema.additive])
-        yield* run(sql, statement);
+      if (yield* checkStamps(sql, path, schema)) return false;
+      for (const statement of schema.tables) yield* run(sql, statement);
+      yield* applyAdditions;
       yield* run(sql, `PRAGMA user_version = ${schema.version}`);
+      return true;
     }).pipe(sql.withTransaction);
   }
-  for (const statement of schema.additive) yield* run(sql, statement);
+  if (!initialized) yield* applyAdditions;
   if (persistent) {
     yield* run(sql, 'PRAGMA journal_size_limit = 1048576');
   }
@@ -324,7 +332,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     return yield* Effect.failCause(first.cause);
   const aside = `${filename}.corrupt-${yield* Clock.currentTimeMillis}`;
   for (const suffix of STORE_FILE_SUFFIXES) {
-    if (yield* fs.exists(`${filename}${suffix}`))
+    if (yield* pathExists(fs, `${filename}${suffix}`))
       yield* fs.rename(`${filename}${suffix}`, `${aside}${suffix}`);
   }
   yield* Effect.logWarning(

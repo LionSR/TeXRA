@@ -30,11 +30,12 @@ export interface DesktopSettingsIpcOptions {
     openSubscriptionSignInUrl(url: string): Effect.Effect<void, HostFailed>;
     presentSubscriptionSignInUrl(
       url: string,
-      names: Pick<SubscriptionProvider, 'displayName' | 'sessionName'>,
+      names: Pick<SubscriptionProvider, 'id' | 'displayName' | 'sessionName'>,
     ): Effect.Effect<void, Error>;
     presentSubscriptionDeviceCode(
       prompt: SubscriptionDeviceCodePrompt,
-      names: Pick<SubscriptionProvider, 'displayName' | 'sessionName'>,
+      names: Pick<SubscriptionProvider, 'id' | 'displayName' | 'sessionName'>,
+      reason: string | undefined,
     ): Effect.Effect<void, Error>;
   };
   /** The roots of the project this settings surface serves. The desktop has
@@ -104,12 +105,13 @@ export function createDesktopSettingsIpc(
         transport: 'auto',
         stores: options.roots,
         present: {
-          presentDeviceCode: (prompt) =>
+          presentDeviceCode: (prompt, reason) =>
             reportPresentation(
               displayName,
               signInPresentation.presentSubscriptionDeviceCode(
                 prompt,
                 provider,
+                reason,
               ),
             ),
           presentSignInUrl: (url) =>

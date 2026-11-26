@@ -1,4 +1,3 @@
-import { Text } from 'ink';
 import { useState } from 'react';
 
 import {
@@ -30,7 +29,7 @@ function providerApiKeyStatusLabel(
   status: CredentialOrigin | undefined,
   view: ResourceStatus<ProviderApiKeyStatuses>,
 ): string {
-  if (status !== undefined) return credentialOriginLabel(status, 'key');
+  if (status !== undefined) return credentialOriginLabel(status);
   if (view.loading && view.error === undefined) return 'Checking status';
   return 'Status unavailable';
 }
@@ -104,9 +103,7 @@ export function ProviderApiKeyForm(
         title="Add provider API key"
         availableRows={props.availableRows}
         items={buildProviderApiKeyItems(props.status)}
-        description={
-          <Text dimColor>Choose the service that issued the key.</Text>
-        }
+        description="Choose the service that issued the key."
         action="select"
         onSelect={(candidate) => {
           setError(undefined);

@@ -7,6 +7,7 @@ import type {
   SubscriptionUsageWindow,
 } from '@texra/shared/model/subscriptionUsage';
 import {
+  type PlanQuotaFailure,
   formatResetDuration,
   FACT_SEPARATOR,
   joinFacts,
@@ -30,22 +31,28 @@ export function subscriptionUsageWindowLabel(
   return `${prefix}${name.replaceAll('_', ' ')}`;
 }
 
-/** The tone a usage window paints with, by what it has left: an error once
- *  it is used up, a caution at a fifth or less, and nothing to say above
+/** The tone a usage window paints with, by how much is used: an error once it
+ *  is used up, a caution at four fifths or more, and nothing to say below
  *  that. The CLI status bar and the settings view's meters read it. */
 export function subscriptionQuotaTone(
-  window: Pick<SubscriptionUsageWindow, 'percentRemaining'>,
+  window: Pick<SubscriptionUsageWindow, 'percentUsed'>,
 ): Extract<RunTone, 'warning' | 'danger'> | undefined {
-  if (window.percentRemaining <= 0) return 'danger';
-  if (window.percentRemaining <= 20) return 'warning';
+  if (window.percentUsed >= 100) return 'danger';
+  if (window.percentUsed >= 80) return 'warning';
   return undefined;
 }
 
-export function formatSubscriptionUsagePercent(percentUsed: number): string {
+/** A window's usage as every host words it, the percent used: "30% used".
+ *  A window that has started reads at least 0.1%, and one not yet used up
+ *  at most 99.9%, so rounding never says "0%" or "100%" when it is not. */
+export function subscriptionQuotaUsed(
+  window: Pick<SubscriptionUsageWindow, 'percentUsed'>,
+): string {
+  const { percentUsed } = window;
   let rounded = Math.round(percentUsed * 10) / 10;
   if (percentUsed > 0 && rounded === 0) rounded = 0.1;
   if (percentUsed < 100 && rounded === 100) rounded = 99.9;
-  return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
+  return `${rounded}% used`;
 }
 
 export function formatSubscriptionUsageReset(
@@ -63,8 +70,22 @@ export function formatSubscriptionUsageUpdated(
   now: number,
 ): string {
   return now - fetchedAt >= STALE_AFTER_MS
-    ? `stale · updated ${formatRelativeTime(fetchedAt, now)}`
+    ? joinFacts(['stale', `updated ${formatRelativeTime(fetchedAt, now)}`])
     : 'updated just now';
+}
+
+/** Why a plan's usage cannot be shown, as the settings page and the status
+ *  bar both say it. */
+export function subscriptionUsageUnavailable(reason: PlanQuotaFailure): string {
+  switch (reason) {
+    case 'invalid_credentials':
+      return 'The provider rejected the configured credentials.';
+    case 'malformed_response':
+      return 'The provider returned usage data TeXRA could not read.';
+    case 'missing_credentials':
+    case 'request_failed':
+      return 'The provider usage request failed. Try refreshing again shortly.';
+  }
 }
 
 /** Compact provider usage text shared by settings and the detailed CLI status. */
@@ -81,7 +102,7 @@ export function formatSubscriptionUsageSummary(
     .map((window) => {
       const reset = formatSubscriptionUsageReset(window.resetAt, now);
       return joinFacts([
-        `${subscriptionUsageWindowLabel(window)}: ${formatSubscriptionUsagePercent(window.percentUsed)}`,
+        `${subscriptionUsageWindowLabel(window)}: ${subscriptionQuotaUsed(window)}`,
         reset,
       ]);
     })

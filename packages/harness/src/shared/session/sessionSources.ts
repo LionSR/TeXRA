@@ -16,7 +16,15 @@
  * batches the publisher committed by then. A webview receives the resulting ordered inputs directly, without
  * constructing another copy of the accumulated text.
  */
-import { Context, Effect, Layer, type Scope, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Equivalence,
+  Layer,
+  Option,
+  type Scope,
+  SubscriptionRef,
+} from 'effect';
 
 import type { TranscriptInterest } from '@shared/session/sessionViewAccess';
 
@@ -89,7 +97,7 @@ export class TextChunkSource extends Context.Service<
 export class TranscriptSubscriptions extends Context.Service<
   TranscriptSubscriptions,
   {
-    /** The union of every subscriber's set: a fold input. */
+    /** The merged interest of all subscribers. */
     readonly ref: SubscriptionRef.SubscriptionRef<
       readonly TranscriptSubscription[]
     >;
@@ -106,43 +114,39 @@ export class TranscriptSubscriptions extends Context.Service<
       const ref = yield* SubscriptionRef.make<
         readonly TranscriptSubscription[]
       >([]);
+      const sameInterest = Equivalence.Array<TranscriptSubscription>(
+        (left, right) => left.id === right.id && left.fromSeq === right.fromSeq,
+      );
       // One entry per subscriber, keyed by the token its scope holds.
       const ports = new Map<object, readonly TranscriptSubscription[]>();
-      const union = (): TranscriptSubscription[] => {
-        // The lowest `fromSeq` any port asks for: a port that already holds
-        // an aggregate's history must not shorten another's read.
-        const byId = new Map<RunId, TranscriptSubscription>();
-        for (const set of ports.values()) {
-          for (const entry of set) {
-            const held = byId.get(entry.id);
-            if (!held || entry.fromSeq < held.fromSeq)
-              byId.set(entry.id, entry);
-          }
-        }
-        return [...byId.values()];
-      };
       const write = (
         key: object,
         set: readonly TranscriptSubscription[] | null,
       ) =>
-        Effect.suspend(() => {
+        SubscriptionRef.updateSome(ref, (current) => {
           if (set === null) ports.delete(key);
           else ports.set(key, set);
-          // Computed under the ref's own permit, so two subscribers changing
-          // at once cannot publish an older union after a newer one.
-          return SubscriptionRef.update(ref, union);
+          // A port that has read further cannot shorten another port's read.
+          const byId = new Map<RunId, TranscriptSubscription>();
+          for (const entries of ports.values())
+            for (const entry of entries) {
+              const held = byId.get(entry.id);
+              if (!held || entry.fromSeq < held.fromSeq)
+                byId.set(entry.id, entry);
+            }
+          // Unchanged interest does not restart the underlying read.
+          const next = [...byId.values()];
+          return sameInterest(current, next)
+            ? Option.none()
+            : Option.some(next);
         });
       return {
         ref,
-        subscribe: (set) =>
-          Effect.acquireRelease(
-            Effect.sync(() => ({})).pipe(Effect.tap((key) => write(key, set))),
-            (key) => write(key, null),
-          ).pipe(
-            Effect.map((key): TranscriptInterest => ({
-              set: (next) => write(key, next),
-            })),
-          ),
+        subscribe: Effect.fnUntraced(function* (set) {
+          const key = {};
+          yield* Effect.acquireRelease(write(key, set), () => write(key, null));
+          return { set: (next) => write(key, next) };
+        }),
       };
     }),
   );

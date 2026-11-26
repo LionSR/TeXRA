@@ -4,33 +4,18 @@ import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
+import { joinFacts } from '@texra-ai/worldline/schemas';
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import {
-  formatSubscriptionUsagePercent,
   formatSubscriptionUsageReset,
   formatSubscriptionUsageUpdated,
   subscriptionQuotaTone,
+  subscriptionQuotaUsed,
+  subscriptionUsageUnavailable,
   subscriptionUsageWindowLabel,
 } from '@ui/copy/subscriptionUsage';
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
-
-type UnavailableReason = Extract<
-  SubscriptionUsageSnapshot,
-  { state: 'unavailable' }
->['reason'];
-
-function unavailableDetail(reason: UnavailableReason): string {
-  switch (reason) {
-    case 'invalid_credentials':
-      return 'The provider rejected the configured credentials.';
-    case 'malformed_response':
-      return 'The provider returned usage data TeXRA could not read.';
-    case 'missing_credentials':
-    case 'request_failed':
-      return 'The provider usage request failed. Try refreshing again shortly.';
-  }
-}
 
 @customElement('subscription-usage-row')
 export class SubscriptionUsageRow extends TexraElement {
@@ -139,10 +124,10 @@ export class SubscriptionUsageRow extends TexraElement {
           <div class="settings-row-text">
             <wa-details
               class="panel-collapsible"
-              summary="Plan usage · unavailable"
+              summary=${joinFacts(['Plan usage', 'unavailable'])}
             >
               <span class="usage-unavailable-detail">
-                ${unavailableDetail(snapshot.reason)}
+                ${subscriptionUsageUnavailable(snapshot.reason)}
               </span>
             </wa-details>
           </div>
@@ -159,9 +144,7 @@ export class SubscriptionUsageRow extends TexraElement {
             >
             ${snapshot.windows.map((window) => {
               const label = subscriptionUsageWindowLabel(window);
-              const percent = formatSubscriptionUsagePercent(
-                window.percentUsed,
-              );
+              const percent = subscriptionQuotaUsed(window);
               const reset = formatSubscriptionUsageReset(
                 window.resetAt,
                 this.now,

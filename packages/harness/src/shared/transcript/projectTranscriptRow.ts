@@ -15,7 +15,6 @@ import {
   type ErrorLogData,
   modelFailureMessage,
   reasonPhrase,
-  type FileListEntry,
   type LogPayload,
   type ToolCallLog,
 } from '@shared/schemas';
@@ -148,25 +147,6 @@ function errorRow(
 }
 
 // ---------------------------------------------------------------------------
-// Attachments
-// ---------------------------------------------------------------------------
-
-function fileListSummary(files: readonly FileListEntry[]): string {
-  const loaded = files.filter((file) => file.ok).length;
-  const failed = files.length - loaded;
-  const failedSuffix = failed > 0 ? `, ${failed} not found` : '';
-  return `Files (${loaded}/${files.length} loaded${failedSuffix})`;
-}
-
-/** The entries as a host lists them: a file that did not load, or names no
- *  path, shows no media label. */
-function listedFiles(files: readonly FileListEntry[]): FileListEntry[] {
-  return files.map(({ media, ...file }) =>
-    file.ok && media && file.path.trim() ? { ...file, media } : file,
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Context management
 // ---------------------------------------------------------------------------
 
@@ -263,17 +243,6 @@ export function logPayloadRow(
         ...base,
         kind: 'webSearch',
         ...(query !== undefined ? { query } : {}),
-      };
-    }
-
-    case MESSAGE_TYPES.FILE_LIST: {
-      const files = payload.data;
-      if (files.length === 0) return undefined;
-      return {
-        ...base,
-        kind: 'fileList',
-        files: listedFiles(files),
-        summary: fileListSummary(files),
       };
     }
 

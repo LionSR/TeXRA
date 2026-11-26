@@ -128,7 +128,7 @@ export function PluginsListForm(
       items={(data) =>
         pending
           ? [
-              { value: TRUST, label: PLUGINS_TUI.trust },
+              { value: TRUST, label: PLUGINS_PAGE.trustAction },
               { value: DECLINE, label: PLUGINS_TUI.decline },
             ]
           : data.rows.map((row) => ({
@@ -140,9 +140,7 @@ export function PluginsListForm(
       }
       emptyMessage={PLUGINS_PAGE.empty}
       availableRows={props.availableRows}
-      description={
-        pending ? undefined : <Text dimColor>{PLUGINS_TUI.description}</Text>
-      }
+      description={pending ? undefined : PLUGINS_TUI.description}
       detailFor={(data) => {
         if (reviewLines) return reviewLines;
         if (data.mcpWarnings.length === 0) return undefined;

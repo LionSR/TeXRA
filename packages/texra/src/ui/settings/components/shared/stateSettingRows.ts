@@ -102,9 +102,9 @@ export function renderStateSettingToggleRow(
   });
 }
 
-/** A number row's own options. The label and help text default to the
- *  catalog row's; the bounds, value, write and acknowledgement are the
- *  row's. */
+/** A number row's own options. The label and help text are the catalog
+ *  row's (the words every host shows for it), as are the bounds, value,
+ *  write and acknowledgement. */
 type StateSettingNumberRowOptions = Omit<
   SettingsNumberRowOptions,
   | 'label'
@@ -114,8 +114,7 @@ type StateSettingNumberRowOptions = Omit<
   | 'ackGeneration'
   | 'min'
   | 'max'
-> &
-  Partial<Pick<SettingsNumberRowOptions, 'label' | 'description'>>;
+>;
 
 /**
  * The number counterpart of {@link renderStateSettingToggleRow}. A committed

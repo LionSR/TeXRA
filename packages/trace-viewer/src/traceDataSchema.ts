@@ -15,13 +15,10 @@ import {
   TraceDocumentSchema,
   type TraceDocument,
 } from '@texra-ai/worldline/schemas';
-import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 
 const INCOMPATIBLE =
   'Trace data does not match the expected schema — this trace file may ' +
   'have been exported by an incompatible TeXRA version:\n';
-
-const APP_FACT_KIND_LIST = Object.values(APP_FACT_KINDS).flat();
 
 /** Parse an exported trace before replaying it through the trusted UI path. */
 export function parseTraceData(raw: unknown): TraceDocument {
@@ -33,7 +30,7 @@ export function parseTraceData(raw: unknown): TraceDocument {
   if (!Result.isSuccess(result))
     throw new Error(INCOMPATIBLE + result.failure.message);
   try {
-    return readTraceFacts(result.success, APP_FACT_KIND_LIST);
+    return readTraceFacts(result.success);
   } catch (error) {
     throw new Error(INCOMPATIBLE + toErrorMessage(error), { cause: error });
   }

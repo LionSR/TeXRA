@@ -61,7 +61,8 @@ export function locateInWorkspace(
     return { kind: 'external', absolutePath: path.resolve(inputPath) };
   }
 
-  // Absolute paths: platform's asRelativePath for symlink handling
+  // An absolute path is inside the root when its symlink-aware relative form
+  // (`relativeToRoot`) stays inside it.
   if (path.isAbsolute(inputPath)) {
     const relativePath = workspaceRelativePath(root, inputPath);
     if (!path.isAbsolute(relativePath) && !escapesRoot(relativePath)) {

@@ -5,10 +5,7 @@ import { isWorking } from '@texra-ai/worldline/schemas';
 import { osc } from '@cli/runtime/terminal/ansiEscapes';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { subscribeToClock } from '@cli/tui/useLiveNowMs';
-import {
-  formatSessionTitle,
-  TERMINAL_TAB_TITLE,
-} from '@texra/shared/sessionTitle';
+import { formatSessionTitle, TERMINAL_TAB_TITLE } from '@ui/copy/sessionTitle';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { projectName } from '@texra/shared/session/hostSnapshot';
 

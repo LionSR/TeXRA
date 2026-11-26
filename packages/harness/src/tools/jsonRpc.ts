@@ -6,7 +6,7 @@
  * byte buffer) and are routed: responses complete the `Deferred` registered
  * per request id, notifications go to the owner's handler, and a request the
  * peer sends us is answered by the owner's `onRequest` or refused with
- * `MethodNotFound`. Outbound frames are queued to the sink by a writer
+ * JSON-RPC's method-not-found error. Outbound frames are queued to the sink by a writer
  * fiber. Both fibers live in the connection's scope.
  *
  * The connection has one terminal state: `close(reason)` fails every pending
@@ -29,6 +29,8 @@ import {
   Effect,
   Exit,
   Fiber,
+  HashMap,
+  Option,
   type PlatformError,
   Queue,
   Ref,
@@ -84,7 +86,7 @@ export interface JsonRpcConnection {
   readonly close: (reason: string) => Effect.Effect<void>;
 }
 
-/** What {@link makeJsonRpcConnection} connects: the peer's byte streams
+/** What `makeJsonRpcConnection` connects: the peer's byte streams
  *  and the owner's handlers. */
 export interface JsonRpcConnectionOptions {
   /** The peer's output: bytes we decode. */
@@ -118,7 +120,7 @@ type PendingError = JsonRpcRequestError | JsonRpcConnectionDisposed;
 interface ConnectionState {
   readonly closed: string | undefined;
   readonly lastId: number;
-  readonly pending: ReadonlyMap<number, PendingRequest>;
+  readonly pending: HashMap.HashMap<number, PendingRequest>;
 }
 
 /** A request's place in the table, or the reason the connection closed with. */
@@ -239,7 +241,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   const state = yield* Ref.make<ConnectionState>({
     closed: undefined,
     lastId: 0,
-    pending: new Map(),
+    pending: HashMap.empty(),
   });
   const closedReason = Effect.map(Ref.get(state), ({ closed }) => closed);
   const outbound = yield* Queue.make<Uint8Array, Cause.Done>();
@@ -248,12 +250,18 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   const close = Effect.fn('JsonRpc.close')(function* (reason: string) {
     const waiting = yield* Ref.modify(state, (current) =>
       current.closed === undefined
-        ? [current.pending, { ...current, closed: reason, pending: new Map() }]
+        ? [
+            current.pending,
+            { ...current, closed: reason, pending: HashMap.empty() },
+          ]
         : [undefined, current],
     );
     if (waiting === undefined) return;
     yield* Queue.end(outbound);
-    for (const { deferred } of waiting.values()) {
+    // Fail requests in registration order, which is the order of their ids.
+    for (const [, { deferred }] of Array.from(waiting).toSorted(
+      ([first], [second]) => first - second,
+    )) {
       yield* Deferred.fail(
         deferred,
         new JsonRpcConnectionDisposed({ message: reason }),
@@ -267,11 +275,12 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
 
   const takePending = (id: number) =>
     Ref.modify(state, (current) => {
-      const entry = current.pending.get(id);
+      const entry = Option.getOrUndefined(HashMap.get(current.pending, id));
       if (!entry) return [undefined, current];
-      const pending = new Map(current.pending);
-      pending.delete(id);
-      return [entry, { ...current, pending }];
+      return [
+        entry,
+        { ...current, pending: HashMap.remove(current.pending, id) },
+      ];
     });
 
   const dispatch = Effect.fn('JsonRpc.dispatch')(function* (
@@ -342,9 +351,20 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   );
   yield* Effect.forkScoped(
     options.input.pipe(
+      Stream.concat(Stream.succeed(null)),
       Stream.mapAccumEffect(
         (): PendingInput => ({ chunks: [], size: 0, frameEnd: 0 }),
-        (input, chunk) => takeFrames(input, chunk),
+        (input, chunk) => {
+          if (chunk !== null) return takeFrames(input, chunk);
+          // The final marker is reached only after normal end of input.
+          return input.size === 0
+            ? Effect.succeed([input, []] as const)
+            : Effect.fail(
+                new JsonRpcFrameError({
+                  message: 'JSON-RPC input ended in the middle of a frame.',
+                }),
+              );
+        },
       ),
       Stream.runForEach(dispatch),
       Effect.catch(
@@ -390,7 +410,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
           if (current.closed !== undefined)
             return [{ closed: current.closed }, current];
           const id = current.lastId + 1;
-          const pending = new Map(current.pending).set(id, {
+          const pending = HashMap.set(current.pending, id, {
             method,
             deferred,
           });
@@ -479,7 +499,12 @@ export const connectJsonRpcProcess = Effect.fn('JsonRpc.process')(function* (
           ),
         ),
       ),
-      Effect.ignore,
+      Effect.ignore({
+        log: 'Warn',
+        message:
+          "A JSON-RPC server's stderr could not be read; its tail ends here",
+      }),
+      withLogChannel(CHANNEL),
     ),
   );
   const { connection, inputEnded } = yield* makeJsonRpcConnection({

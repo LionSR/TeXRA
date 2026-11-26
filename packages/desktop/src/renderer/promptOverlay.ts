@@ -45,7 +45,7 @@ export function createDesktopPromptOverlay(
   input.spellcheck = false;
 
   const actions = document.createElement('div');
-  actions.classList.add('desktop-prompt-actions');
+  actions.classList.add('desktop-overlay-actions');
 
   const cancelButton = renderElement(
     renderLabeledActionButton({

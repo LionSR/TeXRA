@@ -8,7 +8,7 @@
  * Interaction state (selection, drafts, recording, expansion, focus, scroll)
  * is never here.
  */
-import { Schema } from 'effect';
+import { Array as Arr, Iterable, Schema } from 'effect';
 
 import { ApprovalGrantsSchema } from '@shared/approvalBypassKind';
 import {
@@ -53,8 +53,7 @@ const TranscriptViewSchema = Schema.Struct({
   /** The transcript rows (`transcriptUpdate.ts`) plus the compaction rows,
    *  in first-appearance order. */
   rows: Schema.Array(Schema.declare((_u): _u is TranscriptRow => true)),
-  /** One entry per stage: a plugin's section, opened by `stage.start` and
-   *  closed by `stage.end`, or a script's, projected from its `script` card
+  /** One entry per stage: a script's, projected from its `script` card
    *  and the cards under it. */
   stages: Schema.Array(StageSchema),
   /** The contiguous leading prefix of rows whose finalizing event has been
@@ -381,8 +380,8 @@ function pendingRequests<View extends SessionView>(
 }
 
 /**
- * The one attention rule every host reads (the extension's badge, reveal and
- * chime, the desktop's dock badge, notifications, and rail): a pending
+ * The one attention rule every host reads (the extension's badge and reveal,
+ * the desktop's dock badge, notifications, and rail): a pending
  * request wants the user, and a run when its outcome lands.
  */
 export function attentionOf<View extends SessionView>(
@@ -395,7 +394,8 @@ export function attentionOf<View extends SessionView>(
   return {
     requests,
     arrived: requests.filter((request) => !known.has(request.requestId)),
-    finished: [...view.runs.values()].filter(
+    finished: Arr.filter(
+      view.runs.values(),
       ({ id, outcome }) =>
         outcome !== null && previous.runs.get(id)?.outcome === null,
     ),
@@ -410,9 +410,9 @@ export type SessionTitleState = 'idle' | 'running' | 'approval';
  * now; a conversation waiting on its user is idle.
  */
 export function sessionActivity(view: SessionView): SessionTitleState {
-  if (pendingRequests(view).length > 0) return 'approval';
-  for (const run of view.runs.values()) if (isWorking(run)) return 'running';
-  return 'idle';
+  if (view.requests.some(({ runId }) => view.runs.has(runId)))
+    return 'approval';
+  return Iterable.some(view.runs.values(), isWorking) ? 'running' : 'idle';
 }
 
 /**

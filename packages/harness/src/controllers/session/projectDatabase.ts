@@ -9,6 +9,7 @@ import {
   FileSystem,
   Layer,
   Number as Num,
+  Option,
   RcMap,
 } from 'effect';
 
@@ -19,6 +20,7 @@ import {
 import { GlobalValues } from '@platform/processRuntime';
 import { Database, ProjectDatabases } from '@shared/session/database';
 import { WORKSPACE_STORES } from '@shared/session/valueFamily';
+import { pathExists } from '@utils/files/fsEntryExists';
 import { AppNamespace, storeFileName } from '@utils/system/appNamespace';
 
 import { databaseLayer, storeOpenElsewhere } from './databaseLayer';
@@ -91,14 +93,14 @@ export const readStorageInventory = Effect.fn('readStorageInventory')(
     );
     const none = resolveWorkspaceStoragePath(storageRoot, undefined);
     const global = resolveGlobalStoragePath(storageRoot);
-    const ids = (yield* fs.exists(path.dirname(none)))
+    const ids = (yield* pathExists(fs, path.dirname(none)))
       ? yield* fs.readDirectory(path.dirname(none))
       : [];
     const orphans: StorageInventory['orphans'][number][] = [];
     const asides: StorageInventory['asides'][number][] = [];
     const skipped: StorageInventory['skipped'][number][] = [];
     for (const directory of [
-      ...((yield* fs.exists(global)) ? [global] : []),
+      ...((yield* pathExists(fs, global)) ? [global] : []),
       ...ids.toSorted().map((id) => path.join(path.dirname(none), id)),
     ]) {
       yield* Effect.gen(function* () {
@@ -112,7 +114,7 @@ export const readStorageInventory = Effect.fn('readStorageInventory')(
           directory,
           storeFileName(namespace, directory === global ? 'global' : 'project'),
         );
-        if (record === undefined || (yield* fs.exists(record.root))) {
+        if (record === undefined || (yield* pathExists(fs, record.root))) {
           asides.push(...(yield* asideCopies(database)));
           return;
         }
@@ -127,7 +129,7 @@ export const readStorageInventory = Effect.fn('readStorageInventory')(
         const bytes = Num.sumAll(sizes);
         // A store whose database is not SQLite is still an orphan.
         const unreadable =
-          (yield* fs.exists(database)) &&
+          (yield* pathExists(fs, database)) &&
           (yield* storeOpenElsewhere(database)) === 'unreadable';
         const why = `${record.root} no longer exists`;
         orphans.push({
@@ -180,17 +182,18 @@ export const deleteStorageInventory = Effect.fn('deleteStorageInventory')(
           // Removing an orphan removes its entire directory. An older host may
           // still hold its project database under the fixed pre-v1 filename,
           // independent of the current global store's naming convention.
-          for (const file of [
-            storeFileName(namespace, 'project'),
-            `${namespace}.db`,
-          ]) {
-            const database = path.join(target, file);
-            if (
-              (yield* fs.exists(database)) &&
-              (yield* storeOpenElsewhere(database)) === 'open'
-            )
-              return { path: target, outcome: 'kept' as const };
-          }
+          const open = yield* Effect.findFirst(
+            [storeFileName(namespace, 'project'), `${namespace}.db`],
+            Effect.fnUntraced(function* (file) {
+              const database = path.join(target, file);
+              return (
+                (yield* pathExists(fs, database)) &&
+                (yield* storeOpenElsewhere(database)) === 'open'
+              );
+            }),
+          );
+          if (Option.isSome(open))
+            return { path: target, outcome: 'kept' as const };
         }
         yield* fs.remove(target, { recursive: store, force: !store });
         return { path: target, outcome: 'deleted' as const };

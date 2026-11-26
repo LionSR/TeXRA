@@ -26,15 +26,17 @@ import {
 } from '@texra-ai/worldline/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import {
-  codexAccountLabel,
-  type SubscriptionAccountNames,
+  subscriptionAccountLabel,
   type SubscriptionAuthStatus,
-  xaiAccountLabel,
 } from '@texra/shared/model/subscriptionAuthStatus';
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
-import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
+import {
+  ACCOUNT_OUTCOME,
+  SIGN_IN_PROMPT,
+  SUBSCRIPTION_AUTH_COPY,
+} from '@ui/copy/accountAuth';
 import {
   emitAppSignal,
   logFailure,
@@ -65,8 +67,17 @@ export interface SubscriptionSignInPresenter {
    * Show the one-time code and where to enter it. Runs once, on a child fiber
    * beside the poll loop: the flow does not wait for it and interrupts it when
    * the sign-in ends. A host reports its own failure, so the channel is empty.
+   *
+   * `reason` is the sentence that explains why a device code is being shown,
+   * which only the flow knows: it is set when the sign-in fell back here after
+   * the loopback browser could not be reached, and `undefined` when the host
+   * asked for a device code outright. A host shows it ahead of the steps, so
+   * the "could not open a browser" line never appears when none was tried.
    */
-  presentDeviceCode(prompt: SubscriptionDeviceCodePrompt): Effect.Effect<void>;
+  presentDeviceCode(
+    prompt: SubscriptionDeviceCodePrompt,
+    reason: string | undefined,
+  ): Effect.Effect<void>;
   /**
    * Show (and normally open) the loopback consent URL. The program runs to
    * completion before the callback wait begins, so a host may block on a
@@ -102,7 +113,8 @@ interface SubscriptionSignInOptions {
 /** One OAuth subscription provider, as every host consumes it. */
 export interface SubscriptionProvider {
   readonly id: SubscriptionProviderId;
-  /** Name used verbatim in prompts, titles, and errors. */
+  /** Name used verbatim in prompts, titles, and errors: the account copy's
+   *  `label`. */
   readonly displayName: string;
   /** Account the browser session belongs to ('ChatGPT', 'xAI'). */
   readonly sessionName: string;
@@ -174,18 +186,6 @@ export interface SubscriptionSignOutResult {
 type AccountOf<Id extends SubscriptionProviderId> =
   SubscriptionAccounts['Service'][(typeof SUBSCRIPTION_ROUTES)[Id]];
 
-/** A row's descriptor fields pass through to the provider unchanged; its
- *  account runs the sign-in itself. */
-interface SubscriptionProviderBindings<
-  Id extends SubscriptionProviderId,
-> extends Pick<
-  SubscriptionProvider,
-  'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
-> {
-  readonly id: Id;
-  readonly accountLabel: (account: SubscriptionAccountNames) => string;
-}
-
 /** A sign-in that could not finish: no transport this machine can use, or
  *  an account signed in whose subscription could not be turned on. The
  *  message is the user-facing text. */
@@ -198,10 +198,18 @@ class SubscriptionSignInFailed extends Schema.TaggedError<SubscriptionSignInFail
  * Bind one provider's account to the shared sign-in flow. Two callers (the
  * catalog rows below); the flow it closes over is the whole point.
  */
-function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
-  accountLabel,
-  ...descriptor
-}: SubscriptionProviderBindings<Id>): SubscriptionProvider {
+function defineSubscriptionProvider<Id extends SubscriptionProviderId>(
+  id: Id,
+): SubscriptionProvider {
+  const { label, sessionName, copyTarget, modelFamily } =
+    SUBSCRIPTION_AUTH_COPY[id];
+  const descriptor = {
+    id,
+    displayName: label,
+    sessionName,
+    copyTarget,
+    modelFamily,
+  };
   const account: Effect.Effect<
     AccountOf<Id>,
     never,
@@ -213,11 +221,12 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
   const deviceCodeLogin = (
     signIn: AccountOf<Id>['signInWithDeviceCode'],
     options: SubscriptionSignInOptions,
+    reason: string | undefined,
   ) =>
     signIn === undefined
       ? Effect.fail(
           new SubscriptionSignInFailed({
-            message: `${descriptor.displayName} sign-in has no device code: it returns to a browser on this machine (127.0.0.1). Sign in where TeXRA runs, or forward port 1455 from your browser's machine to this one.`,
+            message: `${descriptor.displayName} sign-in has no device code: it returns to a browser on the machine running TeXRA (127.0.0.1). Sign in where TeXRA runs, or forward its sign-in callback port from your browser's machine to this one.`,
           }),
         )
       : // The prompt is shown beside the poll, not before it: the poll waits
@@ -226,7 +235,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
         // the flow.
         signIn((prompt) =>
           Effect.asVoid(
-            Effect.forkChild(options.present.presentDeviceCode(prompt)),
+            Effect.forkChild(options.present.presentDeviceCode(prompt, reason)),
           ),
         );
 
@@ -246,7 +255,9 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
       // forwarded, that still completes.
       const session: Pick<SubscriptionSessionStatus, 'email' | 'accountId'> =
         options.transport === 'device' && signInWithDeviceCode !== undefined
-          ? yield* deviceCodeLogin(signInWithDeviceCode, options)
+          ? // The host asked for a device code; it is not a fallback, so no
+            // "could not open a browser" line precedes the steps.
+            yield* deviceCodeLogin(signInWithDeviceCode, options, undefined)
           : yield* subscription
               .signInWithBrowser((url) =>
                 // A browser the host could not reach is the loopback route
@@ -278,7 +289,15 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
                       `${descriptor.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}${causeMessage}`,
                     )(error).pipe(
                       Effect.andThen(
-                        deviceCodeLogin(signInWithDeviceCode, options),
+                        deviceCodeLogin(
+                          signInWithDeviceCode,
+                          options,
+                          // The browser could not be reached, so this device
+                          // code is the fallback: the host leads with why.
+                          SIGN_IN_PROMPT.deviceCodeFallback(
+                            descriptor.displayName,
+                          ),
+                        ),
                       ),
                     );
                   },
@@ -304,7 +323,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
         signedIn: true,
         email: session.email,
         accountId: session.accountId,
-        label: accountLabel(session),
+        label: subscriptionAccountLabel(descriptor.id, session),
       } satisfies SubscriptionAccount;
     },
   );
@@ -335,7 +354,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
       Effect.flatMap(account, (coordinator) =>
         Effect.map(coordinator.getStatus(), (status) => ({
           ...status,
-          label: accountLabel(status),
+          label: subscriptionAccountLabel(descriptor.id, status),
         })),
       ),
   });
@@ -346,27 +365,13 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
  * ChatGPT plan instead of an OpenAI API key, through OpenAI's token sharing.
  * The sign-in is browser-only: OpenAI's flow has no device code.
  */
-const CHATGPT_PROVIDER = defineSubscriptionProvider({
-  id: 'chatgpt',
-  displayName: 'ChatGPT',
-  sessionName: 'ChatGPT',
-  copyTarget: 'ChatGPT',
-  modelFamily: 'OpenAI models',
-  accountLabel: (account) => codexAccountLabel(account),
-});
+const CHATGPT_PROVIDER = defineSubscriptionProvider('chatgpt');
 
 /**
  * Experimental "Sign in with Grok": xAI models then run on the user's
  * SuperGrok / xAI account OAuth token instead of an xAI API key.
  */
-const GROK_PROVIDER = defineSubscriptionProvider({
-  id: 'grok',
-  displayName: 'Grok',
-  sessionName: 'xAI',
-  copyTarget: 'Grok / xAI',
-  modelFamily: 'xAI models',
-  accountLabel: (account) => xaiAccountLabel(account),
-});
+const GROK_PROVIDER = defineSubscriptionProvider('grok');
 
 /** Canonical catalog of OAuth subscription providers, shared by every host. */
 const SUBSCRIPTION_PROVIDERS: Readonly<

@@ -13,7 +13,7 @@ import {
   RUN_LIFECYCLE_CHANNEL,
   type RunEnding,
 } from '@agent/storage/runLifecycle';
-import { classifyAgentError } from '@common/errors/agentErrorClassification';
+import { classifyAgentError } from './agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import type { ResultEvent } from '@shared/session/agentEvent';
@@ -128,7 +128,7 @@ export const commitEnd = Effect.fn('commitEnd')(function* (
       }),
     ),
   );
-  const resolved = ended.end?.outcome ?? ending.outcome;
+  const resolved = ended?.outcome ?? ending.outcome;
   yield* Effect.logDebug(`Task completed with outcome: ${resolved}`).pipe(
     withLogChannel(RUN_LIFECYCLE_CHANNEL),
   );

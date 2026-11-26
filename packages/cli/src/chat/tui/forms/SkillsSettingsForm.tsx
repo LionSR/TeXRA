@@ -17,6 +17,7 @@ import {
   settingWriteFailure,
 } from '@texra/controllers/settingsView/stateSettingWrite';
 import { enabledLabel } from '@ui/copy/format';
+import { skillSourceToggleLabel } from '@ui/copy/skills';
 
 import { AsyncListForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';
@@ -43,7 +44,7 @@ export function SkillsSettingsForm(
   const { roots } = useChatProcess();
   return (
     <AsyncListForm<SkillsSettingsData, SkillToggle>
-      title="/config · Skills"
+      title={joinFacts(['/config', 'Skills'])}
       loadingLabel="Loading skills…"
       load={() =>
         Effect.gen(function* () {
@@ -62,7 +63,7 @@ export function SkillsSettingsForm(
       items={(data) => [
         ...ActiveSkillSourceScopeSchema.literals.map((scope) => ({
           value: { kind: 'source' as const, scope },
-          label: `Source: ${scope === 'interop' ? 'imported' : scope}`,
+          label: skillSourceToggleLabel(scope),
           description: enabledLabel(!data.disabledScopes.includes(scope)),
         })),
         ...data.skills.map((skill) => ({
@@ -76,7 +77,7 @@ export function SkillsSettingsForm(
         })),
       ]}
       availableRows={props.availableRows}
-      description={<Text dimColor>Toggle skills for this project.</Text>}
+      description="Toggle skills for this project."
       detailFor={(data) =>
         data.issueCount > 0 ? (
           <Text dimColor>

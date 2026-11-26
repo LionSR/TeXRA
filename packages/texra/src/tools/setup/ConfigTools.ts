@@ -33,10 +33,8 @@ import { settingSchemaWithoutDefault } from '@texra/shared/settingsView/settingR
  */
 const UPDATABLE_KEY_LIST = [
   'texra.bib.defaultPath',
-  'texra.bib.zoteroPort',
   'texra.audio.soxPath',
   'texra.latex.tikzInputDirectory',
-  'texra.git.numberOfCommitsToShow',
   'texra.maxImageDimension',
 ] as const;
 
@@ -67,6 +65,8 @@ type ReadConfigInput = typeof ReadConfigInputSchema.Type;
 
 export const ReadConfigTool = defineTool({
   name: 'read_config',
+  // A function of scripts: offered with the script tool, never sent.
+  scriptGlobal: { positional: 'key', withScript: true },
   replay: 'safe',
   description: `Read the effective value of a TeXRA configuration key.
 
@@ -135,6 +135,8 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
 
 export const UpdateConfigTool = defineTool({
   name: 'update_config',
+  // A function of scripts: offered with the script tool, never sent.
+  scriptGlobal: { positional: 'key', withScript: true },
   requiresApproval: true,
   description: `Update a TeXRA configuration value (allowlisted keys only).
 

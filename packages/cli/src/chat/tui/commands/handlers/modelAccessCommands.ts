@@ -28,13 +28,13 @@ export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
     yield* commitProviderKey(tuiUi, stores, provider, key);
     const codingPlan = CODING_PLAN_BY_API_PROVIDER.get(provider);
     if (!codingPlan) return undefined;
-    if (!codingPlan.exclusiveCredential) {
-      return `Tip: ${planFallbackName(codingPlan.usageRoute)} is the default; enable '${codingPlan.preference.title}' in \`/login\` or \`/config\` to use ${codingPlan.displayName}.`;
-    }
-    // The coding-only models route through the subscription automatically;
-    // dual-backend K3 needs the opt-in switch, which is only discoverable if
-    // we name it here — the same name `/config` and `/login` show.
-    return `Tip: the Kimi for Coding models use your subscription automatically; to use it for Kimi K3 too, enable '${codingPlan.preference.title}' in /config.`;
+    const { title, description } = codingPlan.preference;
+    // The switch is named as `/config` and `/login` show it; what it routes
+    // is its setting row's description, so no model is named here by hand.
+    const opener = codingPlan.exclusiveCredential
+      ? `the ${codingPlan.displayName} models use your subscription automatically`
+      : `${planFallbackName(codingPlan.usageRoute)} is the default`;
+    return `Tip: ${opener}. '${title}' in \`/login\` or \`/config\`: ${description}`;
   },
 );
 

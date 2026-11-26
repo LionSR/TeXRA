@@ -47,9 +47,21 @@ export const runTabsContainerStyles = css`
 
   /* Recursive child stream nesting — indentation alone carries the
      hierarchy (child rows also render a nested-run chevron). */
+  /* The task that holds the run on screen, as one card where a list asks
+     for it (the rail sets the properties). */
+  .run-node {
+    border-radius: var(--run-tab-radius, 0);
+  }
+
+  .run-node.holds-shown {
+    background: var(--run-node-shown-background, transparent);
+    box-shadow: inset 0 0 0 var(--border-thin)
+      var(--run-node-shown-border, transparent);
+  }
+
   .child-runs {
-    padding-inline-start: var(--wa-space-xs);
-    margin-inline-start: var(--wa-space-2xs);
+    padding-inline-start: var(--run-tab-child-indent, var(--wa-space-xs));
+    margin-inline-start: var(--run-tab-child-margin, var(--wa-space-2xs));
     box-sizing: border-box;
     min-width: 0;
     max-width: 100%;

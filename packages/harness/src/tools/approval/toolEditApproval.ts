@@ -8,7 +8,7 @@ import {
   type ToolEditRequest,
   type ToolResult,
 } from '@shared/schemas';
-import { refusalCopy } from '@shared/session/approvalDecision';
+import { refusalCopy } from '@tools/approval/refusalCopy';
 import { Approvals, SessionLog } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
 import {
@@ -17,7 +17,6 @@ import {
   firstChangedLine,
   reportDiffTimeout,
   unifiedDiffText,
-  type DiffHunks,
 } from '@tools/unifiedDiff';
 import { blobAddress } from '@utils/core/idHash';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
@@ -56,12 +55,23 @@ export type ToolEditApprovalResult =
     }
   | RefusalDecision;
 
-/** One diff pass over an edit; identical texts skip the engine entirely. */
-function diffEdit(original: string, proposed: string): DiffHunks {
-  return original === proposed
-    ? { hunks: [], timeout: undefined }
-    : buildDiffHunks(original, proposed);
-}
+const reviewEdit = Effect.fnUntraced(function* (
+  originalContent: string | null,
+  proposedContent: string,
+): Effect.fn.Return<Effect.Success<ReturnType<typeof readToolEditContent>>> {
+  const original = originalContent ?? '';
+  const { hunks, timeout } =
+    original === proposedContent
+      ? { hunks: [], timeout: undefined }
+      : buildDiffHunks(original, proposedContent);
+  yield* reportDiffTimeout(timeout);
+  return {
+    originalContent,
+    proposedContent,
+    hunks,
+    firstChangedLine: firstChangedLine(hunks, proposedContent),
+  };
+});
 
 // ============================================================================
 // Approval queue and request handling
@@ -85,94 +95,62 @@ export const requestToolEditApproval = (
       const { run, requests, hook } = call;
       const { runId } = run;
       const approvals = yield* Approvals;
-      const log = yield* SessionLog;
-      const acceptProposedAsIs = (): Effect.Effect<ToolEditApprovalResult> =>
-        finalizeApprovalResult(request.proposedContent, request);
       const answer = approvals.permission(runId, 'toolEdit', hook);
-      if (answer === 'allow') return yield* acceptProposedAsIs();
-      if (answer !== 'ask') return answer;
+      if (answer !== 'ask' && answer !== 'allow') return answer;
 
-      // One diff pass gives the hunks, their line counts and the first
-      // changed line, so every surface reports the same numbers for one edit.
       const { originalContent, proposedContent, path, sourceTool } = request;
-      const { hunks, timeout } = diffEdit(
-        originalContent ?? '',
-        proposedContent,
-      );
-      yield* reportDiffTimeout(timeout);
-      const lines = countLineChanges(hunks);
-      const content: Effect.Success<ReturnType<typeof readToolEditContent>> = {
-        originalContent,
-        proposedContent,
-        hunks,
-        firstChangedLine: firstChangedLine(hunks, proposedContent),
-      };
-      const text = JSON.stringify(content);
-      const address = blobAddress(text);
-      const permission: ToolEditRequest = {
-        requestId: requests.nextId(),
-        path,
-        // The call's own workspace root, as data: the display path a host
-        // shows is relative to the session that raised the request, not to
-        // whichever roots the answering fiber happens to carry.
-        relativePath: workspaceRelativePath(call.env.roots.workspace, path),
-        sourceTool,
-        runId,
-        addedLines: lines.added,
-        removedLines: lines.removed,
-        content: address,
-      };
-      return yield* requests
-        .open(
+      let reviewed = yield* reviewEdit(originalContent, proposedContent);
+      let lineChanges = countLineChanges(reviewed.hunks);
+      let appliedContent = proposedContent;
+      if (answer === 'ask') {
+        const text = JSON.stringify(reviewed);
+        const address = blobAddress(text);
+        const permission: ToolEditRequest = {
+          requestId: requests.nextId(),
+          path,
+          relativePath: workspaceRelativePath(call.env.roots.workspace, path),
+          sourceTool,
+          runId,
+          addedLines: lineChanges.added,
+          removedLines: lineChanges.removed,
+          content: address,
+        };
+        const { payload, decision } = yield* requests.open(
           { kind: 'toolEdit', data: permission },
           { blobs: [{ digest: address, text }] },
-        )
-        .pipe(
-          Effect.flatMap(
-            ({ payload, decision }): Effect.Effect<ToolEditApprovalResult> =>
-              decision.action !== 'approve'
-                ? Effect.succeed(decision)
-                : readToolEditContent(log.blobs, payload.data.content).pipe(
-                    Effect.flatMap((reviewed) =>
-                      // A host's edited bytes may be CRLF. The base and proposal
-                      // are the request's stored ones, including after a resume.
-                      finalizeApprovalResult(
-                        (
-                          decision.edit?.content ?? reviewed.proposedContent
-                        ).replaceAll('\r\n', '\n'),
-                        reviewed,
-                      ),
-                    ),
-                  ),
-          ),
         );
+        if (decision.action !== 'approve') return decision;
+        const log = yield* SessionLog;
+        // After a resume the stored proposal is still the one under review.
+        reviewed = yield* readToolEditContent(log.blobs, payload.data.content);
+        lineChanges = {
+          added: payload.data.addedLines,
+          removed: payload.data.removedLines,
+        };
+        appliedContent = (
+          decision.edit?.content ?? reviewed.proposedContent
+        ).replaceAll('\r\n', '\n');
+      }
+
+      let firstLine = reviewed.firstChangedLine;
+      if (appliedContent !== reviewed.proposedContent) {
+        const applied = yield* reviewEdit(
+          reviewed.originalContent,
+          appliedContent,
+        );
+        lineChanges = countLineChanges(applied.hunks);
+        firstLine = applied.firstChangedLine;
+      }
+      return {
+        action: 'apply' as const,
+        originalContent: reviewed.originalContent,
+        proposedContent: reviewed.proposedContent,
+        appliedContent,
+        lineChanges,
+        startLine: (firstLine ?? 0) + 1,
+      };
     }),
   );
-
-function finalizeApprovalResult(
-  appliedContent: string,
-  request: Pick<ToolEditProposal, 'originalContent' | 'proposedContent'>,
-): Effect.Effect<ToolEditApprovalResult> {
-  // One pass answers both the start line and the counts.
-  const { hunks, timeout } = diffEdit(
-    request.originalContent ?? '',
-    appliedContent,
-  );
-
-  // Compute startLine once here (convert 0-based to 1-based; null → line 1).
-  const startLine = (firstChangedLine(hunks, appliedContent) ?? 0) + 1;
-
-  return reportDiffTimeout(timeout).pipe(
-    Effect.as({
-      action: 'apply' as const,
-      appliedContent,
-      originalContent: request.originalContent,
-      proposedContent: request.proposedContent,
-      lineChanges: countLineChanges(hunks),
-      startLine,
-    }),
-  );
-}
 
 /**
  * Append the unified user-adjustment diff note to a base output message, or

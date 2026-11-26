@@ -308,12 +308,12 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         Stream.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Stream.empty
-            : Stream.fromEffect(
+            : Stream.fromEffectDrain(
                 logFailure(
                   CHANNEL,
                   `The TeXRA service stopped sending ${workspace}; ${cost}`,
                 )(cause),
-              ).pipe(Stream.drain),
+              ),
         ),
       );
   // The window's own view: the listing, plus the transcripts its readers
@@ -650,13 +650,9 @@ export function watchTask(
             Stream.tap((frame) => Effect.sync(() => onFrame(frame))),
             Stream.map((frame) => frame.inputs),
             // Each end is said through `ended`, which ends the levels below.
-            Stream.concat(
-              Stream.fromEffect(endWith('the service closed the watch.')).pipe(
-                Stream.drain,
-              ),
-            ),
+            Stream.onEnd(endWith('the service closed the watch.')),
             Stream.catch((error) =>
-              Stream.fromEffect(endWith(error.message)).pipe(Stream.drain),
+              Stream.fromEffectDrain(endWith(error.message)),
             ),
           ),
       );

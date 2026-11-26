@@ -7,6 +7,7 @@ import {
   isRunId,
   joinFacts,
   programOf,
+  RUN_OUTCOME,
   type RunId,
   type RunOutcome,
   serializeFilteredConfig,
@@ -20,7 +21,6 @@ import {
 } from '@texra-ai/worldline/host';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
-import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
 import { formatBytes } from '@ui/copy/format';
 import { PROJECT_AGENT_MARK } from '@ui/copy/nestedRuns';
 import { Settings } from '@texra-ai/worldline/plugins';
@@ -64,7 +64,7 @@ export interface CliHistoryEntry {
    *  show a blocked run's cause. */
   readonly continuation: AgentRunListingEntry['continuation'];
   readonly inputBasename: string;
-  /** A document task's run, or a chat. */
+  /** A program's run, or a chat. */
   readonly kind?: 'task' | 'chat';
   readonly description?: string;
   /** The project's agent, which bare `texra` opens on: listed first. */
@@ -182,7 +182,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     options: { includeFullConversation?: boolean } = {},
   ) {
     const records = session.records(id);
-    const [
+    const {
       config,
       view,
       result,
@@ -191,17 +191,17 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       workspaceFiles,
       rowsContinue,
       generatedFiles,
-    ] = yield* Effect.all(
-      [
-        records.readConfig,
-        session.view.read([id]),
-        records.readResult,
-        records.readReport,
-        records.readConversation,
-        records.readWorkspaceFiles,
-        records.readContinues,
-        listRunGeneratedFiles(id, storage),
-      ],
+    } = yield* Effect.all(
+      {
+        config: records.readConfig,
+        view: session.view.read([id]),
+        result: records.readResult,
+        report: records.readReport,
+        conversation: records.readConversation,
+        workspaceFiles: records.readWorkspaceFiles,
+        rowsContinue: records.readContinues,
+        generatedFiles: listRunGeneratedFiles(id, storage),
+      },
       { concurrency: 8 },
     );
     const run = view.runs.get(id);
@@ -347,7 +347,7 @@ export function formatCliHistoryNotFoundText(id: RunId, cwd?: string): string {
 /** What a run that continues can take: a finished conversation another
  *  message, anything else (interrupted, failed, cancelled) a resume. */
 function continueNote(outcome: RunOutcome | null): string {
-  return outcome === 'completed' ? 'can continue' : 'can resume';
+  return outcome === RUN_OUTCOME.COMPLETED ? 'can continue' : 'can resume';
 }
 
 /** How a listed run stands in `texra history`'s text and the `/resume`
@@ -378,9 +378,6 @@ export function formatCliHistoryDetailsText(
 ): string {
   const { config, run } = details;
   const model = details.currentModel ?? config?.model;
-  const cliOutputFile = config
-    ? cliLaunchOutput(config).outputFile?.trim()
-    : undefined;
   // Worded as every host words it.
   const status = `${run ? runStatusLabel(run.statusKey) : 'Unknown'}${
     details.continues
@@ -403,7 +400,6 @@ export function formatCliHistoryDetailsText(
     lines.push(`Startup model: ${config.model}`);
   }
   if (config) lines.push(`Kind: ${runKindOf(config)}`);
-  if (cliOutputFile) lines.push(`CLI output: ${cliOutputFile}`);
   if (run?.parentId) lines.push(`Parent: ${run.parentId}`);
   if (run?.description) lines.push(`Description: ${run.description}`);
   if (details.result) {
@@ -456,7 +452,7 @@ function toCliHistoryEntry(
   };
 }
 
-/** A document task's run, or a chat: what its launch config ran. */
+/** A program's run, or a chat: what its launch config ran. */
 function runKindOf(config: AgentConfig): 'task' | 'chat' {
   return programOf(config) !== null ? 'task' : 'chat';
 }

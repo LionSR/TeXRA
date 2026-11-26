@@ -173,13 +173,13 @@ export function SlashPalette(
       footer={
         <KeyHints
           hints={[
+            { key: 'Tab', action: 'complete' },
             ...(slashPaletteOwnsArrows(matchCount) ? [NAVIGATE_HINT] : []),
             {
               key: 'Enter',
               action: slashPaletteEnterHintAction(highlightedCommand),
             },
             CLOSE_HINT,
-            { key: 'Tab', action: 'complete' },
           ]}
         />
       }

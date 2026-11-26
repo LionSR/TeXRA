@@ -42,12 +42,15 @@ import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { SettingsTargetSchema } from './settingsTarget';
 import { ProfilePageSchema } from './profileViewMessages';
 import { OpenMemoryFolderMessageSchema } from './memoryViewMessages';
-import { commandOnly } from './messageFactories';
 import {
   PluginActionMessageSchema,
   PluginListItemSchema,
 } from './pluginMessages';
 import { OsPlatformSchema } from '@texra/shared/osPlatform';
+
+/** An inbound message with only a `command` literal (no payload). */
+const commandOnly = <T extends string>(command: T) =>
+  Schema.Struct({ command: Schema.Literal(command) });
 
 /** An absolute URL the host may open. */
 const UrlSchema = Schema.String.check(
@@ -145,18 +148,6 @@ const ModelSelectionItemSchema = Schema.Struct({
   deprecated: Schema.Boolean,
   contextWindow: Schema.optional(Schema.String),
   cost: Schema.optional(Schema.String),
-  /** The row's reasoning choice; absent where its route carries one level
-   *  or none. */
-  reasoning: Schema.optional(
-    Schema.Struct({
-      /** The levels the route can carry. */
-      levels: Schema.Array(ReasoningEffortSchema),
-      /** The level a run sends with none saved. */
-      default: Schema.optional(ReasoningEffortSchema),
-      /** The level a run sends for the saved one. */
-      saved: Schema.optional(ReasoningEffortSchema),
-    }),
-  ),
   /** Whether this model's API pricing earns the premium warning (price-based). */
   isExpensive: Schema.Boolean,
   // Resolved once by modelOptionsFrom and carried verbatim so the
@@ -269,13 +260,6 @@ const SkillsPageSchema = Schema.Struct({
   issues: Schema.Array(SkillDisplayIssueSchema),
 });
 
-/** Outbound: backend → frontend GitHub token status. */
-const GitHubTokenPageSchema = Schema.Struct({
-  /** Where the token comes from: the host's secret store, `GH_TOKEN` /
-   *  `GITHUB_TOKEN`, or nowhere. */
-  status: CredentialOriginSchema,
-});
-
 /** Each subscription's sign-in status, by provider. */
 const SubscriptionAuthPageSchema = Schema.Record(
   Schema.Literals(SUBSCRIPTION_AUTH_PROVIDERS),
@@ -285,22 +269,6 @@ const SubscriptionAuthPageSchema = Schema.Record(
 const SubscriptionUsagePageSchema = Schema.Struct({
   snapshots: SubscriptionUsageSnapshotsSchema,
 });
-const PRSubscriptionOwnerSchema = Schema.Struct({
-  runId: RunIdSchema,
-  label: Schema.String,
-});
-
-const PRSubscriptionEntrySchema = Schema.Struct({
-  key: Schema.NonEmptyString,
-  owners: Schema.Array(PRSubscriptionOwnerSchema),
-});
-export type PRSubscriptionEntry = typeof PRSubscriptionEntrySchema.Type;
-
-/** Outbound: backend → frontend active PR subscriptions. */
-const PRSubscriptionsPageSchema = Schema.Struct({
-  subscriptions: Schema.Array(PRSubscriptionEntrySchema),
-});
-
 // ============================================================
 // LaTeX settings data schemas
 // ============================================================
@@ -381,10 +349,8 @@ const SettingsHostStateSchema = Schema.Struct({
   models: ModelSelectionPageSchema,
   skills: SkillsPageSchema,
   plugins: PluginsPageSchema,
-  githubToken: GitHubTokenPageSchema,
   subscriptionAuth: SubscriptionAuthPageSchema,
   subscriptionUsage: SubscriptionUsagePageSchema,
-  prSubscriptions: PRSubscriptionsPageSchema,
   latex: LatexStatusPageSchema,
 });
 export type SettingsHostState = typeof SettingsHostStateSchema.Type;
@@ -445,15 +411,6 @@ const SetModelEnabledMessageSchema = modelCommand(
   SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
 ).mapFields(Struct.assign({ enabled: Schema.Boolean }));
 
-const SetModelReasoningLevelMessageSchema = modelCommand(
-  SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL,
-).mapFields(
-  Struct.assign({
-    /** The reasoning level to set, or undefined/null to reset to model default. */
-    level: Schema.NullOr(ReasoningEffortSchema),
-  }),
-);
-
 // Tool dashboard inbound messages
 const InstallExtensionMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION),
@@ -474,16 +431,6 @@ const RunToolCommandMessageSchema = Schema.Struct({
 });
 export type ToolCommandKind =
   (typeof RunToolCommandMessageSchema)['Type']['kind'];
-// GitHub token messages (for PR subscription tool)
-const SetGitHubTokenMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN,
-);
-const RemoveGitHubTokenMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN,
-);
-const OpenGitHubTokenUrlMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
-);
 // Subscription sign-in messages, addressed by provider
 const SignInSubscriptionMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SIGN_IN_SUBSCRIPTION),
@@ -501,14 +448,6 @@ const SetSubscriptionPreferenceMessageSchema = Schema.Struct({
 const GetSubscriptionUsageMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE),
   forceRefresh: Schema.optional(Schema.Boolean),
-});
-const UnsubscribePRMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR),
-  key: Schema.NonEmptyString,
-});
-const OpenPRSubscriptionStreamMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM),
-  runId: RunIdSchema,
 });
 
 // LaTeX settings inbound messages
@@ -581,18 +520,11 @@ export const SettingsViewInboundMessageSchema = Schema.Union([
   OpenExternalUrlMessageSchema,
   // Model selection messages
   SetModelEnabledMessageSchema,
-  SetModelReasoningLevelMessageSchema,
-  // GitHub token messages
-  SetGitHubTokenMessageSchema,
-  RemoveGitHubTokenMessageSchema,
-  OpenGitHubTokenUrlMessageSchema,
   // Subscription sign-in messages
   SignInSubscriptionMessageSchema,
   SignOutSubscriptionMessageSchema,
   SetSubscriptionPreferenceMessageSchema,
   GetSubscriptionUsageMessageSchema,
-  UnsubscribePRMessageSchema,
-  OpenPRSubscriptionStreamMessageSchema,
   // Generic catalog-driven scalar-setting write
   UpdateStateSettingMessageSchema,
   SetSkillEnabledMessageSchema,

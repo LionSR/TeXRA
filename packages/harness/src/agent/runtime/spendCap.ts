@@ -75,6 +75,10 @@ export const stopRunsAtCap: Effect.Effect<
   );
 });
 
+/** A spend or a cap as a model reads it: dollars to four significant digits. */
+export const formatSpendUsd = (usd: number): string =>
+  `$${Number(usd.toPrecision(4))}`;
+
 /** The sentence for a run stopped at its own cap, or null when `stop` was
  *  not a cap's or the cap reached was a run's above it. */
 export function capReached(
@@ -87,5 +91,5 @@ export function capReached(
     return null;
   const { cost } = run.treeUsage;
   if (cost < run.maxCostUsd) return null;
-  return `reached its spend cap of $${run.maxCostUsd} before it finished (spent $${Number(cost.toPrecision(4))}, the runs it started included); its run was stopped.`;
+  return `reached its spend cap of ${formatSpendUsd(run.maxCostUsd)} before it finished (spent ${formatSpendUsd(cost)}, the runs it started included); its run was stopped.`;
 }

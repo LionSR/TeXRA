@@ -195,7 +195,7 @@ over `processLayer()` once), `packages/extension/src/commands/`,
 providers in `packages/extension/src/progressView/` and
 `packages/extension/src/settingsView/`.
 
-- Reach process services (`HostResources`, `AppState`, `Secrets`,
+- Reach process services (`AppState`, `Secrets`, `GlobalValues`,
   `FileSystem`, `SetupPlatform`, …) from the Effect context the process
   runtime serves, and per-workspace ones from the `WorkspaceRoots` the caller
   holds. When agnostic code needs a host-only capability, add a typed port

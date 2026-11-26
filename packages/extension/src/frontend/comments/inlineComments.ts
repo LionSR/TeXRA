@@ -123,16 +123,14 @@ export const makeInlineComments: Effect.Effect<
   );
   // No commentingRangeProvider: the user replies to and resolves
   // agent-created threads, but does not start their own from the gutter.
-  yield* Effect.acquireRelease(
-    Effect.sync(() =>
-      Object.entries(COMMENT_COMMANDS).map(([id, run]) =>
-        vscode.commands.registerCommand(id, run),
+  yield* Effect.forEach(
+    Object.entries(COMMENT_COMMANDS),
+    ([id, run]) =>
+      Effect.acquireRelease(
+        Effect.sync(() => vscode.commands.registerCommand(id, run)),
+        (registered) => Effect.sync(() => registered.dispose()),
       ),
-    ),
-    (registered) =>
-      Effect.sync(() => {
-        for (const command of registered) command.dispose();
-      }),
+    { discard: true },
   );
   // Threads share the controller's lifetime. VS Code exposes no event for a
   // thread being closed or deleted, and resolved threads remain

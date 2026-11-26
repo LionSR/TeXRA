@@ -24,19 +24,16 @@ import * as vscode from 'vscode';
 // Local imports
 import { readNormalizedFile } from '@texra-ai/worldline/node';
 import { toErrorMessage, hasExtension } from '@texra-ai/worldline/schemas';
-import { outputFilesProduced } from '@texra/controllers/session/outputFilesProduced';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
-import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
-import type { Session } from '@texra-ai/worldline';
+import { appSignalStream } from '@texra-ai/worldline/host';
 import {
   withLogChannel,
   Settings,
   type SettingsStores,
   AppState,
-  type PerKeyLane,
-  withPerKeyLane,
+  type AppSignals,
 } from '@texra-ai/worldline/plugins';
 import { INLINE_CRITICISM_SETTING } from '@texra/shared/settings/texraSettings';
 
@@ -81,9 +78,12 @@ interface InlineCriticism {
    * logged, and the diagnostics stay as they were.
    */
   readonly follow: (
-    session: Pick<Session, 'view'>,
     stores: SettingsStores,
-  ) => Effect.Effect<void, never, AppState | FileSystem.FileSystem>;
+  ) => Effect.Effect<
+    void,
+    never,
+    AppState | FileSystem.FileSystem | AppSignals
+  >;
   /** Append a criticism entry from an agent. Answers false when the
    *  feature is off, so the tool can report the no-op back to the agent. */
   readonly add: (entry: ManualCriticismEntry) => boolean;
@@ -94,18 +94,16 @@ interface InlineCriticism {
 export function makeInlineCriticism(): InlineCriticism {
   /** The diagnostics while the setting is on. */
   let collection: vscode.DiagnosticCollection | undefined;
-  const fileLanes = new Map<string, PerKeyLane>();
 
   const refreshFileDiagnostics = Effect.fnUntraced(function* (
-    file: OutputFileInfo,
+    absolutePath: string,
   ) {
     const activeCollection = collection;
     if (!activeCollection) return;
-    const absolutePath = file.location.absolutePath;
     if (!hasExtension(absolutePath, '.tex')) return;
 
     const fs = yield* FileSystem.FileSystem;
-    // An unreadable output file loses its squiggles, not the whole refresh.
+    // An unreadable file loses its squiggles, not the whole refresh.
     const text = yield* readNormalizedFile(fs, absolutePath).pipe(
       Effect.catch((error) =>
         Effect.logError(
@@ -141,62 +139,49 @@ export function makeInlineCriticism(): InlineCriticism {
 
   /**
    * The diagnostics, from the moment this runs until it is interrupted: the
-   * collection opens, every output file a run produces refreshes its entries,
+   * collection opens, every project file TeXRA writes refreshes its entries,
    * and an interrupt clears and closes the collection, ending the refreshes
    * it started.
    */
-  const showDiagnostics = (
-    session: Pick<Session, 'view'>,
-  ): Effect.Effect<void, never, FileSystem.FileSystem> =>
-    Effect.acquireRelease(
+  const showDiagnostics: Effect.Effect<
+    void,
+    never,
+    FileSystem.FileSystem | AppSignals
+  > = Effect.acquireRelease(
+    Effect.sync(() => {
+      collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
+      return collection;
+    }).pipe(Effect.tap(Effect.logInfo('Inline criticism diagnostics enabled'))),
+    (opened) =>
       Effect.sync(() => {
-        collection =
-          vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
-        return collection;
+        if (collection === opened) collection = undefined;
+        opened.clear();
+        opened.dispose();
       }).pipe(
-        Effect.tap(Effect.logInfo('Inline criticism diagnostics enabled')),
+        Effect.andThen(Effect.logInfo('Inline criticism diagnostics disabled')),
       ),
-      (opened) =>
-        Effect.sync(() => {
-          if (collection === opened) collection = undefined;
-          opened.clear();
-          opened.dispose();
-        }).pipe(
-          Effect.andThen(
-            Effect.logInfo('Inline criticism diagnostics disabled'),
-          ),
-        ),
-    ).pipe(
-      Effect.andThen(
-        Stream.runForEach(outputFilesProduced(session), (files) =>
-          Effect.forEach(
-            files,
-            // One refresh per path at a time, in arrival order: two rounds
-            // writing the same output file fork two reads, and without the
-            // lane the older read can land last and set stale squiggles over
-            // the newer ones.
-            (file) =>
-              refreshFileDiagnostics(file).pipe(
-                withPerKeyLane(fileLanes, file.location.absolutePath),
-              ),
-            { concurrency: 8, discard: true },
-          ).pipe(
+  ).pipe(
+    Effect.andThen(
+      Stream.runForEach(
+        appSignalStream('workspaceFilesWritten'),
+        ({ absolutePaths }) =>
+          // Finish this batch before taking the next one.
+          Effect.forEach(new Set(absolutePaths), refreshFileDiagnostics, {
+            concurrency: 8,
+            discard: true,
+          }).pipe(
             Effect.catchCause((cause) =>
               Effect.logError(
                 `Failed to refresh criticism diagnostics: ${toErrorMessage(cause)}`,
               ),
             ),
-            Effect.forkChild,
           ),
-        ),
       ),
-      Effect.scoped,
-    );
+    ),
+    Effect.scoped,
+  );
 
-  const follow = (
-    session: Pick<Session, 'view'>,
-    stores: SettingsStores,
-  ): Effect.Effect<void, never, AppState | FileSystem.FileSystem> => {
+  const follow: InlineCriticism['follow'] = (stores) => {
     const enabled = Settings.get(stores, INLINE_CRITICISM_SETTING).pipe(
       Effect.catch((error) =>
         Effect.logWarning(
@@ -213,7 +198,7 @@ export function makeInlineCriticism(): InlineCriticism {
       Stream.filter(Predicate.isNotUndefined),
       Stream.changes,
       Stream.switchMap((on) =>
-        on ? Stream.fromEffect(showDiagnostics(session)) : Stream.empty,
+        on ? Stream.fromEffectDrain(showDiagnostics) : Stream.empty,
       ),
       Stream.runDrain,
       withLogChannel(CHANNEL),

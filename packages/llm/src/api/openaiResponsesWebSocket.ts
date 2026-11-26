@@ -24,15 +24,12 @@ import {
   WebSocketErrorSchema,
 } from './openaiResponsesWire.js';
 import { originOf } from '../protocol.js';
-import {
-  decodeWireOrFail,
-  refuseAmbientHeaders,
-  wireFail,
-} from './transport.js';
+import { decodeWireOrFail, wireFail } from './transport.js';
 import {
   authorized,
   bearerHeaders,
   prepareResponsesTurn,
+  refuseAmbientOpenAiHeaders,
   responseParameters,
 } from './openaiResponsesRequest.js';
 import type { SessionToken } from '../node.js';
@@ -217,45 +214,43 @@ const connect = Effect.fnUntraced(function* (
           ...parameters,
         } satisfies OpenAI.Responses.ResponsesClientEvent),
       ).pipe(Effect.mapError(socketFailure));
-      const chunks = Stream.fromPull(
-        Effect.succeed(
-          Effect.gen(function* () {
-            if (frames.length === 0) {
-              const read = claimed === undefined ? pull : Fiber.join(claimed);
-              claimed = undefined;
-              frames.push(...(yield* Effect.mapError(read, socketFailure)));
-            }
-            const frame = frames.shift();
-            if (typeof frame !== 'string')
-              return yield* wireFail(
-                'The Responses connection returned a binary frame.',
-              );
-            const raw = yield* decodeWireOrFail(
-              JsonFrameSchema,
-              'The Responses connection returned invalid JSON.',
-              frame,
+      const chunks = Stream.fromEffectRepeat(
+        Effect.gen(function* () {
+          if (frames.length === 0) {
+            const read = claimed === undefined ? pull : Fiber.join(claimed);
+            claimed = undefined;
+            frames.push(...(yield* Effect.mapError(read, socketFailure)));
+          }
+          const frame = frames.shift();
+          if (typeof frame !== 'string')
+            return yield* wireFail(
+              'The Responses connection returned a binary frame.',
             );
-            const envelope = yield* decodeWireOrFail(
-              WebSocketEnvelopeSchema,
-              'The Responses event does not belong to the implicit lane.',
+          const raw = yield* decodeWireOrFail(
+            JsonFrameSchema,
+            'The Responses connection returned invalid JSON.',
+            frame,
+          );
+          const envelope = yield* decodeWireOrFail(
+            WebSocketEnvelopeSchema,
+            'The Responses event does not belong to the implicit lane.',
+            raw,
+          );
+          if (envelope.type === 'error') {
+            const rejected = yield* decodeWireOrFail(
+              WebSocketErrorSchema,
+              'The Responses connection returned a malformed error.',
               raw,
             );
-            if (envelope.type === 'error') {
-              const rejected = yield* decodeWireOrFail(
-                WebSocketErrorSchema,
-                'The Responses connection returned a malformed error.',
-                raw,
-              );
-              return yield* new ModelError({
-                kind: authOrRejectionKind(rejected.status),
-                message: rejected.error.message,
-                status: rejected.status,
-                cause: rejected.error,
-              });
-            }
-            return [raw] as const;
-          }),
-        ),
+            return yield* new ModelError({
+              kind: authOrRejectionKind(rejected.status),
+              message: rejected.error.message,
+              status: rejected.status,
+              cause: rejected.error,
+            });
+          }
+          return raw;
+        }),
       );
       return responseEvents(chunks, origin, (result) =>
         withResponsesContinuation(turn, result),
@@ -312,10 +307,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   bearer: string | SessionToken,
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
   const origin = originOf(config);
-  yield* refuseAmbientHeaders(
-    'OPENAI_CUSTOM_HEADERS',
-    'Ambient OpenAI headers cannot override the selected deployment.',
-  );
+  yield* refuseAmbientOpenAiHeaders;
   const endpoint = new URL(config.deployment.endpoint);
   if (endpoint.username || endpoint.password)
     return yield* new ModelError({

@@ -6,14 +6,14 @@
 
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
-const scriptPath = resolve(repoRoot, 'scripts/check-guidance-refs.mjs');
+import { REPO_ROOT } from '@test/support/repoRoot';
+
+const scriptPath = resolve(REPO_ROOT, 'scripts/check-guidance-refs.mjs');
 const fixtureRoot = resolve(
-  repoRoot,
+  REPO_ROOT,
   'src/test-kernel/scripts/fixtures/guidance-refs',
 );
 

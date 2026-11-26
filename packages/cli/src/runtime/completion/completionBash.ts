@@ -3,13 +3,13 @@ import * as CommandLine from 'effect/process/CommandLine';
 
 import {
   CLI_COMPLETION_SHELLS,
-  DYNAMIC_VALUE_FLAG_SOURCES,
   POSITIONAL_COMPLETION_SOURCES,
   allCompletionSources,
   commandKey,
   completionFlagTokens,
   completionFlagVariants,
   completionSourceListing,
+  dynamicValueFlags,
   type CompletionCommand,
   type CompletionFlag,
 } from './completionCommandTree';
@@ -62,30 +62,12 @@ function fixedFlagValueCases(commands: readonly CompletionCommand[]): string {
     .join('\n    ');
 }
 
-/** The dynamic-value flag tokens present in the tree, grouped per flag name. */
-function dynamicValueFlagTokens(
-  commands: readonly CompletionCommand[],
-): Map<string, string[]> {
-  const byFlagName = new Map<string, string[]>();
-  for (const command of commands) {
-    for (const flag of command.flags) {
-      if (!(flag.name in DYNAMIC_VALUE_FLAG_SOURCES)) continue;
-      if (!byFlagName.has(flag.name)) {
-        byFlagName.set(flag.name, completionFlagTokens(flag));
-      }
-    }
-  }
-  return byFlagName;
-}
-
 function dynamicFlagValueCases(commands: readonly CompletionCommand[]): string {
-  const byFlagName = dynamicValueFlagTokens(commands);
-  return Object.keys(DYNAMIC_VALUE_FLAG_SOURCES)
-    .filter((name) => byFlagName.has(name))
-    .map((name) => {
-      const shellFunction = DYNAMIC_VALUE_FLAG_SOURCES[name].shellFunction;
-      return `${byFlagName.get(name)?.join('|')}) COMPREPLY=( $(compgen -W "$(${shellFunction})" -- "$cur") ); return ;;`;
-    })
+  return dynamicValueFlags(commands)
+    .map(
+      ({ flag, source }) =>
+        `${completionFlagTokens(flag).join('|')}) COMPREPLY=( $(compgen -W "$(${source.shellFunction})" -- "$cur") ); return ;;`,
+    )
     .join('\n    ');
 }
 
@@ -97,15 +79,17 @@ function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
         .flatMap(completionFlagTokens),
     ),
   );
-  const dynamicValueFlags = new Set<string>(
-    [...dynamicValueFlagTokens(commands).values()].flat(),
+  const dynamicTokens = new Set(
+    dynamicValueFlags(commands).flatMap(({ flag }) =>
+      completionFlagTokens(flag),
+    ),
   );
   const fileFlags: string[] = [];
   const directoryFlags: string[] = [];
   const genericFlags: string[] = [];
 
   for (const { flag, token } of flagValueTokenEntries(commands)) {
-    if (fixedValueFlags.has(token) || dynamicValueFlags.has(token)) continue;
+    if (fixedValueFlags.has(token) || dynamicTokens.has(token)) continue;
     if (flag.valueKind === 'directory' || flag.valueKind === 'dir') {
       directoryFlags.push(token);
     } else if (flag.valueKind === 'file' || flag.valueKind === 'path') {

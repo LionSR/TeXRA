@@ -20,13 +20,12 @@ import {
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import { runStorageLocationUnder } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
-import { ToolError, type RunId } from '@shared/schemas';
+import { asToolError, ToolError, type RunId } from '@shared/schemas';
 import type {
   RunHistory,
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
-import { Settings, type SettingsStores } from '@shared/config/settings';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import type { ToolRegistry } from '@tools/toolTable';
@@ -37,31 +36,18 @@ import {
 } from '@tools/core/inputSchema';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { meansAbsent, entryExists } from '@utils/files/fsEntryExists';
-import { formatError, ensureError } from '@utils/errors/errorMessage';
+import { formatError } from '@utils/errors/errorMessage';
 import { escapesRoot } from '@utils/core/pathCore';
-import {
-  GIT_WORKTREE_SUPPORT_SETTING,
-  settingName,
-} from '@shared/state/stateSettings';
-
-const WORKTREE_DISABLED_MESSAGE = `git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on the ${settingName(GIT_WORKTREE_SUPPORT_SETTING)} setting.`;
 
 /**
- * The `working_directory` gate, over the settings of the project the call
- * belongs to: the worktree opt-in first, then that the path is an existing
- * directory. It lives here beside the field it guards, but runs in the tool's
- * `execute`, where `call.env.roots` names that project — the schema is static,
- * parsed once by the tool facade before any call exists, so a gate in its
- * transform could only ever answer for whichever workspace the process came
- * up in.
+ * The `working_directory` check: the path is an existing directory. It runs
+ * in the tool's `execute`, since the field's schema is parsed once by the
+ * tool facade and cannot read the file system.
  */
 export const rejectUnusableWorkingDirectory = Effect.fn(function* (
-  stores: SettingsStores,
   workingDirectory: string | undefined,
 ) {
   if (!workingDirectory) return null;
-  const worktrees = yield* Settings.get(stores, GIT_WORKTREE_SUPPORT_SETTING);
-  if (!worktrees) return errorResult(WORKTREE_DISABLED_MESSAGE);
   const fs = yield* FileSystem.FileSystem;
   const stat = yield* Effect.result(fs.stat(workingDirectory));
   if (Result.isFailure(stat)) {
@@ -108,14 +94,13 @@ export function withToolUseSubagentHandoffInstruction(
  */
 const workingDirectoryField = optionalInput(
   Schema.String,
-  'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support (`git.worktreeSupport`) is enabled for this workspace.',
+  'Absolute path of an existing directory for the subagent to operate in: a copy of the project you made, or a git worktree you added. All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root.',
 ).pipe(
   Schema.decodeTo(Schema.optional(Schema.String), {
     decode: SchemaGetter.transformOptionalEffect((value) => {
-      // Neither the worktree opt-in nor the path's existence is checked here:
-      // this runs on the tool facade's one decode of a static schema, before
-      // any call exists. Both run in `execute`, through
-      // `rejectUnusableWorkingDirectory`, where `call.env.roots` names the project.
+      // The path's existence is not checked here: this runs on the tool
+      // facade's one decode of a static schema, before any call exists.
+      // `rejectUnusableWorkingDirectory` checks it in `execute`.
       const parsed = parseWorkingDirectory(Option.getOrUndefined(value));
       return Result.isSuccess(parsed)
         ? Effect.succeed(Option.some(parsed.success))
@@ -189,7 +174,7 @@ const absoluteWorkspacePath = (
 ): Effect.Effect<string, ToolError> =>
   Effect.try({
     try: () => workspaceAbsolutePath(workspaceRoot, target),
-    catch: (cause) => new ToolError(ensureError(cause).message, { cause }),
+    catch: asToolError,
   });
 
 interface InputFileGroup {
@@ -210,18 +195,18 @@ const assertInputFilesExist = Effect.fn('assertInputFilesExist')(function* (
   const entries = groups.flatMap(({ label, files }) =>
     files.filter((file) => file.trim() !== '').map((path) => ({ label, path })),
   );
-  const inspected = yield* Effect.forEach(
+  const missing = yield* Effect.filter(
     entries,
     (entry) =>
       absoluteWorkspacePath(workspaceRoot, entry.path).pipe(
         Effect.flatMap((absolute) => entryExists(fs, absolute)),
-        Effect.map((exists) => ({ ...entry, exists })),
+        Effect.map((exists) => !exists),
       ),
     { concurrency: 'unbounded' },
   );
-  const missing = inspected.find((entry) => !entry.exists);
-  if (missing) {
-    return yield* new ToolError(`${missing.label} not found: ${missing.path}`);
+  const first = missing[0];
+  if (first !== undefined) {
+    return yield* new ToolError(`${first.label} not found: ${first.path}`);
   }
 });
 

@@ -50,10 +50,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   const prepared = yield* resolveWritableTarget(input.path, {
     allowMissing: true,
   });
-  if ('blocked' in prepared) {
-    return prepared.blocked;
-  }
-  const { path, displayPath, exists, originalContent } = prepared.target;
+  const { path, displayPath, exists, originalContent } = prepared;
   const proposedContent =
     writeFilter === undefined
       ? input.content

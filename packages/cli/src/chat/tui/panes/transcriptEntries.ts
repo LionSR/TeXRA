@@ -9,8 +9,6 @@ import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { errorRowText } from '@ui/copy/modelAccess';
 
-import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
-
 /**
  * The headline a row leads with: the one line its terminal paint starts from.
  * Body lines come from the row itself (`transcriptRowBodyLines`) at the
@@ -19,8 +17,7 @@ import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormaliz
  * Memoized on the row object, which the session view replaces (never mutates) when its
  * content changes, so a hit is always current and a dropped row takes its
  * cache slot with it. Without the memo the renderable/split/scan walks would
- * re-run the markdown normalize and terminal-sanitize passes for every row on every
- * frame.
+ * re-run the terminal-sanitize pass for every row on every frame.
  */
 const HEADLINE_CACHE = new WeakMap<TranscriptRow, string>();
 
@@ -33,14 +30,11 @@ export function transcriptRowHeadline(row: TranscriptRow): string {
 }
 
 /** The shared {@link rowHeadline}, sanitized for the terminal where a row
- *  carries model or process text. The one HTML normalize pass for transcript
- *  markdown runs here; the renderer does not repeat it. */
+ *  carries process text. */
 function deriveTranscriptRowHeadline(row: TranscriptRow): string {
   switch (row.kind) {
-    case 'assistant':
-      return normalizeKnownHtmlForCliMarkdown(row.text.full);
     case 'log':
-      return safeTerminalText(normalizeKnownHtmlForCliMarkdown(row.text.full));
+      return safeTerminalText(row.text.full);
     case 'error':
       return safeTerminalText(errorRowText(row).summary);
     case 'progressStatus':
@@ -65,7 +59,6 @@ const ROW_KIND_IS_WIDGET = {
   log: false,
   user: false,
   contextManagement: true,
-  fileList: true,
   progressStatus: true,
   thinking: true,
   tool: true,
@@ -74,7 +67,7 @@ const ROW_KIND_IS_WIDGET = {
 
 /** A text row whose headline still paints once the terminal's own passes
  *  ran: the projector drops text rows that paint nothing on any host, but
- *  the HTML normalize and the control-sequence strip can leave one painting
+ *  the control-sequence strip can leave one painting
  *  nothing (model text that leads with escapes), and a user row may carry
  *  no text. */
 export function isRenderableTranscriptEntry(row: TranscriptRow): boolean {

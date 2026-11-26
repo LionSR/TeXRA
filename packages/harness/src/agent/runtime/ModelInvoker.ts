@@ -62,7 +62,7 @@ import {
   type RetryCredentials,
 } from '@shared/session/inFlight';
 import { turnText } from '@shared/session/runFacts';
-import { readCause } from '@shared/session/causeReading';
+import { readCause } from './causeReading';
 import {
   SessionLog,
   type CellError,
@@ -70,7 +70,7 @@ import {
 } from '@shared/session/runHistory';
 import type { StateReadFailed } from '@shared/config/settings';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import { UsageLog, usageAgentName } from '@shared/usageLog';
+import { UsageLog } from '@shared/usageLog';
 
 import { resendDelayMs, RouteAnswered, RouteRetries } from './ModelRetryGate';
 import { decisionOf, openRequest } from './requests';
@@ -78,7 +78,7 @@ import { AgentRun } from './run/AgentRun';
 import { callModel, type ModelCallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
 import { contextTokens, outputBudget } from './run/contextTokens';
-import { priceTurnUsage, reportUsage } from './run/pricing';
+import { priceTurnUsage, reportUsage, usageAgentName } from './run/pricing';
 import {
   acceptedTurn,
   attemptRows,
@@ -177,7 +177,6 @@ export class ModelInvoker extends Context.Service<
      *  Its messages are the history's, media by address; the call resolves
      *  them. */
     readonly call: (
-      cell: RunCell,
       request: Omit<TurnRequest, 'messages'> & {
         readonly messages: readonly HistoryMessage[];
       },
@@ -496,7 +495,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         },
       );
 
-      /** Rebind for a retry on `credentials`, retiring the failed binding,
+      /** Rebind for a retry on its credentials, retiring the failed binding,
        *  on the routes the run declines as its rows now stand plus the one
        *  the retry `declines`; the new binding, or null when another stands.
        *  A failure keeps the old one, loudly. The turn's loop is the
@@ -505,7 +504,7 @@ export const modelInvokerLayer = (): Layer.Layer<
        *  one the loop bound itself, and stands. */
       const rebind = (
         cell: RunCell,
-        { credentials, declines }: RetryCredentials,
+        { personal, declines }: RetryCredentials,
         failed: BoundModel,
       ): Effect.Effect<BoundModel | null, CallFailure> =>
         Effect.flatMap(cell.current, (state) => {
@@ -522,7 +521,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                 modelId: failed.modelId,
                 // A personal-key retry drops the route's overlay (window,
                 // prices, PDF acceptance, Kimi endpoint) for the catalog's.
-                config: credentials === 'personal' ? undefined : failed.config,
+                config: personal ? undefined : failed.config,
                 backend: failed.backend,
                 declinedRoutes,
                 textOnly: failed.textOnly,
@@ -824,7 +823,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       });
 
       /** A compaction summary on the run's binding; its caller lands it. */
-      const call: ModelInvoker['Service']['call'] = (cell, request) =>
+      const call: ModelInvoker['Service']['call'] = (request) =>
         Effect.flatMap(
           providerMessages(request.messages, log.blobs),
           (messages) =>

@@ -1,5 +1,5 @@
 /**
- * The tool card: the collapsible shell the tool-use and web-search entries
+ * The tool row: the one-line disclosure the tool-use and web-search entries
  * share.
  */
 
@@ -14,8 +14,9 @@ import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 /**
- * Wrap formatted tool content in the collapsible banner shell shared by the
- * tool-use and web-search entries. `extraClasses` and `extraContent` carry the
+ * Wrap formatted tool content in the one-line row shared by the tool-use
+ * and web-search entries: its icon, what it did and to what, and its
+ * content below when opened. `extraClasses` and `extraContent` carry the
  * tool-use-only state flags and summary-row controls.
  */
 export function buildToolUseDetails(opts: {
@@ -24,6 +25,8 @@ export function buildToolUseDetails(opts: {
   /** Show a spinner in place of the icon. */
   running: boolean;
   label: string;
+  /** What the call acts on, beside its label. */
+  detail?: string;
   isError: boolean;
   content: TemplateResult;
   defaultOpen?: boolean;
@@ -32,7 +35,9 @@ export function buildToolUseDetails(opts: {
 }): TemplateResult {
   const classes: ClassInfo = {
     'tool-use-details': true,
+    'activity-row': true,
     'tool-use-error': opts.isError,
+    'tone-danger': opts.isError,
     ...opts.extraClasses,
   };
   // The failure icon is decorative and hidden from assistive technology.
@@ -43,7 +48,7 @@ export function buildToolUseDetails(opts: {
   const extraContent = html`${statusText}${opts.extraContent ?? nothing}`;
   // prettier-ignore
   return buildDetailsCard({
-    summary: { iconName: opts.iconName, running: opts.running, label: opts.label, labelClass: 'tool-use-title', extraContent },
+    summary: { iconName: opts.iconName, running: opts.running, label: opts.label, detail: opts.detail, labelClass: 'tool-use-title', extraContent },
     body: html`<div class="banner-content log-entry-content">${opts.content}</div>`,
     open: opts.defaultOpen,
     classes,

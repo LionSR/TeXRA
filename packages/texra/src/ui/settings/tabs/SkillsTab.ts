@@ -17,6 +17,7 @@ import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postToHost } from '@ui/settings/messageDispatcher';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TexraSignalElement } from '@ui/litBase';
+import { SKILL_SOURCE_LABEL, skillSourceToggleLabel } from '@ui/copy/skills';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
@@ -24,14 +25,6 @@ import { catalogDetailStyles } from '../components/shared/catalogDetailStyles';
 import { settingSignal } from '../settingsState';
 import type { SettingsCatalogItem } from '../components/shared/SettingsCatalog';
 import '../components/shared/SettingsCatalog';
-
-const SOURCE_LABELS: Record<ActiveSkillSourceScope, string> = {
-  bundled: 'Bundled',
-  project: 'Project',
-  user: 'User',
-  custom: 'Custom',
-  interop: 'Imported',
-};
 
 @customElement('skills-tab')
 export class SkillsTab extends TexraSignalElement {
@@ -114,7 +107,7 @@ export class SkillsTab extends TexraSignalElement {
             event.target.checked,
           );
       }}
-      >Use ${SOURCE_LABELS[scope].toLowerCase()} skills</wa-switch
+      >${skillSourceToggleLabel(scope)}</wa-switch
     >`;
   }
 
@@ -123,7 +116,7 @@ export class SkillsTab extends TexraSignalElement {
       key: item.path,
       name: item.name,
       description: item.description,
-      group: SOURCE_LABELS[item.scope],
+      group: SKILL_SOURCE_LABEL[item.scope],
       searchText: item.path,
       control: renderIconActionButton({
         id: `skill-enabled-${encodeURIComponent(item.path)}`,
@@ -150,7 +143,7 @@ export class SkillsTab extends TexraSignalElement {
     return html`<section slot="detail" aria-labelledby="skill-detail-name">
       <div class="catalog-detail-header">
         <h3 class="catalog-detail-name" id="skill-detail-name">${item.name}</h3>
-        <wa-tag size="s">${SOURCE_LABELS[item.scope]}</wa-tag>
+        <wa-tag size="s">${SKILL_SOURCE_LABEL[item.scope]}</wa-tag>
       </div>
       <p class="catalog-detail-description">${item.description}</p>
       ${renderSettingsToggleRow({

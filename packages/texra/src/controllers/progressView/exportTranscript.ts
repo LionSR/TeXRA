@@ -24,14 +24,15 @@ export type TranscriptExportFormat = Parameters<typeof writeTranscript>[1];
  * lazy load, the packaged resources or trace-viewer bundle it needs, or the
  * trace it assembles. `cause` is the value the failing step produced,
  * carried unchanged so a host classifies and words it exactly as it would
- * the bare value. A host's own capabilities (the format pick, the open)
- * fail with their `HostFailed`.
+ * the bare value; a step that found the problem itself (no resources, an
+ * empty trace) has none. A host's own capabilities (the format pick, the
+ * open) fail with their `HostFailed`.
  */
 export class TranscriptExportFailed extends Schema.TaggedError<TranscriptExportFailed>()(
   'TranscriptExportFailed',
   {
     message: Schema.String,
-    cause: Schema.Defect(),
+    cause: Schema.optional(Schema.Defect()),
   },
 ) {}
 
@@ -112,13 +113,10 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
     return;
   }
   if (result.pdfPath) {
-    const pdfFilename = path
-      .basename(result.storagePath)
-      .replace(/\.tex$/, '.pdf');
     yield* ports.openPath(result.pdfPath, 'pdf');
     yield* ports.notify(
       'info',
-      `Transcript exported and compiled: ${pdfFilename}`,
+      `Transcript exported and compiled: ${path.basename(result.pdfPath)}`,
     );
     return;
   }

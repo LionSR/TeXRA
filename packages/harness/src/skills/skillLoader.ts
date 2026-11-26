@@ -9,6 +9,7 @@ import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { SKILL_FILE_NAME, SkillNameSchema } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { collapseWhitespace } from '@utils/text/stringUtils';
 
 // Local imports - skill parsing
 import {
@@ -16,6 +17,7 @@ import {
   SkillSchema,
   type Skill,
 } from './SkillSchema';
+import { appendHead } from '@utils/text/appendTail';
 
 interface ExtractedFrontmatter {
   frontmatter: unknown;
@@ -172,7 +174,7 @@ function normalizeSkillDescription(
   const errors: SkillLoadIssue[] = [];
   const description =
     typeof rawDescription === 'string'
-      ? rawDescription.replaceAll(/\s+/g, ' ').trim()
+      ? collapseWhitespace(rawDescription)
       : '';
 
   if (!description) {
@@ -194,7 +196,7 @@ function normalizeSkillDescription(
       ),
     );
     return {
-      description: description.slice(0, SKILL_DESCRIPTION_MAX_LENGTH),
+      description: appendHead('', description, SKILL_DESCRIPTION_MAX_LENGTH),
       errors,
     };
   }

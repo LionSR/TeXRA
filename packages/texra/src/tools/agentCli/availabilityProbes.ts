@@ -5,7 +5,7 @@
  */
 
 // Third-party imports
-import { Effect, type FileSystem } from 'effect';
+import { Array as Arr, Effect, type FileSystem, Option } from 'effect';
 
 // Local imports
 import { IS_WINDOWS, runsInWsl } from '@texra-ai/worldline/node';
@@ -149,9 +149,11 @@ export function preferredInstallCommand(commands: InstallCommands): string {
   if (commands.win32 != null && IS_WINDOWS) return commands.win32;
   // A getter holds no runtime to read `CommandDirs` from.
   const appDirs = commandDirs();
-  for (const manager of SYSTEM_PACKAGE_MANAGERS) {
+  const found = Arr.findFirst(SYSTEM_PACKAGE_MANAGERS, (manager) => {
     const command = commands[manager];
-    if (command != null && hasPackageManager(manager, appDirs)) return command;
-  }
-  return commands.default;
+    return command != null && hasPackageManager(manager, appDirs)
+      ? Option.some(command)
+      : Option.none();
+  });
+  return Option.getOrElse(found, () => commands.default);
 }

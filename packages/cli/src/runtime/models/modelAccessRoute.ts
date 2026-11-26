@@ -1,6 +1,12 @@
-import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
+import {
+  joinFacts,
+  SUBSCRIPTION_AUTH_PROVIDERS,
+} from '@texra-ai/worldline/schemas';
 import type { ModelAccessStatus } from '@texra/controllers/modelAccess/modelAccessPreference';
-import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAuthStatus';
+import {
+  subscriptionAccountLabel,
+  type SubscriptionAuthStatus,
+} from '@texra/shared/model/subscriptionAuthStatus';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
@@ -40,34 +46,31 @@ export type CliModelAccessItemsInput =
       readonly state: 'failed' | 'loading';
     };
 
-/** The account a subscription session is signed in as, when it names one. */
-export function subscriptionAccountLabel(
-  status: SubscriptionAuthStatus,
-): string | undefined {
-  return status.email ?? status.accountId ?? undefined;
-}
-
 /** Format one subscription preference independently of its session. */
 export function formatCliSubscriptionPreference(
   status: SubscriptionAuthStatus,
 ): string {
-  const account = subscriptionAccountLabel(status) ?? 'your account';
-  if (status.preferSubscription && status.signedIn) return `On · ${account}`;
-  if (status.signedIn) return `Off · ${account}`;
-  return status.preferSubscription
-    ? 'On · sign in required'
-    : 'Off · select to sign in and turn on';
+  const on = status.preferSubscription;
+  let detail = on ? 'sign in required' : 'select to sign in and turn on';
+  if (status.signedIn) {
+    detail = subscriptionAccountLabel(status.provider, status);
+  }
+  return joinFacts([on ? 'On' : 'Off', detail]);
 }
 
 function formatCliKeyedSubscriptionPreference(
   preferenceOn: boolean,
   keySet: boolean | undefined,
 ): string {
-  if (preferenceOn && keySet !== true) return 'On · key required';
-  if (preferenceOn) return 'On · key configured';
-  return keySet === true
-    ? 'Off · select to turn on'
-    : 'Off · key required to enable';
+  const set = keySet === true;
+  const detail = preferenceOn
+    ? set
+      ? 'key configured'
+      : 'key required'
+    : set
+      ? 'select to turn on'
+      : 'key required to enable';
+  return joinFacts([preferenceOn ? 'On' : 'Off', detail]);
 }
 
 /** Read one plan from the canonical status map. */
@@ -160,8 +163,7 @@ export function buildCliAccountAccessRows(
         provider,
         operation: 'sign-out',
         label: copy.signOutLabel,
-        description:
-          subscriptionAccountLabel(subscription) ?? copy.subscriptionLabel,
+        description: subscriptionAccountLabel(provider, subscription),
       });
     } else if (subscription.preferSubscription) {
       rows.push({

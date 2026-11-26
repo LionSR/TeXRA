@@ -18,7 +18,7 @@ TeXRA connects directly to models from Anthropic, OpenAI, Google, DeepSeek, Moon
 - `@none` to turn thinking off, on models that allow it (for example `deepseek/deepseek-v4-pro@none`)
 - `+pro` to run an OpenAI model in pro reasoning mode (for example `openai/gpt-6.1-sol+pro`)
 
-Thinking and non-thinking versions of a model are one entry, not separate models. Without an `@effort`, TeXRA uses the level you last saved for that model, otherwise **medium**, for every model. If a model does not offer the level you ask for, TeXRA uses the nearest level it does offer (a tie goes to the higher level, so `medium` on a model with only `low`, `high`, and `max` runs at `high`), and the run log says so. The CLI's `--model` and `texra models show` also take a model's bare API ID or label when it names exactly one model (`claude-opus-5-5`, `Opus 5.5`, or `opus55`); `.texra/config.json` takes the reference.
+Thinking and non-thinking versions of a model are one entry, not separate models. Without an `@effort`, TeXRA uses the level you last picked for that model in the model picker, otherwise **medium**, for every model. Each model remembers its own level, so switching back to a model returns to the level you last used with it. If a model does not offer the level you ask for, TeXRA uses the nearest level it does offer (a tie goes to the higher level, so `medium` on a model with only `low`, `high`, and `max` runs at `high`), and the run log says so. The CLI's `--model` and `texra models show` also take a model's bare API ID or label when it names exactly one model (`claude-opus-5-5`, `Opus 5.5`, or `opus55`); `.texra/config.json` takes the reference.
 
 ## Anthropic models
 

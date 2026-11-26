@@ -9,7 +9,7 @@
 
 // Third-party imports
 import { callKey } from '@shared/session/runFacts';
-import { Effect, Result, Schema, SubscriptionRef } from 'effect';
+import { Array as Arr, Effect, Option, Schema, SubscriptionRef } from 'effect';
 
 // Local imports
 import {
@@ -21,6 +21,7 @@ import { goalGrant } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { withLogChannel } from '@logger/effectLog';
 import {
+  APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
@@ -70,7 +71,7 @@ const GOAL_AUTO_APPROVALS: Record<
   readonly ApprovalBypassKind[]
 > = {
   commands: ['bash'],
-  allAgentWork: ['superYolo', 'toolEdit', 'bash'],
+  allAgentWork: [...APPROVAL_BYPASS_KINDS],
 };
 
 const PlanToolInputSchema = Schema.Struct({
@@ -132,28 +133,22 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
       (run.outcome === null || run.childIds.some(stillRunning))
     );
   };
-  const running = results
-    .flatMap((payload) => {
-      const { responseId, callId, result } = payload;
-      const launched =
-        result.status === 'executed'
-          ? Schema.decodeUnknownResult(LaunchedSchema)(result.value)
-          : undefined;
-      const goal =
-        launched !== undefined && Result.isSuccess(launched)
-          ? launched.success.runId
-          : undefined;
-      return goal !== undefined &&
-        issued[callKey(responseId, callId)]?.toolName === PLAN
-        ? [goal]
-        : [];
-    })
-    .find((goal) =>
-      runs.has(goal) ? stillRunning(goal) : live.get(goal) !== undefined,
+  const running = Arr.findFirst(results, ({ responseId, callId, result }) => {
+    if (
+      result.status !== 'executed' ||
+      issued[callKey(responseId, callId)]?.toolName !== PLAN
+    )
+      return Option.none();
+    return Schema.decodeUnknownOption(LaunchedSchema)(result.value).pipe(
+      Option.map(({ runId }) => runId),
+      Option.filter((goal) =>
+        runs.has(goal) ? stillRunning(goal) : live.get(goal) !== undefined,
+      ),
     );
-  if (running !== undefined)
+  });
+  if (Option.isSome(running))
     return executed(
-      `The plan is approved, but a goal is already running (run ${running}): it was not started again. Work on the plan in this conversation, or stop that goal first and run the plan as a goal again.`,
+      `The plan is approved, but a goal is already running (run ${running.value}): it was not started again. Work on the plan in this conversation, or stop that goal first and run the plan as a goal again.`,
       'Plan approved: a goal is already running',
     );
   const maxCostUsd = yield* Settings.get(call.env.roots, GOAL_MAX_COST_SETTING);
@@ -298,7 +293,7 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
 export const PlanTool = defineTool({
   name: PLAN,
   requiresApproval: 'inBody',
-  description: `Propose or replace the plan: \`objective\` is a plain document stating what to achieve, the intended approach, and a verifiable stopping condition. Every proposal is presented to the user, who may approve it, run it as a goal (a goal run then works on it in rounds until it verifies the stopping condition), or reject it. Propose a new plan only when the objective or approach genuinely changes.`,
+  description: `Propose or replace the plan: \`objective\` is a plain document stating what to achieve, the intended approach, and a verifiable stopping condition. Where the user's approval settings ask, the user may approve it, run it as a goal (a goal run then works on it in rounds until it verifies the stopping condition), or reject it; otherwise it is approved as proposed. Propose a new plan only when the objective or approach genuinely changes.`,
   schema: PlanToolInputSchema,
   execute: (input: PlanToolInput) =>
     inRunSession((call) => executeUpdate(call, { objective: input.objective })),

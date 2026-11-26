@@ -26,7 +26,7 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 
 import { cliCommand } from './_helpers/cliCommand';
-import { cliResult, emitCliResult } from './_helpers/output';
+import { cliResult, emitCliResult } from '../runtime/platform/output';
 
 /** How long a service with no project open stays up. */
 const DEFAULT_IDLE_SECONDS = 600;

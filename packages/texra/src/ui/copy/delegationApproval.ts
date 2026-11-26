@@ -1,5 +1,6 @@
 import { Record as EffectRecord } from 'effect';
 
+import { collapseWhitespace, joinFacts } from '@texra-ai/worldline/schemas';
 import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
 
 /**
@@ -57,7 +58,7 @@ export const DELEGATION_APPROVAL_COPY = Object.freeze({
 /** The first sentence of `text`, on one line: a card's summary of a
  *  child's system text. */
 const firstSentence = (text: string): string => {
-  const flat = text.trim().replaceAll(/\s+/g, ' ');
+  const flat = collapseWhitespace(text);
   const end = flat.search(/[.!?](?:\s|$)/);
   return end === -1 ? flat : flat.slice(0, end + 1);
 };
@@ -69,7 +70,10 @@ const firstSentence = (text: string): string => {
  */
 export const CHILD_AGENT_COPY = Object.freeze({
   heading: (label: string, tools: readonly string[]) =>
-    `Agent '${label}' · tools: ${tools.length > 0 ? tools.join(', ') : 'none'}`,
+    joinFacts([
+      `Agent '${label}'`,
+      `tools: ${tools.length > 0 ? tools.join(', ') : 'none'}`,
+    ]),
   summary: firstSentence,
   promptLabel: 'System prompt',
   instructionLabel: 'Instructions',

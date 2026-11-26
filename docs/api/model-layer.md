@@ -11,10 +11,10 @@
 
 ## Entries
 
-| Entry                                  | Environment  | Exports                                                                                                                                                                                                         |
-| -------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **[`@texra-ai/llm`](./llm/)**          | Browser-safe | `Model`, `TurnRequest`, `ResolvedTurn`, `TurnEvent`, `TurnResult`, `completedTurn`, `ModelError`, `selectModel`, `MODEL_PROVIDER_PLUGINS`, `decideModelRoute`, `chooseReasoning`, `turnCost`, `CredentialStore` |
-| **[`@texra-ai/llm/node`](./llm/node)** | Node.js      | `bindModel(spec)`, `BindSpec`, `Binding`, and `SubscriptionAccounts`: the ChatGPT and Grok accounts, each running its own browser (and Grok's device-code) sign-in                                              |
+| Entry                                  | Environment  | Exports                                                                                                                                                                               |
+| -------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[`@texra-ai/llm`](./llm/)**          | Browser-safe | `Model`, `TurnRequest`, `ResolvedTurn`, `TurnEvent`, `TurnResult`, `completedTurn`, `ModelError`, `selectModel`, `decideModelRoute`, `chooseReasoning`, `turnCost`, `CredentialStore` |
+| **[`@texra-ai/llm/node`](./llm/node)** | Node.js      | `bindModel(spec)`, `BindSpec`, `Binding`, and `SubscriptionAccounts`: the ChatGPT and Grok accounts, each running its own browser (and Grok's device-code) sign-in                    |
 
 `bindModel` loads its protocol module on demand (`import('./api/<protocol>.js')`), so a process only loads the SDK of the provider it binds, and the published `.d.ts` files never expose vendor SDK types.
 

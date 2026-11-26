@@ -2,26 +2,12 @@
 // regexes for the LaTeX math spans and stray macros, the collision-free
 // `@@<tag>-N@@` placeholder tag selection, and the fixpoint restore pass.
 
-// Inline `$…$` requires both delimiters to be unescaped (`\$` is a literal
-// dollar in LaTeX, not a delimiter) and on the same line, which keeps stray
-// currency `$` from being captured and avoids cascading mis-splits. One or
-// more adjacent spans chain so `$a$$b$` shields as a single unit.
-const INLINE_MATH_SPAN_PATTERN =
-  /(?<!\\)\$(?!\$)[^\n$]+?(?<![\\$])\$(?:\$(?!\$)[^\n$]+?(?<![\\$])\$)*/g;
-
 // Display and inline delimiter regexes used by the render shield before the
-// bounded inline-dollar scanner runs, and by the lax HTML-normalize shield.
+// bounded inline-dollar scanner runs.
 export const DISPLAY_MATH_SPAN_PATTERNS: readonly RegExp[] = Object.freeze([
   /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
   /(?<!\\)\\\[[\s\S]+?(?<!\\)\\\]/g, // \[ … \]  (display)
   /(?<!\\)\\\([\s\S]+?(?<!\\)\\\)/g, // \( … \)  (inline)
-]);
-
-// Lax HTML-normalize math pattern set: display fences first so `$…$` never
-// splits a `$$…$$`, then the intentionally lax inline `$…$` regex.
-export const MATH_SPAN_PATTERNS: readonly RegExp[] = Object.freeze([
-  ...DISPLAY_MATH_SPAN_PATTERNS,
-  INLINE_MATH_SPAN_PATTERN,
 ]);
 
 // LaTeX backslash-macros whose trailing character is CommonMark-escapable
@@ -167,7 +153,6 @@ export function protectByPatterns(
   content: string,
   patterns: readonly RegExp[],
   tag: string,
-  preserveBlockquotePrefixes = false,
 ): { content: string; restore: (value: string) => string } {
   const items: string[] = [];
   const selectedTag = selectPlaceholderTag(content, tag);
@@ -176,7 +161,7 @@ export function protectByPatterns(
     patterns,
     selectedTag,
     items,
-    preserveBlockquotePrefixes,
+    false,
   );
   return {
     content: protectedContent,

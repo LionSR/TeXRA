@@ -1,9 +1,9 @@
 /**
  * What the delegation tools can launch, and the text that tells the model.
  *
- * The installed plugins' agents a delegation can name, the models a child
- * can run and whether worktrees are on all change while a run lives (a
- * plugin switched on, a new credential, the worktree setting). The step reads them
+ * The installed plugins' agents a delegation can name and the models a child
+ * can run change while a run lives (a plugin switched on, a new
+ * credential). The step reads them
  * (`readDelegationTargets`) into the run's context; the system text renders
  * them once, at the step that freezes it (`delegationSection`), and a later
  * change reaches the model as lines of the context update
@@ -34,13 +34,8 @@ import {
   type DelegationTargets,
 } from '@shared/schemas';
 
-import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  GIT_WORKTREE_SUPPORT_SETTING,
-  settingName,
-} from '@shared/state/stateSettings';
 
 /** The models that can run now, in picker order. */
 const availableModelNames = (options: readonly ModelVerdict[]): string[] =>
@@ -55,8 +50,8 @@ const availableModelNames = (options: readonly ModelVerdict[]): string[] =>
 /**
  * What the `agent` tool can launch, or `undefined` when the step's tools
  * hold none: the agents of the installed plugins the step loaded (so they
- * come and go with the plugin's tools and programs in the same request),
- * the models a child can run, and whether worktrees are on.
+ * come and go with the plugin's tools and programs in the same request)
+ * and the models a child can run.
  */
 export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   function* (
@@ -87,22 +82,13 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
         ).pipe(withLogChannel('DelegationTargets'), Effect.as(null)),
       ),
     );
-    return {
-      agents,
-      models,
-      worktree: yield* Settings.get(stores, GIT_WORKTREE_SUPPORT_SETTING),
-    } satisfies DelegationTargets;
+    return { agents, models } satisfies DelegationTargets;
   },
 );
 
 /* -------------------------------------------------------------------------
  * Rendering
  * ---------------------------------------------------------------------- */
-
-const worktreeLine = (enabled: boolean): string =>
-  enabled
-    ? 'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to `agent` to run a tool-use subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.'
-    : `Git worktree support: DISABLED in this workspace. Do not pass \`working_directory\` to \`agent\` because the call will be rejected. Ask the user to turn on the ${settingName(GIT_WORKTREE_SUPPORT_SETTING)} setting if worktree operation is needed.`;
 
 /** The system text's delegation section, rendered once, at the freeze. */
 export function delegationSection(targets: DelegationTargets): string {
@@ -127,7 +113,6 @@ export function delegationSection(targets: DelegationTargets): string {
       'Available models: none currently available. Ask the user to configure model access before delegating.',
     );
   else lines.push(`Available models: ${targets.models.join(', ')}`);
-  if (targets.worktree !== null) lines.push(worktreeLine(targets.worktree));
   return `<delegation_targets>\n${lines.join('\n')}\n</delegation_targets>`;
 }
 
@@ -172,8 +157,6 @@ export function delegationUpdate(
     const change = namesChange(told?.models ?? [], now.models);
     if (change !== null) lines.push(`Models for delegation ${change}.`);
   }
-  if (now.worktree !== null && now.worktree !== (told?.worktree ?? null))
-    lines.push(worktreeLine(now.worktree));
   return lines;
 }
 

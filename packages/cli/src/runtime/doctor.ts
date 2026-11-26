@@ -36,13 +36,13 @@ import {
 } from '@texra/shared/settings/texraSettings';
 
 // Local file imports
+import { NO_RUNNABLE_MODEL_COPY } from './models/modelAccess';
 import { CliExitCode } from './platform/exitCodes';
-import { writeCliResult } from '../commands/_helpers/output';
+import { writeCliResult } from './platform/output';
 import { cliErrorMessage, writeTextStderr } from './platform/logSinks';
 import { createCliStyle } from './terminal/style';
-import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminal/terminalRequirements';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { CliContext } from './platform/cliContext';
+import { readCliNodeRange, type CliContext } from './platform/cliContext';
 import type { CliStyle } from './terminal/style';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 
@@ -129,15 +129,12 @@ function failFromError(
   return fail(id, name, message, cliErrorMessage(error));
 }
 
-const SUPPORTED_NODE_RANGE = SemVerRange.parseUnsafe(
-  TEXRA_CLI_SUPPORTED_NODE_RANGE,
-);
-
 function checkNode(version: string): DoctorCheck {
+  const range = readCliNodeRange();
   const parsed = SemVer.parse(version);
   if (
     Result.isSuccess(parsed) &&
-    SemVerRange.matches(SUPPORTED_NODE_RANGE, parsed.success)
+    SemVerRange.matches(SemVerRange.parseUnsafe(range), parsed.success)
   ) {
     return pass('node', 'Node.js', `Node ${version}`);
   }
@@ -145,7 +142,7 @@ function checkNode(version: string): DoctorCheck {
     'node',
     'Node.js',
     `Node ${version || 'unknown'} is outside the supported range.`,
-    `Install Node ${TEXRA_CLI_SUPPORTED_NODE_RANGE} before running TeXRA CLI.`,
+    `Install Node ${range} before running TeXRA CLI.`,
   );
 }
 
@@ -204,7 +201,7 @@ function checkModels(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
       return fail(
         'models',
         'Models',
-        'No model is currently available.',
+        NO_RUNNABLE_MODEL_COPY,
         'Run `texra models list --all` to inspect access, sign in with `texra auth chatgpt login`, or add a provider API key with `texra setup`.',
       );
     }),

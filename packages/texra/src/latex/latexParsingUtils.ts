@@ -4,40 +4,9 @@
  * extractors share.
  */
 
-import * as path from 'node:path';
-
 import { Effect, FileSystem } from 'effect';
 
-import { withLogChannel } from '@texra-ai/worldline/plugins';
-import { pathExists, readNormalizedFile } from '@texra-ai/worldline/node';
-import { hasExtension } from '@texra-ai/worldline/schemas';
-
-const CHANNEL = 'LatexParsing';
-
-/**
- * Join a base directory with a path from a LaTeX command, stripping its
- * leading and trailing slashes. An absolute path is kept, only normalized.
- *
- * @example
- * joinLatexPath('/project', 'figures/image.pdf') // '/project/figures/image.pdf'
- * joinLatexPath('/project', '/abs/refs') // '/abs/refs'
- */
-export function joinLatexPath(baseDir: string, relativePath: string): string {
-  if (path.isAbsolute(relativePath)) return path.normalize(relativePath);
-  const stripped = relativePath.replaceAll(/^\/+|\/+$/g, '');
-  return path.normalize(path.join(baseDir, stripped));
-}
-
-/**
- * `filePath` with `extension` appended unless it already has it, compared
- * case-insensitively (`refs` and `refs.BIB` both stay one `.bib` file).
- */
-export function ensureExtension(filePath: string, extension: string): string {
-  if (!filePath) return '';
-  return hasExtension(filePath, extension)
-    ? filePath
-    : `${filePath}${extension}`;
-}
+import { readNormalizedFile } from '@texra-ai/worldline/node';
 
 /**
  * A comment, or a URL argument to keep whole. A `%` starts a comment unless
@@ -54,10 +23,6 @@ export function ensureExtension(filePath: string, extension: string): string {
 const COMMENT_PATTERN =
   /(?<=(?<!\\)(?:\\\\)*)(?:(\\(?:url|nolinkurl|path|href)\s*\{[^{}\n]*\})|(?<=(?<!\\)(?:\\\\)*\\[A-Za-z@]+)%.*|%.*(?:\n[ \t]*(?=\S))?)/g;
 
-/** The reads of a LaTeX file's references probe the filesystem, so each
- *  bounds its fan-out to this many at once. */
-export const LATEX_PROBE_CONCURRENCY = 8;
-
 /**
  * The text of the LaTeX file at `absolutePath` with each comment removed, so
  * nothing commented out reads as a figure, input, bibliography or picture the
@@ -71,94 +36,6 @@ export const readUncommentedLatex = Effect.fn('latex.readUncommentedLatex')(
       COMMENT_PATTERN,
       (_match, url: string | undefined) => url ?? '',
     );
-  },
-);
-
-/** `\input{…}` or `\include{…}`: the command, then the file it names. */
-const TEX_INPUT = String.raw`\\(input|include)\s*\{([^}]+)\}`;
-
-/** A comment (kept whole, so nothing in it counts) or a file input. */
-const TEX_INPUT_OR_COMMENT_PATTERN = new RegExp(
-  `${COMMENT_PATTERN.source}|${TEX_INPUT}`,
-  'g',
-);
-
-/**
- * The file arguments of the `\input` and `\include` commands in `content`,
- * in document order, skipping commented-out ones.
- */
-export function texInputPaths(content: string): string[] {
-  return [...content.matchAll(TEX_INPUT_OR_COMMENT_PATTERN)].flatMap((match) =>
-    match[3] === undefined ? [] : [match[3]],
-  );
-}
-
-/**
- * `content` with the file argument of each `\input` and `\include` replaced
- * by what `rewrite` answers for it; an argument it answers `undefined` for,
- * and every commented-out command, stays as written.
- */
-export function rewriteTexInputs(
-  content: string,
-  rewrite: (rawPath: string) => string | undefined,
-): string {
-  return content.replaceAll(
-    TEX_INPUT_OR_COMMENT_PATTERN,
-    (
-      match,
-      _url: string | undefined,
-      command: string | undefined,
-      rawPath: string | undefined,
-    ) => {
-      if (command === undefined || rawPath === undefined) return match;
-      const replacement = rewrite(rawPath);
-      return replacement === undefined ? match : `\\${command}{${replacement}}`;
-    },
-  );
-}
-
-/**
- * Matches both \bibliography{...} and \addbibresource[...]{...}.
- * matchAll clones the regex, so a single module-level instance is safe.
- */
-const BIB_DIRECTIVE_PATTERN = new RegExp(
-  '(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}',
-  'g',
-);
-
-/**
- * Directory containing a LaTeX file, following symlinks so references
- * inside a file mirrored into run storage resolve against the workspace.
- * Falls back to the literal dirname if the file can't be realpath'd.
- */
-export const resolveLatexDir = Effect.fn('latex.resolveLatexDir')(function* (
-  absolutePath: string,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const resolved = yield* Effect.catch(fs.realPath(absolutePath), (error) =>
-    Effect.logDebug(
-      `realPath failed for ${absolutePath}; falling back to literal dirname`,
-    ).pipe(
-      Effect.annotateLogs({ data: error }),
-      withLogChannel(CHANNEL),
-      Effect.as(absolutePath),
-    ),
-  );
-  return path.dirname(resolved);
-});
-
-/**
- * Return `absolutePath` if it exists on disk, otherwise null. Centralizes
- * the existence probe used by the various LaTeX dependency resolvers:
- * `pathExists`'s reading, which is ENOTDIR read as absent alongside ENOENT plus
- * a link that resolves to nothing read as absent -- right for a dependency,
- * which a dangling symlink does not supply.
- */
-export const existingExternalPath = Effect.fn('latex.existingExternalPath')(
-  function* (absolutePath: string) {
-    const fs = yield* FileSystem.FileSystem;
-    const exists = yield* pathExists(fs, absolutePath);
-    return exists ? absolutePath : null;
   },
 );
 
@@ -201,19 +78,4 @@ const DOCUMENTCLASS_PATTERN = /\\documentclass\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/;
  *  takes; `undefined` when there is none. */
 export function documentClass(content: string): string | undefined {
   return DOCUMENTCLASS_PATTERN.exec(content)?.[1]?.trim();
-}
-
-/**
- * Collect candidate `.bib` paths referenced by `\bibliography` and
- * `\addbibresource` directives in `content`, joined against `baseDir`.
- * Empty/whitespace entries are skipped and duplicates are de-duplicated.
- * Existence checking is the caller's responsibility.
- */
-export function collectBibliographyPaths(
-  baseDir: string,
-  content: string,
-): string[] {
-  return collectCommaSeparatedMatches(content, BIB_DIRECTIVE_PATTERN, (token) =>
-    joinLatexPath(baseDir, ensureExtension(token, '.bib')),
-  );
 }

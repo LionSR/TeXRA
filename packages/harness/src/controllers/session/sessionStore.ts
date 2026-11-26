@@ -206,8 +206,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       closure: trace.closure,
       drained,
       now: events.head,
-      history: (id, fromSeq = 1, types = RUN_STATE_ROW_TYPES) =>
-        database.readAggregate(id, fromSeq, types),
+      history: (id, fromSeq = 1) =>
+        database.readAggregate(id, fromSeq, RUN_STATE_ROW_TYPES),
       runRows: (id, read, through) =>
         database
           .readAggregate(id, 1, RUN_ROW_READS[read].kinds, through)
@@ -233,11 +233,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
           Effect.as(viewApplied(batch.through), batch),
         ),
         Stream.flatMap(({ rows, through }) =>
-          Stream.concat(
-            Stream.fromIterable(rows),
-            Stream.drain(
-              Stream.fromEffect(SubscriptionRef.set(presented, through)),
-            ),
+          Stream.fromIterable(rows).pipe(
+            Stream.onEnd(SubscriptionRef.set(presented, through)),
           ),
         ),
         Stream.ensuring(Deferred.succeed(presenterEnded, undefined)),

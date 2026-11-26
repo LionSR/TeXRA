@@ -1,3 +1,5 @@
+import { Equivalence } from 'effect';
+
 import {
   getModelLabel,
   getProposalFileGroups,
@@ -110,15 +112,7 @@ function boundedAgentProposalInstructionLines(
   });
 }
 
-function equalLines(
-  left: readonly string[],
-  right: readonly string[],
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every((line, index) => line === right[index])
-  );
-}
+const equalLines = Equivalence.Array(Equivalence.String);
 
 /** `label: a, b +N more`, bounded to `maxFiles` names. */
 export function formatAgentProposalFileGroup(

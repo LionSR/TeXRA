@@ -99,7 +99,6 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
   storageRoot: string,
   workspaceRoot: string | undefined,
 ) {
-  const warnings: string[] = [];
   const openLocal = JsonStore.open(
     path.join(
       resolveWorkspaceStoragePath(storageRoot, workspaceRoot),
@@ -108,25 +107,31 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
   );
   if (!workspaceRoot) {
     const store = yield* openLocal;
-    warnings.push(...configFileWarnings(catalog, store, false));
-    return { workspace: store, local: store, warnings };
+    return {
+      workspace: store,
+      local: store,
+      warnings: configFileWarnings(catalog, store, false),
+    };
   }
   const projectConfigPath = workspaceTexraConfigPath(workspaceRoot);
-  const [workspace, local] = yield* Effect.all(
+  const [{ workspace, warning }, local] = yield* Effect.all(
     [
       JsonStore.open(projectConfigPath).pipe(
+        Effect.map((workspace) => ({ workspace, warning: undefined })),
         Effect.catch((error) =>
-          Effect.sync(() =>
-            warnings.push(
-              `Cannot read ${projectConfigPath}; project settings are ignored and cannot be saved until it is fixed. Cause: ${toErrorMessage(error)}`,
-            ),
-          ).pipe(Effect.andThen(JsonStore.unreadable(projectConfigPath))),
+          JsonStore.unreadable(projectConfigPath).pipe(
+            Effect.map((workspace) => ({
+              workspace,
+              warning: `Cannot read ${projectConfigPath}; project settings are ignored and cannot be saved until it is fixed. Cause: ${toErrorMessage(error)}`,
+            })),
+          ),
         ),
       ),
       openLocal,
     ],
     { concurrency: 'unbounded' },
   );
+  const warnings = warning === undefined ? [] : [warning];
   for (const key of workspace.keys()) {
     const row = catalog.byStoredKey(key);
     if (!projectValueIgnored(row, workspace.get(key))) continue;

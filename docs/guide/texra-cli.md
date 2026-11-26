@@ -1,6 +1,5 @@
 <script setup>
 import CliChatHero from '../.vitepress/components/CliChatHero.vue';
-import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 import CliSubagentsHero from '../.vitepress/components/CliSubagentsHero.vue';
 import ConfigPrecedenceStack from '../.vitepress/components/ConfigPrecedenceStack.vue';
 </script>
@@ -57,40 +56,28 @@ texra clone <project> ./project
 ## Running programs
 
 `texra run <program>` runs one of the [programs](./programs.md) over `--input`
-files, without a chat. The document programs (`edit`, `annotate`, `enhance`,
-`apply`, `transcribe`, `slides`, `poster`) revise or create
-documents; the task programs (`review`, `search`, `derive`, `code`,
-`review-code`, `simplify`, `test`, `experiment`, `solve`, `fix-latex`,
-`latexdiff`) answer with a report; the Lean programs `prove`,
-`lean-simplify` and `blueprint` work on a Lean project's files in place, and
-`lean-search` reports what Mathlib and the project already have. Every program needs at least one
+files, without a chat: `annotate` and `transcribe` for LaTeX, and the Lean
+programs `prove`, `lean-simplify`, `blueprint` and `lean-search`. Every
+program works on the project's files in place and needs at least one
 `--input`. Run one from a project directory:
 
 ```bash
-texra run edit --input paper.tex --instruction "Polish the prose" --output paper.polished.tex --print
+texra run annotate --input paper.tex --instruction "Read as a first-time reader" --print
 ```
 
-<CliRunHero
-  command="texra run edit --input paper.tex --instruction 'Polish the prose' --output paper.polished.tex --print"
-  :rounds="[
-    { label: 'Revision 1: draft', state: 'done' },
-    { label: 'Revision 2: review and correct', state: 'done' },
-  ]"
-  :outputs="['paper.polished.tex']"
-/>
+The run prints its progress on stderr and its reply on stdout: the check's
+verdict and what the helper agent reported. There is no output file to
+collect: the program edited the files you passed, so `git diff` shows the
+result.
 
-<p class="hero-caption">Command in, revisions stream as progress, and the printed path is the success signal: the copied <code>--output</code> destination, or the generated file in run storage when no copy was requested.</p>
-
-The instruction says what the program should do: how far `edit` goes (with no
-instruction it proofreads), which point of view `annotate` reads from, what
-`review` should check. Pass it with `--instruction <text>` or
+The instruction says what the program should do, for example which point of
+view `annotate` reads from. Pass it with `--instruction <text>` or
 `--instruction-file <file>`. When both are set, the file contents are passed
 first:
 
 ```bash
-texra run edit --input paper.tex --instruction "Tighten the proof of Lemma 2"
-texra run annotate --input paper.tex --instruction "Read as a first-time reader"
-texra run edit --input paper.tex --instruction-file notes.md
+texra run annotate --input paper.tex --instruction "Check every derivation in Section 3"
+texra run annotate --input paper.tex --instruction-file notes.md
 ```
 
 Supported media files passed with `--input` are attached to the model instead
@@ -98,43 +85,32 @@ of being read as text. Audio transcription requires a model with native audio
 support:
 
 ```bash
-texra run transcribe --input recording.m4a --output transcript.tex --model google/gemini-4-argon --print
+texra run transcribe --input recording.m4a --instruction "Write talk.tex" --model google/gemini-4-argon --print
 ```
 
-Text inputs retain their usual behavior. You can combine text and media with
-repeated `--input` flags; `--context` supplies read-only text context.
-For programs that edit their inputs, media attachments do not count as output documents.
-
-Pass read-only context files with repeated `--context` flags. The program
-reads these files, but it only emits revised documents for the selected
-inputs:
+You can combine text and media with repeated `--input` flags. Pass read-only
+context files with repeated `--context` flags: the program reads them and
+does not change them.
 
 ```bash
-texra run edit --input appendices.tex --context Draft0.tex --context refs.bib
+texra run annotate --input appendices.tex --context Draft0.tex --context refs.bib
 ```
 
 Pass multiple inputs with repeated `--input` flags, a directory, or a glob.
-Directory inputs expand recursively to `.tex` files. Multi-input runs can copy
-their generated artifacts to a directory with `--output-dir`; relative document
-paths are preserved under that directory:
+Directory inputs expand recursively to `.tex` files:
 
 ```bash
-texra run edit --input Draft0.tex --input appendices.tex --instruction "Polish the prose" --output-dir polished
-texra run edit --input 'sections/**/*.tex' --output-dir corrected
+texra run annotate --input Draft0.tex --input appendices.tex
+texra run annotate --input 'sections/**/*.tex'
 ```
 
-Programs always write generated files into the run's run-storage
-directory first. In text mode, TeXRA prints a filesystem path: the copied path
-when `--output` or `--output-dir` is used, otherwise the final generated file in
-run storage. A program that generates no document, such as `prove`, prints its
-final reply instead, as does a task program such as `review`.
+JSON and NDJSON output carry the run's result: its `runId`, its canonical
+`outcome`, and `output.response`, the program's reply. To polish or rewrite
+a document headlessly, give `chat` the instruction:
 
-With `--output`, TeXRA also copies the final artifact to the requested
-filesystem destination. JSON and NDJSON output keep `output.documents.outputs[]` as the
-run-storage source of truth (`relativePath`, `absolutePath`, and `location`),
-include `runDirectory`, include `copiedOutput` or `copiedOutputs` when a
-filesystem copy was written, and report the completed run's canonical
-`outcome`.
+```bash
+texra run chat --instruction "Polish paper.tex for clarity; keep the math. Compile it with latexmk." --print
+```
 
 Final run result objects report their terminal state through `outcome` and name
 the run through `runId`. A `texra run` result also records the plugins it ran
@@ -151,7 +127,7 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 `contract: 3` (the 1.0 contract version):
 
 - `kind: "progress"` carries a session event verbatim, with `event` set to the
-  event's `type` (`run.start`, `run.activate`, `run.end`, `usage`, `stage.start`,
+  event's `type` (`run.start`, `run.activate`, `run.end`, `usage`,
   `tool.start`, `run.description`, `run.removed`, and so on) and `payload`
   holding the remaining fields:
   - **Identity & outcomes:** Run events identify their run via
@@ -160,10 +136,8 @@ Every `--output-format ndjson` line is one JSON object whose first key is
     appear on `run.end` as `outcome`.
   - **Spend:** Each `usage` event represents one priced model turn, so total
     run spend is the sum of its `usage` events.
-  - **Turns, stages & scripts:** Run turns appear as `run.position` events
-    (`turn.begin`, `turn.end`). A `stage.start`/`stage.end` pair marks a
-    labelled span (such as a script section); any stage still open when the run
-    ends closes with `run.end`. Tool calls made inside a script carry a
+  - **Turns & scripts:** Run turns appear as `run.position` events
+    (`turn.begin`, `turn.end`). Tool calls made inside a script carry a
     `stageId` matching the enclosing `script` card's `logId`, which closes with
     its own `tool.end`.
   - **Live children (`event: "run.children"`):** The one synthetic progress event (no
@@ -190,7 +164,7 @@ provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
 
 ```bash
 export ANTHROPIC_API_KEY=sk-…
-texra run edit --input paper.tex
+texra run annotate --input paper.tex
 ```
 
 Claude Max/Team and ChatGPT Pro/Business plans also include monthly API credits
@@ -288,7 +262,7 @@ Slash commands inside the session:
 `texra chat` requires an interactive terminal. For scripts and CI, use `texra run <program | chat>` with `--print` or `--output-format json|ndjson`:
 
 - **`chat`** gives the assistant one instruction (`--instruction`, `--instruction-file`, or both; required) with optional `--input` and `--context` files, and prints its answer.
-- A **program** runs over `--input` files (required), accepts `--output` / `--output-dir`, and writes versioned document outputs. A name that is neither a program nor `chat` prints the program names.
+- A **program** runs over `--input` files (required), edits them in place, and prints its reply. A name that is neither a program nor `chat` prints the program names.
 
 ## Helper agents
 
@@ -315,7 +289,7 @@ with `--source` (`-s`, repeatable):
 
 ```bash
 texra skills list
-texra run edit --input paper.tex --source ~/my-skills
+texra run annotate --input paper.tex --source ~/my-skills
 ```
 
 Imported skill folders (`.agents`, `.claude`, `.codex`, `.gemini`) start disabled

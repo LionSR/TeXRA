@@ -18,6 +18,7 @@
 import '@awesome.me/webawesome/dist/components/tree/tree.js';
 import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import {
+  Cause,
   Duration,
   Effect,
   Exit,
@@ -40,6 +41,7 @@ import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { WORKBENCH_KIND_META } from '../shared/desktopShellState';
 import { applyMonacoTheme } from './monacoTheme';
 import { monacoPresentationOptions } from './monacoOptions';
 import { installMonacoCommandDescriptions } from './monacoCommandDescriptions';
@@ -84,16 +86,13 @@ interface FileState {
 /** What the file tree shows, as one value: every change replaces it and
  *  the tree renders the new one. */
 interface TreeState {
-  /** The top-level listing. */
-  readonly nodes: readonly EditorTreeNode[];
-  readonly loading: boolean;
-  readonly error: string | undefined;
   /** The file the editor shows. */
   readonly openPath: string | undefined;
   /** Files with edits not yet saved. */
   readonly dirty: ReadonlySet<string>;
   readonly expanded: ReadonlySet<string>;
-  /** Each folder the tree has asked to list, by path. */
+  /** Each folder the tree has asked to list, by path; the project's top
+   *  level is `''`, absent until its first listing starts. */
   readonly folders: ReadonlyMap<string, FolderListing>;
 }
 
@@ -104,9 +103,6 @@ type FolderListing =
   | { readonly state: 'failed' };
 
 const FRESH_TREE: TreeState = {
-  nodes: [],
-  loading: true,
-  error: undefined,
   openPath: undefined,
   dirty: new Set(),
   expanded: new Set(),
@@ -208,7 +204,7 @@ export function createEditorPane(
   // Everything the pane runs lives in its scope: disposing the pane
   // interrupts whatever is still in flight.
   const scope = Scope.makeUnsafe();
-  const { tree, opening, listing, directoryLoads, fork, ensureEditor } =
+  const { tree, opening, listing, directoryLoads, runInPane, ensureEditor } =
     runtime.runSync(
       Effect.gen(function* () {
         const tree = yield* SubscriptionRef.make(FRESH_TREE);
@@ -223,37 +219,39 @@ export function createEditorPane(
         );
         // Monaco and the pane's editor, made once; a load that failed is
         // tried again by the next open.
-        const [editorOnce, forgetEditor] =
-          yield* Effect.cachedInvalidateWithTTL(
-            Effect.tryPromise({
-              try: () => loadMonaco(),
-              catch: (cause) =>
-                new EditorPaneError({
-                  message: ensureError(cause).message,
-                  cause,
-                }),
-            }).pipe(
-              Effect.map((loadedMonaco) => {
-                monaco = loadedMonaco;
-                editor = loadedMonaco.editor.create(editorHost, {
-                  ...monacoPresentationOptions(document.body),
-                  theme: applyMonacoTheme(loadedMonaco, theme, document.body),
-                  // Monaco measures its own container, and the pane is resized by
-                  // splits and divider drags, not only by the window.
-                  automaticLayout: true,
-                  // Papers and proofs have paragraph-length lines, so wrapping
-                  // beats a horizontal scrollbar — but wrap on word boundaries,
-                  // not anywhere.
-                  wordWrap: 'bounded',
-                  wordWrapColumn: 120,
-                  wrappingStrategy: 'simple',
-                  folding: true,
-                });
-                return { monaco: loadedMonaco, editor };
+        const ensureEditor = yield* Effect.cachedWithTTL(
+          Effect.tryPromise({
+            try: () => loadMonaco(),
+            catch: (cause) =>
+              new EditorPaneError({
+                message: ensureError(cause).message,
+                cause,
               }),
-            ),
-            Duration.infinity,
-          );
+          }).pipe(
+            Effect.map((loadedMonaco) => {
+              monaco = loadedMonaco;
+              editor = loadedMonaco.editor.create(editorHost, {
+                ...monacoPresentationOptions(document.body),
+                theme: applyMonacoTheme(loadedMonaco, theme, document.body),
+                // Monaco measures its own container, and the pane is resized by
+                // splits and divider drags, not only by the window.
+                automaticLayout: true,
+                // Papers and proofs have paragraph-length lines, so wrapping
+                // beats a horizontal scrollbar — but wrap on word boundaries,
+                // not anywhere.
+                wordWrap: 'bounded',
+                wordWrapColumn: 120,
+                wrappingStrategy: 'simple',
+                folding: true,
+              });
+              return { monaco: loadedMonaco, editor };
+            }),
+          ),
+          (exit) =>
+            Exit.isFailure(exit) && Cause.hasFails(exit.cause)
+              ? Duration.zero
+              : Duration.infinity,
+        );
         return {
           tree,
           /** The open that chooses which file is visible: a newer open
@@ -264,8 +262,8 @@ export function createEditorPane(
           /** The folders being listed; a refresh interrupts them all. */
           directoryLoads: yield* FiberSet.make<void>(),
           /** Starts a fiber of the pane's scope. */
-          fork: yield* FiberSet.makeRuntime<never, void, never>(),
-          ensureEditor: editorOnce.pipe(Effect.tapError(() => forgetEditor)),
+          runInPane: yield* FiberSet.makeRuntimePromise<never, void, never>(),
+          ensureEditor,
         };
       }).pipe(Scope.provide(scope)),
     );
@@ -274,9 +272,7 @@ export function createEditorPane(
   const run = (program: Effect.Effect<void>): Promise<void> =>
     disposed
       ? Promise.resolve()
-      : new Promise((resolve) => {
-          fork(logDefect(program)).addObserver(() => resolve());
-        });
+      : runInPane(logDefect(program)).catch(() => undefined);
   const files = new Map<string, FileState>();
   /** Change the tree's state from outside an Effect. */
   const setTree = (change: (state: TreeState) => TreeState): void =>
@@ -317,11 +313,13 @@ export function createEditorPane(
   }
 
   function treeTemplate(state: TreeState): TemplateResult {
-    if (state.error) return renderNoticeCallout(state.error);
-    if (state.loading) {
+    const root = state.folders.get('');
+    if (root?.state === 'failed')
+      return renderNoticeCallout('Could not list project files.');
+    if (root?.state !== 'loaded') {
       return renderLoadingState('Loading project files…');
     }
-    if (state.nodes.length === 0) {
+    if (root.entries.length === 0) {
       return renderEmptyState({
         icon: 'folder-open',
         title: 'No files found in this project.',
@@ -352,7 +350,7 @@ export function createEditorPane(
         ) => requestOpenFromRow(event.detail.selection.at(-1))}
         @click=${handleTreeClick}
       >
-        ${state.nodes.map((node) => treeNodeTemplate(state, node))}
+        ${root.entries.map((node) => treeNodeTemplate(state, node))}
       </wa-tree>
     `;
   }
@@ -384,17 +382,18 @@ export function createEditorPane(
     }));
     if (expanded) {
       void run(
-        FiberSet.run(directoryLoads, logDefect(loadDirectory(directory))).pipe(
-          Effect.asVoid,
-        ),
+        FiberSet.run(
+          directoryLoads,
+          logDefect(loadDirectory(directory.path)),
+        ).pipe(Effect.asVoid),
       );
     }
   }
 
-  /** List one folder for the tree. A refresh interrupts it, and clears
-   *  what it would have written. */
-  function loadDirectory(directory: EditorTreeDirectory): Effect.Effect<void> {
-    const { path } = directory;
+  /** List one folder for the tree, the top level included. Each run asks
+   *  anew, so an interrupted listing's late answer never satisfies the
+   *  next. A refresh interrupts it, and clears what it would have written. */
+  function loadDirectory(path: string): Effect.Effect<void> {
     return Effect.suspend(() => {
       const state = SubscriptionRef.getUnsafe(tree);
       const folder = state.folders.get(path);
@@ -483,9 +482,11 @@ export function createEditorPane(
         .selected=${isOpen}
         title=${node.path}
       >
-        <span class="desktop-editor-tree-icon">${waIcon('file-lines')}</span>
+        <span class="desktop-editor-tree-icon"
+          >${waIcon(WORKBENCH_KIND_META.editor.icon)}</span
+        >
         <span class="desktop-editor-tree-label truncate">${node.name}</span>
-        ${dirty ? html`<span class="status-dot desktop-editor-dirty-dot"></span>` : nothing}
+        ${dirty ? html`<span class="status-dot desktop-editor-dirty-dot" role="img" aria-label="Unsaved changes"></span>` : nothing}
       </wa-tree-item>
     `;
   }
@@ -628,33 +629,6 @@ export function createEditorPane(
     );
   }
 
-  /** The tree's top-level listing, from scratch. Each run asks anew: a
-   *  listing request is made when `listFiles` is called, and an interrupted
-   *  one's late answer must not satisfy the next. */
-  const listTree = SubscriptionRef.update(tree, (state) => ({
-    ...state,
-    loading: true,
-  })).pipe(
-    Effect.andThen(() => callbacks.listFiles('')),
-    Effect.match({
-      onSuccess: (listedFiles) => ({
-        nodes: buildEditorDirectoryEntries(listedFiles),
-        error: undefined,
-      }),
-      onFailure: (error) => {
-        callbacks.onError(error);
-        return { error: 'Could not list project files.' };
-      },
-    }),
-    Effect.flatMap((listed) =>
-      SubscriptionRef.update(tree, (state) => ({
-        ...state,
-        ...listed,
-        loading: false,
-      })),
-    ),
-  );
-
   /** Re-read the tree and every open file from disk. A refresh during
    *  another interrupts its listing and folder loads; each file's re-read
    *  queues on its lane, behind a first read still in flight. */
@@ -668,7 +642,7 @@ export function createEditorPane(
           folders: FRESH_TREE.folders,
         })),
       ),
-      Effect.andThen(FiberHandle.run(listing, logDefect(listTree))),
+      Effect.andThen(FiberHandle.run(listing, logDefect(loadDirectory('')))),
       Effect.flatMap(Fiber.await),
     );
     const fileRefreshes = [...files].map(([path, file]) =>

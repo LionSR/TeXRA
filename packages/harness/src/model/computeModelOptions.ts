@@ -202,7 +202,7 @@ interface DecidedModel {
  * again, so no model is charged a second read (or a second warning) for it.
  * A failed read is that provider's `unreadable` status, never "no key"
  * (which would send a user with a working key to enter it again), and warns
- * once for the provider, never once per model that consults it (#11508).
+ * once for the provider, never once per model that consults it.
  */
 const decideVerdicts = Effect.fn('decideVerdicts')(function* (
   routed: RoutedModels,
@@ -318,6 +318,18 @@ function isUnservedModelId(model: string): boolean {
 }
 
 /**
+ * The registry models a person can switch on, which is every one a run can be
+ * served on ({@link setModelEnabled} refuses the rest): the rows the Models
+ * tab, `texra models enabled` and `/models` list. A surface names a row's
+ * provider with `resolveModelSource`.
+ */
+export function enableableModels(): readonly ModelConfig[] {
+  return Object.values(MODEL_CONFIGS).filter(
+    (config) => !isUnservedModel(config),
+  );
+}
+
+/**
  * Unserved models drop out here, so no startup pass sweeps persisted state.
  * An explicitly enabled default is also kept in `enabledExtras`, so it stays
  * on if the curated defaults later drop it; the set de-duplicates it.
@@ -360,7 +372,7 @@ const readSelection = Effect.fnUntraced(function* (
 /**
  * The models a person has switched on: the list the Models tab and
  * `texra models enabled` edit — the single reader of
- * {@link MODEL_SELECTION_KEY} for every host. What a picker lists is
+ * `MODEL_SELECTION_KEY` for every host. What a picker lists is
  * `readModelOptions`' default list, which adds what a subscription serves.
  */
 export const getEnabledModels = Effect.fn('getEnabledModels')(function* (
@@ -374,7 +386,7 @@ export const getEnabledModels = Effect.fn('getEnabledModels')(function* (
 
 /**
  * Enable or disable one model — the only writer of
- * {@link MODEL_SELECTION_KEY}.
+ * `MODEL_SELECTION_KEY`.
  *
  * Two invariants: at least one model stays enabled, and an unserved model is
  * never enabled. Either violation fails with `StateWriteFailed`.

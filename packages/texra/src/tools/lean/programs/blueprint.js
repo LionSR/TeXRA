@@ -38,7 +38,6 @@ export default async (args, launch) => {
         'lean_loogle',
         'web_search',
         'web_fetch',
-        'arxiv_search',
       ],
       rounds: 2,
       extension: '.tex',

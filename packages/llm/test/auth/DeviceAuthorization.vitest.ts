@@ -49,4 +49,29 @@ describe('pollDeviceAuthorization', () => {
       expect(yield* Fiber.join(fiber)).toBe(true);
     }),
   );
+
+  // A slow_down response can push the next poll past the code's expiry.
+  it.effect(
+    'stops polling when slow_down would push the next request past expiry',
+    () =>
+      Effect.gen(function* () {
+        const { poll, attempts } = queuedPoll(['slow_down', true]);
+        const fiber = yield* Effect.forkChild(
+          pollDeviceAuthorization({
+            poll,
+            intervalMs: 5000,
+            expiresInMs: 12_000,
+            slowDownIncrementMs: 5000,
+          }),
+        );
+
+        yield* TestClock.adjust('15 seconds');
+
+        expect(yield* Effect.result(Fiber.join(fiber))).toMatchObject({
+          _tag: 'Failure',
+          failure: { kind: 'expired' },
+        });
+        expect(yield* attempts).toBe(1);
+      }),
+  );
 });

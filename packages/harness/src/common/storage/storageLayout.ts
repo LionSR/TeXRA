@@ -9,7 +9,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result, Schema } from 'effect';
+import { Effect, FileSystem, Option, Result, Schema } from 'effect';
 
 // Local imports
 import {
@@ -29,16 +29,6 @@ export const WORKSPACE_STORAGE_LAYOUT = Object.freeze({
   memory: 'memories',
   runs: 'executions',
 } as const);
-
-/** Where a tool plugin's bundled skills ship under a host's packaged
- *  resources root: `<resources>/plugins/<id>/skills`. A plugin that ships
- *  none has no such directory, which reads as none. */
-export function bundledPluginSkillsDir(
-  resourcesPath: string,
-  pluginId: string,
-): string {
-  return path.join(resourcesPath, 'plugins', pluginId, 'skills');
-}
 
 /** A storage-relative (POSIX) path under the runs directory. */
 function resolveRunStoragePath(...segments: string[]): string {
@@ -148,21 +138,20 @@ export const runEntryUnder = Effect.fn('runStorage.runEntry')(function* (
         path.join(runDirectory, ...pathSegments.slice(0, index + 1)),
       ),
   ];
-  for (const ancestor of ancestors) {
-    const ancestorType = yield* entryTypeIn(fs, ancestor);
-    if (ancestorType === undefined)
-      return { kind: 'missing' } satisfies RunStorageEntry;
-    if (ancestorType === 'SymbolicLink')
-      return {
-        kind: 'symlink',
-        absolutePath: ancestor,
-      } satisfies RunStorageEntry;
-    if (ancestorType !== 'Directory')
-      return {
-        kind: 'unsupported',
-        absolutePath: ancestor,
-      } satisfies RunStorageEntry;
-  }
+  const blocked = yield* Effect.findFirstFilter(ancestors, (absolutePath) =>
+    Effect.map(
+      entryTypeIn(fs, absolutePath),
+      (type): Result.Result<RunStorageEntry, void> => {
+        if (type === 'Directory') return Result.failVoid;
+        if (type === undefined) return Result.succeed({ kind: 'missing' });
+        return Result.succeed({
+          kind: type === 'SymbolicLink' ? 'symlink' : 'unsupported',
+          absolutePath,
+        });
+      },
+    ),
+  );
+  if (Option.isSome(blocked)) return blocked.value;
 
   const absolutePath = path.join(runDirectory, normalizedPath);
   const type = yield* entryTypeIn(fs, absolutePath);

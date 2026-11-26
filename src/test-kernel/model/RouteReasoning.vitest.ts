@@ -9,8 +9,6 @@ import {
 } from '@texra-ai/llm';
 import { decideReasoning } from '@model/reasoningLevel';
 
-import { modelFileName } from '@texra/utils/files/outputFileUtils';
-
 const model = (ref: string): ModelConfig => {
   const config = modelConfig(ref);
   if (!config) throw new Error(`missing ${ref}`);
@@ -38,10 +36,4 @@ describe('reasoning on a route', () => {
         expect(refused.message).toMatch(/cannot turn thinking off/);
       }),
   );
-});
-
-describe('modelFileName', () => {
-  it('never yields a path separator for a string that names no model', () => {
-    expect(modelFileName('someone/unknown@x')).toBe('someone-unknown-x');
-  });
 });

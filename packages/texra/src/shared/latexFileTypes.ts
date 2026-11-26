@@ -4,7 +4,11 @@ import { hasExtension } from '@texra-ai/worldline/schemas';
 /**
  * LaTeX file extensions that can be compiled to PDF.
  */
-const LATEX_EXTENSIONS = ['.tex', '.ltx', '.latex'] as const;
+export const LATEX_EXTENSIONS = Object.freeze([
+  '.tex',
+  '.ltx',
+  '.latex',
+] as const);
 
 /**
  * Returns true if the file has a LaTeX extension (.tex, .ltx, .latex).

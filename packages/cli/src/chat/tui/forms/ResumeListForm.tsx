@@ -1,8 +1,6 @@
 // `/resume` form. It lists recent executions that can be continued from the
 // current chat TUI: every one but the conversation this chat is on.
 
-import { Text } from 'ink';
-
 import { Effect } from 'effect';
 
 import {
@@ -73,7 +71,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
         }))
       }
       availableRows={props.availableRows}
-      description={<Text dimColor>Choose a task to continue.</Text>}
+      description="Choose a task to continue."
       emptyMessage={EMPTY_TASK_LIST.line}
       selectMarginTop={1}
       action="resume"
