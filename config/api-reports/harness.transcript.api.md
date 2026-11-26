@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/transcriptEntry.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 73
+Exports: 72
 
 - `buildMcpToolName` — `function buildMcpToolName: (server: string, tool: string) => string`
 - `CommitOrdinal` — `type CommitOrdinal = typeof CommitOrdinalSchema.Type; ≡ number`
@@ -25,7 +25,6 @@ Exports: 73
 - `isMcpToolName` — `function isMcpToolName: (toolName: string) => boolean`
 - `isScriptCall` — `function isScriptCall: (row: ReadonlyDeep<TranscriptRow>) => row is ToolRow & { readonly stageId: string; }`
 - `LogRow` — `interface LogRow extends TranscriptRowBase { readonly kind: 'log'; readonly text: TranscriptText; }`
-- `mcpServerOfToolName` — `function mcpServerOfToolName: (name: string) => string | undefined`
 - `normalizeToolName` — `function normalizeToolName: (toolName: string) => string`
 - `paintsNothing` — `function paintsNothing: (text: string) => boolean`
 - `PayloadLanguage` — `type PayloadLanguage = 'yaml' | 'plaintext'; ≡ PayloadLanguage`
