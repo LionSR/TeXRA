@@ -17,32 +17,10 @@ import {
   type ReasoningMode,
 } from 'llm-zoo';
 
-import type { PlanRoute } from '../errors.js';
 import type { ModelRoute } from './modelRoute.js';
 
 /** The effort used when neither the caller nor the user names one. */
 export const DEFAULT_EFFORT = ReasoningEffort.MEDIUM;
-
-/**
- * The ChatGPT plan route's effort ceiling, applied through the one reasoning
- * policy. It was set for ChatGPT's Codex backend, which ran every turn
- * synchronously on one connection so that a higher effort risked a client
- * timeout; the token-sharing route streams over the public API and keeps the
- * ceiling until higher efforts are measured there.
- */
-const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
-  ReasoningEffort.LOW,
-  ReasoningEffort.MEDIUM,
-];
-
-/** The efforts each plan's backend serves; `undefined` for every effort
- *  the model has. */
-const PLAN_EFFORTS = Object.freeze({
-  'chatgpt-subscription': CODEX_ROUTE_EFFORTS,
-  'xai-subscription': undefined,
-  'kimi-code-subscription': undefined,
-  'glm-coding-plan-subscription': undefined,
-} satisfies Record<PlanRoute, readonly ReasoningEffort[] | undefined>);
 
 /**
  * The reasoning controls `config` has on `route`; without a route, the
@@ -50,8 +28,8 @@ const PLAN_EFFORTS = Object.freeze({
  * rows derive from it. Each provider serves one protocol
  * (`BACKEND_PROTOCOLS`): Gemini's Interactions request and Kimi's Responses
  * request have no switch that turns thinking off, DashScope's has none that
- * turns Qwen's thinking on, MiniMax's names `high` as its one effort, and the
- * Codex subscription serves {@link CODEX_ROUTE_EFFORTS} only.
+ * turns Qwen's thinking on, and MiniMax's names `high` as its one effort. A
+ * subscription plan serves every effort the model has.
  */
 function routeControls(
   config: Pick<ModelConfig, 'provider' | 'reasoning'>,
@@ -67,20 +45,8 @@ function routeControls(
       return { ...reasoning, off: undefined };
     case ModelProvider.MINIMAX:
       return { ...reasoning, efforts: [ReasoningEffort.HIGH] };
-    default: {
-      const served =
-        'plan' in route && route.plan !== null
-          ? PLAN_EFFORTS[route.plan]
-          : undefined;
-      return served === undefined
-        ? reasoning
-        : {
-            ...reasoning,
-            efforts: reasoning.efforts.filter((effort) =>
-              served.includes(effort),
-            ),
-          };
-    }
+    default:
+      return reasoning;
   }
 }
 
