@@ -1,8 +1,8 @@
 /**
  * How the conversation groups a run's transcript for reading: a finished
  * turn's intermediate work stands behind one "Worked for …" line, leaving
- * the message and its answer, and consecutive tool calls read as one
- * sentence. Both are computed from the rows; which groups are open is the
+ * the message, the edits it made and its answer, and consecutive tool calls
+ * read as one sentence. Both are computed from the rows; which groups are open is the
  * surface's.
  */
 import {
@@ -48,9 +48,16 @@ function clauseOf(row: RowOf<'tool' | 'webSearch'>): ToolRunClause {
   return toolDisplayKind(name) ?? 'other';
 }
 
-/** A call still open keeps its own line, with its timer and live output. */
+/** An edit to a file: the change itself is what a person reads, so no
+ *  group stands in front of it. */
+const isEdit = (row: TranscriptRow): boolean =>
+  row.kind === 'tool' && toolDisplayKind(row.log.toolName) === 'edit';
+
+/** A call still open keeps its own line, with its timer and live output,
+ *  and an edit keeps its diff in view. */
 const joinsRun = (entry: Entry): entry is { kind: 'row'; row: RunRow } =>
   entry.kind === 'row' &&
+  !isEdit(entry.row) &&
   (entry.row.kind === 'webSearch' ||
     (entry.row.kind === 'thinking' && !entry.row.streaming) ||
     (entry.row.kind === 'tool' &&
@@ -144,7 +151,13 @@ export function turnLayout(
     const folds =
       work.length > 0 && (last ? !running && outcome.length > 0 : true);
     layout.push(message);
-    if (folds && isMessage(message)) {
+    // A folded turn still shows what it changed: its edits stand after the
+    // fold, each with its diff.
+    const edits = folds
+      ? work.filter((entry) => entry.kind === 'row' && isEdit(entry.row))
+      : [];
+    const behind = work.filter((entry) => !edits.includes(entry));
+    if (folds && isMessage(message) && behind.length > 0) {
       const closing = outcome.at(0) ?? work.at(-1);
       const finishedAt =
         closing === undefined
@@ -155,9 +168,10 @@ export function turnLayout(
       layout.push({
         kind: 'work',
         id: message.row.id,
-        items: groupToolRuns(work),
+        items: groupToolRuns(behind),
         durationMs: Math.max(0, finishedAt - message.row.timestamp),
       });
+      layout.push(...edits);
     } else layout.push(...groupToolRuns(work));
     layout.push(...outcome);
     index = end;

@@ -134,7 +134,9 @@ export function formatToolUseTemplate(
     sections.push(html`<div class="tool-use-section tool-no-output">(no output)</div>`);
   }
 
-  const shouldOpen = running;
+  // A running call shows its live output, and an edit its diff: the change
+  // is what a person reads, so it is not behind a click.
+  const shouldOpen = running || displayKind === 'edit';
 
   // Live timer for in-progress tools, with timeout limit when available
   // prettier-ignore
