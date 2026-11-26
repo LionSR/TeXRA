@@ -68,8 +68,6 @@ export const progressAppStyles = css`
   /* Workspace controls live in the host's own title bar. This header
      belongs to the task and aligns with the host's file-tab strip. */
   :host([placement='embedded']) .shell-header {
-    --wa-height-header: 44px;
-    min-height: 44px;
     border-bottom: 0;
   }
   /* One readable column, as the wide editor tab has: the host's window
