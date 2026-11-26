@@ -14,7 +14,6 @@
 
 // Node imports
 import * as nodeFs from 'node:fs/promises';
-import * as path from 'node:path';
 
 // Third-party imports
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
