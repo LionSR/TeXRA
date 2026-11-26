@@ -528,25 +528,66 @@ report prints (so a field or result type counts as named, as
 `McpServerConfig` is by `readMcpConfig`'s result). A name nobody imports
 and no live name names is free.
 
-| Entry                | Names   | Imported by nobody | Free |
-| -------------------- | ------- | ------------------ | ---- |
-| root                 | 45      | 13                 | 0    |
-| `./schemas`          | 299     | 45                 | 7    |
-| `./transcript`       | 73      | 20                 | 1    |
-| `./plugins`          | 153     | 55                 | 6    |
-| `./builtins`         | 9       | 0                  | 0    |
-| `./host`             | 91 → 90 | 26                 | 0    |
-| `./node`             | 65      | 4                  | 1    |
-| `@texra-ai/llm`      | 103     | 12                 | 3    |
-| `@texra-ai/llm/node` | 23      | 4                  | 0    |
+| Entry                | Names     | Imported by nobody | Free |
+| -------------------- | --------- | ------------------ | ---- |
+| root                 | 45        | 13                 | 0    |
+| `./schemas`          | 299 → 291 | 45                 | 7    |
+| `./transcript`       | 73 → 72   | 20                 | 1    |
+| `./plugins`          | 153 → 148 | 55                 | 6    |
+| `./builtins`         | 9         | 0                  | 0    |
+| `./host`             | 91 → 92   | 26                 | 0    |
+| `./node`             | 65 → 64   | 4                  | 1    |
+| `@texra-ai/llm`      | 103 → 100 | 12                 | 3    |
+| `@texra-ai/llm/node` | 23        | 4                  | 0    |
 
 Every root name nobody imports is named by a root signature (`Sessions`,
 `Session`, `LocalSession`, `Notices`); so is every such `./host` name, by a
 `./host` signature, and every such llm name, by an llm or harness one.
 
-Landed: `./host` stops exporting `MODEL_SELECTION_KEY`, whose one importer
-was the TUI fixture script (a lint exemption that already reads the
-session's internals); no signature names it.
+Landed, one commit per entry, no name renamed:
+
+- `./host`: `MODEL_SELECTION_KEY` goes; its one importer was the TUI
+  fixture script, a lint exemption that already reads the session's
+  internals. `HookEvent` and `NormalizedUsage` arrive from `./schemas`:
+  nobody imports them, and only `./host` signatures (`ConfiguredHook`,
+  `helperCall`) name them.
+- `./schemas`: `QueuedFollowUp`, `AgentProposal`, `ContextManagementData`
+  and `ResumeRefusal` (each read only inside the harness;
+  `ResumeRefusalSchema` stays, since `ResumeRefused` names it),
+  `WorkspaceFileLocation` (a case of `FileLocation` nothing reads; its
+  alias is deleted) and `toJsonValue` (the fixture script imports it from
+  its module).
+- `./transcript`: `mcpServerOfToolName`, read only inside the harness.
+- `./plugins`: `buildFileAttachment`, `BuildFileAttachmentOptions` and
+  `ToolFileAttachment` (the Read tool's own), `MEMORY_INDEX` (now
+  file-local in the memory layout) and `makeJsonRpcConnection` (its one
+  outside importer was the harness's own test, which imports its module;
+  `connectJsonRpcProcess` stays the plugins' JSON-RPC door).
+- `./node`: `MachineGitResult`, file-local in `git.ts`; `machineGit`
+  answers its own inferred result.
+- `@texra-ai/llm`: `findModelProviderPlugin`, `MODEL_PROVIDER_PLUGINS` and
+  `ModelProviderPlugin`, read only inside llm; the list and its row type
+  are file-local in `providerPlugins.ts`.
+
+Each branch of #15216, #15229 and #15230 still merges with this one
+without a hand-resolved conflict (`git merge-tree`); the generated reports
+are rewritten by `npm run docgen` after a merge.
+
+Free, and left for a later run:
+
+- `ExternalFileLocation` (`./schemas`): its line sits beside
+  `FileListEntry`, which #15229 removes, so both removals conflict; it
+  goes once #15229 merges. `LoadedMediaMetadata` is #15229's own.
+- `NativeEntryModule` and `NativePluginHost` (`./plugins`) stay: a
+  third-party `harness.mjs` is written against them, and its importers
+  live outside this repository.
+- `DEFAULT_MODEL_CAPABILITIES` (`@texra-ai/llm`) stays though only tests
+  import it: it is part of the llm-zoo catalog the entry re-exports so a
+  consumer declares one dependency, and the harness and root suites cannot
+  resolve `llm-zoo` themselves.
+- `PlanQuotaFailure` stays on `./schemas` though only `./host`'s
+  `PlanQuota` names it: its schema is there, and the app imports that
+  schema in browser-safe code.
 
 The twelve helpers: TeXRA's plugins import nothing from `./host` (zero
 files under `packages/texra/src/tools` or the bundled plugin resources).
@@ -561,34 +602,6 @@ plugin importer to #15229 and #15230 but keep app or host importers;
 `readModelOptions` has no plugin importer and stays on `./host` for the CLI
 and the app's model picker.
 
-Free, but on an entry an open PR edits (#15216, #15229 and #15230 hold
-`schemas.ts`, `plugins.ts`, `transcriptEntry.ts`, `node.ts`,
-`packages/llm/src/index.ts` and the modules behind them), so not taken here:
-
-- `./schemas`: `QueuedFollowUp`, `AgentProposal`, `ContextManagementData`,
-  `ResumeRefusal` (each read only inside the harness),
-  `ExternalFileLocation` and `WorkspaceFileLocation` (two cases of
-  `FileLocation`, which callers write as a literal), and
-  `LoadedMediaMetadata`, which #15229 removes.
-- `./transcript`: `mcpServerOfToolName`, read only inside the harness.
-- `./plugins`: `buildFileAttachment`, `BuildFileAttachmentOptions`,
-  `ToolFileAttachment` (the Read tool's own) and `MEMORY_INDEX`.
-  `NativeEntryModule` and `NativePluginHost` stay: they are what a
-  third-party `harness.mjs` is written against, whose importers live
-  outside this repository.
-- `./node`: `MachineGitResult`, which no signature names (`machineGit`
-  answers its own `{ code, stderr, stdout }`).
-- `@texra-ai/llm`: `findModelProviderPlugin`, `MODEL_PROVIDER_PLUGINS` and
-  `ModelProviderPlugin`, read only inside llm (`providers.ts`,
-  `modelRoute.ts`).
-- Imported only by tests or the fixture scripts and named by nothing:
-  `toJsonValue` (`./schemas`), `makeJsonRpcConnection` (`./plugins`),
-  `DEFAULT_MODEL_CAPABILITIES` (`@texra-ai/llm`).
-
-On the wrong entry, also behind those PRs: `PlanQuotaFailure`, `HookEvent`
-and `NormalizedUsage` are on `./schemas`, but only `./host` signatures
-(`PlanQuota`, `ConfiguredHook`, `helperCall`) name them.
-
 Freed when #15229 and #15230 land (their last importer is a file they
 delete; the PRs leave the export): on `./schemas`, `ToolFact`,
 `causeChain`, `formatWallTime`, `previewLabel`, `DiffStats`,
@@ -599,9 +612,9 @@ delete; the PRs leave the export): on `./schemas`, `ToolFact`,
 `sourceLocationUnder`, `jitteredExponentialBackoffMs`, `isTransportReason`;
 on `./node`, `isStrictlyWithin`, `toPosixPath`, `createSymlink`; on
 `@texra-ai/llm`, `resolveCredential`, `codexBackendModelId`,
-`DEFAULT_EFFORT`. With the free names above that is 43 names the next run
-over these entries removes after both PRs merge (`./plugins` 153 → 139
-and `./schemas` 299 → 283, beyond the names the PRs remove themselves).
+`DEFAULT_EFFORT`. With `ExternalFileLocation` that is 26 names the next
+run over these entries removes after both PRs merge (`./plugins` 148 → 139
+and `./schemas` 291 → 281, beyond the names the PRs remove themselves).
 
 Stays, with its reason:
 
@@ -674,7 +687,7 @@ both call. No shared preamble is left to fold: the bash guard decides in the loo
 - **Alias scoping** must still serve `tsconfig.test-kernel.json`, which today
   extends the root `tsconfig.json`.
 - **`./host`** is smaller but nothing forces it to shrink. Its api-report diff
-  is the only check. On 2026-11-26 none of its 90 names was free (the
+  is the only check. On 2026-11-26 none of its names was free (the
   re-check above), so what shrinks it now is moving its consumers, not
   deleting names.
 - **The timed follow-up's `notBefore`** needs a `followup.queued` version bump
