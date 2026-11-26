@@ -85,7 +85,7 @@ of being read as text. Audio transcription requires a model with native audio
 support:
 
 ```bash
-texra run transcribe --input recording.m4a --instruction "Write talk.tex" --model google/gemini-4-argon --print
+texra run transcribe --input recording.m4a --instruction "Write talk.tex" --model google/gemini-4-neon --print
 ```
 
 You can combine text and media with repeated `--input` flags. Pass read-only
