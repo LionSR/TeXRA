@@ -500,7 +500,12 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         Stream.changes,
       ),
       refresh: Effect.all(
-        [Effect.andThen(loadModels, loadUsage), loadFiles, hostBanners, loadFlags],
+        [
+          Effect.andThen(loadModels, loadUsage),
+          loadFiles,
+          hostBanners,
+          loadFlags,
+        ],
         { concurrency: 'unbounded', discard: true },
       ).pipe(Effect.andThen(write({ loaded: true }))),
       refreshFiles: loadFiles,
