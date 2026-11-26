@@ -47,6 +47,7 @@ import {
 } from '@ui/copy/runStatus';
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
+import type { WaVariant } from '@ui/wa/waVariant';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, nestedCountsLabel } from '@ui/copy/nestedRuns';
@@ -58,9 +59,7 @@ import type { SessionView, RunView } from '@texra-ai/worldline/schemas';
 const DISPATCH_GROUP_KEY = 'dispatch';
 
 /** The `wa-badge` variant that paints a tone in the summary. */
-const TONE_BADGE: Readonly<
-  Record<RunTone, 'success' | 'danger' | 'warning' | 'neutral'>
-> = Object.freeze({
+const TONE_BADGE: Readonly<Record<RunTone, WaVariant>> = Object.freeze({
   running: 'success',
   success: 'success',
   danger: 'danger',
