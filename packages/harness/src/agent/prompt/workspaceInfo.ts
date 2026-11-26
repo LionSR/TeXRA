@@ -91,6 +91,8 @@ const getGitInfo = Effect.fn(function* (workspaceRoot: string) {
  * that help the LLM understand the user's workspace context.
  *
  * @param wsPath - The run's workspace root, or undefined when no folder is open.
+ * @param cwd - The directory the run's commands and relative paths start
+ *   from, listed when it is not the workspace root.
  * @param offered - The tools the run offers, by name: the external
  *   directories are listed only for a run offered a tool that reads them,
  *   and the advice before a git command only for one offered `bash`.
@@ -98,6 +100,7 @@ const getGitInfo = Effect.fn(function* (workspaceRoot: string) {
  */
 export const buildWorkspaceInfoBlock = Effect.fn(function* (
   wsPath: string | undefined,
+  cwd: string,
   offered: readonly string[],
   memory: readonly MemoryFolder[],
 ) {
@@ -109,6 +112,8 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
   const lines: string[] = [];
 
   if (wsPath) lines.push(`Workspace: ${escapeTextStrict(wsPath)}`);
+  if (cwd !== (wsPath ?? '.'))
+    lines.push(`Working directory: ${escapeTextStrict(cwd)}`);
 
   lines.push(`Platform: ${escapeTextStrict(platform)}`);
 

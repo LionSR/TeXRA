@@ -37,6 +37,7 @@ describe('PromptBuilder', () => {
           { roots, textOnly: false, offered: ['bash'], memory: [] },
         );
         expect(system).toContain('Work in /work.');
+        expect(system).toContain('Working directory: /work');
         expect(system).toContain('ws {{ 7 * 6 }}');
       }).pipe(Effect.provide(nodePlatformLayer)),
   );

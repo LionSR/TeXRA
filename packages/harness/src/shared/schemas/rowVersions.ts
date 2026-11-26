@@ -123,7 +123,8 @@ export const CURRENT_VALUE_VERSION = 1;
  *  version and its listing class, does not compile. */
 export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
   Object.freeze({
-    'run.start': Object.freeze({ ...V1, listing: 'lifecycle' }),
+    // v2: a run's grants carry no `never` limit.
+    'run.start': Object.freeze({ version: 2, listing: 'lifecycle' }),
     'run.activate': Object.freeze({ ...V1, listing: 'own' }),
     // v2: run config no longer carries attached memory paths.
     // v3: nor output files or the launching app's own record.
@@ -140,7 +141,8 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v3: a user question stores no nulls and states both of its switches.
     'request.opened': Object.freeze({ version: 3, listing: 'request' }),
     'request.decided': Object.freeze({ ...V1, listing: 'request' }),
-    'approval.policy': Object.freeze({ ...V1, listing: 'own' }),
+    // v2: a run's grants carry no `never` limit.
+    'approval.policy': Object.freeze({ version: 2, listing: 'own' }),
     'run.position': Object.freeze({ ...V1, listing: 'own' }),
     // v2: no `fileList` message; a script delivery's files are paths.
     log: Object.freeze({ version: 2, listing: 'none' }),

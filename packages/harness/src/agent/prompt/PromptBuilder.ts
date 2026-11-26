@@ -117,6 +117,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
           ? Effect.succeed('')
           : buildWorkspaceInfoBlock(
               roots.workspace,
+              inputs.CWD,
               options.offered,
               options.memory,
             ),
