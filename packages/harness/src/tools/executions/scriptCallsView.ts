@@ -6,12 +6,13 @@
 
 // Local imports
 import type { ScriptCallCard } from '@agent/runtime/scriptRun';
+import { appendHead } from '@utils/text/appendTail';
 
 const MAX_ENTRIES = 8;
 const TEXT_LENGTH = 160;
 
 function compactText(value: string | undefined): string | undefined {
-  return value?.slice(0, TEXT_LENGTH);
+  return value === undefined ? undefined : appendHead('', value, TEXT_LENGTH);
 }
 
 /** A background script's calls by section, bounded for a model's context:

@@ -14,6 +14,7 @@ import {
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
+import { appendHead } from '@utils/text/appendTail';
 
 /**
  * The tables a history query reads and their columns, in order: the public
@@ -130,7 +131,7 @@ const HISTORY_TEXT_LIMIT = 16 * 1024;
 /** `value`, or a text value past {@link HISTORY_TEXT_LIMIT} cut to it. */
 export const cutText = <T>(value: T): T | string =>
   typeof value === 'string' && value.length > HISTORY_TEXT_LIMIT
-    ? `${value.slice(0, HISTORY_TEXT_LIMIT)}… [cut: ${value.length} characters in all]`
+    ? `${appendHead('', value, HISTORY_TEXT_LIMIT)}… [cut: ${value.length} characters in all]`
     : value;
 /** The longest JSON cell the store holds whole, after its text values are
  *  cut: a longer one (many values, a large object) keeps only its length. */

@@ -7,10 +7,18 @@
  */
 import { Effect, Option, Schema } from 'effect';
 
+/**
+ * An optional field of a provider's reply where a value of another shape
+ * reads as absent instead of failing the whole reply. For display claims and
+ * hints only: a field the flow cannot continue without stays strict.
+ */
+export const absentWhenInvalid = <S extends Schema.Top>(schema: S) =>
+  Schema.optional(schema).pipe(
+    Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
+  );
+
 /** Non-empty string claim; any other shape degrades to undefined. */
-export const NonEmptyJwtClaim = Schema.optional(Schema.NonEmptyString).pipe(
-  Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
-);
+export const NonEmptyJwtClaim = absentWhenInvalid(Schema.NonEmptyString);
 
 /**
  * Decode a JWT's middle base64url segment as JSON and parse it with `schema`.

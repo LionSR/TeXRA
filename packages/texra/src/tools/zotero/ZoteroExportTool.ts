@@ -9,7 +9,12 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports - core
-import { executed, ToolError, defineTool } from '@texra-ai/worldline/plugins';
+import {
+  executed,
+  ToolError,
+  defineTool,
+  optionalInput,
+} from '@texra-ai/worldline/plugins';
 import { pluralize } from '@texra-ai/worldline/schemas';
 
 // Local imports - zotero
@@ -24,20 +29,13 @@ const ZoteroExportInputSchema = Schema.Struct({
     .annotate({
       description: 'List of Better BibTeX citation keys to export.',
     }),
-  format: Schema.optional(
-    Schema.NullOr(
-      Schema.Literals(['bibtex', 'biblatex', 'json']).annotate({
-        description: 'Export format. Defaults to biblatex.',
-      }),
-    ),
+  format: optionalInput(
+    Schema.Literals(['bibtex', 'biblatex', 'json']),
+    'Export format. Defaults to biblatex.',
   ),
-  library: Schema.optional(
-    Schema.NullOr(
-      Schema.String.annotate({
-        description:
-          'Optional library ID. Omit to search in My Library, or use "*" for all.',
-      }),
-    ),
+  library: optionalInput(
+    Schema.String,
+    'Optional library ID. Omit to search in My Library, or use "*" for all.',
   ),
 });
 

@@ -161,6 +161,23 @@ export const DYNAMIC_VALUE_FLAG_SOURCES: Readonly<
   model: COMPLETION_SOURCES.models,
 });
 
+/**
+ * Each dynamic-value flag the tree carries with its listing source, in the
+ * order of {@link DYNAMIC_VALUE_FLAG_SOURCES}: the first command's flag of a
+ * name stands for every command's.
+ */
+export function dynamicValueFlags(
+  commands: readonly CompletionCommand[],
+): { readonly flag: CompletionFlag; readonly source: CompletionSource }[] {
+  const flags = commands.flatMap((command) => command.flags);
+  return Object.entries(DYNAMIC_VALUE_FLAG_SOURCES).flatMap(
+    ([name, source]) => {
+      const flag = flags.find((candidate) => candidate.name === name);
+      return flag === undefined ? [] : [{ flag, source }];
+    },
+  );
+}
+
 /** Every dynamic listing source, for the generators that emit each function. */
 export function allCompletionSources(): CompletionSource[] {
   return Object.values(COMPLETION_SOURCES);
