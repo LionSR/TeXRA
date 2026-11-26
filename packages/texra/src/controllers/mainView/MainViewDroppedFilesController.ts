@@ -84,7 +84,6 @@ export const attachDroppedFiles = Effect.fn('attachDroppedFiles')(function* (
     });
   return {
     paths: [...attached],
-    attachedCount: attached.size,
     rejectedCount,
   };
 });

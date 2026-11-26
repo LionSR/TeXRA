@@ -555,10 +555,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             request.paths,
             getIncludedExtensions(request.category),
           );
-          if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
+          if (attached.paths.length > 0 && attached.rejectedCount > 0) {
             yield* host.notify(
               'info',
-              `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-project item')}.`,
+              `Attached ${formatResultCount(attached.paths.length, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-project item')}.`,
             );
           }
           return { kind: 'files', paths: attached.paths };
