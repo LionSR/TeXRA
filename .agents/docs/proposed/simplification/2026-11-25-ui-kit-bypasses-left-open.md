@@ -73,9 +73,10 @@ lands.
 10. **Two status dots.** `.status-dot` (`styles.css`, 6px, `--dot-color`)
     sits beside the kit's `.status-indicator`
     (`styles/statusIndicatorStyles.ts`, 7px, `--tone-color`); the left rail
-    shows both sizes, a project's unseen dot above a run's. The "unsaved"
-    dot is written twice, with an accessible name in `dockControls.ts` and
-    without one in `editorPane.ts`.
+    shows both sizes, a project's unseen dot above a run's. The two
+    remaining `.status-dot` users, `desktopShell.ts` and `main.ts`, are in
+    open PRs. (The 2026-11-26 run gave the file tree's "unsaved" dot in
+    `editorPane.ts` the accessible name the dock tab's has.)
 11. **Sidebar group labels** (`.shell-sidebar-section-label` and the Files
     header in `desktopShell.css`) are small grey labels beside the kit's
     `.overline`, which `RunTabs.ts` uses for its headings in the same
