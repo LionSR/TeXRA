@@ -110,6 +110,17 @@ lands.
     heading) were left as they are because other open PRs rewrite the same
     lines; they take `joinFacts` once those land.
 
+## The kit itself
+
+19. **`controlStyles.ts` restates a block of `commonViewStyles.ts`.**
+    `.btn-ghost.is-row::part(label)` writes out `truncateDeclarations`,
+    which lives in the module above it (`commonViewStyles.ts` imports
+    `controlStyles.ts`, so the lower file cannot import it back). The
+    2026-11-26 run moved `visuallyHiddenDeclarations` down into
+    `controlStyles.ts`, where `.action-button-label` now interpolates it.
+    `truncateDeclarations` takes the same move once `FileList.styles.ts`
+    and `SessionDrawer.ts`, two of its importers, are out of open PRs.
+
 ## Checked and declined
 
 - **The shell's log-level colours** (`styles.css`, `logEntryStyles.ts`)
