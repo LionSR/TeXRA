@@ -2,8 +2,8 @@
  * `<model-picker>`: the composer's model choice. Its chip names the model and its reasoning
  * level; its panel searches the host's models and sets the level. It owns
  * no selection: every pick goes out as `model-pick` with the model string
- * to run (`provider/id[@effort]`), so a level belongs to the task or
- * follow-up it was picked for.
+ * to run (`provider/id[@effort]`), and a level is also remembered for its
+ * model (`setReasoningLevel`), so returning to a model returns to its level.
  */
 
 // Third-party imports
@@ -28,6 +28,7 @@ import {
 import { REASONING_LEVEL_LABELS } from '@texra/shared/model/modelPicker';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { TexraElement } from '@ui/litBase';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -257,34 +258,29 @@ export class ModelPicker extends TexraElement {
       : choices.filter((choice) => matches(choice, needle));
   }
 
-  /** Another model: a level the person chose moves with them, as the
-   *  nearest one the new model has (providers name different levels); with
-   *  none chosen, the new model takes its own default. */
+  /** Another model, at the level remembered for it (its row's), or its
+   *  default. */
   private pick(choice: ModelChoice): void {
     if (choice.disabled) return;
-    const chosen = selectModel(this.selected)?.request.effort;
-    const levels = choice.row?.efforts?.levels;
-    const level =
-      chosen === undefined || levels === undefined
-        ? undefined
-        : nearestEffort(levels, chosen);
     this.dispatchEvent(
-      new CustomEvent<string>('model-pick', {
-        detail:
-          level === undefined
-            ? choice.value
-            : `${refOf(choice.value)}@${level}`,
-      }),
+      new CustomEvent<string>('model-pick', { detail: choice.value }),
     );
     void this.panel?.hide();
   }
 
   /** The selected model at `level`, keeping the mode it carries. */
+  /** The selected model at `level`: this task takes it now, and the model
+   *  remembers it for the next one. */
   private setLevel(current: ModelChoice, level: ReasoningEffort): void {
+    const ref = refOf(current.value);
     const mode = selectModel(this.selected)?.request.mode;
-    const model = `${refOf(current.value)}@${level}${mode ? `+${mode}` : ''}`;
     this.dispatchEvent(
-      new CustomEvent<string>('model-pick', { detail: model }),
+      new CustomEvent<string>('model-pick', {
+        detail: `${ref}@${level}${mode ? `+${mode}` : ''}`,
+      }),
+    );
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'setReasoningLevel', model: ref, level }),
     );
   }
 

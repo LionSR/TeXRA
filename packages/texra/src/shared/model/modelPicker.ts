@@ -3,11 +3,10 @@
  * carry, and the reasoning-level labels. Plain data and pure predicates, so
  * the settings webview renders the same words the hosts build rows with.
  */
-import { EFFORT_SCALE, ReasoningEffort } from '@texra-ai/llm';
+import { ReasoningEffort } from '@texra-ai/llm';
 
 /**
- * Display labels for llm-zoo's reasoning efforts, written low → high because
- * the picker offers them in that order. The key type keeps the record
+ * Display labels for llm-zoo's reasoning efforts, written low → high. The key type keeps the record
  * exhaustive against the registry vocabulary.
  */
 export const REASONING_LEVEL_LABELS: Record<ReasoningEffort, string> =
@@ -20,19 +19,6 @@ export const REASONING_LEVEL_LABELS: Record<ReasoningEffort, string> =
     [ReasoningEffort.XHIGH]: 'Extra High',
     [ReasoningEffort.MAX]: 'Max',
   });
-/** The reasoning levels a picker offers, low to high, with their labels. */
-export const REASONING_LEVEL_OPTIONS: readonly {
-  readonly value: ReasoningEffort;
-  readonly label: string;
-}[] = Object.freeze(
-  EFFORT_SCALE.map((value) =>
-    Object.freeze({
-      value,
-      label: REASONING_LEVEL_LABELS[value],
-    }),
-  ),
-);
-
 /**
  * Price-based "fast first response" hint: models strictly under $1/M input
  * are small, fast, cheap variants that make a reasonable first try. Pricing
