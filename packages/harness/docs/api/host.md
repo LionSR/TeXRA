@@ -345,15 +345,6 @@ interface McpServerConfig {
 }
 ```
 
-## MODEL_SELECTION_KEY
-
-The model selection's key. Its absence is the empty delta, read here
-rather than by a decoding default, so a corrupt record is reported.
-
-```ts
-const MODEL_SELECTION_KEY: { readonly key: "modelSelection"; readonly slot: "globalState"; readonly schema: Struct<{ readonly enabledExtras: $Array<String>; readonly disabledDefaults: $Array<String>; }>; }
-```
-
 ## ModelVerdict
 
 One visible model's verdict: whether it can run now, the route that decided

@@ -95,7 +95,6 @@ export { ValidationModel } from '@agent/runtime/modelAccess/routeDecision';
 export {
   enableableModels,
   getEnabledModels,
-  MODEL_SELECTION_KEY,
   readModelOptions,
   setModelEnabled,
   type ModelVerdict,
