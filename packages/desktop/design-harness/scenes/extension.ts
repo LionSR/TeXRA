@@ -5,6 +5,8 @@
 import { Schema } from 'effect';
 import { html, type TemplateResult } from 'lit';
 
+import { ReasoningEffort as E } from '@texra-ai/llm';
+
 import {
   AgentConfigSchema,
   MESSAGE_TYPES,
@@ -64,17 +66,41 @@ function host(): HostSnapshot {
       {
         value: 'gemini-3.8-flash',
         label: 'Gemini 3.8 Flash',
+        hint: 'Fast first response — good for quick replies',
+        context: '1M',
+        cost: '$0.30/$2.50',
         availability: 'provider-key',
       },
       {
         value: 'gpt-5.6',
         label: 'GPT 5.6',
+        hint: 'Strong general model for long, multi-step work.',
+        context: '400K',
+        cost: '$1.25/$10.00',
+        efforts: {
+          levels: [E.LOW, E.MEDIUM, E.HIGH],
+          sent: E.MEDIUM,
+        },
         availability: 'provider-key',
       },
       {
         value: 'claude-sonnet-5-5',
         label: 'Sonnet 5.5',
+        hint: 'Balanced model for writing, proofs and code.',
+        context: '1M',
+        cost: '$3.00/$15.00',
+        efforts: {
+          levels: [E.LOW, E.MEDIUM, E.HIGH, E.XHIGH, E.MAX],
+          sent: E.HIGH,
+        },
         availability: 'provider-key',
+      },
+      {
+        value: 'claude-opus-5-5',
+        label: 'Opus 5.5',
+        availability: 'missing-key',
+        unavailableReason:
+          'Model "claude-opus-5-5" requires your Anthropic API key. Provide it to continue.',
       },
     ],
     workspaceRoots: [{ value: '/paper', label: 'ldt-lean' }],
@@ -355,6 +381,14 @@ function conversationView(): SessionView {
     grants: NO_GRANTS,
   });
   log.emit(TALK, T.root, { type: 'run.activate' });
+  log.emit(TALK, T.root, {
+    type: 'run.config',
+    config: Schema.decodeUnknownSync(AgentConfigSchema)({
+      label: 'assistant',
+      model: 'claude-sonnet-5-5',
+      instruction: 'Check Lemma B.3',
+    }),
+  });
   log.emit(TALK, T.root, {
     type: 'run.description',
     description: 'Check Lemma B.3',

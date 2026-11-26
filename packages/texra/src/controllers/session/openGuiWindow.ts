@@ -33,6 +33,7 @@ import {
 import { workspaceRelativePath } from '@texra-ai/worldline/node';
 import {
   AppSignals,
+  emitAppSignal,
   Secrets,
   ToolRegistry,
   type StorageFs,
@@ -73,6 +74,7 @@ import {
   type WindowClient,
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
+import { setReasoningLevel } from '@texra/controllers/settingsView/modelSelection';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { pickLauncherFiles, type OpenFilesDialog } from './launcherFilePicker';
 import {
@@ -651,6 +653,14 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return done;
         case 'openSettings':
           yield* bindings.openSettings(request.target);
+          return done;
+        case 'setReasoningLevel':
+          yield* setReasoningLevel(roots.globalState, {
+            modelName: request.model,
+            level: request.level,
+          });
+          // The rows say what a run sends: reload them in every window.
+          yield* emitAppSignal('modelAccessChanged', undefined);
           return done;
         case 'apiKeyBanner':
           yield* request.action === 'set'

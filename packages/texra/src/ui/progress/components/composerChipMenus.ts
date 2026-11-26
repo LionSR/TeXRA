@@ -1,20 +1,14 @@
 /**
- * The new-task composer's chips: model, approval, and the working
- * directory when there are two or more roots. Each chip is a menu over the
- * launcher's selections; the composer renders them and owns the dispatch.
- * Open on a proposal, the form approves another run's launch, so it offers
- * the model only: that run's approval and directory apply.
+ * The new-task composer's chip menus beside its model picker: approval, and
+ * the working directory when there are two or more roots. Each chip is a
+ * menu over the launcher's selections; the composer renders them and owns
+ * the dispatch. A card that offers a model as a plain menu reads it here.
  */
 import { html, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import {
-  getModelLabel,
-  isModelOptionAvailable,
-  joinFacts,
-} from '@texra-ai/worldline/schemas';
-import { modelRefOf } from '@texra-ai/llm';
+import { joinFacts } from '@texra-ai/worldline/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
@@ -24,6 +18,7 @@ import {
   formatApprovalPolicy,
 } from '@ui/copy/approvalPolicy';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
+import { modelChoices } from './ModelPicker';
 import { launchPolicy, type ApprovalPolicy } from '@texra-ai/worldline/schemas';
 
 export interface ChipMenu {
@@ -39,53 +34,34 @@ export interface ChipMenu {
 type Launch = Surface['launch'];
 
 /**
- * The model menu over `selected`: its label, and the host's models as items
- * valued `model:<id>`, the selected one checked. A model the host does not
- * list (a saved effort or mode, or a proposal's model) is offered as itself,
- * its effort or mode after the name: `ref@high` is "Name (high)".
+ * The model menu over `selected`, for a card that offers the model as a
+ * plain menu: its label, and the choices as items valued `model:<id>`, the
+ * selected one checked (`modelChoices`).
  */
 export function modelMenu(
   selected: string,
   host: HostSnapshot,
 ): { readonly label: string; readonly items: TemplateResult } {
-  const listed = host.modelOptions.find((option) => option.value === selected);
-  const ref = modelRefOf(selected) ?? selected;
-  const modifiers = selected.slice(ref.length).replace(/^[@+]/, '');
-  const hostOptions = host.modelOptions.map((option) => ({
-    value: option.value,
-    label: option.label,
-    disabled: !isModelOptionAvailable(option),
-  }));
-  const options = listed
-    ? hostOptions
-    : [
-        {
-          value: selected,
-          label:
-            modifiers === ''
-              ? getModelLabel(selected)
-              : `${getModelLabel(selected)} (${modifiers})`,
-          disabled: false,
-        },
-        ...hostOptions,
-      ];
+  const { current, choices } = modelChoices(selected, host.modelOptions);
   return {
-    label: listed?.label ?? options[0].label,
+    label: current.label,
     items: html`${repeat(
-      options,
-      (option) => option.value,
-      (option) =>
+      choices,
+      (choice) => choice.value,
+      (choice) =>
         html`<wa-dropdown-item
-          value=${`model:${option.value}`}
+          value=${`model:${choice.value}`}
           type="checkbox"
-          .checked=${live(option.value === selected)}
-          ?disabled=${option.disabled}
-          >${option.label}</wa-dropdown-item
+          .checked=${live(choice.value === selected)}
+          ?disabled=${choice.disabled}
+          >${choice.label}</wa-dropdown-item
         >`,
     )}`,
   };
 }
 
+/** The launcher's chips beside its model: approval, and the working
+ *  directory when there are two or more roots. */
 export function launcherChipMenus(
   launch: Launch,
   host: HostSnapshot,
@@ -93,31 +69,8 @@ export function launcherChipMenus(
     setLaunch(patch: Partial<Launch>): void;
     openSettings(target: SettingsTarget): void;
   },
-  editing: boolean,
 ): ChipMenu[] {
-  const model = modelMenu(launch.model, host);
-  const menus: ChipMenu[] = [
-    {
-      id: 'composer-model',
-      icon: 'bolt',
-      label: model.label,
-      title: 'Model',
-      items: html`
-        ${model.items}
-        <wa-dropdown-item value="settings:models"
-          >Model settings…</wa-dropdown-item
-        >
-      `,
-      onSelect: (value) => {
-        if (value.startsWith('model:')) {
-          actions.setLaunch({ model: value.slice(6) });
-        } else if (value === 'settings:models') {
-          actions.openSettings('models/models');
-        }
-      },
-    },
-  ];
-  if (editing) return menus;
+  const menus: ChipMenu[] = [];
   menus.push(approvalMenu(launch, host.approvalPolicy, actions));
   if (host.workspaceRoots.length >= 2) {
     const root = host.workspaceRoots.find(
