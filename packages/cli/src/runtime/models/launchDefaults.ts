@@ -11,6 +11,7 @@ import { CLI_CHEAP_START_MODEL } from '@texra/model/curatedModels';
 import {
   cliCommandDefaults,
   resolveKnownCliModelId,
+  unknownCliModelMessage,
 } from '../platform/cliConfig';
 import {
   CliUsageError,
@@ -29,9 +30,7 @@ export function assertExplicitModelKnown(
   if (!trimmed) return undefined;
   const resolved = resolveKnownCliModelId(trimmed);
   if (!resolved) {
-    throw new CliUsageError({
-      message: `Model not found: ${trimmed}. Use \`texra models list\` to see available models.`,
-    });
+    throw new CliUsageError({ message: unknownCliModelMessage(trimmed) });
   }
   return resolved;
 }

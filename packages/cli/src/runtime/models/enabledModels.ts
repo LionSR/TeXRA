@@ -26,7 +26,10 @@ import type {
 } from '@texra-ai/worldline/plugins';
 import { getModelLabel } from '@texra-ai/worldline/schemas';
 
-import { resolveKnownCliModelId } from '../platform/cliConfig';
+import {
+  resolveKnownCliModelId,
+  unknownCliModelMessage,
+} from '../platform/cliConfig';
 import { type CliUsageError, failUsage } from '../platform/cliContext';
 
 export interface CliEnabledModelRow {
@@ -86,9 +89,7 @@ export function setCliModelEnabled(
     const resolved = resolveKnownCliModelId(modelInput);
     const model = resolved && (modelRefOf(resolved) ?? resolved);
     if (!model)
-      return yield* failUsage(
-        `Unknown model "${modelInput}". Use an id from \`texra models list --all\`.`,
-      );
+      return yield* failUsage(unknownCliModelMessage(modelInput));
     const list = yield* setModelEnabled({ model, enabled, stores });
     return { model, enabled: list.includes(model), list };
   });
