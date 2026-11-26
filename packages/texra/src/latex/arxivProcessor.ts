@@ -162,10 +162,15 @@ export function validateArxivId(input: string): string | null {
   return normaliseArxivIdentifier(input) ? null : INVALID_ARXIV_INPUT_ERROR;
 }
 
-/** Sanitized directory name for a paper (e.g. `2404.12175` or `cs_0501072`). */
-export function getArxivPaperDirName(input: string): string {
-  const id = normaliseArxivIdentifier(input);
-  return id ? id.replaceAll('/', '_') : input;
+/** A paper's id as a file name (`2404.12175`, `cs_0501072`): an old-style
+ *  id carries a slash, which would nest the paper one directory deeper. */
+const paperDirName = (id: string): string => id.replaceAll('/', '_');
+
+/** Where the paper `input` names (an id or a URL) lands in a project when
+ *  it does not go to the root, relative to the project
+ *  (`References/2404.12175`). */
+export function arxivReferencesDir(input: string): string {
+  return `References/${paperDirName(normaliseArxivIdentifier(input) ?? input)}`;
 }
 
 const retryableDownloadFailure = (cause: Cause.Cause<ArxivSourceError>) => {
@@ -412,12 +417,10 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
       });
     }
 
-    // An old-style ID ('math/0501234') carries a slash, which would nest
-    // the paper under an extra directory level; flatten it into the name.
     const isRoot = destination === 'root';
     const paperDirFull = path.join(
       workspaceRoot,
-      isRoot ? '.' : `References/${id.replaceAll('/', '_')}`,
+      isRoot ? '.' : arxivReferencesDir(id),
     );
 
     const needsDownload = !(yield* hasExistingSource(isRoot, paperDirFull));
@@ -595,7 +598,7 @@ const downloadAndPlaceSource = Effect.fn(
     permanentFs(
       fs.makeTempDirectory({
         directory: paperDirFull,
-        prefix: `.arxiv-download-${id.replaceAll('/', '_')}-`,
+        prefix: `.arxiv-download-${paperDirName(id)}-`,
       }),
     ),
     (directory) =>
