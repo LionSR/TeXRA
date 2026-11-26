@@ -324,8 +324,10 @@ export const executeCliConfig: (
     } else if (!interrupted) {
       const failure = Cause.squash(exit.cause);
       // The session words a launch's failure as a `RunFailure` (what it
-      // failed with is its cause), or a refused one as `LaunchRefused`.
-      const err = failure instanceof RunFailure ? failure.cause : failure;
+      // failed with is its cause, when it has one), or a refused one as
+      // `LaunchRefused`.
+      const err =
+        failure instanceof RunFailure ? (failure.cause ?? failure) : failure;
       // Only a refused resume, a refused launch or a classified AgentError
       // resolves to a non-zero exit code here; anything else is unexpected
       // and keeps propagating to the crash handler.

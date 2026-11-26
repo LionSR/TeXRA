@@ -572,11 +572,12 @@ type RunEnd = typeof RunEndSchema.Type;
 ## RunFailure
 
 A run that failed on its own: an activation with no readable end.
-`cause` is exactly what the launch path threw.
+`cause` is what the launch path failed with, when something did; a run
+that ended without a stored end and no failure of its own has none.
 
 ```ts
 class RunFailure extends Schema.TaggedError<RunFailure>()('RunFailure', {
-  cause: Schema.Defect(),
+  cause: Schema.optional(Schema.Defect()),
   message: Schema.String,
 })
 ```
