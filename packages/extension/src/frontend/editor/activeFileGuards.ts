@@ -13,7 +13,7 @@ import {
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
-import { isLatexFile } from '@texra/shared/latexFileTypes';
+import { LATEX_EXTENSIONS, isLatexFile } from '@texra/shared/latexFileTypes';
 import type { WorkspaceRoots } from '@texra-ai/worldline';
 
 const CHANNEL = 'ActiveFileGuards';
@@ -31,7 +31,7 @@ const GUARD_FAILURE_MESSAGES = {
     level: 'warn',
   },
   unsupportedExtension: {
-    user: 'This command only works with LaTeX files (.tex, .ltx, .latex).',
+    user: `This command only works with LaTeX files (${LATEX_EXTENSIONS.join(', ')}).`,
     logTail: 'active document is not a LaTeX file.',
     level: 'warn',
   },
