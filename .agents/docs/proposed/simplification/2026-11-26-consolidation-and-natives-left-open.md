@@ -15,8 +15,8 @@ These landed in the PR that adds this note:
 - `Schedule.min([exponential, spaced(cap)])` at four backoffs that capped
   the delay with `modifyDelay` and `Duration.min`, as the service link's
   reconnect schedule already did
-- `appendHead` at nine cuts that sliced by code unit and could leave half a
-  surrogate pair in a stored row, a log line or a model's context;
+- `appendHead` at seven cuts that sliced by code unit and could leave half a
+  surrogate pair in a stored row or a model's context;
   `truncateSummary` for the context tool's preview
 - `Record.map` and `Record.filter` for two hand-built entry rewrites
 - `optionalInput` for the eight optional fields of the Zotero search and
@@ -76,6 +76,9 @@ These landed in the PR that adds this note:
 
 ## Checked and declined
 
+- **`appendHead` in `logger/logSink.ts` and `logger/effectDiagnostics.ts`.**
+  `logger/` is the bottom layer and imports nothing in the harness; its two
+  cuts stay code-unit slices.
 - **`Record.filter` over a struct with optional keys**
   (`anthropicMessages.ts` usage counters, `fillModelError`). The same
   refusal as `Record.isEmptyRecord` in the 2026-11-23 note: a type with

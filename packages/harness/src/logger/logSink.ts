@@ -26,7 +26,6 @@ import {
   redactDisplayValue,
   redactSecrets,
 } from '@logger/redaction';
-import { appendHead } from '@utils/text/appendTail';
 
 /**
  * One diagnostic record, shaped by Effect's own structured formatter rather
@@ -160,7 +159,7 @@ function truncateAnnotations(entry: LogEntry): LogEntry {
     ...entry,
     annotations: Record.map(entry.annotations, (value) =>
       typeof value === 'string' && value.length > MAX_ANNOTATION_LENGTH
-        ? `${appendHead('', value, MAX_ANNOTATION_LENGTH)}… [truncated]`
+        ? `${value.slice(0, MAX_ANNOTATION_LENGTH)}… [truncated]`
         : value,
     ),
   };
