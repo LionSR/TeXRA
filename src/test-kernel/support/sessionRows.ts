@@ -87,15 +87,13 @@ export function toolUseTurn(runId: RunId) {
       toolUsePromptTokens: null,
     },
   } as const;
-  /** The dispatch facts: two barrier calls, the second a duplicate of the
-   *  first. */
+  /** The dispatch facts: two barrier calls. */
   const CALLS = [
     {
       callId: 'call-a',
       toolName: 'bash',
       lane: 'barrier',
       replay: 'unsafe',
-      duplicateOf: null,
       logId: 'card-0',
     },
     {
@@ -103,7 +101,6 @@ export function toolUseTurn(runId: RunId) {
       toolName: 'bash',
       lane: 'barrier',
       replay: 'unsafe',
-      duplicateOf: 'call-a',
       logId: 'card-1',
     },
   ] as const;

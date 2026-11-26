@@ -179,15 +179,6 @@ const issuedBy = (state: RunState, scriptCallId: string) =>
 const storedResult = (result: ToolResult): ToolCallResult['result'] =>
   Schema.decodeUnknownSync(FinishedToolResultSchema)(result);
 
-/** A duplicate's copy of its primary's result: no edits, no files. */
-const withoutEffects = (
-  result: ToolCallResult['result'],
-): ToolCallResult['result'] => {
-  if (result.status !== 'executed') return result;
-  const { edits: _edits, files: _files, ...rest } = result;
-  return rest;
-};
-
 const dispositionOf = (
   result: Pick<ToolResult, 'status'>,
 ): ToolCallResult['disposition'] =>
@@ -352,16 +343,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     kind: 'issued',
   };
   if (status.kind === 'finished') return;
-  if ('duplicateOf' in fact && fact.duplicateOf !== null) {
-    const primary = finishedCall(dispatch, state, fact.duplicateOf);
-    if (primary !== null)
-      yield* commitResult(call, Math.max(1, attemptOf(status)), {
-        disposition: 'duplicate',
-        result: withoutEffects(primary.result),
-        attachments: [],
-      });
-    return;
-  }
   if (ended) {
     yield* skipCall(call, status, SKIPPED_AFTER_END_TURN);
     return;
@@ -816,18 +797,14 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   } satisfies ScriptDoor;
 });
 
-/** A response's calls in the order they run: contiguous parallel calls (a
- *  duplicate among them, whatever its tool's lane) form one group that runs
- *  under the window; every other call is a group of its own, a barrier that
- *  runs alone. */
-const groupsOf = (calls: readonly DispatchFacts[]) => {
-  const parallel = (fact: DispatchFacts) =>
-    fact.duplicateOf !== null || fact.lane === 'parallel';
-  return Iterable.groupWith(
+/** A response's calls in the order they run: contiguous parallel calls
+ *  form one group that runs under the window; every other call is a group
+ *  of its own, a barrier that runs alone. */
+const groupsOf = (calls: readonly DispatchFacts[]) =>
+  Iterable.groupWith(
     calls,
-    (left, right) => parallel(left) && parallel(right),
+    (left, right) => left.lane === 'parallel' && right.lane === 'parallel',
   );
-};
 
 /** Delivery: the paid turn enters history once, with the complete tool
  *  group, each result as the model reads it. */
@@ -968,21 +945,15 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       { script: null, scriptCalls: scriptDoor(dispatch, fact) },
       ended,
     );
-  // Each group in turn: its own calls together, under the window, then its
-  // duplicates. A group after one that ended the turn sees that it did.
+  // Each group in turn, its calls together under the window. A group after
+  // one that ended the turn sees that it did.
   let ended = false;
   for (const group of groupsOf(pending.calls)) {
     const endedBefore = ended;
-    yield* Effect.forEach(
-      group.filter((fact) => fact.duplicateOf === null),
-      (fact) => finish(fact, endedBefore),
-      { concurrency: MAX_PARALLEL_TOOL_CALLS, discard: true },
-    );
-    yield* Effect.forEach(
-      group.filter((fact) => fact.duplicateOf !== null),
-      (fact) => finish(fact, endedBefore),
-      { discard: true },
-    );
+    yield* Effect.forEach(group, (fact) => finish(fact, endedBefore), {
+      concurrency: MAX_PARALLEL_TOOL_CALLS,
+      discard: true,
+    });
     const state = yield* cell.current;
     ended ||= group.some(({ callId }) =>
       endsTurn(finishedCall(dispatch, state, callId)),
