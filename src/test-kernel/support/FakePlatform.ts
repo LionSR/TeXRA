@@ -48,7 +48,7 @@ declare global {
  * against.
  */
 function workerTempHome(): string {
-  globalThis.__texraFakeHome__ ??= realpathSync(
+  globalThis.__texraFakeHome__ ??= realpathSync.native(
     mkdtempSync(path.join(os.tmpdir(), 'texra-fake-')),
   );
   return globalThis.__texraFakeHome__;
@@ -77,7 +77,9 @@ function workerDir(name: string): string {
  * it on release.
  */
 export function makeHostRoot(): string {
-  return realpathSync(mkdtempSync(path.join(os.tmpdir(), 'texra-host-')));
+  return realpathSync.native(
+    mkdtempSync(path.join(os.tmpdir(), 'texra-host-')),
+  );
 }
 
 /** The worker's storage root, which every fake host shares: the fake host's
