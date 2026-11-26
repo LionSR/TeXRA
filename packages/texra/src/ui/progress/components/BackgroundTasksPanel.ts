@@ -39,8 +39,11 @@ import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TickerController } from '@ui/litControllers/TickerController';
 import {
   runStatus,
+  runStatusLabel,
   runStatusLook,
   sectionCountLabel,
+  statusGlyph,
+  type RunTone,
 } from '@ui/copy/runStatus';
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
@@ -53,6 +56,19 @@ import type { SessionView, RunView } from '@texra-ai/worldline/schemas';
 
 /** The card's key in `RunSurface.disclosures` for its run. */
 const DISPATCH_GROUP_KEY = 'dispatch';
+
+/** The `wa-badge` variant that paints a tone in the summary. */
+const TONE_BADGE: Readonly<
+  Record<RunTone, 'success' | 'danger' | 'warning' | 'neutral'>
+> = Object.freeze({
+  running: 'success',
+  success: 'success',
+  danger: 'danger',
+  warning: 'warning',
+  neutral: 'neutral',
+});
+const RUNNING = runStatusLook('running');
+const WAITING = runStatusLook('waitingOnUser');
 
 @customElement('background-tasks-panel')
 export class BackgroundTasksPanel extends TexraElement {
@@ -226,14 +242,18 @@ export class BackgroundTasksPanel extends TexraElement {
     const summary = html`${waIcon('diagram-project')}
     ${dispatchSummary(counts)}${
       rollup.running > 0
-        ? html`<wa-badge variant="success" pill
+        ? html`<wa-badge variant=${TONE_BADGE[RUNNING.tone]} pill
             >${sectionCountLabel('running', String(rollup.running))}</wa-badge
           >`
         : nothing
     }${
       approval
-        ? html`<wa-badge variant="warning" pill
-            >${waIcon('triangle-exclamation')}</wa-badge
+        ? html`<wa-badge
+            variant=${TONE_BADGE[WAITING.tone]}
+            pill
+            role="img"
+            aria-label=${runStatusLabel('waitingOnUser')}
+            >${waIcon(statusGlyph(WAITING))}</wa-badge
           >`
         : nothing
     }${
@@ -327,8 +347,7 @@ function renderClock(
   nowMs: number,
 ): TemplateResult {
   if (pendingApproval) {
-    return html`<span
-      class="task-elapsed is-approval tone-${runStatusLook('waitingOnUser').tone}"
+    return html`<span class="task-elapsed is-approval tone-${WAITING.tone}"
       >approval</span
     >`;
   }

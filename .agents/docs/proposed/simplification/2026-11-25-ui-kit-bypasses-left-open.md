@@ -53,10 +53,10 @@ lands.
    The success mark is `check` in three places and `circle-check`
    (`TONE_GLYPH.success`) in one, in three greens. `statusGlyph({ tone })`
    with a `tone-*` class is the owner; which green stays is a design call.
-7. **`BackgroundTasksPanel.ts`'s count badges** name `variant="success"`,
-   `variant="warning"` and `triangle-exclamation` directly; the row under
-   them reads `runStatus`. There is no map from a `RunTone` to a `wa-badge`
-   variant yet, and the approval badge has no accessible name.
+7. **Closed.** `BackgroundTasksPanel.ts`'s badges take their variant from
+   a `RunTone` table and their glyph and accessible name from the running
+   and waiting statuses. The table stays in the panel until a second badge
+   reads a tone.
 8. **`RetryRequestPanel.styles.ts` re-skins `.collapsible-quiet`** (header
    height, padding, hover colour) and restates the error-details `pre` of
    `toolUseStyles.ts`.
