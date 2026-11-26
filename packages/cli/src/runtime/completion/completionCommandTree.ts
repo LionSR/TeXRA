@@ -27,7 +27,7 @@ export interface CompletionFlag {
 }
 
 /** What follows a flag: nothing, one of a fixed set, a path, or any text. */
-export type CompletionFlagValue =
+type CompletionFlagValue =
   | { readonly kind: 'none' }
   | { readonly kind: 'choice'; readonly values: readonly string[] }
   | { readonly kind: 'file' | 'directory' | 'value' };
