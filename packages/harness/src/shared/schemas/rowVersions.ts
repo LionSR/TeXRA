@@ -156,7 +156,7 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     'process.exit': Object.freeze({ ...V1, listing: 'own' }),
     'followup.closed': Object.freeze({ ...V1, listing: 'own' }),
     'model.message': Object.freeze({ ...V1, listing: 'none' }),
-    'context.edit': Object.freeze({ ...V1, listing: 'none' }),
+    'context.edit': Object.freeze({ version: 2, listing: 'none' }),
     'tool.intent': Object.freeze({ ...V1, listing: 'none' }),
     'script.call': Object.freeze({ ...V1, listing: 'none' }),
     // v2: no `duplicateOf`; the response's dispatch fact names the primary.
