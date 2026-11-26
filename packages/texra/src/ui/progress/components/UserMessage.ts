@@ -16,7 +16,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared styles
-import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { designTokens } from '@ui/styles';
 import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
 import { markdownStyles } from '@ui/styles/markdownStyles';
@@ -25,14 +24,12 @@ import {
   messageHeaderStyles,
   messageDisclosureStyles,
 } from '@ui/styles/messageHeaderStyles';
-import {
-  renderIconActionButton,
-  renderLabeledActionButton,
-} from '@ui/wa/actionButtons';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 // Local imports - formatter helpers
+import { buildCopyButton } from '../formatters/htmlBuilders';
 import { renderMarkdownHtml } from '../formatters/markdownRenderer';
 import { formatDisplayTimestamp } from '../formatters/timestampUtils';
 import type {
@@ -143,8 +140,6 @@ export class UserMessage extends LitElement {
   @property({ attribute: false })
   media: readonly (typeof StoredMediaSchema.Type)[] = [];
 
-  private copyController = new CopyButtonController(this);
-
   /** A delivery's rendered Markdown, by its text: message text is immutable
    *  after creation, so the parse must not rerun on every render. */
   private markdownCache = { text: '', html: '' };
@@ -180,8 +175,6 @@ export class UserMessage extends LitElement {
       messageDate,
       'minute',
     );
-    const { copied } = this.copyController;
-    const copyTitle = copied ? 'Copied!' : 'Copy message';
     const isStructuredDelivery = this.scriptSummary !== null;
 
     return html`
@@ -218,14 +211,7 @@ export class UserMessage extends LitElement {
               }}
               @keydown=${(event: KeyboardEvent) => event.stopPropagation()}
             >
-              ${renderLabeledActionButton({
-                id: 'user-message-copy-button',
-                text: copied ? 'Copied' : 'Copy',
-                label: copyTitle,
-                tooltip: copyTitle,
-                className: `user-message-copy message-copy ${copied ? 'copy-success' : ''}`,
-                onClick: () => this.copyController.copy(this.text),
-              })}
+              ${buildCopyButton('Copy message', this.text)}
               ${
                 this.forkAt !== null && !isStructuredDelivery
                   ? renderIconActionButton({
@@ -233,7 +219,7 @@ export class UserMessage extends LitElement {
                       icon: 'code-branch',
                       label: TASK_ACTIONS.forkFromHere,
                       tooltip: TASK_ACTIONS.forkFromHere,
-                      className: 'user-message-copy user-message-fork',
+                      className: 'user-message-fork',
                       onClick: () => this.forkFromHere(),
                     })
                   : nothing

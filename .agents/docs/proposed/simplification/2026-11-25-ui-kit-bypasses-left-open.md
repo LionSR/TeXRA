@@ -37,10 +37,9 @@ lands.
    (`settings/components/shared/stateSettingRows.ts`): the same catalog
    lookup, row markup and write. The plugin card passes its own label and
    a narrower select, so the helper needs a `label` first.
-4. **`UserMessage.ts` builds its own Copy button** with its own controller
-   and Copied state, where the assistant and error headers use
-   `<copy-button>` through `buildCopyButton`. Its hint is a `<wa-tooltip>`
-   and the shared button's a `title` (entry 1 decides which).
+4. **Closed.** `UserMessage.ts` draws its Copy through `buildCopyButton`,
+   so the user, assistant and error headers share one `<copy-button>` and
+   its native `title` hint.
 5. **Dot separators in templates.** `UsagePanel.ts`, `SessionComposer.ts`
    and `ModelSelectionList.ts` write `<span aria-hidden="true">·</span>`
    between elements. `joinFacts` joins strings only; a template join that
