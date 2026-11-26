@@ -38,13 +38,17 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TickerController } from '@ui/litControllers/TickerController';
 import {
+  runSectionTone,
   runStatus,
+  runStatusLabel,
   runStatusLook,
   sectionCountLabel,
+  statusGlyph,
 } from '@ui/copy/runStatus';
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import { toneVariant } from '@ui/wa/waVariant';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, nestedCountsLabel } from '@ui/copy/nestedRuns';
 import { TIME_OF_DAY } from '../formatters/timestampUtils';
@@ -223,17 +227,18 @@ export class BackgroundTasksPanel extends TexraElement {
     );
     const since = starts.length > 0 ? Math.min(...starts) : null;
     const counts = nestedCountsLabel(rollup.kinds);
+    const needsUser = runStatusLook('waitingOnUser');
     const summary = html`${waIcon('diagram-project')}
     ${dispatchSummary(counts)}${
       rollup.running > 0
-        ? html`<wa-badge variant="success" pill
+        ? html`<wa-badge variant=${toneVariant(runSectionTone('running'))} pill
             >${sectionCountLabel('running', String(rollup.running))}</wa-badge
           >`
         : nothing
     }${
       approval
-        ? html`<wa-badge variant="warning" pill
-            >${waIcon('triangle-exclamation')}</wa-badge
+        ? html`<wa-badge variant=${toneVariant(needsUser.tone)} pill
+            >${waIcon(statusGlyph(needsUser), { label: runStatusLabel('waitingOnUser') })}</wa-badge
           >`
         : nothing
     }${
