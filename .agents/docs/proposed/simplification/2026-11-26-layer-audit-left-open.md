@@ -47,9 +47,11 @@ What follows is left open, in the order worth taking.
 - **The `HistoryQuery` service and its page schema** sit in
   `packages/harness/src/shared/session/runHistory.ts`; only `agent/`,
   `tools/` and `controllers/` read them.
-- **App vocabulary in llm.** `isCodexModel`, `isClaudeCodeModel` and
-  `codexBackendModelId` (`packages/llm/src/models/modelRoute.ts`) are read
-  only by the app's agent-CLI tools; #15230 deletes those tools.
+- **App vocabulary in llm.** `isCodexModel` and `isClaudeCodeModel`
+  (`packages/llm/src/models/modelRoute.ts`) are read outside llm only by
+  `packages/texra/src/shared/agentCliSettings.ts` and the app's agent-CLI
+  tools, which #15230 deletes. `codexBackendModelId` stays: llm's own
+  Responses configuration reads it.
 - **The resume command is formatted in the TUI.** `formatResumeCommand` and
   `oneShotResumeNotice` (`packages/cli/src/chat/tui/state/resumeHint.ts`) are
   read by `runtime/headless/interruptedResumeHint.ts` and
@@ -77,7 +79,7 @@ chat-only modules out of `packages/cli/src/runtime/` (item 5 of the
   limits; the fourth site, `toolRowSections.ts`, is held, so the constant
   goes in with it.
 - **The CLI words a plan switched on inline**
-  (`packages/cli/src/chat/tui/modelAccess/modelAccessSelection.ts`) beside
+  (`packages/cli/src/runtime/models/modelAccessSelection.ts`) beside
   `ACCOUNT_OUTCOME.planDisabled`, and `/logout` composes the sign-out lines
   by hand with the account copy's `label` where
   `subscriptionSignOutOutcomeMessage` uses the provider's `displayName`.
