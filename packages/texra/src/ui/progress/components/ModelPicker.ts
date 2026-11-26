@@ -16,7 +16,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/popover/popover.js';
 
 // Local imports
-import { selectModel, type ReasoningEffort } from '@texra-ai/llm';
+import {
+  nearestEffort,
+  selectModel,
+  type ReasoningEffort,
+} from '@texra-ai/llm';
 import {
   getModelLabel,
   isModelOptionAvailable,
@@ -67,12 +71,17 @@ export function modelChoices(
   return { current: own, choices: [own, ...listed] };
 }
 
-/** The level `selected` runs at: the one it names, else what its row sends. */
+/** The level `selected` runs at: the one it names, as the model's nearest
+ *  level when the model lacks it (as the run sends it), else what its row
+ *  sends. */
 function levelOf(
   selected: string,
   current: ModelChoice,
 ): ReasoningEffort | undefined {
-  return selectModel(selected)?.request.effort ?? current.row?.efforts?.sent;
+  const named = selectModel(selected)?.request.effort;
+  const levels = current.row?.efforts?.levels;
+  if (named === undefined) return current.row?.efforts?.sent;
+  return levels === undefined ? named : nearestEffort(levels, named);
 }
 
 const matches = (choice: ModelChoice, query: string): boolean =>
@@ -248,10 +257,24 @@ export class ModelPicker extends TexraElement {
       : choices.filter((choice) => matches(choice, needle));
   }
 
+  /** Another model: a level the person chose moves with them, as the
+   *  nearest one the new model has (providers name different levels); with
+   *  none chosen, the new model takes its own default. */
   private pick(choice: ModelChoice): void {
     if (choice.disabled) return;
+    const chosen = selectModel(this.selected)?.request.effort;
+    const levels = choice.row?.efforts?.levels;
+    const level =
+      chosen === undefined || levels === undefined
+        ? undefined
+        : nearestEffort(levels, chosen);
     this.dispatchEvent(
-      new CustomEvent<string>('model-pick', { detail: choice.value }),
+      new CustomEvent<string>('model-pick', {
+        detail:
+          level === undefined
+            ? choice.value
+            : `${refOf(choice.value)}@${level}`,
+      }),
     );
     void this.panel?.hide();
   }

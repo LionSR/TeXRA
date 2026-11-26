@@ -74,9 +74,12 @@ const rank = (effort: ReasoningEffort) => EFFORT_SCALE.indexOf(effort);
 
 /**
  * The accepted level nearest to `wanted`; a tie goes to the higher level, so
- * a missing `medium` between `low` and `high` becomes `high`.
+ * a missing `medium` between `low` and `high` becomes `high`. Providers name
+ * different levels, so a level chosen on one model is carried to another by
+ * this rule: the run's own choice, and a picker moving a choice between
+ * models.
  */
-function nearestEffort(
+export function nearestEffort(
   accepted: readonly ReasoningEffort[],
   wanted: ReasoningEffort,
 ): ReasoningEffort | undefined {
