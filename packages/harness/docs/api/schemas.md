@@ -592,6 +592,12 @@ One node of a run's conversation as an export reads it.
 const ExportNodeSchema: Union<readonly [Struct<{ readonly kind: Literal<"user-message">; readonly parts: $Array<Union<readonly [Struct<{ readonly type: Literal<"text">; readonly text: String; }>, Struct<{ readonly type: Literal<"attachment">; readonly attachmentType: Literals<readonly ["image", "document"]>; }>]>>; }>, Struct<{ readonly kind: Literal<"assistant-text">; readonly text: String; }>, Struct<{ readonly kind: Literal<"thinking">; readonly text: String; }>, Struct<{ readonly kind: Literal<"tool-call">; readonly name: String; readonly input: Unknown; }>, Struct<{ readonly kind: Literal<"tool-result">; readonly text: String; readonly value: optional<Codec<Json, Json, never, never>>; }>, Struct<{ readonly kind: Literal<"web-search">; readonly query: String; }>]>
 ```
 
+## ExternalFileLocation
+
+```ts
+type ExternalFileLocation = typeof ExternalFileLocationSchema.Type;
+```
+
 ## extractErrorMessage
 
 Extract error message from Error objects or strings.

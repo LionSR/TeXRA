@@ -30,6 +30,7 @@ export const FileLocationSchema = Schema.Union([
 
 export type RunStorageFileLocation =
   (typeof RunStorageFileLocationSchema)['Type'];
+export type ExternalFileLocation = typeof ExternalFileLocationSchema.Type;
 export type FileLocation = typeof FileLocationSchema.Type;
 
 // ============================================================================

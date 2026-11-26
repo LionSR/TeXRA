@@ -90,6 +90,7 @@ export type {
   DeclinableUsageRoute,
   DispatchFacts,
   DisplayRow,
+  ExternalFileLocation,
   FileListEntry,
   FileLocation,
   FinishedToolResult,
