@@ -10,8 +10,7 @@
 //
 // Its scenarios cover the transcript, queued follow-ups, the slash commands
 // and their forms, approval modals, the child list, resizes and the exit
-// paths; PR CI runs the ones tagged `smoke: true` (`--smoke`), and the
-// nightly CI run all of them. It is NOT a general terminal-automation
+// paths; the `Nightly` workflow runs all of them. It is NOT a general terminal-automation
 // framework.
 //
 // Run:  node scripts/validate-tui.mjs        (from packages/cli)
@@ -166,8 +165,6 @@ process.on('exit', () => {
 });
 
 // --- scenarios (verified against the committed harness) ------------------
-// `smoke: true` marks the subset PR CI runs (`--smoke`). The tag travels
-// with the scenario, so renaming one cannot silently drop it from the gate.
 const SCENARIOS = [
   {
     name: 'transcript',
@@ -225,7 +222,6 @@ const SCENARIOS = [
   },
   {
     name: 'script-running',
-    smoke: true,
     frame: 'viewport',
     rows: 30,
     cols: 100,
@@ -438,7 +434,6 @@ const SCENARIOS = [
   },
   {
     name: 'subagent-followup-summary',
-    smoke: true,
     frame: 'scrollback',
     env: { HARNESS_ENTRIES: '0', HARNESS_SUBAGENT_FOLLOWUPS: '1' },
     expect: [
@@ -478,7 +473,6 @@ const SCENARIOS = [
   },
   {
     name: 'root-transcript-reader-full-tool-output',
-    smoke: true,
     cols: 80,
     env: { HARNESS_ENTRIES: '0', HARNESS_LONG_TOOL_OUTPUT: '1' },
     keys: [DC4],
@@ -585,7 +579,6 @@ const SCENARIOS = [
   },
   {
     name: 'narrow-slash-palette-command-names',
-    smoke: true,
     rows: 16,
     cols: 52,
     env: { HARNESS_ENTRIES: '4' },
@@ -924,7 +917,6 @@ const SCENARIOS = [
     // publishes a real activation and executing flow step; frame settlement
     // advances the displayed duration beyond zero.
     name: 'single-run-liveness',
-    smoke: true,
     env: { HARNESS_ENTRIES: '4', HARNESS_PLAN: '1' },
     frame: 'viewport',
     expectPatterns: [
@@ -1033,7 +1025,6 @@ const SCENARIOS = [
   },
   {
     name: 'compact-api-form',
-    smoke: true,
     rows: 12,
     cols: 80,
     env: { HARNESS_ENTRIES: '4' },
@@ -1145,7 +1136,6 @@ const SCENARIOS = [
   },
   {
     name: 'edit-approval',
-    smoke: true,
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
     bootExpect: ' Ctrl-C ',
     frame: 'viewport',
@@ -1672,7 +1662,6 @@ const SCENARIOS = [
   },
   {
     name: 'agent-proposal-approve-all',
-    smoke: true,
     rows: 24,
     cols: 100,
     env: { HARNESS_ENTRIES: '2', HARNESS_AGENT_PROPOSAL: '1' },
@@ -2118,7 +2107,6 @@ const SCENARIOS = [
   },
   {
     name: 'subagent-list-focus-full-frame',
-    smoke: true,
     frame: 'scrollback',
     cols: 120,
     env: {
@@ -2173,7 +2161,6 @@ const SCENARIOS = [
   },
   {
     name: 'hidden-root-approval-tab-return',
-    smoke: true,
     frame: 'scrollback',
     cols: 120,
     env: {
@@ -2667,11 +2654,10 @@ const SCENARIOS = [
 
 function formatUsage() {
   return [
-    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [--no-build] [--smoke] [scenario ...]',
+    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [--no-build] [scenario ...]',
     '',
     'Options:',
     '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
-    '  --smoke             Run the CI smoke subset (the `smoke: true` scenarios)',
     `  --no-build          Use the existing ${DEFAULT_HARNESS_RELATIVE_PATH} instead of rebuilding it`,
     '  --list, --list-scenarios',
     '                      Print available scenario names and exit',
@@ -2709,7 +2695,6 @@ function parseArgs(argv) {
         'list-scenarios': { type: 'boolean' },
         'list-selected': { type: 'boolean' },
         'no-build': { type: 'boolean' },
-        smoke: { type: 'boolean' },
         'snapshot-dir': { type: 'string' },
       },
     });
@@ -2743,7 +2728,6 @@ function parseArgs(argv) {
     snapshotDir,
     listSelected: args['list-selected'] ?? false,
     noBuild: args['no-build'] ?? false,
-    smoke: args.smoke ?? false,
   };
 }
 
@@ -2817,16 +2801,8 @@ if (oracleGraphFailure) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const smokeNames = SCENARIOS.filter((scenario) => scenario.smoke).map(
-  (scenario) => scenario.name,
-);
-if (args.smoke && smokeNames.length === 0) {
-  console.error('[validate-tui] --smoke selected no scenarios');
-  process.exit(1);
-}
-const only = args.smoke ? [...smokeNames, ...args.scenarios] : args.scenarios;
 const unknownScenarios = [
-  ...new Set(only.filter((name) => !scenarioByName.has(name))),
+  ...new Set(args.scenarios.filter((name) => !scenarioByName.has(name))),
 ];
 if (unknownScenarios.length > 0) {
   console.error(
@@ -2837,8 +2813,8 @@ if (unknownScenarios.length > 0) {
   );
   process.exit(1);
 }
-const scenarios = only.length
-  ? selectedScenariosWithFrameOracles(only, scenarioByName)
+const scenarios = args.scenarios.length
+  ? selectedScenariosWithFrameOracles(args.scenarios, scenarioByName)
   : SCENARIOS;
 if (args.listSelected) {
   console.log(scenarios.map((scenario) => scenario.name).join('\n'));
