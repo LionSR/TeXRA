@@ -58,13 +58,10 @@ and the log line of a notice that could not be shown.
    attachment passes the harness's check and fails the model call. The
    harness should read llm's set, which needs an export from
    `packages/llm/src/index.ts`, a file #15229 edits.
-4. **The terminal words "no model can run" four ways**
-   (`packages/cli/src/runtime/models/modelAccess.ts` twice,
-   `packages/cli/src/runtime/doctor.ts`,
-   `packages/cli/src/runtime/models/launchDefaults.ts`). The last one sends
-   a person with an unknown `--model` to `texra models list`, which lists
-   only enabled models that can run, while `--model` takes any catalog id
-   (`texra models list --all`).
+4. **Closed (2026-11-26).** The terminal says "No models are currently
+   available." from one constant in
+   `packages/cli/src/runtime/models/modelAccess.ts`, which `doctor.ts`
+   reads, and an unknown `--model` points at `texra models list --all`.
 5. **Which finished run each GUI host announces** (item 1 of the
    2026-11-23 note) is still open. The extension's chime filter reads
    `isDocumentTaskRun`, which #15229 deletes; decide the rule after it
