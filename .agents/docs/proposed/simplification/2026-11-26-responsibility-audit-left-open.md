@@ -10,10 +10,9 @@ shared UI and harness helpers, and the app's subtrees against the harness
 and each other. Two open PRs (#15229, #15230) still rewrite about 430 files,
 so a finding whose fix edits one of them was left for after they merge.
 
-The PR that adds this note lands nine findings, one commit each: the
+The PR that adds this note lands eight findings, one commit each: the
 terminal's list of editor tools (item 2 of the 2026-11-25 note), the
 terminal's "no model can run" and "unknown model" sentences (its item 4),
-the model of a chat opened on a stored run (item 1 of the 2026-11-21 note),
 the path a `file:` URL names, the site host in the desktop's link policy,
 the UTC-to-the-second time format, the folder an arXiv paper lands in, the
 usage log's retry backoff, and the LaTeX extensions in the extension's
@@ -100,6 +99,12 @@ rejection) had already landed as `refuseAmbientOpenAiHeaders`.
    shown; which finished run each GUI host announces) are unchanged.
 
 ## Checked and declined
+
+- **Ranking a startup resume's model as `history`** (item 1 of the
+  2026-11-21 note). It was tried and reverted in this PR: the resume runs
+  the stored run on its recorded model, so the fallback the chat announced
+  never reached the invocation, and the run retried the model that could
+  not run. See that note for what stays open.
 
 - **`defaultShell` against the login-shell read as one function now.**
   The POSIX half could land alone, but the two would still disagree on

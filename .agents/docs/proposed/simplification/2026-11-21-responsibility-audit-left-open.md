@@ -31,8 +31,14 @@ command already calls `assertExplicitModelKnown` before mounting.
    environment and the command config, so relabelling the startup case would
    also let `TEXRA_MODEL` override a resumed run. Decision: which rank a
    resumed run's model has, then one reason at both call sites.
-   Landed on 2026-11-26: `texra resume` passes no `--model`, so the
-   startup case adopts the stored model as `history`, as `/resume` does.
+   Checked on 2026-11-26 and declined for the startup case: `texra resume`
+   passes no `--model`, and the controller resumes the stored run on its
+   recorded model whatever the chat selected (`resumeRun`, then
+   `adoptRunConfig`), so ranking it `history` only announces a fallback
+   the resumed invocation never takes. The explicit refusal at startup is
+   the honest answer. What is open is the other side: `/resume` inside a
+   chat adopts a model that may not run and says nothing until the turn
+   fails.
 2. **The chat's reported model source can name a candidate it did not
    run.** `resolveChatDefaults` decides the source before availability is
    known; when `selectCliRunnableModel` then falls back, the session meta
