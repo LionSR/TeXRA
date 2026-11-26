@@ -147,6 +147,7 @@ const sidebarCallbacks = {
   onOpenRecent: noop,
   onSelectProject: noop,
   onProjectAction: noop,
+  onToggleProject: noop,
   onOpenSettings: noop,
 };
 // ── real chrome over the fixtures ─────────────────────────────────────────

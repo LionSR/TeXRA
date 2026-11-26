@@ -32,6 +32,7 @@ import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from './composedPath';
 import { RunTab } from './RunTab';
 import {
+  needsUser,
   type SessionView,
   type RunView,
   type RunId,
@@ -195,7 +196,14 @@ export class RunTabs extends TexraElement {
       .map((id) => this.runOfEvent(id))
       .filter((run): run is RunView => run !== undefined)
       .filter((run) => !this.activeOnly || runStatus(run).section !== 'recent')
-      .filter((run) => this.matchesSearch(run, query));
+      .filter((run) => this.matchesSearch(run, query))
+      // A flat list leads with what needs the person; a sort keeps the
+      // rest in the view's order.
+      .toSorted((a, b) =>
+        this.topLevelOnly && view
+          ? Number(needsUser(b, view.runs)) - Number(needsUser(a, view.runs))
+          : 0,
+      );
 
     let body: TemplateResult;
     if (!this.sections) {

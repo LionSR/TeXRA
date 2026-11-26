@@ -562,6 +562,13 @@ function shellTemplate(): TemplateResult {
                   root,
                 }),
               onSelectProject: selectProject,
+              onToggleProject: (key) =>
+                setShell({
+                  ...shell,
+                  collapsed: shell.collapsed.includes(key)
+                    ? shell.collapsed.filter((other) => other !== key)
+                    : [...shell.collapsed, key],
+                }),
               onProjectAction: (key, action) => {
                 if (action !== 'rename')
                   return projectRail.runProjectAction(key, action);

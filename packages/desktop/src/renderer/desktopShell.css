@@ -134,12 +134,11 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   font-weight: var(--font-weight-medium);
   letter-spacing: 0.02em;
 }
-.shell-history-section {
-  margin-top: var(--wa-space-xs);
-}
 .shell-project-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) repeat(2, var(--height-control-compact));
+  grid-template-columns:
+    var(--height-control-compact) minmax(0, 1fr)
+    var(--height-control-compact);
   gap: var(--wa-space-2xs);
   align-items: center;
   min-height: var(--row-height);
@@ -166,23 +165,8 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-project-item:not(:hover, :focus-within) .shell-project-menu {
   opacity: 0;
 }
-.shell-project-status {
-  grid-column: 2;
-  justify-self: center;
-  --dot-color: var(--tone-color);
-}
-/* A project with work in progress shows it moving. */
-.shell-project-status.is-working {
-  display: inline-flex;
-  font-size: var(--font-size-xs);
-  color: var(--tone-color);
-}
-.shell-project-status.tone-unseen {
-  --tone-color: var(--wa-color-brand-fill-loud);
-}
 .shell-project-menu {
   display: block;
-  grid-column: 3;
   width: var(--height-control-compact);
   height: var(--height-control-compact);
   color: var(--color-text-secondary);
@@ -191,14 +175,28 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   margin-inline-start: var(--wa-space-2xs);
   width: calc(100% - var(--wa-space-2xs));
 }
+.shell-project-toggle {
+  color: var(--color-text-secondary);
+}
+/* A project's tasks sit under its row, indented to its name. A task row
+   is its title, when it last moved, and its status. */
 .shell-project-runs {
-  --run-tab-padding-inline-start: var(--wa-space-xs);
-  --run-tab-row-gap: var(--wa-space-3xs);
+  --run-tab-padding-inline-start: calc(
+    var(--height-control-compact) + var(--wa-space-s)
+  );
+  --run-tab-row-gap: 0;
   --run-tab-radius: var(--row-radius);
   --run-tab-meta-display: none;
   --run-tab-detail-display: none;
+  --run-tab-rollup-display: none;
+  --run-tab-time-display: inline;
   --run-tab-status-width: var(--height-control-compact);
   --run-tab-status-label-display: none;
+}
+/* One row reads as selected in the rail: the shown project's. */
+.shell-project-runs:not(.is-active) {
+  --wa-color-list-active-bg: transparent;
+  --wa-color-list-active-fg: var(--wa-color-text-normal);
 }
 .shell-sidebar-sessions > run-tabs {
   display: flex;

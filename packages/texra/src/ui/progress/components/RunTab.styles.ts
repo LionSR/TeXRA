@@ -173,9 +173,20 @@ export const runTabStyles = css`
     color: inherit;
   }
 
+  /* When the run last moved, on a list whose rows are one line (the rail
+     sets the property); a list with a meta line says it there. */
+  .tab-time {
+    display: var(--run-tab-time-display, none);
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
   /* A collapsed parent's descendants, in words: how many it hides and how
      many of them are running. */
   .tab-rollup {
+    display: var(--run-tab-rollup-display, inline);
     flex-shrink: 0;
     margin-inline-end: var(--wa-space-2xs);
     color: var(--color-text-secondary);

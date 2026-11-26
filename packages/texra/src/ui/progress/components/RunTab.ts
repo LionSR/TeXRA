@@ -311,6 +311,12 @@ export class RunTab extends LitElement {
                     : nothing
                 }${runTitle}</span
               >
+              <wa-relative-time
+                class="tab-time"
+                .date=${new Date(run.lastTimestamp)}
+                format="narrow"
+                sync
+              ></wa-relative-time>
               ${
                 showRollup
                   ? html`<span class="tab-rollup"

@@ -19,22 +19,13 @@ import {
   type ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
-import { unseenRuns } from '@texra/shared/session/unseenRuns';
-import {
-  runSectionTone,
-  sectionCountLabel,
-  type RunTone,
-} from '@ui/copy/runStatus';
-import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import type { IconName } from '@ui/wa/iconNames';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { actionMenu } from '@ui/wa/actionMenu';
-import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { inlineRenameField } from '@ui/wa/inlineRename';
-import { waSpinner } from '@ui/wa/spinner';
 import '@ui/progress/components/PlanUsageMeters';
 import type { Shell } from './shell';
 
@@ -73,6 +64,8 @@ interface ShellSidebarCallbacks {
   onOpenRecent(root: string): void;
   onSelectProject(key: string): void;
   onProjectAction(key: string, action: ProjectAction): void;
+  /** Show or hide a project's tasks. */
+  onToggleProject(key: string): void;
   onRenameProject?(key: string, name: string): void;
   onCloseRename?(): void;
   onOpenSettings(): void;
@@ -94,31 +87,6 @@ function sidebarAction(options: {
   });
 }
 
-/** The run sections a project's status names, in the order it names them. */
-const RAIL_SECTIONS = ['waiting', 'interrupted', 'running'] as const;
-
-/**
- * A project's one status, read from its view's rollup and its surface: what
- * needs the user first (waiting, then interrupted), then work in progress,
- * then runs that finished while the user was elsewhere. The first three are
- * run sections, worded and toned as the run list words them; unseen is the
- * rail's own.
- */
-function projectStatus(
-  project: RailProject,
-): { readonly tone: RunTone | 'unseen'; readonly label: string } | undefined {
-  const { rollup } = project.view;
-  const section = RAIL_SECTIONS.find((key) => rollup[key] > 0);
-  if (section !== undefined)
-    return {
-      tone: runSectionTone(section),
-      label: sectionCountLabel(section, String(rollup[section])),
-    };
-  const unseen = unseenRuns(project.surface, project.view).size;
-  if (unseen > 0) return { tone: 'unseen', label: `${unseen} completed` };
-  return undefined;
-}
-
 /** The project row's own button: the menu and the rename field beside it
  *  answer neither a double-click nor F2. */
 function onProjectRow(event: Event): boolean {
@@ -128,7 +96,11 @@ function onProjectRow(event: Event): boolean {
   );
 }
 
-/** Project selection is separate from the active project's task history. */
+/**
+ * One project: its row, and its tasks under it. Collapsed, it still lists
+ * the tasks that are running or need the person, so nothing that wants
+ * attention is behind a closed row.
+ */
 function projectSection(
   project: RailProject,
   model: ShellSidebarModel,
@@ -138,7 +110,8 @@ function projectSection(
   const active = key === model.shell.active;
   // Tooltip anchors: the key is a path, so it is encoded into the DOM id.
   const idBase = `shell-project-${encodeURIComponent(key)}`;
-  const status = projectStatus(project);
+  const collapsed = model.shell.collapsed.includes(key);
+  const hasTasks = project.view.order.length > 0;
   const menu = actionMenu([
     {
       icon: 'plus',
@@ -169,6 +142,13 @@ function projectSection(
         callbacks.onProjectAction(key, 'rename');
       }}
     >
+      ${renderIconActionButton({
+        id: `${idBase}-toggle`,
+        label: collapsed ? `Show ${name}'s tasks` : `Hide ${name}'s tasks`,
+        className: 'shell-project-toggle',
+        expanded: !collapsed,
+        onClick: () => callbacks.onToggleProject(key),
+      })}
       ${
         model.renamingProjectKey === key
           ? inlineRenameField({
@@ -189,20 +169,6 @@ function projectSection(
               onClick: () => callbacks.onSelectProject(key),
             })
       }
-      ${
-        // The dot is the row's whole status line; its words are the tooltip.
-        status
-          ? html`<span
-              class="shell-project-status tone-${status.tone} ${
-                status.tone === 'running' ? 'is-working' : 'status-dot'
-              }"
-              role="img"
-              aria-label=${status.label}
-              title=${status.label}
-              >${status.tone === 'running' ? waSpinner() : nothing}</span
-            >`
-          : nothing
-      }
       <wa-dropdown
         class="shell-project-menu"
         placement="bottom-end"
@@ -218,6 +184,24 @@ function projectSection(
         ${menu.items}
       </wa-dropdown>
     </div>
+    ${
+      hasTasks
+        ? html`<div
+            class="shell-sidebar-sessions shell-project-runs ${
+              active ? 'is-active' : ''
+            }"
+            data-session=${key}
+          >
+            <run-tabs
+              .view=${project.view}
+              .surface=${project.surface}
+              .topLevelOnly=${true}
+              ?activeOnly=${collapsed}
+              removable
+            ></run-tabs>
+          </div>`
+        : nothing
+    }
   `;
 }
 
@@ -225,9 +209,6 @@ export function shellSidebarTemplate(
   model: ShellSidebarModel,
   callbacks: ShellSidebarCallbacks,
 ): TemplateResult {
-  const active = model.projects.find(
-    (project) => project.display.key === model.shell.active,
-  );
   return html`
     <aside class="shell-sidebar" aria-label="Projects and tasks">
       <nav class="shell-sidebar-primary" aria-label="Quick actions">
@@ -281,29 +262,6 @@ export function shellSidebarTemplate(
               : model.projects.map((project) =>
                   projectSection(project, model, callbacks),
                 )
-          }
-        </section>
-        <section
-          class="shell-sidebar-section shell-history-section"
-          aria-label="Task history"
-        >
-          <div class="shell-sidebar-section-heading">
-            <span class="shell-sidebar-section-label">Tasks</span>
-          </div>
-          ${
-            active && active.view.order.length > 0
-              ? html` <div
-                  class="shell-sidebar-sessions shell-project-runs"
-                  data-session=${active.display.key}
-                >
-                  <run-tabs
-                    .view=${active.view}
-                    .surface=${active.surface}
-                    .topLevelOnly=${true}
-                    removable
-                  ></run-tabs>
-                </div>`
-              : renderEmptyMessage(EMPTY_TASK_LIST.body)
           }
         </section>
       </div>
