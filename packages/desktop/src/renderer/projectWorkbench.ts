@@ -2,7 +2,6 @@
 // only tab closure, project closure, or document disposal releases its resources.
 
 import { Effect, Result, Schema, Struct } from 'effect';
-import { html, render } from 'lit';
 
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
@@ -11,7 +10,6 @@ import type { Theme } from '@texra/shared/ipc';
 import type { SessionSurfaces } from '@ui/progress/sessionSurfaces';
 import type { ProgressApp } from '@ui/progress/ProgressApp';
 import { requestErrorText } from '@ui/copy/requestErrors';
-import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 import {
   DesktopShellStateSchema,
@@ -25,6 +23,7 @@ import {
   DESKTOP_WORKSPACE_COMMANDS,
   type DesktopWorkspaceRequest,
 } from '../shared/desktopWorkspaceMessages';
+import { createPathToolbar } from './editorFileNotice';
 import { createEditorPane, EditorPaneError } from './editorPane';
 import { createPdfPane } from './pdfPane';
 import { createReviewPane } from './reviewPane';
@@ -282,22 +281,13 @@ export function createProjectWorkbench(options: {
   function mountEditor(id: string, target: string, host: HTMLElement) {
     const editor = editorFor(id);
     host.append(editor.element);
-    const footer = document.createElement('footer');
-    footer.className = 'shell-editor-toolbar';
-    render(
-      html`<span class="shell-editor-path truncate" title=${target}
-          >${target}</span
-        >
-        ${renderLabeledActionButton({
-          text: 'Save',
-          icon: 'floppy-disk',
-          kind: 'ghost',
-          className: 'is-compact',
-          onClick: () => void editor.save(),
-        })}`,
-      footer,
+    host.append(
+      createPathToolbar(target, {
+        text: 'Save',
+        icon: 'floppy-disk',
+        onClick: () => void editor.save(),
+      }),
     );
-    host.append(footer);
     void editor.open(target);
   }
   const workbench = createWorkbenchController({
