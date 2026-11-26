@@ -9,7 +9,11 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports - core
-import { executed, defineTool } from '@texra-ai/worldline/plugins';
+import {
+  executed,
+  defineTool,
+  optionalInput,
+} from '@texra-ai/worldline/plugins';
 import { formatResultCount } from '@texra-ai/worldline/schemas';
 
 // Local imports - zotero
@@ -36,42 +40,21 @@ const AUTHOR_DESCRIPTION =
 const YEAR_DESCRIPTION = 'Filter by publication year (exact match).';
 
 const ZoteroSearchInputSchema = Schema.Struct({
-  query: Schema.optional(
-    Schema.NullOr(
-      Schema.NonEmptyString.annotate({
-        description: QUERY_DESCRIPTION,
-      }),
-    ),
+  query: optionalInput(Schema.NonEmptyString, QUERY_DESCRIPTION),
+  title: optionalInput(Schema.String, TITLE_DESCRIPTION),
+  author: optionalInput(Schema.String, AUTHOR_DESCRIPTION),
+  year: optionalInput(
+    Schema.Union([Schema.String, Schema.Finite]),
+    YEAR_DESCRIPTION,
   ),
-  title: Schema.optional(
-    Schema.NullOr(Schema.String.annotate({ description: TITLE_DESCRIPTION })),
+  library: optionalInput(
+    Schema.String,
+    'Optional library name to search in. Use "*" to search all libraries.',
   ),
-  author: Schema.optional(
-    Schema.NullOr(Schema.String.annotate({ description: AUTHOR_DESCRIPTION })),
-  ),
-  year: Schema.optional(
-    Schema.NullOr(
-      Schema.Union([Schema.String, Schema.Finite]).annotate({
-        description: YEAR_DESCRIPTION,
-      }),
-    ),
-  ),
-  library: Schema.optional(
-    Schema.NullOr(
-      Schema.String.annotate({
-        description:
-          'Optional library name to search in. Use "*" to search all libraries.',
-      }),
-    ),
-  ),
-  include_collections: Schema.optional(
-    Schema.NullOr(
-      Schema.Boolean.annotate({
-        description:
-          'When true, each result includes the Zotero collections (folders) it belongs to, ' +
-          'shown as breadcrumb paths. Useful for understanding how the library is organized.',
-      }),
-    ),
+  include_collections: optionalInput(
+    Schema.Boolean,
+    'When true, each result includes the Zotero collections (folders) it belongs to, ' +
+      'shown as breadcrumb paths. Useful for understanding how the library is organized.',
   ),
 }).check(
   Schema.makeFilter(
