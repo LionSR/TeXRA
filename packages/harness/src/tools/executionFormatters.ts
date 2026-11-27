@@ -14,6 +14,7 @@ import {
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
+import { formatUtcSecond } from '@utils/text/stringUtils';
 
 /**
  * The display category of a run: an agent run is a conversation (`agent`)
@@ -84,15 +85,10 @@ export function describeRunNotice(run: RunView): string | null {
   }
 }
 
-/** A launch time as a listing shows it, in UTC to the second
- *  (`2026-11-20 09:15:02`). */
-const listingTime = (ms: number): string =>
-  new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
-
 /** One /executions line. `marks` is what the line says about the run
  *  relative to the caller: its relation and unread input. */
 export function formatListingLine(run: RunView, marks: string): string {
-  const ts = listingTime(run.launchedAt);
+  const ts = formatUtcSecond(run.launchedAt);
   const modelTag = run.model === null ? '' : `  ${run.model}`;
   const parentSuffix = run.parentId === null ? '' : `  parent=${run.parentId}`;
   const markSuffix = marks ? `  ${marks}` : '';
@@ -102,7 +98,7 @@ export function formatListingLine(run: RunView, marks: string): string {
 
 /** Format a single child run as a summary line. */
 export function formatChildLine(child: RunView): string {
-  const ts = listingTime(child.launchedAt);
+  const ts = formatUtcSecond(child.launchedAt);
   const desc = child.description ? `: ${child.description}` : '';
   return `${child.id}  ${ts}  ${child.label}  [${formatRunStatus(child)}]${desc}`;
 }

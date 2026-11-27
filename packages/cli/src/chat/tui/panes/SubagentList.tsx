@@ -1,7 +1,11 @@
 import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
-import { Select, type SelectItem } from '@cli/tui/ui/Select';
+import {
+  Select,
+  SelectGroupHeading,
+  type SelectItem,
+} from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { COLLAPSED, EXPANDED, TICK } from '@cli/tui/ui/glyphs';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
@@ -261,9 +265,7 @@ export function SubagentList(
         }}
         renderItem={({ value: row }, state) =>
           row.kind === 'group' ? (
-            <Text bold dimColor>
-              {row.label}
-            </Text>
+            <SelectGroupHeading text={row.label} />
           ) : (
             <SessionRow
               depth={row.depth}

@@ -71,6 +71,7 @@ import {
 import type { StateReadFailed } from '@shared/config/settings';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog } from '@shared/usageLog';
+import { appendTail } from '@utils/text/appendTail';
 
 import { resendDelayMs, RouteAnswered, RouteRetries } from './ModelRetryGate';
 import { decisionOf, openRequest } from './requests';
@@ -272,9 +273,11 @@ export const modelInvokerLayer = (): Layer.Layer<
                   trace.output.append(event.text);
                   // Kept for the failure path only: a completed turn reports
                   // its own text, so this tail is read when the stream dies.
-                  completed.streamedText = (
-                    completed.streamedText + event.text
-                  ).slice(-PARTIAL_TEXT_TAIL_MAX);
+                  completed.streamedText = appendTail(
+                    completed.streamedText,
+                    event.text,
+                    PARTIAL_TEXT_TAIL_MAX,
+                  );
                 }
                 return;
               case 'completed':

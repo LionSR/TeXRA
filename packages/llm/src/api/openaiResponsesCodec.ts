@@ -31,12 +31,8 @@ import {
 } from './openaiResponsesWire.js';
 import { assembleTurn, type AssemblyOptions } from './assembleTurn.js';
 import type { TurnEvent, TurnResult } from '../turn.js';
-import {
-  ImageMimeTypeSchema,
-  type InputPart,
-  type Part,
-  type PartEvent,
-} from './parts.js';
+import { ImageMimeTypeSchema } from '../protocol.js';
+import { type InputPart, type Part, type PartEvent } from './parts.js';
 
 type Append = Extract<PartEvent, { kind: 'append' }>;
 

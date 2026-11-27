@@ -140,9 +140,8 @@ function getAttachmentConfig(filePath: string): AttachmentKind | null {
     return 'pdf';
   }
 
-  // Treat SVG as an image attachment so vision-capable models can inspect its rendered appearance
-  // even though the underlying file is XML text.
-  if (isImageMimeType(mimeType)) {
+  // An SVG is XML no model takes as an image, so it is read as the text it is.
+  if (isImageMimeType(mimeType) && mimeType !== 'image/svg+xml') {
     return 'image';
   }
 

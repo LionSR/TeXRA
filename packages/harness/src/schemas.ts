@@ -190,8 +190,10 @@ export {
   type TraceDocument,
 } from '@shared/schemas/traceDocument';
 // Path basics that hold in a browser: forward slashes, a path's base name,
-// its base name without the extension, and a case-free extension check.
+// its base name without the extension, a case-free extension check, and
+// the path a `file:` URL names.
 export {
+  filePathOfFileUrl,
   getBasename,
   getFileStem,
   hasExtension,
@@ -266,6 +268,7 @@ export {
   formatCostUsd,
   formatResetDuration,
   formatResultCount,
+  formatUtcSecond,
   formatWallTime,
   formatWordList,
   joinFacts,
@@ -276,6 +279,8 @@ export {
   truncateSummary,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+// The last characters of a growing text, cut between characters.
+export { appendTail } from '@utils/text/appendTail';
 // How a host that prints log entries as text words one: its line and what
 // it carries beyond it.
 export { entryDetail, entryLine } from '@logger/logSink';

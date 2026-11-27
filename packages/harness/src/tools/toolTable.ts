@@ -13,6 +13,7 @@ import {
   Effect,
   type FileSystem,
   type Layer,
+  Order,
   type Path,
   Result,
 } from 'effect';
@@ -279,7 +280,7 @@ export const withNatives = (
   let table = listed;
   const accepted: NativePlugin[] = [];
   let withheld = natives
-    .toSorted((a, b) => (a.plugin.id < b.plugin.id ? -1 : 1))
+    .toSorted(Order.mapInput(Order.String, (native) => native.plugin.id))
     .map((native) => ({ native, reason: 'it was not judged' }));
   for (let progress = true; progress && withheld.length > 0;) {
     progress = false;
