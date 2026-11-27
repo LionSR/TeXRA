@@ -1,6 +1,7 @@
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
+import { DISCARD_CHANGES_COPY } from '../shared/discardChangesCopy';
 import { createOverlayDialog, renderElement } from './overlayDialog';
 
 /**
@@ -22,9 +23,9 @@ export function createDiscardChangesDialog(appRoot: HTMLElement) {
   const { dialog } = createOverlayDialog({
     appRoot,
     prefix: 'desktop-discard',
-    ariaLabel: 'Discard unsaved changes?',
-    closeLabel: 'Keep editing',
-    title: 'Discard unsaved changes?',
+    ariaLabel: DISCARD_CHANGES_COPY.question,
+    closeLabel: DISCARD_CHANGES_COPY.keep,
+    title: DISCARD_CHANGES_COPY.question,
     content,
   });
   // The head is the request on screen. `showing` stays true until the
@@ -46,7 +47,7 @@ export function createDiscardChangesDialog(appRoot: HTMLElement) {
   actions.append(
     renderElement(
       renderLabeledActionButton({
-        text: 'Cancel',
+        text: DISCARD_CHANGES_COPY.keep,
         kind: 'secondary',
         className: 'desktop-discard-cancel',
         onClick: () => {
@@ -56,7 +57,7 @@ export function createDiscardChangesDialog(appRoot: HTMLElement) {
     ),
     renderElement(
       renderLabeledActionButton({
-        text: 'Discard',
+        text: DISCARD_CHANGES_COPY.discard,
         kind: 'danger',
         className: 'desktop-discard-confirm',
         onClick: () => {
@@ -69,7 +70,7 @@ export function createDiscardChangesDialog(appRoot: HTMLElement) {
       }),
     ),
   );
-  // Cancel, the close button and Escape all close through wa-hide.
+  // Keep editing, the close button and Escape all close through wa-hide.
   dialog.addEventListener('wa-hide', (event) => {
     if (event.target !== dialog || answered) return;
     answered = true;

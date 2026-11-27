@@ -8,10 +8,11 @@ import { Effect, Fiber, Layer, Stream, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import type { TurnProtocolSchema } from '@texra-ai/llm';
 import { generateRunId } from '@texra-ai/worldline/schemas';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
-import { attachedMedia } from '@agent/runtime/run/mediaInput';
+import { attachedMedia, storedMediaPart } from '@agent/runtime/run/mediaInput';
 import { Inbox } from '@agent/followUp/Inbox';
 import { SessionRoots } from '@platform/rootedFs';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
@@ -321,6 +322,31 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           expect(
             (yield* Context.get(session, SessionLog).blobs([digest]))(digest),
           ).toBe(PIXEL);
+        }),
+      );
+
+      // A BMP was sent to every protocol as an image part, and Responses
+      // and Anthropic failed the turn for it.
+      it.effect('is an image part only where the protocol takes its type', () =>
+        Effect.sync(() => {
+          const sentTo = (protocol: typeof TurnProtocolSchema.Type) =>
+            storedMediaPart('image/bmp', 'digest', {
+              config: {
+                capabilities: {
+                  supportsVision: true,
+                  supportsNativePdf: true,
+                  supportsNativeAudio: true,
+                },
+              },
+              origin: { protocol },
+            });
+          expect(sentTo('openai-responses')).toBeNull();
+          expect(sentTo('anthropic-messages')).toBeNull();
+          expect(sentTo('google-interactions')).toEqual({
+            kind: 'image',
+            mimeType: 'image/bmp',
+            digest: 'digest',
+          });
         }),
       );
     });

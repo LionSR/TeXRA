@@ -280,6 +280,8 @@ export {
   truncateSummary,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+// The last characters of a growing text, cut between characters.
+export { appendTail } from '@utils/text/appendTail';
 // How a host that prints log entries as text words one: its line and what
 // it carries beyond it.
 export { entryDetail, entryLine } from '@logger/logSink';

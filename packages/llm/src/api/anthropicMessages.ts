@@ -29,7 +29,7 @@ import {
 import { assembleTurn } from './assembleTurn.js';
 import { boundTurn, resolveTurn } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
-import { originOf, sameModelOrigin } from '../protocol.js';
+import { ImageMimeTypeSchema, originOf, sameModelOrigin } from '../protocol.js';
 import {
   ModelError,
   fillModelError,
@@ -57,11 +57,7 @@ import {
   UsageSchema,
 } from './anthropicMessagesWire.js';
 import { messageThreads, type SdkSource } from './anthropicThreads.js';
-import {
-  ImageMimeTypeSchema,
-  type InputPart,
-  type PartEvent,
-} from './parts.js';
+import { type InputPart, type PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 import type {
   ContentBlockParam,

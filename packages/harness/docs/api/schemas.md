@@ -136,6 +136,16 @@ Who answers a request ({@link AnsweredBySchema}).
 type AnsweredBy = typeof AnsweredBySchema.Type;
 ```
 
+## appendTail
+
+```ts
+function appendTail(
+  current: string,
+  chunk: string,
+  maxChars: number,
+): string
+```
+
 ## APPROVAL_BYPASS_KINDS
 
 ```ts
@@ -233,7 +243,8 @@ const AssembleTraceResultSchema: Union<readonly [Struct<{ readonly status: Liter
 ## Attention
 
 What wants this window: the requests it can answer (the badge), and since
-`previous` (none without it) the new ones and the runs that ended.
+`previous` (none without it) the new ones and the runs whose turn
+finished.
 
 ```ts
 interface Attention<Request> {
@@ -246,8 +257,10 @@ interface Attention<Request> {
 ## attentionOf
 
 The one attention rule every host reads (the extension's badge and reveal,
-the desktop's dock badge, notifications, and rail): a pending
-request wants the user, and a run when its outcome lands.
+the desktop's dock badge, notifications, and rail, the terminal's bell): a
+pending request wants the user, and a run when its turn finishes, waiting
+for the next message or at its outcome. A run that ends after waiting was
+already announced, and a stop somebody asked for is not news.
 
 ```ts
 function attentionOf<View extends SessionView>(

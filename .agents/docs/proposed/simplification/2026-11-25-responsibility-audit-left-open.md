@@ -51,23 +51,16 @@ and the log line of a notice that could not be shown.
    delete the strip and rely on the capability, or derive the list from the
    declarations.
    Landed on 2026-11-26: the strip is deleted.
-3. **Which image types a model takes.** The harness treats any `image/*`
-   as an image part (`isImageMimeType`,
-   `packages/harness/src/utils/files/mimeUtils.ts`); llm accepts PNG, JPEG,
-   WEBP and GIF (`ImageMimeTypeSchema`, `packages/llm/src/api/parts.ts`) and
-   fails the turn as `invalid-request` for anything else. A `.bmp` or `.svg`
-   attachment passes the harness's check and fails the model call. The
-   harness should read llm's set, which needs an export from
-   `packages/llm/src/index.ts`, a file #15229 edits.
+3. **Closed (2026-11-27).** llm answers which image types a protocol takes
+   (`takesImageInput`, `packages/llm/src/protocol.ts`), and the harness asks
+   it where an image becomes a part.
 4. **Closed (2026-11-26).** The terminal says "No models are currently
    available." from one constant in
    `packages/cli/src/runtime/models/modelAccess.ts`, which `doctor.ts`
    reads, and an unknown `--model` points at `texra models list --all`.
-5. **Closed (2026-11-27).** Which finished run each GUI host announces
-   (item 1 of the 2026-11-23 note): #15229 deleted the extension's chime
-   and the `chime` surface action with it, so only the desktop announces a
-   finished run (every top-level one), and the extension's attention
-   follower reveals arrivals only.
+5. **Closed (2026-11-27).** Which finished turn is news is `attentionOf`'s
+   `finished` list, read by the desktop and the terminal; #15229 deleted the
+   extension's chime, so the extension announces none.
 6. **The OpenAI ambient-header rejection is stated once per Responses
    transport** (`packages/llm/src/api/openaiResponses.ts`,
    `packages/llm/src/api/openaiResponsesWebSocket.ts`): the same
