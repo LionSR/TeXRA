@@ -135,16 +135,22 @@ const nextBuildPath = path.join(path.dirname(binaryPath), 'texra-next.js');
 // An SDK embedder on the validation model (scripts/sdk-harness.ts).
 const sdkHarnessPath = path.join(path.dirname(binaryPath), 'sdk-harness.js');
 const validationResourcesPath = path.join(validationRoot, 'resources');
-const validationEnv = VALIDATION_SWITCH;
-const validationFlagEnv = VALIDATION_FLAG;
 const validationFlagContent = `${VALIDATION_FLAG_CONTENT}\n`;
 const validationFlagName = '.texra-internal-validation-model';
 const validationBundleMarker = VALIDATION_FLAG_CONTENT;
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
-const validationModelProviderEnv = Object.fromEntries(
-  VALIDATION_PROVIDER_KEYS.map((name) => [name, VALIDATION_FAKE_API_KEY]),
-);
+/** What switches a child to the validation model whose flag file is at
+ *  `flagPath`, with a key for each provider in `VALIDATION_PROVIDER_KEYS`. */
+const validationModelEnv = (flagPath) => ({
+  ...Object.fromEntries(
+    VALIDATION_PROVIDER_KEYS.map((name) => [name, VALIDATION_FAKE_API_KEY]),
+  ),
+  [VALIDATION_SWITCH]: '1',
+  [VALIDATION_FLAG]: flagPath,
+  // Every request the model sees must rebuild from the rows (#13394).
+  HARNESS_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',
+});
 
 function isolatedCliHomeEnv(home, overrides = {}) {
   return {
@@ -173,11 +179,7 @@ function run(command, written, options = {}) {
       const home = path.join(path.dirname(options.validationFlagPath), 'home');
       Object.assign(env, isolatedCliHomeEnv(home));
     }
-    Object.assign(env, validationModelProviderEnv);
-    env[validationEnv] = '1';
-    env[validationFlagEnv] = options.validationFlagPath;
-    // Every request the model sees must rebuild from the rows (#13394).
-    env.HARNESS_INTERNAL_VALIDATE_REQUEST_CONTEXT = '1';
+    Object.assign(env, validationModelEnv(options.validationFlagPath));
   }
 
   const result = spawnSync(command, args, {
@@ -199,14 +201,17 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-/** Poll `check` until it returns something truthy, which is the result;
- *  the scenario fails after `timeoutMs`. */
-async function waitFor(label, check, timeoutMs = 120_000) {
+/** Poll `check` until it answers something truthy, which this returns,
+ *  failing the scenario after `timeoutMs` (with `detail()` when given). */
+async function waitFor(label, check, timeoutMs = 120_000, detail) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const found = check();
     if (found) return found;
-    assert(Date.now() < deadline, `timed out waiting for ${label}`);
+    assert(
+      Date.now() < deadline,
+      `timed out waiting for ${label}${detail === undefined ? '' : `\n${detail()}`}`,
+    );
     await sleep(250);
   }
 }
@@ -901,12 +906,7 @@ function echoProject(cwd, config = null) {
   const env = isolatedCliHomeEnv(home, {
     [VALIDATION_SCENARIOS.echo]: '1',
   });
-  const ptyEnv = {
-    ...env,
-    ...validationModelProviderEnv,
-    [validationEnv]: '1',
-    [validationFlagEnv]: validationFlagPath,
-  };
+  const ptyEnv = { ...env, ...validationModelEnv(validationFlagPath) };
   return {
     work,
     ptyEnv,
@@ -1620,10 +1620,7 @@ async function validateSdkResumeApproval() {
           ...process.env,
           CI: '1',
           ...isolatedCliHomeEnv(home, golden),
-          ...validationModelProviderEnv,
-          [validationEnv]: '1',
-          [validationFlagEnv]: validationFlagPath,
-          HARNESS_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',
+          ...validationModelEnv(validationFlagPath),
         },
       },
     );
@@ -2125,14 +2122,13 @@ async function validateServiceChatsSeeEachOther() {
         if (plain.includes('Hello there | And again')) replied = true;
       },
     });
-    const deadline = Date.now() + 180_000;
-    while (!replied) {
-      assert(
-        Date.now() < deadline,
-        `the first chat never answered\noutput:\n${stripVTControlCharacters(first?.output ?? '').slice(-3000)}`,
-      );
-      await sleep(250);
-    }
+    await waitFor(
+      'the first chat to answer',
+      () => replied,
+      180_000,
+      () =>
+        `output:\n${stripVTControlCharacters(first?.output ?? '').slice(-3000)}`,
+    );
     let phase = 'opening';
     let from = 0;
     const second = await runTexraPty(['chat'], {
@@ -2588,7 +2584,6 @@ async function validateServiceSessionIdle() {
 async function validateServiceProjectEnv() {
   const cwd = makeScratch('texra-cli-service-env-');
   const project = echoProject(cwd);
-  const storageRoot = path.join(cwd, 'home', '.texra');
   writeFileSync(
     path.join(project.work, '.env'),
     'TEXRA_PROJECT_CHECK=from-project-dotenv\nOPENAI_API_KEY=sk-project-dotenv\n',
