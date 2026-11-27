@@ -2584,6 +2584,7 @@ async function validateServiceSessionIdle() {
 async function validateServiceProjectEnv() {
   const cwd = makeScratch('texra-cli-service-env-');
   const project = echoProject(cwd);
+  const storageRoot = path.join(cwd, 'home', '.texra');
   writeFileSync(
     path.join(project.work, '.env'),
     'TEXRA_PROJECT_CHECK=from-project-dotenv\nOPENAI_API_KEY=sk-project-dotenv\n',
