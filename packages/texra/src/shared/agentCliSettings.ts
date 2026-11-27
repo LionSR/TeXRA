@@ -16,10 +16,14 @@ import {
 
 /** The eligible models that are not deprecated, by reference, in registry
  *  order: what a tool's `model` input lists. */
-const currentModels = (eligible: (config: ModelConfig) => boolean) =>
-  Object.values(MODEL_CONFIGS)
-    .filter((config) => eligible(config) && config.deprecated !== true)
-    .map((config) => config.ref);
+const currentModels = (
+  eligible: (config: ModelConfig) => boolean,
+): readonly ModelRef[] =>
+  Object.freeze(
+    Object.values(MODEL_CONFIGS)
+      .filter((config) => eligible(config) && config.deprecated !== true)
+      .map((config) => config.ref),
+  );
 
 /** The current models the `claude_code` tool's `model` input lists. */
 export const CLAUDE_AGENT_MODELS = currentModels(isClaudeCodeModel);
