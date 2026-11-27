@@ -76,6 +76,7 @@ export type {
   ErrorRow,
   ErrorRowDetail,
   LogRow,
+  MessageSender,
   ProgressStatusRow,
   StatItem,
   StreamingTextRow,

@@ -148,7 +148,9 @@ interface DetailsSummaryOptions {
 
 /** The summary-slot header of {@link buildDetailsCard}: icon, label, and
  *  optional extras. */
-function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
+export function buildDetailsSummary(
+  options: DetailsSummaryOptions,
+): TemplateResult {
   const {
     iconName,
     running = false,
