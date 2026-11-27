@@ -91,11 +91,12 @@ function installContentSecurityPolicy(): void {
  * does not.
  */
 export const startDesktop = (mainDir: string): void => {
-  // A startup that fails closes the window it had opened. That close must
-  // not quit the app: the failure's report does, after it has been shown.
-  let startupFailed = false;
+  // A startup that fails, or that a quit ends, closes the window it had
+  // opened. That close must not quit the app: the failure's report does,
+  // after it has been shown, and a quit is already under way.
+  let startupAbandoned = false;
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin' && !startupFailed) app.quit();
+    if (process.platform !== 'darwin' && !startupAbandoned) app.quit();
   });
   void Effect.runPromise(
     Effect.gen(function* () {
@@ -148,6 +149,8 @@ export const startDesktop = (mainDir: string): void => {
       // Once this program completes, the lifecycle owns that cleanup. The
       // original failure is re-raised, not wrapped: the fatal report below
       // prints `error.stack` from the `Cause.squash`'d error.
+      const quitAsked = yield* Deferred.make<void>();
+      const startupOver = yield* Deferred.make<void>();
       yield* withProcessServices(
         runtime,
         Effect.gen(function* () {
@@ -177,8 +180,23 @@ export const startDesktop = (mainDir: string): void => {
           app.on('activate', () => {
             if (BrowserWindow.getAllWindows().length === 0) windows.reopen();
           });
-          // A startup that fails closes this scope, and the opening window
-          // with it, before the shutdown runs.
+          // Ask the renderer to close before draining process services. A dirty
+          // editor can veto that close and remain fully operational. Once the
+          // window really closes, its handler calls app.quit() again and this
+          // listener proceeds with the ordinary shutdown chain. Installed
+          // before the window opens: a quit while the projects still open
+          // ends the startup first, then runs the same shutdown.
+          installDesktopBeforeQuitWiring({
+            app,
+            getMainWindow: windows.window,
+            shutdown: Deferred.succeed(quitAsked, undefined).pipe(
+              Effect.andThen(Deferred.await(startupOver)),
+              Effect.andThen(shutdown),
+            ),
+            continueAfterWindowClose: windows.continueQuitAfterClose,
+          });
+          // A startup that fails or is quit closes this scope, and the
+          // opening window with it, before the shutdown runs.
           const opening = yield* Effect.forkScoped(windows.open);
           // The app is a client of the one background service, so a
           // folder's tasks keep running when it quits and other windows and
@@ -231,16 +249,6 @@ export const startDesktop = (mainDir: string): void => {
           );
           yield* registry.activate(registry.list().at(-1)?.roots.workspace);
 
-          // Ask the renderer to close before draining process services. A dirty
-          // editor can veto that close and remain fully operational. Once the
-          // window really closes, its handler calls app.quit() again and this
-          // listener proceeds with the ordinary shutdown chain.
-          installDesktopBeforeQuitWiring({
-            app,
-            getMainWindow: windows.window,
-            shutdown,
-            continueAfterWindowClose: windows.continueQuitAfterClose,
-          });
           yield* Deferred.succeed(opened, registry);
           yield* Fiber.join(opening);
           // The one-time telemetry notice, shown once the window exists.
@@ -284,12 +292,18 @@ export const startDesktop = (mainDir: string): void => {
         }).pipe(
           Effect.onError(() =>
             Effect.sync(() => {
-              startupFailed = true;
+              startupAbandoned = true;
             }),
           ),
           Effect.scoped,
         ),
-      ).pipe(Effect.onError(() => shutdown));
+      ).pipe(
+        // A quit asked for meanwhile interrupts the startup, which releases
+        // what it had opened; the quit's own handler then shuts down.
+        Effect.raceFirst(Deferred.await(quitAsked)),
+        Effect.onError(() => shutdown),
+        Effect.ensuring(Deferred.succeed(startupOver, undefined)),
+      );
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.sync(() => reportFatalStartupError(Cause.squash(cause))),
