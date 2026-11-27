@@ -120,8 +120,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const [level, setLevel] = useState<AttachedTaskLevel>({
     run: undefined,
     requests: [],
-    ended: null,
   });
+  /** Why the attachment ended, once it has. */
+  const [ended, setEnded] = useState<string>();
   const [draft, setDraft] = useState('');
   const [notice, setNotice] = useState<string>();
   const [decided, setDecided] = useState<ReadonlySet<string>>(new Set());
@@ -138,12 +139,13 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         (ready) => {
           actions.current = ready;
         },
-        (next) =>
-          setLevel((previous) =>
-            next.ended === null
-              ? next
-              : { ...previous, requests: [], ended: next.ended },
-          ),
+        setLevel,
+        (reason) => {
+          // The last run stays on screen; its requests can no longer be
+          // answered here.
+          setLevel((previous) => ({ ...previous, requests: [] }));
+          setEnded(reason);
+        },
       ),
     );
     return () => fiber.interruptUnsafe();
@@ -260,7 +262,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   // every host reads).
   const composing =
     !answering &&
-    !level.ended &&
+    !ended &&
     level.run !== undefined &&
     acceptsFollowUp(level.run);
   // The composer takes Esc while it shows; without one, Esc still
@@ -270,8 +272,8 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   });
 
   const runWord = level.run && runStatus(level.run).word;
-  const status = level.ended
-    ? `detached: ${level.ended}`
+  const status = ended
+    ? `detached: ${ended}`
     : (runWord ?? 'connecting…');
   const title = joinFacts([task.label, status]);
   // While a request is on screen its card owns Esc (reject or skip);
@@ -303,7 +305,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   return (
     <Box flexDirection="column">
       <FormFrame
-        color={level.ended ? COLOR_ERROR : undefined}
+        color={ended ? COLOR_ERROR : undefined}
         title={title}
         hints={hints}
       >

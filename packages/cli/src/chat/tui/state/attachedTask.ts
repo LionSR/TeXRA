@@ -29,8 +29,6 @@ export interface AttachedTaskLevel {
   readonly run: RunView | undefined;
   /** The task's answerable requests, its agents' included, in commit order. */
   readonly requests: SessionView['requests'];
-  /** Why the attachment ended, once it has. */
-  readonly ended: string | null;
 }
 
 /** What the attached view does to the task, each a request to the service. */
@@ -50,13 +48,14 @@ export type ConnectService = () => Effect.Effect<
 /**
  * Hold the service connection and follow `task`: `onReady` receives the
  * actions once connected, `onLevel` every change. Runs until interrupted;
- * a connection or watch that fails ends it with a final level saying why.
+ * a connection or watch that fails ends it, and `onEnded` receives why.
  */
 export function followAttachedTask(
   connect: ConnectService,
   task: TaskSummary,
   onReady: (actions: AttachedTaskActions) => void,
   onLevel: (level: AttachedTaskLevel) => void,
+  onEnded: (reason: string) => void,
 ): Effect.Effect<void, never, GlobalValues> {
   return Effect.gen(function* () {
     const { client } = yield* connect();
@@ -96,17 +95,12 @@ export function followAttachedTask(
           requests: attentionOf(view).requests.filter((request) =>
             tree.has(request.runId),
           ),
-          ended: null,
         });
         return Effect.void;
       }),
     );
   }).pipe(
     Effect.scoped,
-    Effect.catch((error) =>
-      Effect.sync(() =>
-        onLevel({ run: undefined, requests: [], ended: error.message }),
-      ),
-    ),
+    Effect.catch((error) => Effect.sync(() => onEnded(error.message))),
   );
 }
