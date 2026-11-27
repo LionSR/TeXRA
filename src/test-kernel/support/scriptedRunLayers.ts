@@ -296,8 +296,8 @@ const testEntry = (
 });
 
 /**
- * The launch a fixture run stands on: a `chat` run of the test model with
- * no opening inputs, tracing to `over.logger` (silent by default). `over`
+ * The launch a fixture run stands on: a `chat` run of the test model,
+ * tracing to `over.logger` (silent by default). `over`
  * names what the case under test reads.
  */
 export function testLaunch(
@@ -312,12 +312,6 @@ export function testLaunch(
     config,
     logger,
     toolPolicy: {},
-    opening: {
-      inputs: {
-        CWD: '.',
-      },
-      activated: [],
-    },
     entry: testEntry(runId, config),
     ...over,
   };

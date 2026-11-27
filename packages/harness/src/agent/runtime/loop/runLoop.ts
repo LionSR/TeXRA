@@ -79,7 +79,7 @@ import {
 } from './rows';
 import { dispatchPendingResponse } from './toolUseDispatch';
 import { hooksOf } from './hooks';
-import { dispatchTools, stepFor } from './step';
+import { activatedSkills, dispatchTools, stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { RunRegistry, type AgentRunServices } from '../runRegistry';
 import type { RunControls } from '../runs';
@@ -369,12 +369,14 @@ export const openToolUse = Effect.fn('toolUse.open')(
           const handed = [yield* handedDown(run, script)];
           return { content, offered: step.rows, handed };
         }
-        const inputs =
-          run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`)));
+        // A resume renders nothing again: the run's rows hold its opening.
+        if (run.entry.fresh === null)
+          return yield* Effect.die(new Error(`${runId}: no opening`));
         // The first step renders the prompt over the tools it offers, and
         // stores its base text.
         const step = yield* stepFor(run, opening, false, (offered, memory) =>
-          buildOpeningSystemPrompt(run.config.system, inputs, {
+          buildOpeningSystemPrompt(run.config.system, {
+            cwd: run.workingDirectory ?? roots.workspace ?? '.',
             roots,
             textOnly: bound.textOnly,
             offered,
@@ -416,7 +418,7 @@ export const openToolUse = Effect.fn('toolUse.open')(
         return { content, offered: [...step.rows, ...hooked.rows], handed: [] };
       }),
     );
-    const { activated = [] } = run.opening ?? {};
+    const activated = activatedSkills(run.config);
     const input = {
       ...(openingSystem !== undefined && { system: sha256(openingSystem) }),
       ...(activated.length > 0 && { activated: [...activated] }),

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Option } from 'effect';
+import { Effect, Option, Result } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -147,19 +147,18 @@ export function handleGetTeXCount(
         Effect.fnUntraced(function* (progress) {
           progress.report({ message: 'Running texcount…' });
 
-          const { output, errors } = yield* getTeXCount(
+          const count = yield* getTeXCount(
             roots.workspace,
             relativePath,
-            { mode: countingMode.value },
+            countingMode.value,
           );
 
-          if (!output) {
-            const message = errors[0] ?? 'Could not count words in this file.';
-            yield* showLoggedMessage(message);
+          if (Result.isFailure(count)) {
+            yield* showLoggedMessage(count.failure);
             return;
           }
 
-          const stats = parseTeXCountStats(output);
+          const stats = parseTeXCountStats(count.success);
 
           yield* quickPick(stats, {
             placeHolder: 'Word count results (press Esc to dismiss)',

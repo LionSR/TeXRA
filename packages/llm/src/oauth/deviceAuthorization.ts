@@ -60,7 +60,7 @@ interface DeviceAuthorizationOptions<Token, E, R> {
   /** Lifetime of the user code in milliseconds. */
   readonly expiresInMs: number;
   /** Extra milliseconds added to the interval per `slow_down` (RFC 8628). */
-  readonly slowDownIncrementMs?: number;
+  readonly slowDownIncrementMs: number;
 }
 
 /**
@@ -78,7 +78,6 @@ export const pollDeviceAuthorization = Effect.fn(
     kind: 'expired',
   });
   const deadline = (yield* Clock.currentTimeMillis) + options.expiresInMs;
-  const increment = options.slowDownIncrementMs ?? 0;
   const schedule = Schedule.fromStep(
     Effect.sync(() => {
       let intervalMs = options.intervalMs;
@@ -89,7 +88,7 @@ export const pollDeviceAuthorization = Effect.fn(
       ): Effect.fn.Return<[void, Duration.Duration], Cause.Done> {
         if (isPending(error)) {
           transients = 0;
-          if (error.slowDown) intervalMs += increment;
+          if (error.slowDown) intervalMs += options.slowDownIncrementMs;
         } else if (isTransient(error)) {
           transients += 1;
           yield* Effect.logWarning(

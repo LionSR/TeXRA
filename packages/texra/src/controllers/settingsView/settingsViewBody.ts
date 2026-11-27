@@ -76,7 +76,6 @@ import { settingsToolCommands } from '@texra/controllers/settingsView/settingsTo
 import {
   applyStateSettingUpdate,
   setSkillEnabled,
-  settingWriteFailure,
   type StateSettingUpdateResult,
   type WritableRow,
 } from '@texra/controllers/settingsView/stateSettingWrite';
@@ -252,22 +251,21 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
 
     // Every outcome is sent back, so a rejected edit shows the stored value.
     const settingWritten = Effect.fn('settingWritten')(function* (
-      result: StateSettingUpdateResult<WritableRow>,
+      entry: WritableRow,
+      result: StateSettingUpdateResult,
     ) {
       if (result.kind === 'ignored') return;
-      const failure = settingWriteFailure(result);
-      if (failure !== undefined)
-        yield* result.kind === 'workspace-required' ||
-        result.kind === 'needs-key'
-          ? notice(failure.message)
-          : alert(failure.message);
+      if (result.kind === 'failed')
+        yield* result.shownAs === 'notice'
+          ? notice(result.error.message)
+          : alert(result.error.message);
       yield* changed('settings');
       if (result.kind !== 'applied') return;
       // A row that re-routes models changes what the credentials page says.
-      if (result.entry.onWrite?.invalidatesModelOptions) {
+      if (entry.onWrite?.invalidatesModelOptions) {
         yield* credentialsChanged();
       }
-      if (codingPlanForUsageSetting(result.entry.key) !== undefined) {
+      if (codingPlanForUsageSetting(entry.key) !== undefined) {
         yield* changed('usage');
       }
     });
@@ -279,7 +277,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         ? Effect.void
         : Effect.flatMap(
             applyStateSettingUpdate(entry, value, roots),
-            settingWritten,
+            (result) => settingWritten(entry, result),
           );
     };
 
@@ -293,18 +291,16 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       )['key'],
       item: string,
       enabled: boolean,
-    ) =>
-      setSkillEnabled(
+    ) => {
+      const row =
         key === DISABLED_SKILLS_SETTING.key
           ? DISABLED_SKILLS_SETTING
-          : DISABLED_SKILL_SOURCES_SETTING,
-        item,
-        enabled,
-        roots,
-      ).pipe(
-        Effect.flatMap(settingWritten),
+          : DISABLED_SKILL_SOURCES_SETTING;
+      return setSkillEnabled(row, item, enabled, roots).pipe(
+        Effect.flatMap((result) => settingWritten(row, result)),
         withPerKeyLane(skillListLanes, key),
       );
+    };
 
     // A failed key write is reported, and the profile and the Models page
     // show the key as it is.

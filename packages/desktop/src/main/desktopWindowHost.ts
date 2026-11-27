@@ -10,6 +10,7 @@ import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import type { OpenFilesDialog } from '@texra/controllers/session/launcherFilePicker';
+import { DISCARD_CHANGES_COPY } from '../shared/discardChangesCopy.js';
 import { choose, createDesktopDialogs } from './desktopDialogs.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
@@ -106,11 +107,11 @@ export function createDesktopWindowHost(options: {
     showDiscardDialog: () =>
       dialog.showMessageBoxSync(window, {
         type: 'warning',
-        buttons: ['Keep editing', 'Discard'],
+        buttons: [DISCARD_CHANGES_COPY.keep, DISCARD_CHANGES_COPY.discard],
         defaultId: 0,
         cancelId: 0,
         title: 'Unsaved changes',
-        message: 'Discard unsaved changes?',
+        message: DISCARD_CHANGES_COPY.question,
         detail: 'Your unsaved edits will be lost.',
       }),
     /** Tell the user a newer release exists. It opens the known-constant
@@ -166,12 +167,10 @@ export function createDesktopWindowHost(options: {
       const { roots } = project;
       const name = project.display.name;
       const diff = diffHost.inProject(roots);
-      const dialogsOfProject: Omit<
-        DesktopAgentRunHost,
-        'openBuildDisplay' | 'openDiff'
-      > = {
+      const run: DesktopAgentRunHost = {
         openPath: (filePath) => presented(previewHost.openPath(filePath)),
-        confirm: (question) => dialogs.confirm(question, name),
+        openBuildDisplay: (location) =>
+          presented(previewHost.openBuildDisplayIn(roots)(location)),
         notify: (level, message) => notify(level, message, name),
         ask: (level, message, labels) =>
           dialogs.ask(level, message, labels, name),
@@ -179,12 +178,7 @@ export function createDesktopWindowHost(options: {
           dialogs.pickTranscriptExportFormat(name),
       };
       return {
-        run: {
-          ...dialogsOfProject,
-          openDiff: diff.openDiff,
-          openBuildDisplay: (location) =>
-            presented(previewHost.openBuildDisplayIn(roots)(location)),
-        } satisfies DesktopAgentRunHost,
+        run,
         // The tool-edit preview presents its own failures.
         toolEditPreview: {
           openPath: previewHost.openPath,

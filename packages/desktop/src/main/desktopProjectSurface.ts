@@ -87,12 +87,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         dialogs: {
           notify: (level, message) => dialogs.notify(level, message),
           confirm: (question) => dialogs.confirm(question),
-          input: (field) =>
-            options.promptController.request({
-              title: field.prompt,
-              prompt: field.prompt,
-              password: field.secret,
-            }),
+          input: options.promptController.request,
         },
         // The one browser hand-off every settings URL takes. Its failure
         // reaches the settings body's own report, so the opener shows no

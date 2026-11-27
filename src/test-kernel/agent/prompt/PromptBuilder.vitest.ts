@@ -28,14 +28,13 @@ describe('PromptBuilder', () => {
         mkdirSync(workspace);
         // cast: the opening reads only the workspace and the storage root.
         const roots = { workspace, storageRoot } as WorkspaceRoots;
-        const system = yield* buildOpeningSystemPrompt(
-          'Work in {{ CWD }}.',
-          {
-            inputs: { CWD: '/work' },
-            activated: [],
-          },
-          { roots, textOnly: false, offered: ['bash'], memory: [] },
-        );
+        const system = yield* buildOpeningSystemPrompt('Work in {{ CWD }}.', {
+          cwd: '/work',
+          roots,
+          textOnly: false,
+          offered: ['bash'],
+          memory: [],
+        });
         expect(system).toContain('Work in /work.');
         expect(system).toContain('Working directory: /work');
         expect(system).toContain('ws {{ 7 * 6 }}');
@@ -58,14 +57,13 @@ describe('PromptBuilder', () => {
         writeFileSync(join(workspace, 'AGENTS.md'), 'Label equations eq:.\n');
         // cast: the opening reads only the workspace and the storage root.
         const roots = { workspace, storageRoot } as WorkspaceRoots;
-        const system = yield* buildOpeningSystemPrompt(
-          'Answer the task.',
-          {
-            inputs: { CWD: '/work' },
-            activated: [],
-          },
-          { roots, textOnly: true, offered: [], memory: [] },
-        );
+        const system = yield* buildOpeningSystemPrompt('Answer the task.', {
+          cwd: '/work',
+          roots,
+          textOnly: true,
+          offered: [],
+          memory: [],
+        });
         expect(system.indexOf('Use British spelling.')).toBeGreaterThan(-1);
         expect(system.indexOf('Label equations eq:.')).toBeGreaterThan(
           system.indexOf('Use British spelling.'),

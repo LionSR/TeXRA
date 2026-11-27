@@ -19,7 +19,7 @@ const MANAGED_DIRECTORIES = Object.freeze([
 
 /** Built-in file discovery rules. These are product behavior, not settings. */
 export const FILE_HANDLING_RULES = Object.freeze({
-  /** Extensions listed per extension category (`ExtensionCategory`). */
+  /** Extensions listed per document file type (`DocumentFileType`). */
   included: Object.freeze({
     media: Object.freeze([
       '.png',
@@ -52,7 +52,6 @@ export const FILE_HANDLING_RULES = Object.freeze({
       '.cls',
       '.sty',
     ]),
-    edited: Object.freeze(['.txt', '.tex']),
   }),
   ignored: Object.freeze({
     fileExtensions: Object.freeze([
@@ -73,7 +72,6 @@ export const FILE_HANDLING_RULES = Object.freeze({
       'preamble.tex',
       'yaml',
     ]),
-    mediaDirectories: MANAGED_DIRECTORIES,
     /** Skipped when listing the text files a run can take. */
     directories: Object.freeze([
       ...MANAGED_DIRECTORIES,

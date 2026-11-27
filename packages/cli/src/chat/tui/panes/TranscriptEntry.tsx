@@ -75,7 +75,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   /** The row printed directly above this one, so its bottom separator can
    *  absorb this row's top one. Yoga does not collapse margins. */
   readonly previousEntry?: TranscriptRow;
-  readonly width?: number;
+  readonly width: number;
 }): React.JSX.Element {
   if (entry.kind === 'tool') {
     return <ToolUseRow toolRow={entry} width={width} />;
@@ -121,7 +121,7 @@ export const LiveTranscriptEntry = memo(function LiveTranscriptEntry({
 }: {
   readonly entry: TranscriptRow;
   readonly maxRows?: number;
-  readonly width?: number;
+  readonly width: number;
 }): React.JSX.Element {
   if (entry.kind === 'tool') {
     return <ToolUseRow maxRows={maxRows} toolRow={entry} width={width} />;

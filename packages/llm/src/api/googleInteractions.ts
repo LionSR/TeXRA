@@ -400,10 +400,8 @@ const interactionEnd = (
   ...usageParts(interaction.usage),
   {
     kind: 'finish',
-    finish: {
-      finishReason:
-        interaction.status === 'requires_action' ? 'tool-calls' : 'stop',
-    },
+    finishReason:
+      interaction.status === 'requires_action' ? 'tool-calls' : 'stop',
   },
 ];
 
