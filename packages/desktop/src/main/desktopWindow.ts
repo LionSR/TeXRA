@@ -291,10 +291,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       Effect.gen(function* () {
         yield* bindings.sync;
         installMenu(state.recent);
-        const switched = state.activeKey !== surface.attached()?.key;
-        if (switched) {
-          for (const binding of bindings.all()) binding.browserViews.hideAll();
-        }
         yield* surface.attach();
         if (pageAskedForProjects) postProjects();
       }),

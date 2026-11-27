@@ -13,7 +13,6 @@ import { createOverlayDialog } from './overlayDialog';
 interface DesktopSettingsDialog {
   open(tab?: SettingsTarget): void;
   close(): void;
-  isOpen(): boolean;
   /** Swap in a fresh view after the active project changed. */
   remount(): void;
 }
@@ -32,15 +31,11 @@ type ThemePreference = typeof DesktopThemePreferenceSchema.Type;
  * replaces it with a new `<settings-app>`: the constructor resets the
  * module-level settings state, and connecting posts the `webviewReady` the new
  * project's IPC answers with its snapshot, so no control shows the previous
- * project's values while that snapshot loads. `onShown` / `onHidden` let
- * the shell hide the native browser view while the dialog is up: a
- * WebContentsView paints over renderer DOM, the dialog included.
+ * project's values while that snapshot loads.
  */
 export function createDesktopSettingsDialog(
   appRoot: HTMLElement,
   hooks: {
-    onShown(): void;
-    onHidden(): void;
     getTheme(): ThemePreference;
     setTheme(theme: ThemePreference): void;
   },
@@ -96,14 +91,6 @@ export function createDesktopSettingsDialog(
     content,
   });
   dialog.lightDismiss = true;
-  // Nested WebAwesome popups (selects, dropdowns) inside the settings view
-  // emit their own show/hide events, which bubble; only the dialog's count.
-  dialog.addEventListener('wa-show', (event) => {
-    if (event.target === dialog) hooks.onShown();
-  });
-  dialog.addEventListener('wa-after-hide', (event) => {
-    if (event.target === dialog) hooks.onHidden();
-  });
 
   return {
     open(tab) {
@@ -119,7 +106,6 @@ export function createDesktopSettingsDialog(
     close: () => {
       dialog.open = false;
     },
-    isOpen: () => dialog.open,
     remount() {
       if (!settingsView.isConnected) return;
       const next = createSettingsView();

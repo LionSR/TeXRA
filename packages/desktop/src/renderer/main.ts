@@ -66,7 +66,6 @@ import {
   initialDesktopShellState,
   openWorkbenchTab,
   workbenchTabId,
-  renameWorkbenchTab,
   setSidebarWidth,
   toggleSidebar,
   WORKBENCH_KIND_META,
@@ -83,7 +82,6 @@ import {
   createDesktopSettingsDialog,
   DesktopThemePreferenceSchema,
 } from './settingsDialog';
-import { trackNativeViewOverlays } from './nativeViewOverlays';
 import { createLogsPane } from './logsPane';
 import { createProjectWorkbench } from './projectWorkbench';
 import { injectXtermStyles } from './terminalPane';
@@ -369,14 +367,7 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
   );
 }
 
-// Both hooks re-sync the browser view, which stays hidden while the dialog
-// is open (`isBrowserCovered`).
-const syncActiveBrowserView = () =>
-  projectWorkbenches.get(shell.active)?.workbench.syncBrowserViewBounds();
-const nativeViewOverlays = trackNativeViewOverlays(syncActiveBrowserView);
 const settingsDialog = createDesktopSettingsDialog(appRoot, {
-  onShown: syncActiveBrowserView,
-  onHidden: syncActiveBrowserView,
   getTheme: () => appearance.getState().theme,
   setTheme: (theme) => {
     appearance.setState({ theme });
@@ -612,7 +603,6 @@ const surfaceResizeObserver = new ResizeObserver(() => {
     const project = projectWorkbenches.get(shell.active);
     if (!project) return;
     project.workbench.layoutVisibleSurfaces();
-    project.workbench.syncBrowserViewBounds();
   });
 });
 const observedSurfaces = new Set<Element>();
@@ -695,7 +685,7 @@ try {
 
 const desktopRendererCommandActions: DesktopCommandActions = {
   showLauncher: returnToLauncher,
-  openWorkbench: (kind) => currentWorkbench().workbench.openKind(kind),
+  showLogs: () => currentWorkbench().workbench.openKind('logs'),
   showSettings: settingsDialog.open,
   openDesktopDocs: () => {
     postToMain({ command: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS });
@@ -802,16 +792,6 @@ const routeMessage = createMessageRoutes({
     projectWorkbenches
       .get(message.session)
       ?.workbench.openTerminalCommand(message.initialCommand),
-  // Renames the document so a browser tab reads as its page rather than a
-  // generic "Browser".
-  'desktop:browser:state': (message) => {
-    const project = projectWorkbenches.get(message.session);
-    if (project) {
-      project.updateState(
-        renameWorkbenchTab(project.getState(), message.tabId, message.title),
-      );
-    }
-  },
   'desktop:projects': (message) => {
     const previousKey = shell.active;
     // The list changes resource ownership and selection together. Keep signal
@@ -841,8 +821,6 @@ const routeMessage = createMessageRoutes({
           logsPane,
           conversationView,
           isActive: () => shell.active === key,
-          isBrowserCovered: () =>
-            settingsDialog.isOpen() || nativeViewOverlays.isCovered(),
           confirmDiscard,
           onLayoutChanged: layoutChanged,
         });
@@ -862,7 +840,6 @@ const routeMessage = createMessageRoutes({
     if (previousKey !== message.activeKey) {
       settingsDialog.remount();
       currentWorkbench().workbench.layoutVisibleSurfaces();
-      currentWorkbench().workbench.syncBrowserViewBounds();
     }
   },
 });
@@ -876,12 +853,9 @@ const routeHostMessage = (event: MessageEvent): void =>
 window.addEventListener('message', routeHostMessage);
 resolveDesktopPushes().listening();
 
-// Keep the embedded browser aligned when the window resizes: its view is
-// positioned in absolute window coordinates, not renderer layout.
 window.addEventListener('resize', () => {
   const project = projectWorkbenches.get(shell.active);
   if (!project) return;
-  project.workbench.syncBrowserViewBounds();
   project.workbench.layoutVisibleSurfaces();
   project.terminalPane.layout();
 });

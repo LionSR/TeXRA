@@ -8,7 +8,6 @@ import {
 } from 'dockview';
 import { html, nothing, render } from 'lit';
 
-import { TEXRA_SITE_URL } from '@ui/copy/guide';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
@@ -21,10 +20,6 @@ import {
   type WorkbenchKind,
   type WorkbenchTab,
 } from '../shared/desktopShellState';
-import {
-  DESKTOP_WORKSPACE_COMMANDS,
-  type DesktopWorkspaceRequest,
-} from '../shared/desktopWorkspaceMessages';
 import { dockGroupActions, dockTab } from './dockControls';
 import type { createTerminalPane } from './terminalPane';
 
@@ -54,20 +49,17 @@ export interface PaneKind {
 interface WorkbenchControllerDeps {
   session: string;
   isActive(): boolean;
-  isBrowserCovered(): boolean;
   /** Asks before discarding a dirty tab; runs `discard` only on consent. */
   confirmDiscard(title: string, discard: () => void): void;
   panes: { readonly [K in WorkbenchKind]: PaneKind };
   terminalPane: ReturnType<typeof createTerminalPane>;
   getState(): DesktopShellState;
   updateShell(next: DesktopShellState): void;
-  postMessage(message: DesktopWorkspaceRequest): void;
 }
 
 /** A project owns one dock. Reparenting a panel never disposes its resources. */
 export function createWorkbenchController(deps: WorkbenchControllerDeps) {
-  const { getState, updateShell, postMessage, isActive, panes, terminalPane } =
-    deps;
+  const { getState, updateShell, isActive, panes, terminalPane } = deps;
   const element = document.createElement('div');
   element.className = 'shell-dock';
   element.dataset.session = deps.session;
@@ -97,7 +89,6 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
   let layoutFrame: number | undefined;
   let openingGroup: DockviewGroupPanel | undefined;
   let lastRequestedTab: string | undefined;
-  let dragging = false;
   const pendingTerminalCommands = new Map<string, string>();
   const mounted = new Map<string, HTMLElement>();
   const subscriptions: { dispose(): void }[] = [];
@@ -123,43 +114,6 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
     });
   }
 
-  // Whether the last message about this project's browser view placed it:
-  // a view is attached only by its bounds, so one that was hidden, or never
-  // placed, has nothing to hide and every later layout pass says nothing.
-  let browserPlaced = false;
-  function syncBrowserViewBounds() {
-    const tab = getState().workbenchTabs.find(
-      (entry) => entry.kind === 'browser',
-    );
-    const slot = tab ? mounted.get(tab.id) : undefined;
-    const visible = tab && dock?.getPanel(tab.id)?.api.isVisible;
-    if (
-      !isActive() ||
-      !visible ||
-      !slot ||
-      deps.isBrowserCovered() ||
-      dragging
-    ) {
-      if (!browserPlaced) return;
-      browserPlaced = false;
-      postMessage({ command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE });
-      return;
-    }
-    const rect = slot.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    browserPlaced = true;
-    postMessage({
-      command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS,
-      tabId: tab.id,
-      bounds: {
-        x: Math.round(rect.x),
-        y: Math.round(rect.y),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      },
-    });
-  }
-
   function layoutVisibleSurfaces() {
     if (disposed || !isActive() || layoutFrame !== undefined) return;
     layoutFrame = requestAnimationFrame(() => {
@@ -174,7 +128,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       for (const panel of dock.panels) {
         if (!panel.api.isVisible) continue;
         // The library reveals tabs chosen from its overflow menu, but API
-        // activations and asynchronous browser titles also need the complete
+        // activations also need the complete
         // tab (including Close) inside the available strip.
         const tabElement = element
           .querySelector<HTMLElement>(
@@ -208,7 +162,6 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
         const host = tab && mounted.get(tab.id);
         if (tab && host) panes[tab.kind].layout?.(tab, host);
       }
-      syncBrowserViewBounds();
     });
   }
 
@@ -258,11 +211,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
 
   function openKind(kind: WorkbenchKind, group?: DockviewGroupPanel) {
     openingGroup = group;
-    const request =
-      kind === 'browser'
-        ? { kind, target: `${TEXRA_SITE_URL}/`, title: 'texra.ai' }
-        : { kind };
-    updateShell(openWorkbenchTab(getState(), request));
+    updateShell(openWorkbenchTab(getState(), { kind }));
     syncState();
     if (group) {
       const panel = dock?.getPanel(getState().activeTabId ?? '');
@@ -423,18 +372,6 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       }),
     );
     subscriptions.push(
-      dock.onWillDragPanel(() => {
-        dragging = true;
-        syncBrowserViewBounds();
-      }),
-    );
-    subscriptions.push(
-      dock.onWillDragGroup(() => {
-        dragging = true;
-        syncBrowserViewBounds();
-      }),
-    );
-    subscriptions.push(
       dock.onWillDrop((event) => {
         if (event.kind !== 'edge' || event.position === 'center') return;
         const data = event.getData();
@@ -468,13 +405,6 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
     open: openKind,
     close: disposeWorkbenchTab,
   };
-  function finishDrag() {
-    dragging = false;
-    layoutVisibleSurfaces();
-  }
-  document.addEventListener('pointerup', finishDrag);
-  document.addEventListener('dragend', finishDrag);
-
   function syncState() {
     if (disposed || reconciling) return;
     ensureDock();
@@ -546,7 +476,6 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
     redrawTab(id: string) {
       dock?.getPanel(id)?.api.updateParameters({});
     },
-    syncBrowserViewBounds,
     layoutVisibleSurfaces,
     activeTabId: () => dock?.activePanel?.id,
     isVisible: (kind: WorkbenchKind) =>
@@ -574,8 +503,6 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       disposed = true;
       if (persistFrame !== undefined) cancelAnimationFrame(persistFrame);
       if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame);
-      document.removeEventListener('pointerup', finishDrag);
-      document.removeEventListener('dragend', finishDrag);
       for (const subscription of subscriptions) subscription.dispose();
       dock?.dispose();
       for (const host of mounted.values()) render(nothing, host);

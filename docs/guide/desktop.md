@@ -37,7 +37,7 @@ Opening the same project folder in the desktop app, VS Code extension, or CLI au
 
 ### Layout and projects
 
-The desktop app lets you arrange **Agent**, **Files**, **Editor**, **PDF**, **Review**, **Terminal**, **Browser**, and **Logs** in split panes whose layout persists across restarts and project switches.
+The desktop app lets you arrange **Agent**, **Files**, **Editor**, **PDF**, **Review**, **Terminal**, and **Logs** in split panes whose layout persists across restarts and project switches.
 
 Open projects appear in the **Projects** section of the left sidebar with a status dot; the active project's tasks appear in **Task history** below. Press `Cmd/Ctrl+K` to open **Commands** (or **Switch Project** for open projects), and use **File → Open Recent** to reopen closed projects.
 
