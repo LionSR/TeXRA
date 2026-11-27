@@ -22,7 +22,7 @@
 import { DateTime, Effect, Schema } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/worldline/schemas';
-import type { ChatExportInput } from '@texra/agent/export/schemas';
+import type { ChatExportInput } from '@texra/controllers/export/schemas';
 import type { Session } from '@texra-ai/worldline';
 import type { RunId } from '@texra-ai/worldline/schemas';
 

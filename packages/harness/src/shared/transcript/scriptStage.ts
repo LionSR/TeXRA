@@ -17,6 +17,7 @@ import {
   AGENT_TOOL_NAME,
   PROGRAM_TOOL_NAME,
   SELF_TOOL_NAME,
+  SKIPPED_RESULT_NAME,
   TOOL_CALL_STATUS,
   type RequestPayload,
   type RunId,
@@ -160,7 +161,7 @@ function statusOf(
         ? 'reused'
         : 'finished';
     case TOOL_CALL_STATUS.FAILED:
-      if (result?.status === 'error' && result.name === 'Skipped')
+      if (result?.status === 'error' && result.name === SKIPPED_RESULT_NAME)
         return 'skipped';
       if (row.cutByRunEnd === true)
         return agent && child === undefined ? 'not run' : 'cancelled';

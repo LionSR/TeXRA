@@ -47,6 +47,8 @@ export const CLONE_COPY = Object.freeze({
     remote.isOverleaf
       ? `${tokenHint(remote)} Create or copy a token at ${OVERLEAF_GIT_TOKEN_URL}. Instructions: ${OVERLEAF_TOKEN_DOCS_URL}`
       : undefined,
+  /** What names a project to clone, where a host asks for it. */
+  projectPrompt: 'Project URL, git URL, or 24-character project ID',
   /** The project named is no URL or id this app can clone. */
   invalidProject:
     'Invalid Overleaf/ShareLaTeX project: expected a project URL, a git URL or a 24-character project ID.',

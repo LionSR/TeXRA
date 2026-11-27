@@ -13,6 +13,7 @@ import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import {
   RUN_OUTCOME,
+  SKIPPED_RESULT_NAME,
   type ChildRunDelivery,
   type RunId,
   type RunOutcome,
@@ -44,7 +45,10 @@ export interface ScriptCallCard {
 const statusOf = (result: ToolResultPayload | undefined): ScriptCallOutcome => {
   if (result === undefined) return 'unfinished';
   if (result.result.status === 'executed') return 'completed';
-  if (result.disposition === 'skipped' || result.result.name === 'Skipped')
+  if (
+    result.disposition === 'skipped' ||
+    result.result.name === SKIPPED_RESULT_NAME
+  )
     return 'skipped';
   return 'failed';
 };

@@ -3,7 +3,7 @@
 import type {
   ChatExportInput,
   DocumentMeta,
-} from '@texra/agent/export/schemas';
+} from '@texra/controllers/export/schemas';
 
 import {
   ATTACHMENT_LABELS,

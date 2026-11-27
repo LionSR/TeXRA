@@ -3,7 +3,7 @@ import { Clock, Duration, Effect, Schema, type Scope } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import { TOOL_RESULT_TRUNCATION } from '@shared/toolResultText';
+import { TOOL_RESULT_TRUNCATION } from '@tools/core/toolResultText';
 import { ToolContext } from '@tools/core/ToolTypes';
 import {
   noLaterTurn,
