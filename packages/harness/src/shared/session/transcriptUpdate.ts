@@ -50,36 +50,6 @@ import {
 import { standingAfter, type RunStanding } from './runRowReads';
 import type { TranscriptView } from './sessionView';
 
-/** A plugin's section: its start opens the stage whole; its end closes the
- *  stage its start opened and writes nothing for one no start opened. */
-function applyStage(
-  d: TranscriptUpdate,
-  event: Extract<TraceRowFields, { type: 'stage.start' | 'stage.end' }>,
-): void {
-  const at = d.ix.stageIndex.get(event.id);
-  let stage: Stage;
-  if (event.type === 'stage.start') {
-    stage = {
-      id: event.id,
-      // A section with no label reads by its id, on every surface.
-      name: event.label || event.id,
-      seqNo: (d.ix.appended += 1),
-      startTime: d.at,
-      end: null,
-    };
-  } else {
-    if (at === undefined) return;
-    stage = {
-      ...d.next.stages[at],
-      end: { outcome: event.status, at: d.at },
-    };
-  }
-  const stages = writableArray(d, d.next, 'stages');
-  if (at !== undefined) stages[at] = stage;
-  else d.ix.stageIndex.set(event.id, stages.push(stage) - 1);
-  d.touched = true;
-}
-
 /**
  * A script's stage, projected from cards: a card starting under another card
  * (`stageId`, the `script` card that issued it) opens that card's stage,
@@ -155,11 +125,6 @@ function record(d: TranscriptUpdate, event: TraceRowFields): void {
       return;
     case 'process.output':
       recordProcessOutputRow(d, event);
-      return;
-
-    case 'stage.start':
-    case 'stage.end':
-      applyStage(d, event);
       return;
 
     case 'tool.start': {

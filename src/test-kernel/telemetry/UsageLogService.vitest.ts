@@ -9,7 +9,7 @@ import { AppState } from '@texra-ai/worldline/plugins';
 import { UsageLog } from '@texra-ai/worldline/host';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { usageAgentName } from '@shared/usageLog';
+import { usageAgentName } from '@agent/runtime/run/pricing';
 import { FLUSH_INTERVAL, usageLogLayer } from '@telemetry/UsageLogService';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { jsonResponse } from '@test/support/fetchTestUtils';

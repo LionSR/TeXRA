@@ -195,7 +195,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>What models does it support?</summary>
-    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, MiniMax, Meta Muse Spark, and any OpenAI-compatible endpoint. Bring your own API key, or use a provider subscription you already pay for (ChatGPT, Grok, Kimi Code and the GLM Coding Plan). Each helper agent or program the assistant starts can run a different model.</p>
+    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, MiniMax, Meta Muse, and any OpenAI-compatible endpoint. Bring your own API key, or use a provider subscription you already pay for (ChatGPT, Grok, Kimi Code and the GLM Coding Plan). Each helper agent or program the assistant starts can run a different model.</p>
   </details>
 
   <details>

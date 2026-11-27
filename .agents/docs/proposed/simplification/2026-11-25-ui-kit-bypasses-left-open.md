@@ -20,12 +20,12 @@ lands.
 ## Web views
 
 1. **A file path's hover hint has two forms.** It is a `<wa-tooltip>` in
-   `FileList.ts` and `ProposalRequestPanel.ts` and a native `title` in
+   `ProposalRequestPanel.ts` and a native `title` in
    `FileSelectGroup.ts`, `LaunchAttachments.ts` and `htmlBuilders.ts`. A
    `<wa-tooltip>` anchors by `id`, and the formatter rows render many to a
    shadow root, so the choice is between a native `title` everywhere and an
-   id per row. (Closed for a message's time: `buildMessageHeader` writes the
-   user, assistant and error headers, with the full moment as a `title`.)
+   id per row. (A message's time left the question when the transcript
+   became a conversation: only the error row keeps a header.)
 2. **Closed.** `buildFileLinkSpan` draws every clickable file path and
    `fileLinkTarget` reads the click.
 3. **`PluginsTab.renderSelectRow` restates `renderStateSettingSelectRow`**
@@ -47,27 +47,33 @@ lands.
 7. **Closed.** `toneVariant` (`wa/waVariant.ts`) maps a `RunTone` to a
    badge or tag variant; the approval badge reads the waiting status's
    glyph and name.
-8. **`RetryRequestPanel.styles.ts` re-skins `.collapsible-quiet`** (header
-   height, padding, hover colour) and restates the error-details `pre` of
-   `toolUseStyles.ts`.
-9. **`DependencyBanner.ts`** joins its install links with a hand-written
-   "a, b, and c" and a native `<button class="clickable-link">`, the one
-   use of that rule on a button. `formatWordList` returns a string; a
-   `formatToParts` variant and the kit's link button would replace both.
+8. **Closed.** The retry card's "Error details" is a plain
+   `.collapsible-quiet`; its header and summary rules are gone. Its body
+   stays local: it is extra-small, height-capped text in the card, where
+   `toolUseStyles.ts`'s error `pre` is a transcript row at body size, and
+   the two sheets never meet in one shadow root.
+9. **Closed.** `DependencyBanner.ts` joins its install links with
+   `Intl.ListFormat.formatToParts`, the formatter `formatWordList` wraps.
+   The native `<button class="clickable-link">` stays: the link sits inside
+   a sentence, and a `wa-button` is inline-flex and would break the line
+   (`button.clickable-link` in `commonViewStyles.ts` says so).
 
 ## Desktop
 
 10. **Two status dots.** `.status-dot` (`styles.css`, 6px, `--dot-color`)
     sits beside the kit's `.status-indicator`
     (`styles/statusIndicatorStyles.ts`, 7px, `--tone-color`); the left rail
-    shows both sizes, a project's unseen dot above a run's. (The "unsaved"
-    dot is one template now, `unsavedDot` in `paneChrome.ts`; a tab's is
-    the text colour and a tree row's the accent, which is a design call.)
+    shows both sizes, a project's unseen dot above a run's. The two
+    remaining `.status-dot` users, `desktopShell.ts` and `main.ts`, are in
+    open PRs. (The "unsaved" dot is one template now, `unsavedDot` in
+    `paneChrome.ts`, with its accessible name; a tab's is the text colour
+    and a tree row's the accent, which is a design call.)
 11. **Sidebar group labels** (`.shell-sidebar-section-label` and the Files
     header in `desktopShell.css`) are small grey labels beside the kit's
     `.overline`, which `RunTabs.ts` uses for its headings in the same
     sidebar. Moving them makes the labels uppercase.
-12. **Closed.** `pathFooter` (`paneChrome.ts`) builds it for both panes.
+12. **Closed.** `createPathToolbar` (`editorFileNotice.ts`) builds it for
+    both panes.
 
 ## Terminal
 
@@ -78,8 +84,8 @@ lands.
     would delete `detailRows`, `detailRowsFor` and the description's own
     count; it reports zero until the first layout, so the first frame needs
     a list budget that cannot overflow the terminal, and an Ink render check.
-14. **Closed.** The attached task's transcript is bounded by
-    `boundedScrollableLines`, under a `… N previous rows` marker.
+14. **Closed.** `TasksForm.tsx` shows the newest rows under a dim
+    `previousRowsText` marker when the transcript is longer than its budget.
 15. **Clipping text to fit beside a fixed suffix** is written in
     `render/scrollBounds.ts` and twice in `modals/UserQuestion.tsx`, and
     `UserQuestion.tsx` bounds its prompt lines with its own version of
@@ -90,12 +96,21 @@ lands.
 
 ## Every host
 
-18. **Two files still type the fact separator.**
-    `packages/cli/src/runtime/models/modelAccessRoute.ts` (the `On · …` and
-    `Off · …` preference labels) and
-    `packages/texra/src/ui/copy/delegationApproval.ts` (the child agent
-    heading) were left as they are because other open PRs rewrite the same
-    lines; they take `joinFacts` once those land.
+18. **Closed.** The CLI's preference labels
+    (`packages/cli/src/runtime/models/modelAccessRoute.ts`) and the child
+    agent heading (`packages/texra/src/ui/copy/delegationApproval.ts`) join
+    their facts with `joinFacts`.
+
+## The kit itself
+
+19. **`controlStyles.ts` restates a block of `commonViewStyles.ts`.**
+    `.btn-ghost.is-row::part(label)` writes out `truncateDeclarations`,
+    which lives in the module above it (`commonViewStyles.ts` imports
+    `controlStyles.ts`, so the lower file cannot import it back). The
+    2026-11-26 run moved `visuallyHiddenDeclarations` down into
+    `controlStyles.ts`, where `.action-button-label` now interpolates it.
+    `truncateDeclarations` takes the same move once `FileList.styles.ts`
+    and `SessionDrawer.ts`, two of its importers, are out of open PRs.
 
 The 2026-11-26 run closed entries 2, 4, 5, 7, 12, 14, 16 and 17 and half of
 1 and 10, and rewrote 3 and 13 to what it found. Its scan of the three hosts

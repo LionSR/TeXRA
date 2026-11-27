@@ -5,8 +5,7 @@
 import { nothing, render } from 'lit';
 
 import type { WorkbenchTab } from '../shared/desktopShellState';
-import { renderNoticeCallout } from './editorFileNotice';
-import { pathFooter } from './paneChrome';
+import { createPathToolbar, renderNoticeCallout } from './editorFileNotice';
 
 interface PdfView {
   readonly element: HTMLElement;
@@ -77,7 +76,7 @@ export function createPdfPane(options: {
     // runs no script is Chromium's behavior, which nothing here enforces.
     const view: PdfView = { element, frame, notice };
     const path = filePathOf(tab.target ?? '');
-    const footer = pathFooter(path, {
+    const footer = createPathToolbar(path, {
       text: 'Open externally',
       icon: 'arrow-up-right-from-square',
       onClick: () => options.openExternally(path),

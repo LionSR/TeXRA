@@ -52,6 +52,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import './WorktreeChip';
+import { statusMark } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   NESTED_AGENT,
@@ -310,6 +311,12 @@ export class RunTab extends LitElement {
                     : nothing
                 }${runTitle}</span
               >
+              <wa-relative-time
+                class="tab-time"
+                .date=${new Date(run.lastTimestamp)}
+                format="narrow"
+                sync
+              ></wa-relative-time>
               ${
                 showRollup
                   ? html`<span class="tab-rollup"
@@ -354,17 +361,11 @@ export class RunTab extends LitElement {
           ${status.shown ? html`<wa-tooltip for="run-tab-status">${status.word}</wa-tooltip>` : nothing}
         </div>
         ${
-          status.shown
-            ? html`<span
-                id="run-tab-status"
-                class="tab-status"
-                role="img"
-                aria-label=${status.word}
-              >
-                ${waIcon(status.glyph, { className: 'tab-status-icon' })}
-                ${status.waiting ? html`<span class="tab-status-label">${status.word}</span>` : nothing}
-              </span>`
-            : nothing
+          // Always in the row, so a list that puts the status first has a
+          // lane every title lines up after; empty for a run with nothing
+          // to say.
+          // prettier-ignore
+          html`<span id="run-tab-status" class="tab-status" role=${status.shown ? 'img' : 'none'} aria-label=${status.shown ? status.word : nothing}>${status.shown ? html`${statusMark(status, 'tab-status-icon')}${status.waiting ? html`<span class="tab-status-label">${status.word}</span>` : nothing}` : nothing}</span>`
         }
         <wa-tooltip for="run-tab-kind">${this.decorator.label}</wa-tooltip>
         ${

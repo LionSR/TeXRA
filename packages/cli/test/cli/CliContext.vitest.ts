@@ -86,7 +86,7 @@ describe('CLI context config defaults', () => {
     // there is honoured, so it is not...
     const workspace = await workspaceWithConfig(
       JSON.stringify({
-        'texra.approvalPolicy': 'never',
+        'texra.approvalPolicy': 'ask',
         'texra.telemetry.enabled': false,
       }),
     );
@@ -112,7 +112,7 @@ describe('CLI context config defaults', () => {
     await mkdir(localDir, { recursive: true });
     await writeFile(
       join(localDir, 'config.json'),
-      JSON.stringify({ 'texra.approvalPolicy': 'never' }),
+      JSON.stringify({ 'texra.approvalPolicy': 'ask' }),
     );
     await expect(
       cliContext({
@@ -120,7 +120,7 @@ describe('CLI context config defaults', () => {
         globalArgs: { cwd: workspace },
         storageRoot,
       }),
-    ).resolves.toMatchObject({ approvalPolicy: 'never' });
+    ).resolves.toMatchObject({ approvalPolicy: 'ask' });
 
     // The user-wide file decides elsewhere, as it does for the extension and
     // desktop hosts through their roots' config.
@@ -141,7 +141,7 @@ describe('CLI config values a row rejects', () => {
     await mkdir(globalStorage, { recursive: true });
     await writeFile(
       join(globalStorage, 'config.json'),
-      JSON.stringify({ 'texra.approvalPolicy': 'never' }),
+      JSON.stringify({ 'texra.approvalPolicy': 'ask' }),
     );
     // A hand-typed string opt-out in the project file.
     const workspace = await workspaceWithConfig(

@@ -75,7 +75,6 @@ test.afterAll(async () => {
 test('approval menu shows the current policy and keeps selection marks inside its rows', async () => {
   const { page } = launched;
   for (const [value, label] of [
-    ['never', 'Block'],
     ['ask', 'Ask'],
     ['yolo', 'Auto-approve'],
   ] as const) {
@@ -103,9 +102,6 @@ test('approval menu shows the current policy and keeps selection marks inside it
       return mark.left >= row.left && mark.right <= row.right;
     });
     expect(contained).toBe(true);
-    await expect(
-      page.locator('wa-dropdown-item[value="approval:autoApprove"]'),
-    ).toHaveJSProperty('disabled', value === 'never');
     await page.screenshot({
       path: test.info().outputPath(`approval-${value}.png`),
     });
@@ -387,10 +383,7 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
 test('command palette opens and dismisses', async () => {
   const { page } = launched;
   await showLauncher(launched);
-  await page
-    .locator('.shell-sidebar-primary .shell-sidebar-action')
-    .filter({ hasText: 'Commands' })
-    .click();
+  await page.locator('#shellCommands').click();
   const palette = page.locator('.desktop-command-palette');
   await expect(palette).toHaveAttribute('open');
   await expect(palette.getByRole('option').first()).toBeVisible();

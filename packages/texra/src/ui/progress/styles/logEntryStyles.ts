@@ -69,39 +69,6 @@ export const logEntryStyles = css`
     overflow: visible;
   }
 
-  /* Light DOM formatter styles */
-  .file-list-content {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .file-list-content .file-var,
-  .file-list-content .file-source,
-  .file-list-content .file-media {
-    color: var(--color-text-secondary);
-  }
-
-  .file-list-content .file-media {
-    font-size: var(--font-size-xs);
-  }
-
-  .file-list-content .file-var {
-    font-size: var(--font-size-sm);
-    margin-inline-start: var(--wa-space-3xs);
-  }
-
-  .file-list-content .file-source {
-    font-size: var(--font-size-xs);
-    font-style: italic;
-  }
-
-  /* Note: .detail-item base styles are in commonViewStyles; this adds log-specific variants */
-
-  .file-load-icon {
-    color: var(--tone-color);
-  }
-
   .memory-path {
     color: var(--color-text-secondary);
   }
@@ -125,11 +92,6 @@ export const logEntryStyles = css`
   }
 
   /* Note: .details-summary base styles are in commonViewStyles */
-
-  /* File list details styling */
-  .file-list-details {
-    margin: var(--wa-space-2xs) 0;
-  }
 
   .banner-content-copy {
     min-width: 0;

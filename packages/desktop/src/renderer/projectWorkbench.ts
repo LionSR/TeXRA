@@ -23,8 +23,8 @@ import {
   DESKTOP_WORKSPACE_COMMANDS,
   type DesktopWorkspaceRequest,
 } from '../shared/desktopWorkspaceMessages';
+import { createPathToolbar } from './editorFileNotice';
 import { createEditorPane, EditorPaneError } from './editorPane';
-import { pathFooter } from './paneChrome';
 import { createPdfPane } from './pdfPane';
 import { createReviewPane } from './reviewPane';
 import { createTerminalPane } from './terminalPane';
@@ -282,7 +282,7 @@ export function createProjectWorkbench(options: {
     const editor = editorFor(id);
     host.append(editor.element);
     host.append(
-      pathFooter(target, {
+      createPathToolbar(target, {
         text: 'Save',
         icon: 'floppy-disk',
         onClick: () => void editor.save(),

@@ -1,4 +1,4 @@
-import { Schema, Struct } from 'effect';
+import { Schema } from 'effect';
 import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /**
@@ -8,11 +8,3 @@ export const LineChangesSchema = Schema.Struct({
   added: NonNegativeIntSchema,
   removed: NonNegativeIntSchema,
 });
-
-/**
- * Schema for diff statistics where one side may be absent.
- */
-export const DiffStatsSchema = LineChangesSchema.mapFields(
-  Struct.map(Schema.optional),
-);
-export type DiffStats = typeof DiffStatsSchema.Type;

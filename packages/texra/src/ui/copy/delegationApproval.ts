@@ -1,6 +1,6 @@
 import { Record as EffectRecord } from 'effect';
 
-import { collapseWhitespace } from '@texra-ai/worldline/schemas';
+import { collapseWhitespace, joinFacts } from '@texra-ai/worldline/schemas';
 import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
 
 /**
@@ -70,7 +70,10 @@ const firstSentence = (text: string): string => {
  */
 export const CHILD_AGENT_COPY = Object.freeze({
   heading: (label: string, tools: readonly string[]) =>
-    `Agent '${label}' · tools: ${tools.length > 0 ? tools.join(', ') : 'none'}`,
+    joinFacts([
+      `Agent '${label}'`,
+      `tools: ${tools.length > 0 ? tools.join(', ') : 'none'}`,
+    ]),
   summary: firstSentence,
   promptLabel: 'System prompt',
   instructionLabel: 'Instructions',

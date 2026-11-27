@@ -15,7 +15,6 @@ import QuickStartHero from '../components/QuickStartHero.vue';
 import LatexDiffHero from '../components/LatexDiffHero.vue';
 import FileSelectHero from '../components/FileSelectHero.vue';
 import ApiKeysHero from '../components/ApiKeysHero.vue';
-import CompareHero from '../components/CompareHero.vue';
 
 // Frameless mock-UI system: a focused panel primitive + consolidated building
 // blocks, so a page can show ONE component without the full VS Code window.
@@ -89,7 +88,6 @@ export default {
     app.component('LatexDiffHero', LatexDiffHero);
     app.component('FileSelectHero', FileSelectHero);
     app.component('ApiKeysHero', ApiKeysHero);
-    app.component('CompareHero', CompareHero);
 
     // Frameless mock-UI primitives (also usable directly in markdown).
     app.component('MockCard', MockCard);

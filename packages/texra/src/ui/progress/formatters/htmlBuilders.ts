@@ -4,7 +4,7 @@
  */
 
 // Third-party imports
-import { formatResultCount, getBasename } from '@texra-ai/worldline/schemas';
+import { formatResultCount } from '@texra-ai/worldline/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap, type ClassInfo } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -19,16 +19,12 @@ import type { IconName } from '@ui/wa/iconNames';
 import { waSpinner } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { formatMediaLabel } from '@ui/copy/format';
-import { fileLoadTone, statusGlyph } from '@ui/copy/runStatus';
 
 // Side-effect import - register the <copy-button> element drawn below
 import '@ui/progress/components/CopyButton';
 import { getComposedPathElement } from '@ui/progress/components/composedPath';
 
 // Local imports - formatter helpers
-import { formatDisplayTimestamp } from './timestampUtils';
-import type { FileListRow } from '@texra-ai/worldline/transcript';
 
 // Threshold constants for diff detection heuristics
 const DIFF_DETECTION_LINE_LIMIT = 20;
@@ -108,24 +104,6 @@ export function buildCopyButton(
   return html`<copy-button .text=${content} .label=${title} .look=${'labeled'}></copy-button>`;
 }
 
-/**
- * The summary row a user, assistant or error message opens with
- * (`messageHeaderStyles`): its icon and label, the time of day with the full
- * moment as its hover hint, then its actions at the trailing edge.
- */
-export function buildMessageHeader(header: {
-  readonly icon: TemplateResult;
-  /** Who wrote the message, or an error's summary. */
-  readonly label: unknown;
-  readonly timestamp: number;
-  readonly actions: unknown;
-}): TemplateResult {
-  const date = new Date(header.timestamp);
-  const time = formatDisplayTimestamp(date, 'minute');
-  // prettier-ignore
-  return html`<div slot="summary" class="details-summary message-header"><span class="message-label">${header.icon}${header.label}</span><time class="message-timestamp" datetime=${date.toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time>${header.actions}</div>`;
-}
-
 /** A `<wa-icon>`, or a `<wa-spinner>` in its place while `running`. */
 export function renderIconOrSpinner(
   running: boolean,
@@ -156,6 +134,9 @@ interface DetailsSummaryOptions {
   running?: boolean;
   label: string;
   labelClass?: string;
+  /** What the label acts on (a path, a command), in the reading color
+   *  beside the quieter label. */
+  detail?: string;
   timestamp?: { display: string; tooltip: string };
   copyButton?: {
     title: string;
@@ -173,6 +154,7 @@ function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
     running = false,
     label,
     labelClass = 'label',
+    detail,
     timestamp,
     copyButton,
     extraContent,
@@ -190,7 +172,7 @@ function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
     : nothing;
   const extraTemplate = extraContent ?? nothing;
   // prettier-ignore
-  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto">${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
+  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto">${label}${detail ? html` <span class="summary-detail">${detail}</span>` : nothing}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
 }
 
 /**
@@ -255,45 +237,11 @@ export function buildLineChangeStats(changes: {
   return html`<span class="file-stats"><span class="visually-hidden">${formatResultCount(changes.added, 'line')} added, ${formatResultCount(changes.removed, 'line')} removed</span><span class="added" aria-hidden="true">+${changes.added}</span><span class="removed" aria-hidden="true">-${changes.removed}</span></span>`;
 }
 
-/** Build the `<li>` rows for a file-list banner. The summary line above them
- *  is the row's (`FileListRow.summary`), not derived here. A file that
- *  reached the model as an image or audio clip carries its `media`, and
- *  reports its kind and size beside its name. */
-export function buildFileListRender(
-  files: FileListRow['files'],
-): TemplateResult {
-  // prettier-ignore
-  return html`${files.map((file) => {
-    const tone = fileLoadTone(file.ok);
-    const filePath = file.path;
-    const fileName = getBasename(filePath);
-    const loaded = file.media;
-
-    // The one rule for a loaded file's source label, shared with the CLI
-    // (transcriptRowLines): paint `sourceDisplay`, nothing else — an entry
-    // worth labelling sets `sourceDisplay`, so no host needs a fallback to
-    // spell it out.
-    // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}>${waIcon(statusGlyph({ tone }), { className: `file-load-icon tone-${tone}` })} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${fileName}</bdi>`)}${file.varName ? html` <span class="file-var">[<bdi dir="auto">${file.varName}</bdi>]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(<bdi dir="auto">${file.sourceDisplay}</bdi>)</span>` : ''}${loaded ? html` <span class="file-media"><bdi dir="ltr">${formatMediaLabel(loaded)}</bdi></span>` : ''}</li>`;
-  })}`;
-}
-
 // ============================================================================
 // Syntax Highlighting
 // ============================================================================
 
-/** Human-readable labels for language badges */
-const LANGUAGE_LABELS: Record<string, string> = {
-  bash: 'Bash',
-  json: 'JSON',
-  yaml: 'YAML',
-  javascript: 'JavaScript',
-  typescript: 'TypeScript',
-  python: 'Python',
-  plaintext: 'Text',
-};
-
-/** Build a code block with syntax highlighting, a language badge and a copy button. */
+/** Build a code block with syntax highlighting and a copy button. */
 export function buildCodeBlock(
   text: string,
   language: string,
@@ -304,13 +252,11 @@ export function buildCodeBlock(
   const highlighted =
     language === 'plaintext' ? null : highlightSpans(text, language);
   // prettier-ignore
-  const languageBadge = html`<span class="code-block-language">${LANGUAGE_LABELS[language] ?? language}</span>`;
-  // prettier-ignore
   const copyButton = html`<copy-button .text=${text} .label=${'Copy code'} .look=${'code'}></copy-button>`;
   // prettier-ignore
   const codeTemplate = html`<pre class=${classMap(preClasses)} dir="ltr"><code>${highlighted === null ? text : unsafeHTML(highlighted)}</code></pre>`;
   // prettier-ignore
-  return html`<div class="code-block" data-language=${language}><div class="code-block-header">${languageBadge}${copyButton}</div>${codeTemplate}</div>`;
+  return html`<div class="code-block" data-language=${language}><div class="code-block-copy">${copyButton}</div>${codeTemplate}</div>`;
 }
 
 // ============================================================================

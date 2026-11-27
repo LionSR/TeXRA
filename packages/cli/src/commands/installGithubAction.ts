@@ -4,10 +4,6 @@ import { Effect, FileSystem, Option, PlatformError } from 'effect';
 import { Flag } from 'effect/cli';
 
 import {
-  parseGitHubSlug,
-  type GitHubSlug,
-} from '@texra/tools/github/githubSlug';
-import {
   currentBranch,
   isGitRepository,
   localBranchExists,
@@ -31,6 +27,31 @@ import { gh, ghAvailable, git } from '../runtime/gitOps';
 import { boolFlag, cliCommand } from './_helpers/cliCommand';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { failUsage, type CliContext } from '../runtime/platform/cliContext';
+
+/** A GitHub repository named by owner and repository name. */
+interface GitHubSlug {
+  readonly owner: string;
+  readonly repo: string;
+}
+
+/**
+ * Parse `owner/repo` from a GitHub remote URL: `https://github.com/o/r`,
+ * `git@github.com:o/r` or `ssh://git@github.com/o/r`, each with or without
+ * `.git` and a trailing slash. Repository names may contain dots
+ * (`org.github.io`). Any other host yields null.
+ */
+function parseGitHubSlug(url: string): GitHubSlug | null {
+  const cleaned = url
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\.git$/, '');
+  const match = cleaned.match(
+    /^(?:https?:\/\/(?:[^@/]+@)?(?:www\.)?github\.com\/|git@github\.com:|ssh:\/\/(?:[^@/]+@)?github\.com(?::\d+)?\/)([^/]+)\/([^/]+)$/,
+  );
+  if (!match) return null;
+  const [, owner, repo] = match;
+  return owner && repo ? { owner, repo } : null;
+}
 
 const WORKFLOW_RELATIVE_PATH = '.github/workflows/texra-code-review.yml';
 const DEFAULT_BRANCH_NAME = 'texra/add-code-review';

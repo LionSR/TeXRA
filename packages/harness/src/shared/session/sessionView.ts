@@ -53,8 +53,7 @@ const TranscriptViewSchema = Schema.Struct({
   /** The transcript rows (`transcriptUpdate.ts`) plus the compaction rows,
    *  in first-appearance order. */
   rows: Schema.Array(Schema.declare((_u): _u is TranscriptRow => true)),
-  /** One entry per stage: a plugin's section, opened by `stage.start` and
-   *  closed by `stage.end`, or a script's, projected from its `script` card
+  /** One entry per stage: a script's, projected from its `script` card
    *  and the cards under it. */
   stages: Schema.Array(StageSchema),
   /** The contiguous leading prefix of rows whose finalizing event has been
@@ -381,8 +380,8 @@ function pendingRequests<View extends SessionView>(
 }
 
 /**
- * The one attention rule every host reads (the extension's badge, reveal and
- * chime, the desktop's dock badge, notifications, and rail): a pending
+ * The one attention rule every host reads (the extension's badge and reveal,
+ * the desktop's dock badge, notifications, and rail): a pending
  * request wants the user, and a run when its outcome lands.
  */
 export function attentionOf<View extends SessionView>(

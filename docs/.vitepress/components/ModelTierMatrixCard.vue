@@ -28,10 +28,10 @@ const tiers = [
     kind: 'Complex',
     cue: 'Transformations, rewrites',
     models: [
-      'anthropic/claude-fable-5-1',
+      'anthropic/claude-fable-5-2',
       'anthropic/claude-opus-5-5',
-      'openai/gpt-6.1-sol',
-      'google/gemini-4-argon',
+      'openai/gpt-6.2-sol',
+      'google/gemini-4-neon',
     ],
   },
   {
@@ -39,7 +39,7 @@ const tiers = [
     kind: 'Reasoning-heavy',
     cue: 'Deep, multi-step thinking',
     models: [
-      'anthropic/claude-fable-5-1',
+      'anthropic/claude-fable-5-2',
       'anthropic/claude-sonnet-5-5',
       'anthropic/claude-opus-5-5',
       'deepseek/deepseek-flash',

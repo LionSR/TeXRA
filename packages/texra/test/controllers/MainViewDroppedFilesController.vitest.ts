@@ -40,7 +40,6 @@ describe('MainViewDroppedFilesController', () => {
           ),
         ).toEqual({
           paths: ['paper/main.tex'],
-          attachedCount: 1,
           rejectedCount: 3,
         });
       }).pipe(Effect.provide(nodePlatformLayer)),

@@ -38,7 +38,6 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TickerController } from '@ui/litControllers/TickerController';
 import {
-  runSectionTone,
   runStatus,
   runStatusLabel,
   runStatusLook,
@@ -48,6 +47,7 @@ import {
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import { statusMark } from '@ui/wa/statusIcons';
 import { toneVariant } from '@ui/wa/waVariant';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, nestedCountsLabel } from '@ui/copy/nestedRuns';
@@ -57,6 +57,9 @@ import type { SessionView, RunView } from '@texra-ai/worldline/schemas';
 
 /** The card's key in `RunSurface.disclosures` for its run. */
 const DISPATCH_GROUP_KEY = 'dispatch';
+
+const RUNNING = runStatusLook('running');
+const WAITING = runStatusLook('waitingOnUser');
 
 @customElement('background-tasks-panel')
 export class BackgroundTasksPanel extends TexraElement {
@@ -227,18 +230,21 @@ export class BackgroundTasksPanel extends TexraElement {
     );
     const since = starts.length > 0 ? Math.min(...starts) : null;
     const counts = nestedCountsLabel(rollup.kinds);
-    const needsUser = runStatusLook('waitingOnUser');
     const summary = html`${waIcon('diagram-project')}
     ${dispatchSummary(counts)}${
       rollup.running > 0
-        ? html`<wa-badge variant=${toneVariant(runSectionTone('running'))} pill
+        ? html`<wa-badge variant=${toneVariant(RUNNING.tone)} pill
             >${sectionCountLabel('running', String(rollup.running))}</wa-badge
           >`
         : nothing
     }${
       approval
-        ? html`<wa-badge variant=${toneVariant(needsUser.tone)} pill
-            >${waIcon(statusGlyph(needsUser), { label: runStatusLabel('waitingOnUser') })}</wa-badge
+        ? html`<wa-badge
+            variant=${toneVariant(WAITING.tone)}
+            pill
+            role="img"
+            aria-label=${runStatusLabel('waitingOnUser')}
+            >${waIcon(statusGlyph(WAITING))}</wa-badge
           >`
         : nothing
     }${
@@ -308,7 +314,7 @@ export class BackgroundTasksPanel extends TexraElement {
         aria-label=${label}
         @click=${() => this.navigateToRun(child.id)}
       >
-        ${waIcon(status.glyph, { className: 'task-icon' })}
+        ${statusMark(status, 'task-icon')}
         <span class="task-name">${child.label}</span>
         ${latest ? html`<span class="task-latest">${latest}</span>` : nothing}
         ${renderClock(child, child.approval === 'own', this._ticker.now)}
@@ -332,8 +338,7 @@ function renderClock(
   nowMs: number,
 ): TemplateResult {
   if (pendingApproval) {
-    return html`<span
-      class="task-elapsed is-approval tone-${runStatusLook('waitingOnUser').tone}"
+    return html`<span class="task-elapsed is-approval tone-${WAITING.tone}"
       >approval</span
     >`;
   }

@@ -15,6 +15,7 @@ import {
   joinFacts,
 } from '@texra-ai/worldline/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
+import { previousRowsText } from '@cli/tui/overflowText';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 import {
@@ -37,7 +38,6 @@ import {
   type AttachedTaskLevel,
   type ConnectService,
 } from '../state/attachedTask';
-import { boundedScrollableLines } from '../render/scrollBounds';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useChatProcess } from '../chatProcess';
 import { useMountScope } from '../state/useMountScope';
@@ -296,13 +296,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
       (notice ? 1 : 0) -
       (presentable ? REQUEST_CARD_ROWS : 0),
   );
-  // The newest rows, under a marker counting the older ones left out.
-  const shown = boundedScrollableLines({
-    lines: lines.map((text) => ({ kind: 'row', text })),
-    maxDisplayLines: budget,
-    scrollOffset: lines.length,
-    width: contentWidth,
-  });
+  // The newest rows, under a marker counting the older ones they leave out.
+  const shown = lines.length > budget ? lines.slice(1 - budget) : lines;
+  const hiddenRows = lines.length - shown.length;
 
   return (
     <Box flexDirection="column">
@@ -311,10 +307,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         title={title}
         hints={hints}
       >
+        {hiddenRows > 0 && <Text dimColor>{previousRowsText(hiddenRows)}</Text>}
         {shown.map((line, index) => (
-          <Text key={index} dimColor={line.kind === 'overflow'}>
-            {line.text}
-          </Text>
+          <Text key={index}>{line}</Text>
         ))}
         {composing && (
           <PromptInput

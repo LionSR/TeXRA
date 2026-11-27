@@ -37,7 +37,6 @@ import {
   CliOutputFormatSchema,
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
-import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 
 import { loadCliStartupConfig, resolveKnownCliModelId } from './cliConfig';
 import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
@@ -541,23 +540,4 @@ export function effectiveApprovalPolicy(
   configured: ApprovalPolicy,
 ): ApprovalPolicy {
   return launchPolicy(configured, launchApproval(requested));
-}
-
-/** Why a request is not what a launch decides privileged actions under: one
- *  more permissive than the project's policy cannot widen it, and
- *  Auto-approve, which widens its own task, cannot override Block. */
-export function launchApprovalNotice(
-  requested: ApprovalPolicy | undefined,
-  configured: ApprovalPolicy,
-): string | undefined {
-  if (
-    requested === undefined ||
-    effectiveApprovalPolicy(requested, configured) === requested
-  )
-    return undefined;
-  const change =
-    'Change the project policy with /config in `texra chat` or in Settings.';
-  return requested === 'yolo'
-    ? `Auto-approve cannot override the project's Block policy. ${change}`
-    : `Using project policy (${approvalPolicyLabel(configured)}) instead of ${approvalPolicyLabel(requested)} — per-command flags can only tighten it. ${change}`;
 }

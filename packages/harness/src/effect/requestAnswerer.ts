@@ -8,7 +8,6 @@
 import {
   Cause,
   Context,
-  Duration,
   Effect,
   Fiber,
   FiberMap,
@@ -48,12 +47,10 @@ class DecisionMismatch extends Schema.TaggedError<DecisionMismatch>()(
 /** How a decision the session did not record is recorded again: after
  *  100 ms, doubling and jittered, each wait at most 30 s. With
  *  {@link DECIDE_RETRIES} it ends after about two and a half minutes. */
-const DECIDE_RETRY = Schedule.exponential('100 millis').pipe(
-  Schedule.jittered,
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, Duration.seconds(30))),
-  ),
-);
+const DECIDE_RETRY = Schedule.min([
+  Schedule.exponential('100 millis').pipe(Schedule.jittered),
+  Schedule.spaced('30 seconds'),
+]);
 const DECIDE_RETRIES = 12;
 
 /** The handler's decision on `pending`, or a denial naming why it gave

@@ -20,7 +20,6 @@ export class ToolUseRunContent extends BaseRunContent {
     const showComposer = acceptsFollowUp(run);
     return html`
       <div class="conversation-content">
-        ${this.renderApprovalDock()}
         <div class="conversation-column conversation-prelude">
           ${this.renderForkedFrom(run)}
           <plan-view
@@ -38,6 +37,7 @@ export class ToolUseRunContent extends BaseRunContent {
         <div class="conversation-column conversation-epilogue">
           ${this.renderUsagePanel(run)}
         </div>
+        ${this.renderApprovalDock()}
       </div>
       <div class="conversation-composer-dock">
         <div class="conversation-column">

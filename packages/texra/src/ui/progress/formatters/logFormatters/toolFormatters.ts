@@ -88,11 +88,11 @@ export function formatToolUseTemplate(
     model.headerPreview,
     HEADER_PREVIEW_MAX_CHARS,
   );
-  const titleText = headerPreview
-    ? `${model.headerLabel}: ${headerPreview}`
-    : model.headerLabel;
 
-  const sections: TemplateResult[] = renderToolSections(model.sections);
+  const sections: TemplateResult[] = renderToolSections(
+    model.sections,
+    model.headerPreview,
+  );
 
   // Output is shown unless the model suppressed it (empty, already said by
   // the header, the error, or the sections above).
@@ -137,7 +137,9 @@ export function formatToolUseTemplate(
     sections.push(html`<div class="tool-use-section tool-no-output">(no output)</div>`);
   }
 
-  const shouldOpen = running;
+  // A running call shows its live output, and an edit its diff: the change
+  // is what a person reads, so it is not behind a click.
+  const shouldOpen = running || displayKind === 'edit';
 
   // Live timer for in-progress tools, with timeout limit when available
   // prettier-ignore
@@ -152,7 +154,8 @@ export function formatToolUseTemplate(
     row,
     iconName,
     running: running && model.userInstruction === undefined,
-    label: titleText,
+    label: model.headerLabel,
+    detail: headerPreview || undefined,
     isError: showAsError,
     content: html`${sections}`,
     defaultOpen: shouldOpen,

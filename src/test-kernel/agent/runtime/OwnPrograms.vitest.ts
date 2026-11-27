@@ -90,7 +90,7 @@ describe(
       it.layer(validationHost('texra-own-program-'), { buildPerTest: true })(
         (it) => {
           it.effect(
-            'starts by name at the step after its file is written, on the tools it names, and asks before it starts an agent',
+            'starts by name at the step after its file is written, on the tools it names, and starts its agent unasked',
             () =>
               Effect.gen(function* () {
                 const { roots } = yield* FakeHost;
@@ -157,37 +157,21 @@ describe(
                 expect(write.payload).toMatchObject({ kind: 'toolEdit' });
                 expect(yield* approve(root, write.requestId)).toBe(true);
 
-                // The script's `program('own:greet')` is asked about, as any
-                // launch a model's script makes; the person approves it.
-                const launch = yield* requestOf(root, 1);
-                expect(launch.payload).toMatchObject({
-                  kind: 'proposal',
-                  data: { label: 'own:greet' },
-                });
-                expect(yield* approve(root, launch.requestId)).toBe(true);
-
-                // The program's `agent()` call asks too, on the program's
-                // run, and its child does not start meanwhile.
-                yield* untilRow('run.start', (row) => row.parent === root);
+                yield* untilRow('run.end', (row) => row.run === root);
+                const rows = storedRows(storage);
+                // The script's `program('own:greet')` and the program's
+                // `agent()` call start unasked: starting an agent is the
+                // model's call, and each child inherits the policy.
                 const program = Schema.decodeUnknownSync(RunIdSchema)(
-                  storedRows(storage).find(
+                  rows.find(
                     (row) => row.parent === root && row.type === 'run.start',
                   )?.run,
                 );
-                const delegation = yield* requestOf(program);
-                expect(delegation.payload).toMatchObject({
-                  kind: 'proposal',
-                  data: { label: 'Own child' },
-                });
                 expect(
-                  storedRows(storage).filter((row) => row.parent === program),
-                ).toStrictEqual([]);
-                expect(yield* approve(program, delegation.requestId)).toBe(
-                  true,
-                );
-
-                yield* untilRow('run.end', (row) => row.run === root);
-                const rows = storedRows(storage);
+                  rowsOf(rows, root, 'request.opened').map(
+                    (row) => row.payload?.kind,
+                  ),
+                ).toStrictEqual(['toolEdit']);
 
                 // The program ran in its own run, offered its script, the
                 // script's own function and the two tools `uses` names, and

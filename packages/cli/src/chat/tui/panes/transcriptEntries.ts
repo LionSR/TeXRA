@@ -59,7 +59,6 @@ const ROW_KIND_IS_WIDGET = {
   log: false,
   user: false,
   contextManagement: true,
-  fileList: true,
   progressStatus: true,
   thinking: true,
   tool: true,

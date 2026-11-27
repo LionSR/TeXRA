@@ -62,6 +62,12 @@ export const PLUGINS_PAGE = Object.freeze({
     `Trust ${name}${version ? ` ${version}` : ''} and switch it on?`,
   trustAction: 'Trust and switch on',
   declined: (name: string) => `${name} was not trusted, so it stays off.`,
+  /** The MCP config file is edited by hand: a missing one is named. */
+  noMcpConfig: (path: string) =>
+    `No MCP servers configured yet. Create ${path} (same format as Claude Code's .mcp.json).`,
+  mcpOpenFailed: 'Could not open the MCP config file',
+  /** What a failed row action is reported under, before its cause. */
+  actionFailed: (action: string) => `Plugin ${action} failed`,
 });
 
 /** The row's identity, unique across the three kinds: the page's repeat key

@@ -44,7 +44,7 @@ export type WithBlobs<Draft> = Draft & {
   readonly blobs?: readonly DraftBlob[];
 };
 
-type Replace<T, R> = Omit<T, keyof R> & R;
+type Replace<T, R> = T extends unknown ? Omit<T, keyof R> & R : never;
 type StoredPayload<K> = Extract<
   typeof ModelMessagePayloadSchema.Type,
   { kind: K }

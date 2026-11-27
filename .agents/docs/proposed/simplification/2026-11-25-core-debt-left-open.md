@@ -42,6 +42,11 @@ word-boundary scan of every export found no symbol without a consumer.
    that held import and nothing else, since a schema read only in types
    counts as used (`reportVarsOnlyUsedAsTypes` is off). Take both lines
    when `oxlint.config.mts` and `logPayload.ts` leave the open PR.
+   Landed (2026-11-26 evening): the pattern is `'^_'`. By then #15229 and
+   the branch's own export removals had left eight more unused imports
+   (`ToolServices.ts`, `toolTable.ts`, `log.ts`, `traceEvent.ts`,
+   `fsDurability.ts` and three in the app's `settingsViewMessages.ts`),
+   removed with `logPayload.ts`'s.
 2. **`SessionLog.history`'s `types`**: landed (2026-11-25 evening). Six
    test reads passed it, not one (four in `ToolUseProgressEvents.vitest.ts`
    and one in `AgentLaunchContext.vitest.ts` beside `ToolUseFollowUp`'s).
@@ -56,7 +61,7 @@ word-boundary scan of every export found no symbol without a consumer.
    `renderPrompt`'s (`packages/harness/src/agent/prompt/promptRender.ts`),
    and `JsonRpcConnectionOptions.onRequest` names a `MethodNotFound` the
    code never spells (it answers `-32601`). Take them with `npm run
-   docgen` once that PR merges.
+   docgen` once that PR merges. Landed (2026-11-26 evening).
 
 4. **`RunFailure.cause` is required** (`packages/harness/src/effect/errors.ts`),
    so `runView`'s `failure` (`packages/harness/src/effect/runHandle.ts`) and
@@ -67,7 +72,11 @@ word-boundary scan of every export found no symbol without a consumer.
    on the `.` entry, so the change regenerates
    `packages/harness/docs/api/index.md`, which the same open PR holds; take
    it with item 3. Both still wait (2026-11-25 evening): the open PR holds
-   `packages/harness/docs/api/index.md` and `plugins.md`.
+   `packages/harness/docs/api/index.md` and `plugins.md`. Landed
+   (2026-11-26 evening): `cause` is `Schema.optional(Schema.Defect())`,
+   neither caller mints an `Error`, and the two readers of the cause
+   (`primaryFailure` in `HostInteractions.ts`, the headless CLI's launch
+   failure) take the `RunFailure` itself when it carries none.
 
 ## Checked and declined
 

@@ -96,13 +96,6 @@ const ROW_GEOMETRY = {
     marginBottomRows: 0,
     marginTopRows: 0,
   },
-  fileList: {
-    firstPrefix: '',
-    continuationPrefix: '  ',
-    inset: 0,
-    marginBottomRows: 0,
-    marginTopRows: 0,
-  },
   tool: {
     firstPrefix: '',
     continuationPrefix: '',

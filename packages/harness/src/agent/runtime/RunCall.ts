@@ -5,25 +5,18 @@
  * tools through. The run loop provides it beside every call's `ToolContext`,
  * whose `env.run` is the same run, as a plugin's tool sees it. The public
  * contract every tool reads, the run included, is `ToolContext`; an app's
- * tool reads nothing else. `requireFileReadForEdit` here answers an
- * edit's read prerequisite from the run's state (`RunCallShape.state`), so
- * a resumed run counts the reads its rows record.
+ * tool reads nothing else.
  */
 import { Context, type Deferred, Effect, Schema } from 'effect';
 
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
-import {
-  type ToolResult,
-  type ToolDefinition,
-  type ToolResultPayload,
-} from '@shared/schemas';
+import { type ToolDefinition, type ToolResultPayload } from '@shared/schemas';
 import type { RunState } from '@shared/session/runState';
 import {
   ToolContext,
   type ToolContextShape,
   type ToolRun,
 } from '@tools/core/ToolTypes';
-import { errorResult } from '@tools/core/result';
 
 import type { InvokeError } from './ModelInvoker';
 import type { SessionServices } from './rootLaunch';
@@ -207,27 +200,3 @@ export const inRunSession = <A, E, R>(
 /** A built-in's call: the call, where its requests open, the run, and its
  *  place in the run. */
 export type RunToolCall = ToolContextShape & RunCallShape;
-
-/** The refusal an edit of an existing file gets when the run never read it,
- *  or null. `path` is the file as the results spell it (`reads`,
- *  `edits[].path`): the run has read it once a finished call's result names
- *  it, in this process or in the one that ran the read (`RunCallShape.state`). */
-export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
-  function* (
-    path: string,
-    exists: boolean,
-    errorMessage?: string,
-  ): Effect.fn.Return<ToolResult | null, never, ToolContext> {
-    if (!exists) return null;
-    const state = yield* inRunSession((call) => call.state);
-    if (state.read.includes(path)) return null;
-    return errorResult(
-      errorMessage ??
-        'Edits to existing files require a prior read in this session. Please call read_file first.',
-      {
-        // Not "Read …": the card would read as a read_file call.
-        summary: `Not edited: ${path} was not read first`,
-      },
-    );
-  },
-);

@@ -2,10 +2,7 @@ import { Effect, Option } from 'effect';
 
 import { CliUsageError } from '../runtime/platform/cliContext';
 import { assertExplicitModelKnown } from '../runtime/models/launchDefaults';
-import {
-  formatInteractiveTerminalFailure,
-  interactiveTerminalFailure,
-} from '../runtime/terminal/terminalRequirements';
+import { interactiveTerminalRejection } from '../runtime/terminal/terminalRequirements';
 import { notifyCliUpdate } from '../runtime/platform/updateChecker';
 
 import {
@@ -37,19 +34,13 @@ export const chatOptions: CliCommandOptions<typeof chatConfig, Error> = {
     // `mode === 'headless'` already covers --print / CI / non-TTY stdin
     // (see cliContext.cliMode); stdout must also be a TTY for Ink to render,
     // and `TERM=dumb` strips the cursor controls Ink depends on.
-    const terminalFailure = interactiveTerminalFailure(context);
-    if (terminalFailure) {
-      // Headless precedence: in CI (headless + TERM=dumb often co-occur) the
-      // actionable advice is "use `texra run`", not "fix your TERM".
-      throw new CliUsageError({
-        message: formatInteractiveTerminalFailure(terminalFailure, {
-          headlessMessage:
-            'texra chat requires an interactive terminal (TTY stdin and stdout). For scripting or piped input, use `texra run`.',
-          dumbTerminalCommand: 'chat',
-          dumbTerminalOptions: { nonInteractiveFallback: '`texra run`' },
-        }),
-      });
-    }
+    const terminalRejection = interactiveTerminalRejection(context, 'chat', {
+      headlessMessage:
+        'texra chat requires an interactive terminal (TTY stdin and stdout). For scripting or piped input, use `texra run`.',
+      nonInteractiveFallback: '`texra run`',
+    });
+    if (terminalRejection)
+      throw new CliUsageError({ message: terminalRejection });
     // An update that ran (or was cancelled) is the command's outcome: the
     // next `texra` runs the new version, so no chat mounts.
     return notifyCliUpdate(context).pipe(

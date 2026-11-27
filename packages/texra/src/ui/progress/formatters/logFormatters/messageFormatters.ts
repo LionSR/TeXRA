@@ -23,7 +23,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
-import { buildCopyButton, buildMessageHeader } from '../htmlBuilders';
+import { buildCopyButton } from '../htmlBuilders';
 import type { LogLevel } from '@texra-ai/worldline/schemas';
 import type {
   ErrorRow,
@@ -83,6 +83,10 @@ export function formatProgressStatusTemplate(
  */
 export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const { timestamp } = row;
+  const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
+    new Date(timestamp),
+    'minute',
+  );
 
   const worded = errorRowText(row);
   const summaryText = worded.summary;
@@ -102,12 +106,18 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const detailTemplate = html`<pre class="error-details">${detailText}</pre>`;
   // prettier-ignore
   const contentTemplate = html`<div class="banner-content log-entry-content banner-content--error">${detailTemplate}</div>`;
-  const summaryTemplate = buildMessageHeader({
-    icon: waIcon('circle-exclamation', { className: 'icon' }),
-    label: html`<span class="label">${summaryText}</span>`,
-    timestamp,
-    actions: buildCopyButton('Copy error details', rawContent),
-  });
+  // prettier-ignore
+  const labelSpan = html`<span class="label">${summaryText}</span>`;
+  const timestampLabel = html`<time
+    class="error-timestamp message-timestamp"
+    datetime=${new Date(timestamp).toISOString()}
+    title=${tooltipTimestamp}
+    >${timeDisplay}</time
+  >`;
+  // prettier-ignore
+  const copyButton = buildCopyButton('Copy error details', rawContent);
+  // prettier-ignore
+  const summaryTemplate = html`<div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}</span>${timestampLabel}${copyButton}</div>`;
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--error tone-danger message-disclosure">${summaryTemplate}${contentTemplate}</wa-details>`;
 }

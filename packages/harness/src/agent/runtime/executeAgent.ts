@@ -53,7 +53,10 @@ export interface ExecuteAgentOptions {
    *  resumed, from the facts its resume read: its parent as its rows hold
    *  it (less one the store no longer lists) and its `run.start`. */
   readonly entry:
-    | { readonly kind: 'fresh'; readonly registration: RegisterRunOptions }
+    | {
+        readonly kind: 'fresh';
+        readonly registration: Omit<RegisterRunOptions, 'takesFollowUps'>;
+      }
     | {
         readonly kind: 'resume';
         readonly parentId: RunId | undefined;
@@ -277,7 +280,6 @@ const openAgent = Effect.fn('executeAgent.open')(function* (
           agent: launch.config.label,
           model: launch.config.model,
           input: launch.config.inputFiles[0] ?? '(none)',
-          outputs: launch.config.outputFiles.length,
         },
       }),
       withLogChannel(CHANNEL),

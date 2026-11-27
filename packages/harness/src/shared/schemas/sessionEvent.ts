@@ -411,8 +411,6 @@ export function edgesOf(draft: SessionRowDraft): AggregateEdges {
     case 'approval.policy':
     case 'run.position':
     case 'log':
-    case 'stage.start':
-    case 'stage.end':
     case 'tool.start':
     case 'tool.end':
     case 'usage':
@@ -491,7 +489,7 @@ export function pendingKeyOf(
 
 /** Every `AgentEvent` case but the chunk: each is stored as a row of its run. */
 // prettier-ignore
-export const TRACE_ROW_TYPES = Object.freeze(['log', 'process.output', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplayRow['type'][]);
+export const TRACE_ROW_TYPES = Object.freeze(['log', 'process.output', 'tool.start', 'tool.end', 'usage', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplayRow['type'][]);
 
 export const DISPLAY_ROW_TYPES: readonly string[] = Object.freeze(
   DisplaySessionEventDraftSchema.members.map(

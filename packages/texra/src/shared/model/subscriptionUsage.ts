@@ -21,7 +21,7 @@ const SubscriptionUsageProviderSchema = Schema.Literals(
 export type SubscriptionUsageProvider =
   (typeof SubscriptionUsageProviderSchema)['Type'];
 
-const SubscriptionUsageWindowSchema = Schema.Struct({
+export const SubscriptionUsageWindowSchema = Schema.Struct({
   name: Schema.NonEmptyString,
   percentUsed: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).check(
     Schema.isLessThanOrEqualTo(100),

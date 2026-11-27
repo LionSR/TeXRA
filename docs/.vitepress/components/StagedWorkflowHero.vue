@@ -18,13 +18,13 @@ const stages = [
     icon: 'mortar-board',
     name: 'Research',
     purpose: 'Find papers and verify ideas',
-    agents: ['search', 'derive'],
+    agents: ['assistant', 'prove'],
   },
   {
     icon: 'pencil',
     name: 'Writing',
     purpose: 'Draft LaTeX content interactively',
-    agents: ['assistant', 'review'],
+    agents: ['assistant', 'annotate'],
   },
   {
     icon: 'sparkle',

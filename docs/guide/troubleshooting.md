@@ -1,6 +1,5 @@
 <script setup>
 import ProgressLogHero from '../.vitepress/components/ProgressLogHero.vue';
-import XmlRepairCard from '../.vitepress/components/XmlRepairCard.vue';
 import ToolPathSearchOrder from '../.vitepress/components/ToolPathSearchOrder.vue';
 import DoctorSliceHero from '../.vitepress/components/DoctorSliceHero.vue';
 </script>
@@ -168,7 +167,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 - **Check the toolchain**: Run `texra doctor` to confirm `latexmk`, `pdflatex`, `bibtex`, `biber`, `latexdiff`, and `latexindent` are found on `PATH`.
 - **Verify standalone compilation**: Make sure the original `.tex` document compiles cleanly outside of TeXRA before running a diff or extraction task.
 - **Missing LaTeX packages**: Install missing style files with `tlmgr install <pkg>` (TeX Live) or the MiKTeX Console.
-- **Diff fails to compile**: Complex custom macros or unclosed math environments can conflict with `latexdiff` markup. Format both files first (`latexindent` or `tex-fmt`), or lower **Math markup in diffs** on **Settings → LaTeX → Compile & diff**.
+- **Diff fails to compile**: Complex custom macros or unclosed math environments can conflict with `latexdiff` markup. Format both files first (`latexindent` or `tex-fmt`), or lower **Math markup in diffs** on **Settings → LaTeX → Edit previews**.
 
 ### TikZ and image processing errors
 
@@ -182,20 +181,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 - **Rate limits and quota**: Check your provider dashboard if requests fail with quota or billing errors.
 - **Large documents**: If a run times out or hits the output token limit on a long `.tex` file, split the file into per-section inputs.
 - **Slow turnaround**: Programs run multi-pass reasoning and can take 10–30 minutes on frontier reasoning models. For quick edits, pick a faster model (`google/gemini-3.8-flash`, `anthropic/claude-haiku-5-5`, `deepseek/deepseek-flash`, or `openai/gpt-6-luna`), or ask the assistant in a chat instead.
-- **Stronger reasoning**: For hard derivations, proofs, or deep manuscript reviews, use a flagship model (`anthropic/claude-fable-5-1`, `anthropic/claude-opus-5-5`, `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, or `google/gemini-4-argon`). The assistant can also start a program with a critic reviewing each revision (`args: { reflect: true }`).
-
-### Missing or truncated output files
-
-1. **Locate the run folder**:
-   - In VS Code, check **Generated files** in the Tasks view or choose **Open task folder** (<wa-icon library="texra" name="folder-open"></wa-icon>) from the task's `⋯` menu to open `executions/<run-id>/`.
-   - Each revision writes its extracted file under its input filename (e.g., `r0/draft.tex`, `r1/draft.tex`), alongside the raw model response `r0/output.xml`.
-2. **Repair malformed XML**:
-   - Programs wrap their output in `<documents><document name="...">...</document></documents>`.
-   - TeXRA closes an unclosed `<document>` tag itself and tries to recover files that have no tags. If the model hit its output token limit or the reply is malformed in another way and a file still fails to extract, open `r0/output.xml` in the run folder and repair the tags to recover the text:
-
-<XmlRepairCard />
-
-<p class="hero-caption">When a file still fails to extract, open <code>r0/output.xml</code> and repair the tags to recover the text.</p>
+- **Stronger reasoning**: For hard derivations, proofs, or deep manuscript reviews, use a flagship model (`anthropic/claude-fable-5-2`, `anthropic/claude-opus-5-5`, `openai/gpt-6.2-astra`, `openai/gpt-6.2-sol`, or `google/gemini-4-neon`). The assistant can also start a program with a critic reviewing each revision (`args: { reflect: true }`).
 
 ### High memory use in long CLI sessions
 

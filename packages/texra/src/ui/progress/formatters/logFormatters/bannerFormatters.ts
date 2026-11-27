@@ -1,6 +1,6 @@
 /**
- * Banner-style formatter for thinking and model response messages:
- * one collapsible `<wa-details>` shell driven by a per-message-type config.
+ * Formatter for the two streaming-text rows: the model's answer, which is
+ * its text alone, and its thinking, a one-line row that opens.
  * Uses Lit templates with unsafeHTML for markdown content rendering.
  */
 
@@ -13,53 +13,25 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared transcript model
 import { RESPONSE_CUT_NOTE } from '@ui/copy/responseCut';
-import type { IconName } from '@ui/wa/iconNames';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { renderMarkdownHtml } from '../markdownRenderer';
-import {
-  buildCopyButton,
-  buildDetailsCard,
-  buildMessageHeader,
-} from '../htmlBuilders';
+import { buildDetailsCard } from '../htmlBuilders';
 import type { StreamingTextRow } from '@texra-ai/worldline/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 
-type BannerConfig = {
-  iconName: IconName;
-  labelText: string;
-  copyTitle: string;
-  contentClass: string;
-  /** Whether the content also carries the entry's `message-{level}` class. */
-  levelClass: boolean;
-  /** Whether a verbose entry shows its timestamp in the summary row. */
-  showTimestamp: boolean;
-  defaultOpen: boolean;
-};
-
-// Banner configuration by streaming-text row kind
-const BANNER_CONFIG: Record<StreamingTextRow['kind'], BannerConfig> = {
+/** What differs between the two streaming-text rows' content. */
+const CONTENT = {
   thinking: {
-    iconName: 'lightbulb',
-    labelText: 'Thinking',
     copyTitle: 'Copy thinking',
-    contentClass: 'banner-content--thinking',
-    levelClass: false,
-    showTimestamp: false,
-    defaultOpen: false,
+    className: 'banner-content--thinking',
   },
   assistant: {
-    iconName: 'wand-magic-sparkles',
-    labelText: 'Assistant',
     copyTitle: 'Copy model output',
-    contentClass: 'banner-content--model',
-    levelClass: true,
-    showTimestamp: true,
-    defaultOpen: true,
+    className: 'banner-content--model',
   },
-};
+} as const satisfies Record<StreamingTextRow['kind'], object>;
 
 /**
  * Format thinking or model-response banner content as a
@@ -68,30 +40,19 @@ const BANNER_CONFIG: Record<StreamingTextRow['kind'], BannerConfig> = {
 export function formatBannerContentTemplate(
   row: StreamingTextRow,
 ): FormatResult {
-  const { timestamp, verbose, level, kind } = row;
+  const { timestamp, level, kind } = row;
   // The projector leaves no streaming row whose text paints nothing.
   const trimmedContent = row.text.full.trim();
 
-  const config = BANNER_CONFIG[kind];
-  // Formatted only for the rows that actually paint one: this runs per
-  // streaming chunk, and a thinking row never shows it.
-  const timestampInfo =
-    config.showTimestamp && verbose
-      ? formatDisplayTimestamp(new Date(timestamp))
-      : undefined;
-  // Auto-expand while streaming in, so the block is visibly "live" instead
-  // of hiding the growing text behind a closed summary row; collapses back
-  // once finalized (mirrors the "thought for Xs, tap to expand" pattern
-  // other chat UIs use for reasoning output). Model responses stay open by
-  // default once finalized.
+  const config = CONTENT[kind];
   const isRunning = row.streaming;
-  const shouldOpen = isRunning || config.defaultOpen;
-  const contentClass = config.levelClass
-    ? `${config.contentClass} message-${level}`
-    : config.contentClass;
+  // An answer also carries its entry's level class.
+  const contentClass =
+    kind === 'assistant'
+      ? `${config.className} message-${level}`
+      : config.className;
   // While still streaming in, skip the markdown parse on every chunk and
-  // show the raw text — the banner shell (icon/label/chevron) stays the
-  // same either way; only the content upgrades to rendered markdown once
+  // show the raw text; the content upgrades to rendered markdown once
   // the stream finalizes. banner-content--streaming preserves newlines
   // (raw text has no <p>/<br> tags to do it for us, unlike markdown HTML).
   // prettier-ignore
@@ -100,6 +61,7 @@ export function formatBannerContentTemplate(
     : html`<div class="banner-content markdown-content log-entry-content ${contentClass}">${unsafeHTML(renderMarkdownHtml(trimmedContent))}</div>`;
 
   if (kind === 'assistant') {
+    const time = formatDisplayTimestamp(new Date(timestamp), 'minute');
     // An answer its model ended early says so under its text.
     const cutNote =
       row.cut === undefined
@@ -107,32 +69,25 @@ export function formatBannerContentTemplate(
         : html`<div class="log-line">
             <span class="message-warn">${RESPONSE_CUT_NOTE[row.cut]}</span>
           </div>`;
-    // The transcript has one header grid for people, assistant output and errors.
-    // Keep the disclosure at the trailing edge, beside the copy action.
-    const header = buildMessageHeader({
-      icon: waIcon('wand-magic-sparkles'),
-      label: html`<span>Assistant</span>`,
-      timestamp,
-      actions: buildCopyButton(config.copyTitle, trimmedContent),
-    });
+    // An answer is its text alone: no author line and no frame. Copy and
+    // the time sit under it once it has finished, shown on hover.
     // prettier-ignore
-    return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--assistant message-disclosure" open>${header}${contentTemplate}${cutNote}</wa-details>`;
+    const meta = isRunning ? nothing : html`<div class="message-meta"><copy-button .text=${trimmedContent} .label=${config.copyTitle}></copy-button><time class="message-timestamp" datetime=${new Date(timestamp).toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time></div>`;
+    return html`<div class="assistant-message">
+      ${contentTemplate}${cutNote}${meta}
+    </div>`;
   }
 
+  // Thinking opens while it streams in, so the block is visibly live, and
+  // closes to its one line once finished.
   return buildDetailsCard({
     summary: {
-      iconName: config.iconName,
-      label: config.labelText,
-      timestamp: timestampInfo && {
-        display: `[${timestampInfo.timeDisplay}]`,
-        tooltip: timestampInfo.tooltipTimestamp,
-      },
-      copyButton: {
-        title: config.copyTitle,
-        content: trimmedContent,
-      },
+      iconName: 'lightbulb',
+      label: 'Thinking',
+      copyButton: { title: config.copyTitle, content: trimmedContent },
     },
     body: contentTemplate,
-    open: shouldOpen,
+    open: isRunning,
+    classes: { 'activity-row': true },
   });
 }

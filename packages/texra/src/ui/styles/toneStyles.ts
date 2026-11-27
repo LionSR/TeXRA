@@ -3,7 +3,12 @@ import { css, type CSSResult } from 'lit';
 /** The one colour per tone (`RunTone`): an element classed `tone-<tone>`
  *  sets `--tone-color`, which its glyph, dot or spinner paints with. */
 export const toneStyles: CSSResult = css`
-  :is(.tone-running, .tone-success) {
+  /* Work in progress is the accent, so it cannot be read as finished. */
+  .tone-running {
+    --tone-color: var(--wa-color-brand-on-quiet);
+  }
+
+  .tone-success {
     --tone-color: var(--color-success);
   }
 

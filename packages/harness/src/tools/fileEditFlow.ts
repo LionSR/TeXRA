@@ -5,7 +5,6 @@ import { Array as Arr, Effect, FileSystem, Result } from 'effect';
 import { ToolContext } from '@tools/core/ToolTypes';
 
 // Local imports - shared schemas
-import { requireFileReadForEdit } from '@agent/runtime/RunCall';
 import type { AppSignals } from '@platform/appSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
@@ -51,64 +50,38 @@ interface WritableFileTarget {
   originalContent: string;
 }
 
-type WritableTargetPreparation =
-  | { blocked: ToolResult }
-  | { target: WritableFileTarget };
-
 interface ResolveWritableTargetOptions {
   /** Load a missing file as empty content instead of reading (and failing) on
    *  it; defaults to false, so a missing file is an error. */
   allowMissing?: boolean;
 }
 
-/**
- * Resolve, read-gate, and load a workspace file for editing. Writability is
- * not asked here: the write tools declare their target as a loop-side guard,
- * so a read-only external root is already refused before this runs.
- */
+/** Resolve and load a file for editing. */
 export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
   function* (
     inputPath: string,
     options: ResolveWritableTargetOptions = {},
   ): Effect.fn.Return<
-    WritableTargetPreparation,
+    WritableFileTarget,
     Error,
     ToolContext | FileSystem.FileSystem
   > {
     const call = yield* ToolContext;
-    // The resolution answered for the call's own workspace, so its absolute
-    // form is the one the process filesystem reads — including a path under a
-    // registered external root, which the workspace facade reached the same
-    // way.
     const {
       fsPath: path,
       absolute: absolutePath,
       display: displayPath,
     } = yield* resolveToolPath(call.env, inputPath);
 
-    // Shared read-before-edit gate (lstat semantics), then the current
-    // content. The gate keys on the display path, the spelling the result's
-    // `edits` and a read's `reads` give a file.
     const fs = yield* FileSystem.FileSystem;
     const exists = yield* entryExists(fs, absolutePath);
-    const blocked = yield* requireFileReadForEdit(displayPath, exists);
-    if (blocked) {
-      return { blocked };
-    }
 
     const originalContent =
       exists || !(options.allowMissing ?? false)
         ? yield* readNormalizedFile(fs, absolutePath)
         : '';
 
-    return {
-      target: {
-        path,
-        displayPath,
-        exists,
-        originalContent,
-      },
-    };
+    return { path, displayPath, exists, originalContent };
   },
 );
 

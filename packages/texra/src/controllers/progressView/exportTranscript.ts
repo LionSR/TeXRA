@@ -113,13 +113,10 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
     return;
   }
   if (result.pdfPath) {
-    const pdfFilename = path
-      .basename(result.storagePath)
-      .replace(/\.tex$/, '.pdf');
     yield* ports.openPath(result.pdfPath, 'pdf');
     yield* ports.notify(
       'info',
-      `Transcript exported and compiled: ${pdfFilename}`,
+      `Transcript exported and compiled: ${path.basename(result.pdfPath)}`,
     );
     return;
   }

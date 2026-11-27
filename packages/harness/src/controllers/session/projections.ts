@@ -116,7 +116,7 @@ function pricedUsage(event: SessionRow): TokenUsageStats | null {
         priced = event.payload.usage;
       break;
     case 'context.edit':
-      priced = event.payload.usage;
+      if (event.payload.cause === 'compaction') priced = event.payload.usage;
       break;
     case 'run.description':
       priced = event.usage;

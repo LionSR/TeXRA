@@ -17,7 +17,7 @@ import { Schema, Struct } from 'effect';
 
 import {
   APPROVAL_BYPASS_KINDS,
-  APPROVAL_POLICY_LIMITS,
+  ApprovalPolicyLimitSchema,
   LaunchApprovalSchema,
 } from '@shared/approvalBypassKind';
 import {
@@ -66,21 +66,6 @@ export const RuntimeCommandSchema = Schema.Union([
     kind: Schema.Literal('run.model'),
     ...runScoped,
     model: Schema.NonEmptyString,
-  }),
-  /**
-   * A stopped run's directory, copied to `to` (workspace-relative) or
-   * removed, by the process that holds the run's session.
-   */
-  Schema.Struct({
-    kind: Schema.Literal('run.files'),
-    ...runScoped,
-    files: Schema.Union([
-      Schema.Struct({
-        op: Schema.Literal('copy'),
-        to: Schema.NonEmptyString,
-      }),
-      Schema.Struct({ op: Schema.Literal('remove') }),
-    ]),
   }),
   /** A message to the run. Each send queues one message: a caller that
    *  sends again sends a second one. */
@@ -149,26 +134,13 @@ export const RuntimeCommandSchema = Schema.Union([
       Schema.Struct({
         field: Schema.Literal('limit'),
         ...runScoped,
-        limit: Schema.Literals(APPROVAL_POLICY_LIMITS),
+        limit: ApprovalPolicyLimitSchema,
       }),
     ]),
   }),
 ]);
 /** One command a surface issues to its session's runtime. */
 export type RuntimeCommand = typeof RuntimeCommandSchema.Type;
-
-/** What a `run.files` did: `done` (with the copy's folder), no directory
- *  to act on, or the failure that stopped it. */
-const RunFilesResultSchema = Schema.Union([
-  Schema.Struct({
-    status: Schema.Literal('done'),
-    to: Schema.optional(Schema.String),
-  }),
-  Schema.Struct({ status: Schema.Literal('noFiles') }),
-  Schema.Struct({ status: Schema.Literal('error'), error: Schema.String }),
-]);
-/** What a `run.files` request did. */
-export type RunFilesResult = typeof RunFilesResultSchema.Type;
 
 /** What the runtime answers with: a typed value the host renders. */
 export const OutcomeSchema = Schema.Union([
@@ -184,10 +156,6 @@ export const OutcomeSchema = Schema.Union([
     kind: Schema.Literal('preview'),
     preview: Schema.NullOr(ToolEditContentSchema),
   }),
-  Schema.Struct({
-    kind: Schema.Literal('runFiles'),
-    result: RunFilesResultSchema,
-  }),
 ]);
 /** What the runtime answers a request with. */
 export type Outcome = typeof OutcomeSchema.Type;
@@ -195,7 +163,6 @@ export type Outcome = typeof OutcomeSchema.Type;
 /** The requests answered with something other than `done`, by kind. */
 const OUTCOME_KIND = {
   'run.fork': 'forked',
-  'run.files': 'runFiles',
   'followUp.send': 'followUp',
   'request.preview': 'preview',
 } as const satisfies Partial<Record<RuntimeCommand['kind'], Outcome['kind']>>;

@@ -49,9 +49,9 @@ layer(SessionGraph.hosted)('ConfigTools — update_config allowlist', (it) => {
       );
 
       // Control: an allowlisted key on the same layer is written.
-      const allowed = yield* update('texra.bib.zoteroPort', 23200);
+      const allowed = yield* update('texra.maxImageDimension', 500);
       assert.equal(allowed.status, 'executed');
-      assert.equal(roots.config.get('bib.zoteroPort'), 23200);
+      assert.equal(roots.config.get('maxImageDimension'), 500);
     }),
   );
 });
@@ -67,7 +67,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     it.effect('asks before writing, and a rejected call writes nothing', () =>
       Effect.gen(function* () {
         const project = createFakeHost({
-          config: { 'bib.zoteroPort': 23119 },
+          config: { maxImageDimension: 200 },
         });
         const session = yield* isolatedTestSession(
           createRecordingHost().interactions,
@@ -80,8 +80,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         }));
 
         const result = yield* guardedToolCall(UpdateConfigTool, {
-          key: 'texra.bib.zoteroPort',
-          value: 23200,
+          key: 'texra.maxImageDimension',
+          value: 500,
           target: 'user',
         }).pipe(
           Effect.provide(
@@ -97,10 +97,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             payload.kind === 'bash' ? payload.data.command : payload.kind,
           ),
         ).toEqual([
-          'update_config {"key":"texra.bib.zoteroPort","value":23200,"target":"user"}',
+          'update_config {"key":"texra.maxImageDimension","value":500,"target":"user"}',
         ]);
         expect(result.status).toBe('error');
-        expect(project.roots.config.get('bib.zoteroPort')).toBe(23119);
+        expect(project.roots.config.get('maxImageDimension')).toBe(200);
       }),
     );
   },

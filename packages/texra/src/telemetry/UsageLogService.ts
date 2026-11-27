@@ -482,11 +482,10 @@ export const usageLogLayer = (
         }
       });
 
-      const backoff = Schedule.exponential(FLUSH_INTERVAL).pipe(
-        Schedule.modifyDelay(({ duration }) =>
-          Effect.succeed(Duration.min(duration, MAX_RETRY_DELAY)),
-        ),
-      );
+      const backoff = Schedule.min([
+        Schedule.exponential(FLUSH_INTERVAL),
+        Schedule.spaced(MAX_RETRY_DELAY),
+      ]);
 
       /**
        * A flush nobody awaits: the periodic one and the batch-size trigger. An

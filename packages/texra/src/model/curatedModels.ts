@@ -34,21 +34,30 @@ export const CURATED_MODELS: readonly string[] = Object.freeze([
   // The picker / new-chat default leads. Do not lead with Gemini — GPT is the
   // quality default.
   DEFAULT_AGENT_MODEL,
-  'openai/gpt-5.6-terra',
+  'openai/gpt-6.2-sol',
+  'openai/gpt-6.2-astra',
+  'openai/gpt-6.1-terra',
   'openai/gpt-6-luna',
   'anthropic/claude-sonnet-5-5',
   'anthropic/claude-opus-5-5',
-  'anthropic/claude-fable-5-1',
-  'google/gemini-4-argon',
+  'anthropic/claude-fable-5-2',
+  'anthropic/claude-haiku-5-5',
+  'google/gemini-4-neon',
+  'google/gemini-4-carbon',
+  'google/gemini-4-hydrogen',
   'google/gemini-3.8-flash',
-  'google/gemini-3.1-pro-preview',
 
   'deepseek/deepseek-flash',
   'deepseek/deepseek-v4-pro',
+  'moonshot/kimi-k3.1-pro',
   'moonshot/kimi-k3',
+  'dashscope/qwen4-max',
+  'minimax/MiniMax-M3',
+  'minimax/MiniMax-M3.1-Flash',
   // Current non-retired GLM flagships.
   'glm/glm-5.3',
   // Current non-retired xAI flagship — API key or experimental Grok OAuth.
   'xai/grok-4.7',
+  'meta/muse-wonder-1.0',
   'meta/muse-spark-1.3',
 ]);

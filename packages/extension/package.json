@@ -221,7 +221,7 @@
           {
             "id": "texra.gettingStarted.setupAssistant",
             "title": "Run the Setup Assistant",
-            "description": "Checks your LaTeX tools, helps install anything missing, and runs a quick test edit with diff preview. Asks before every command.\n\n[Run Setup Assistant](command:texra.walkthroughWorkspaceAction?%5B%22texra.runSetupAssistant%22%5D)",
+            "description": "Checks your LaTeX tools, helps install anything missing, and runs a quick test edit with diff preview.\n\n[Run Setup Assistant](command:texra.walkthroughWorkspaceAction?%5B%22texra.runSetupAssistant%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
               "altText": "Screenshot of a TeXRA task"

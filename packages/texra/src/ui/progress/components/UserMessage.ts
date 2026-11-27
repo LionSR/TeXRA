@@ -1,39 +1,38 @@
 /**
  * UserMessage component for displaying user input messages.
  *
- * Renders a message disclosure with persistent timestamp and copy actions.
+ * Renders the message as a bubble at the trailing edge, with its time and
+ * its copy and fork actions on the line under it.
  */
 
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
-import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared styles
+import './CopyButton';
 import { designTokens } from '@ui/styles';
 import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
 import { markdownStyles } from '@ui/styles/markdownStyles';
-import { panelFrameStyles } from '@ui/styles/surfaceStyles';
 import {
   messageHeaderStyles,
-  messageDisclosureStyles,
+  messageMetaStyles,
 } from '@ui/styles/messageHeaderStyles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 // Local imports - formatter helpers
 import { renderMarkdownHtml } from '../formatters/markdownRenderer';
-import {
-  buildCopyButton,
-  buildMessageHeader,
-} from '../formatters/htmlBuilders';
+import { formatDisplayTimestamp } from '../formatters/timestampUtils';
 import type {
   ScriptDeliverySummary,
   StoredMediaSchema,
@@ -48,13 +47,17 @@ export interface ForkFromHere {
 }
 const FORK_FROM_HERE = 'fork-from-here';
 
+/** A message long enough that the transcript shows its first lines only. */
+const isLong = (text: string): boolean =>
+  text.length > 600 || text.split('\n', 9).length > 8;
+
 @customElement('user-message')
 export class UserMessage extends LitElement {
   static override styles = [
     designTokens,
     buttonStyles,
     messageHeaderStyles,
-    messageDisclosureStyles,
+    messageMetaStyles,
     // The only markdownStyles consumer that does not compose commonViewStyles,
     // so it is also the only one that would not inherit the shared focus ring.
     // A user message can contain \ref{}/\cref{}, which render as focusable
@@ -66,20 +69,22 @@ export class UserMessage extends LitElement {
         display: block;
       }
 
-      .user-message-container {
-        display: flex;
-        /* One trailing gap. Leading space belongs to the transcript, so
-           margins cannot double across a custom-element boundary. */
-        margin: 0 0 var(--message-gap);
-      }
-
+      /* A person's message is a bubble at the trailing edge, so the two
+         sides of the conversation differ by position and no author line is
+         needed. The line under it is its trailing gap. */
       .user-message {
-        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
       }
 
-      .user-message::part(base) {
-        ${panelFrameStyles}
-        border-color: transparent;
+      .user-message-bubble {
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 80%;
+        padding: var(--panel-padding-block) var(--panel-padding-inline);
+        border: var(--border-thin) solid transparent;
+        border-radius: var(--panel-radius);
         background: var(--wa-color-surface-raised);
       }
 
@@ -98,21 +103,31 @@ export class UserMessage extends LitElement {
         font-size: var(--font-size-reading);
       }
 
+      /* A long message shows its first lines, fading out, until opened. */
+      .user-message-content.is-folded {
+        max-height: 11lh;
+        overflow: hidden;
+        mask-image: linear-gradient(to bottom, #000 calc(100% - 2lh), #0000);
+      }
+
+      /* A script's delivery is a document, not a line of chat: full width. */
+      .user-message--structured-delivery > .user-message-bubble {
+        width: 100%;
+        max-width: none;
+      }
+
       .user-message--structured-delivery .user-message-content {
         max-height: min(45vh, 520px);
         overflow: auto;
-        padding: var(--wa-space-xs);
-        background: var(--color-bg-secondary);
-        border-radius: var(--border-radius-medium);
         font-size: var(--font-size-sm);
         line-height: var(--line-height-normal);
         white-space: normal;
       }
 
-      /* Host contrast colors keep the message frame visible in both
+      /* Host contrast colors keep the bubble visible in both
          high-contrast themes. */
-      :host-context(.vscode-high-contrast) .user-message::part(base),
-      :host-context(.vscode-high-contrast-light) .user-message::part(base) {
+      :host-context(.vscode-high-contrast) .user-message-bubble,
+      :host-context(.vscode-high-contrast-light) .user-message-bubble {
         background-color: var(--wa-color-surface-default);
         border-color: var(--vscode-contrastBorder, var(--color-border));
       }
@@ -141,6 +156,9 @@ export class UserMessage extends LitElement {
    *  here" carries with its text. */
   @property({ attribute: false })
   media: readonly (typeof StoredMediaSchema.Type)[] = [];
+
+  /** Whether a long message shows all of its text. */
+  @state() private expanded = false;
 
   /** A delivery's rendered Markdown, by its text: message text is immutable
    *  after creation, so the parse must not rerun on every render. */
@@ -172,49 +190,24 @@ export class UserMessage extends LitElement {
   }
 
   override render(): TemplateResult {
+    const messageDate = new Date(this.timestamp);
+    const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
+      messageDate,
+      'minute',
+    );
     const isStructuredDelivery = this.scriptSummary !== null;
 
+    const folds = !isStructuredDelivery && isLong(this.text);
+    const folded = folds && !this.expanded;
+
     return html`
-      <div class="user-message-container">
-        <wa-details
-          appearance="plain"
-          icon-placement="end"
-          open
-          aria-label="User message"
-          class=${classMap({
-            'user-message': true,
-            'message-disclosure': true,
-            'user-message--structured-delivery': isStructuredDelivery,
-          })}
-        >
-          ${buildMessageHeader({
-            icon: waIcon('user'),
-            label: html`<span>You</span>`,
-            timestamp: this.timestamp,
-            // A click or key on an action must not toggle the disclosure.
-            actions: html`<span
-              class="message-actions"
-              @click=${(event: MouseEvent) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-              @keydown=${(event: KeyboardEvent) => event.stopPropagation()}
-            >
-              ${buildCopyButton('Copy message', this.text)}
-              ${
-                this.forkAt !== null && !isStructuredDelivery
-                  ? renderIconActionButton({
-                      id: 'user-message-fork-button',
-                      icon: 'code-branch',
-                      label: TASK_ACTIONS.forkFromHere,
-                      tooltip: TASK_ACTIONS.forkFromHere,
-                      className: 'user-message-fork',
-                      onClick: () => this.forkFromHere(),
-                    })
-                  : nothing
-              }
-            </span>`,
-          })}
+      <div
+        class=${classMap({
+          'user-message': true,
+          'user-message--structured-delivery': isStructuredDelivery,
+        })}
+      >
+        <div class="user-message-bubble" role="group" aria-label="User message">
           ${
             isStructuredDelivery
               ? html`<div
@@ -229,11 +222,52 @@ export class UserMessage extends LitElement {
                   }
                 </div>`
               : html`<div
-                  class="user-message-content"
+                  class=${classMap({
+                    'user-message-content': true,
+                    'is-folded': folded,
+                  })}
                   .textContent=${this.text}
                 ></div>`
           }
-        </wa-details>
+          ${
+            folds
+              ? renderLabeledActionButton({
+                  text: folded ? 'Show full message' : 'Show less',
+                  kind: 'link',
+                  onClick: () => {
+                    this.expanded = !this.expanded;
+                  },
+                })
+              : nothing
+          }
+        </div>
+        <div class="message-meta">
+          <time
+            id="user-message-timestamp"
+            class="message-timestamp"
+            datetime=${messageDate.toISOString()}
+            >${timeDisplay}</time
+          >
+          <wa-tooltip for="user-message-timestamp"
+            >${tooltipTimestamp}</wa-tooltip
+          >
+          <copy-button
+            .text=${this.text}
+            .label=${'Copy message'}
+          ></copy-button>
+          ${
+            this.forkAt !== null && !isStructuredDelivery
+              ? renderIconActionButton({
+                  id: 'user-message-fork-button',
+                  icon: 'code-branch',
+                  label: TASK_ACTIONS.forkFromHere,
+                  tooltip: TASK_ACTIONS.forkFromHere,
+                  className: 'user-message-fork',
+                  onClick: () => this.forkFromHere(),
+                })
+              : nothing
+          }
+        </div>
       </div>
     `;
   }

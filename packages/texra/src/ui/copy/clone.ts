@@ -20,8 +20,41 @@ export function cloneProviderLabel(
   return remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
 }
 
-/** The outcome lines every host shows word for word. */
+/** What a token for `remote` looks like and where to make one; a
+ *  ShareLaTeX host's tokens follow no rule this app knows. */
+const tokenHint = (
+  remote: Pick<OverleafRemote, 'isOverleaf'>,
+): string | undefined =>
+  remote.isOverleaf
+    ? 'Overleaf tokens start with olp_. Generate one at Account Settings → Git Integration.'
+    : undefined;
+
+/** The token prompt and the outcome lines every host shows word for word. */
 export const CLONE_COPY = Object.freeze({
+  /** What the token prompt asks for. */
+  tokenTitle: (remote: Pick<OverleafRemote, 'isOverleaf' | 'host'>): string =>
+    remote.isOverleaf
+      ? 'Overleaf Git Token'
+      : `ShareLaTeX Token (${remote.host})`,
+  /** The line under the prompt's title. */
+  tokenPrompt: (remote: Pick<OverleafRemote, 'isOverleaf'>): string =>
+    tokenHint(remote) ?? 'Enter your Git authentication token.',
+  /** Where a token comes from, with its pages spelled out for a host
+   *  that has no buttons; undefined where the app knows no such page. */
+  tokenGuidance: (
+    remote: Pick<OverleafRemote, 'isOverleaf'>,
+  ): string | undefined =>
+    remote.isOverleaf
+      ? `${tokenHint(remote)} Create or copy a token at ${OVERLEAF_GIT_TOKEN_URL}. Instructions: ${OVERLEAF_TOKEN_DOCS_URL}`
+      : undefined,
+  /** The project named is no URL or id this app can clone. */
+  invalidProject:
+    'Invalid Overleaf/ShareLaTeX project: expected a project URL, a git URL or a 24-character project ID.',
+  /** `InvalidToken`. */
+  invalidToken: (remote: Pick<OverleafRemote, 'isOverleaf'>): string =>
+    ['Invalid token format.', tokenHint(remote)]
+      .filter((part) => part !== undefined)
+      .join(' '),
   /** `Cloned`. */
   cloned: (
     remote: Pick<OverleafRemote, 'isOverleaf'>,
@@ -93,7 +126,7 @@ export function overleafCloneNotice(
     case 'InvalidToken':
       // The token guide is Overleaf's; a ShareLaTeX host has its own.
       return error(
-        outcome.message,
+        CLONE_COPY.invalidToken(remote),
         remote.isOverleaf ? [TOKEN_GUIDE_LINK] : [],
       );
     case 'GitMissing':
