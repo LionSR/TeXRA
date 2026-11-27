@@ -13,6 +13,7 @@ import {
 import {
   RUN_OUTCOME,
   type RunId,
+  type AgentConfig,
   type AgentConfigPayload,
   generateRunId,
   ensureError,
@@ -24,7 +25,6 @@ import {
   RunFailure,
   type Run,
   type Session,
-  type StartInput,
 } from '@texra-ai/worldline';
 import {
   presentRunFailure,
@@ -55,12 +55,6 @@ import {
   type CliInvocation,
 } from '../platform/cliContext';
 import type { LocalSession, SessionOpenError } from '@texra-ai/worldline';
-
-/** What a headless run starts: a host's whole configuration (the
- *  `StartInput` case a host launches with), under the id the CLI minted. */
-type CliRunRequest = Required<
-  Pick<Extract<StartInput, { readonly config: unknown }>, 'config' | 'runId'>
->;
 
 export interface CliExecuteOptions {
   /** The `CliPlatform` services the run uses, from the command that
@@ -99,7 +93,8 @@ type CliConfigExecuteResult =
  *  long: neither is `interactive`. */
 function launchOn(
   session: Session,
-  request: CliRunRequest,
+  launchConfig: AgentConfig,
+  runId: RunId,
   runContext: CliContext,
   options: CliExecuteOptions,
 ): Effect.Effect<Run, Error> {
@@ -112,8 +107,8 @@ function launchOn(
         ),
       );
   return session.start({
-    config: request.config,
-    runId: request.runId,
+    config: launchConfig,
+    runId,
     approval: launchApproval(runContext.requestedApprovalPolicy),
   });
 }
@@ -156,10 +151,8 @@ export const executeCliConfig: (
     }
     // The run id is decided before launch, so a shutdown that cuts the
     // launch can still name the run it leaves behind.
-    const request: CliRunRequest = {
-      config: parsed.success,
-      runId: options.runId ?? generateRunId(),
-    };
+    const launchConfig = parsed.success;
+    const runId = options.runId ?? generateRunId();
     const session = yield* options.services.session;
     const plugins = yield* readCliPluginPins(session.roots);
     // The run follows the project's setting, read at each decision, with
@@ -176,7 +169,7 @@ export const executeCliConfig: (
     const renderPlainProgress =
       runContext.outputFormat === 'text' && shouldRenderRunProgress(runContext);
     yield* presentationHost
-      .attachRunProgressRenderer(session, request.runId)
+      .attachRunProgressRenderer(session, runId)
       .pipe(Scope.provide(presentationScope));
     const host = yield* createHeadlessCliHostInteractions(session, {
       prompting: () => presentationHost.holdForPrompt(),
@@ -216,12 +209,11 @@ export const executeCliConfig: (
     }
     if (renderPlainProgress) {
       yield* attachScriptPlainOutput(session, {
-        runId: request.runId,
+        runId,
         beforeWrite: () => presentationHost.prepareInteractivePrompt(),
         writeLine: writeTextStderr,
       }).pipe(Scope.provide(presentationScope));
     }
-    const launchRunId = request.runId;
     // A shutdown step that fails changes what the exit waits for, so it is
     // said on stderr unless the user passed `--quiet`.
     const sayShutdownFailure = (
@@ -240,7 +232,7 @@ export const executeCliConfig: (
      *  left as its rows stand. */
     const launched = yield* Effect.forkChild(
       Effect.suspend(() =>
-        launchOn(session, request, runContext, options),
+        launchOn(session, launchConfig, runId, runContext, options),
       ).pipe(
         Effect.flatMap((run) =>
           // The run's whole result, built once: what the command emits.
@@ -284,7 +276,7 @@ export const executeCliConfig: (
           orElse: () =>
             sayShutdownFailure(
               `Task did not finish stopping within ${Duration.format(Duration.millis(SESSION_CLOSE_DEADLINE_MS))}`,
-              `saved progress for ${launchRunId} is intact; check \`${runContext.commandName} history show ${launchRunId}\` to see if it can be resumed`,
+              `saved progress for ${runId} is intact; check \`${runContext.commandName} history show ${runId}\` to see if it can be resumed`,
             ),
         }),
         Effect.catchCause((cause) =>
@@ -296,9 +288,7 @@ export const executeCliConfig: (
       ),
     );
 
-    let runResult:
-      | { readonly ok: true; readonly result: CliRunResult }
-      | { readonly ok: false } = { ok: false };
+    let runResult: CliRunResult | undefined;
     let primaryRunFailure: { readonly error: unknown } | undefined;
     let refusal: CliUsageError | undefined;
     const exit = yield* Fiber.await(launched);
@@ -307,7 +297,7 @@ export const executeCliConfig: (
     const interrupted =
       shutdown && Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause);
     if (Exit.isSuccess(exit)) {
-      runResult = { ok: true as const, result: exit.value };
+      runResult = exit.value;
     } else if (!interrupted) {
       const failure = Cause.squash(exit.cause);
       // The session words a launch's failure as a `RunFailure` (what it
@@ -347,13 +337,13 @@ export const executeCliConfig: (
         if (
           interrupted &&
           options.recoveryInputIsDurable &&
-          (yield* session.records(launchRunId).readContinues)
+          (yield* session.records(runId).readContinues)
         )
           yield* writeTextStderrAndWait(
             formatInterruptedResumeHint(
               runContext,
-              launchRunId,
-              programOf(request.config) === null ? 'session' : 'program',
+              runId,
+              programOf(launchConfig) === null ? 'session' : 'program',
               config.workingDirectory || runContext.cwd,
               recoveryProcessCwd,
             ),
@@ -381,7 +371,7 @@ export const executeCliConfig: (
     }
     if (primaryRunFailure) return yield* Effect.die(primaryRunFailure.error);
     if (refusal) return yield* refusal;
-    if (!runResult.ok) {
+    if (runResult === undefined) {
       return {
         ok: false as const,
         exitCode: interrupted
@@ -391,8 +381,9 @@ export const executeCliConfig: (
     }
 
     return {
-      ...runResult,
-      exitCode: runOutcomeExitCode(runResult.result.outcome),
+      ok: true as const,
+      result: runResult,
+      exitCode: runOutcomeExitCode(runResult.outcome),
     };
   },
   Effect.scoped,
