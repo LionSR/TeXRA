@@ -36,8 +36,9 @@ have wrongly deleted `commandManifest.ts`, read by
 `scripts/sync-package-contributes.mjs`).
 
 The tree is tight: 27 of 4,235 exports (0.6 %) had no external reader, and only
-three were a whole dead module. Two of the dead declarations and one dead module
-trace directly to #15229's deletion.
+two were a whole dead module (`editedFileMatch.ts`, `Pagination.ts`). The two
+dead declarations — `copyDereferenced` and `PENDING_BOX` — trace directly to
+#15229's deletion.
 
 ## Landed with this note
 
