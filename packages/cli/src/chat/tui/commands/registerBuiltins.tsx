@@ -98,7 +98,6 @@ export function builtinSlashCommands(options: {
                   ? Effect.void
                   : revokeCliRunGrant(context.runSession, runId, value);
               case 'ask':
-              case 'never':
               case 'yolo':
                 return applyCliApprovalPolicySelection(value, context);
               default:

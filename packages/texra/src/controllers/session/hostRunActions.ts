@@ -67,8 +67,7 @@ export interface HostRunActions {
    * is started; it decodes nothing itself. A failure before the run opens is
    * logged and presented here, once, and fails with the launch's own error,
    * which the caller does not present again (a request answers `Cancelled`);
-   * the launched run is the window's to show (`launched`), and its final
-   * output opens when it ends.
+   * the launched run is the window's to show (`launched`).
    */
   runValidated(
     config: AgentConfig,
@@ -91,7 +90,7 @@ export const createHostRunActions = Effect.fn(
 )(function* (
   ports: HostRunActionPorts,
 ): Effect.fn.Return<HostRunActions, never, Scope.Scope> {
-  // What an action does when its run ends lives as long as the window.
+  // A launch's reveal outlives its request and lives as long as the window.
   const scope = yield* Scope.Scope;
   const { session } = ports;
   const view = () => session.view.current();
@@ -99,7 +98,7 @@ export const createHostRunActions = Effect.fn(
   /** The run's `actions` must still hold `action` as the request is
    *  handled, not only as it was rendered; a run the view no longer holds
    *  is left to the action's own read. A second Resume joins the first in
-   *  the session; a pack or clean is held by the session (`run.files`). */
+   *  the session. */
   const requireAction = (
     runId: RunId,
     action: RunAction,
@@ -130,9 +129,8 @@ export const createHostRunActions = Effect.fn(
    * before its run opens has no row to show it, so it is logged and shown
    * here, once, by the notice it carries; a request refusal (a resume the
    * run does not take) is the surface's to word, so it passes through. The
-   * launched run is the window's (`launched`), and what follows its end is
-   * forked into the window's scope. The failure still fails the action,
-   * which no caller presents again.
+   * launched run is the window's (`launched`). The failure still fails the
+   * action, which no caller presents again.
    */
   const launch = <E>(
     start: Effect.Effect<Run, E, ProcessServices>,

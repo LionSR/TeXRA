@@ -1,7 +1,6 @@
 /**
- * Shared LaTeX content parsing utilities: comment stripping, bibliography
- * directive matching, and the path resolution the LaTeX dependency
- * extractors share.
+ * LaTeX content parsing: comment stripping, and the packages and class a
+ * document loads.
  */
 
 import { Effect, FileSystem } from 'effect';
@@ -39,37 +38,21 @@ export const readUncommentedLatex = Effect.fn('latex.readUncommentedLatex')(
   },
 );
 
-/**
- * Match `pattern` (global, with one capture group: both callers pass a
- * module constant) against `content` and split each match's group on
- * commas, trimming and de-duplicating the resulting tokens (empty entries
- * are skipped). `transform` maps each trimmed token before adding it to the
- * result set, so callers can resolve tokens to paths or leave them as plain
- * keys.
- */
-function collectCommaSeparatedMatches(
-  content: string,
-  pattern: RegExp,
-  transform: (token: string) => string = (token) => token,
-): string[] {
-  const tokens = new Set<string>();
-  for (const match of content.matchAll(pattern)) {
-    for (const raw of match[1].split(',')) {
-      const trimmed = raw.trim();
-      if (!trimmed) continue;
-      tokens.add(transform(trimmed));
-    }
-  }
-  return [...tokens];
-}
-
 const USEPACKAGE_PATTERN =
   /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
 
 /** The packages `\usepackage` and `\RequirePackage` load in `content`,
- *  whatever options they take. */
+ *  whatever options they take: each comma-separated name once, trimmed,
+ *  empty entries skipped. */
 export function loadedPackages(content: string): string[] {
-  return collectCommaSeparatedMatches(content, USEPACKAGE_PATTERN);
+  const names = new Set<string>();
+  for (const match of content.matchAll(USEPACKAGE_PATTERN)) {
+    for (const raw of match[1].split(',')) {
+      const trimmed = raw.trim();
+      if (trimmed) names.add(trimmed);
+    }
+  }
+  return [...names];
 }
 
 const DOCUMENTCLASS_PATTERN = /\\documentclass\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/;

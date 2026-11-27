@@ -35,7 +35,6 @@ import {
 } from '@texra-ai/worldline/plugins';
 import {
   effectiveApprovalPolicy,
-  launchApprovalNotice,
   projectApprovalPolicy,
   type CliContext,
 } from '@cli/runtime/platform/cliContext';
@@ -162,11 +161,6 @@ export async function runChat(
       // This chat's requests are decided under the project's persisted
       // policy, here or in the service; what this invocation asked for rides
       // each launch (`launchApproval`).
-      const refused = launchApprovalNotice(
-        context.requestedApprovalPolicy,
-        projectApprovalPolicy(services.roots.config),
-      );
-      if (refused !== undefined) startupNotices.push(refused);
       if (Result.isFailure(service)) {
         // A store this process moved aside at open is said in the
         // transcript, not on stderr before Ink mounts, where it would sit
@@ -289,8 +283,6 @@ export async function runChat(
   // a stricter policy lowers a live run's limit at once, even below the
   // project's.
   const setApprovalPolicy = (policy: ApprovalPolicy): Effect.Effect<void> => {
-    // What the chat asked for, not the effective policy: a yolo under a
-    // Block project left a grant that a later Ask project would honour.
     const leaving = chatPolicy === 'yolo' && policy !== 'yolo';
     chatPolicy = policy;
     patchSessionMeta({ approvalPolicy: getApprovalPolicy() });

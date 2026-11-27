@@ -366,10 +366,8 @@ export const agentEditsAtBoundary = Effect.fn('compaction.agentEdits')(
             aggregateId: input.runId,
             payload: {
               cause: 'edit',
-              trigger: null,
               range: { from, to },
               messages: [agentReplacement(text)],
-              usage: null,
             },
           },
         ]);

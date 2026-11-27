@@ -19,8 +19,7 @@ interface LaunchRoots {
 /**
  * The run option an Auto-approve launch adds: its run starts with every
  * bypass on, the same state the run header's switches write, so the header
- * shows it and the user can take it back mid-run. Block still denies: the
- * policy is decided before any bypass.
+ * shows it and the user can take it back mid-run.
  */
 export function launchApprovalOptions({
   launch,

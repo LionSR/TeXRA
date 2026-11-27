@@ -35,7 +35,7 @@ The assistant can create new TikZ figures from a description, refine existing di
 ### Creating new figures
 
 1. Open a new task in the TeXRA panel.
-2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>). `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`, and `google/gemini-4-argon` are good choices for complex drawings.
+2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>). `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5`, `openai/gpt-6.2-sol`, and `google/gemini-4-neon` are good choices for complex drawings.
 3. Describe the figure you want in detail.
 4. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 

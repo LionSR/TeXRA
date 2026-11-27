@@ -18,7 +18,7 @@ import {
   formatApprovalPolicy,
 } from '@ui/copy/approvalPolicy';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
-import { launchPolicy, type ApprovalPolicy } from '@texra-ai/worldline/schemas';
+import type { ApprovalPolicy } from '@texra-ai/worldline/schemas';
 
 export interface ChipMenu {
   readonly id: string;
@@ -84,10 +84,8 @@ function approvalMenu(
     openSettings(target: SettingsTarget): void;
   },
 ): ChipMenu {
-  // The task's own Auto-approve, unless the project's Block still wins.
-  const overridden =
-    launch.approval === 'autoApprove' &&
-    launchPolicy(policy, 'autoApprove') !== 'never';
+  // The task's own Auto-approve.
+  const overridden = launch.approval === 'autoApprove';
   const policyLabel = approvalPolicyLabel(policy);
   const policyDescription = formatApprovalPolicy(policy);
   return {
@@ -112,16 +110,9 @@ function approvalMenu(
         value="approval:autoApprove"
         type="checkbox"
         .checked=${live(overridden)}
-        ?disabled=${policy === 'never'}
         ><span class="menu-choice"
           ><span>${TASK_APPROVAL.autoApprove.menuLabel}</span>
-          <small
-            >${
-              policy === 'never'
-                ? TASK_APPROVAL.autoApprove.blocked
-                : TASK_APPROVAL.autoApprove.menuDescription
-            }</small
-          ></span
+          <small>${TASK_APPROVAL.autoApprove.menuDescription}</small></span
         ></wa-dropdown-item
       >
       <wa-dropdown-item value="settings:general"
@@ -130,7 +121,6 @@ function approvalMenu(
     `,
     onSelect: (value) => {
       if (value === 'approval:policy' || value === 'approval:autoApprove') {
-        if (value === 'approval:autoApprove' && policy === 'never') return;
         actions.setLaunch({
           approval: value === 'approval:policy' ? 'policy' : 'autoApprove',
         });

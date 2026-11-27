@@ -17,7 +17,7 @@ import { Schema, Struct } from 'effect';
 
 import {
   APPROVAL_BYPASS_KINDS,
-  APPROVAL_POLICY_LIMITS,
+  ApprovalPolicyLimitSchema,
   LaunchApprovalSchema,
 } from '@shared/approvalBypassKind';
 import {
@@ -134,7 +134,7 @@ export const RuntimeCommandSchema = Schema.Union([
       Schema.Struct({
         field: Schema.Literal('limit'),
         ...runScoped,
-        limit: Schema.Literals(APPROVAL_POLICY_LIMITS),
+        limit: ApprovalPolicyLimitSchema,
       }),
     ]),
   }),

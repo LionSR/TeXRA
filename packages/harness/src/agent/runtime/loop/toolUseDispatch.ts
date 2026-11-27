@@ -476,7 +476,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
             env: {
               roots,
               workingDirectory: run.workingDirectory,
-              stepRoots: step.stepRoots,
               run: runCall.run,
             },
             requests,

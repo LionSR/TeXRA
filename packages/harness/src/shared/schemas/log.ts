@@ -1,5 +1,4 @@
 import { Schema } from 'effect';
-import { NonNegativeIntSchema } from './nonNegativeInt';
 
 export const LOG_LEVELS = {
   ERROR: 'error',

@@ -127,7 +127,7 @@ export interface ChatSessionController {
    */
   resume(id: RunId): Effect.Effect<void, Error, ProcessServices>;
 
-  /** Resume a task beside the chat (a document task, `/resume all`'s
+  /** Resume a task beside the chat (a program run, `/resume all`'s
    *  interrupted ones): it joins the agent list, and the chat keeps its own
    *  conversation. A failed launch is shown here; a refusal is the
    *  caller's to word. */
@@ -468,7 +468,7 @@ export function createChatSessionController(
             yield* endWithout(CliExitCode.Usage);
             return;
           }
-          // A document task takes no chat: it resumes beside this one, as
+          // A program run takes no chat: it resumes beside this one, as
           // `/resume all` resumes it, and joins the agent list.
           if (programOf(config) !== null) {
             appendLocalNotice(`Resuming program run ${id}. Tab lists it.`);

@@ -93,7 +93,6 @@ export { ReasoningEffortSchema } from 'llm-zoo/schemas';
 // Credentials and the provider manifest over llm-zoo.
 export {
   CredentialOriginSchema,
-  resolveCredential,
   SecretsFailed,
 } from './providers/credentials.js';
 export type {

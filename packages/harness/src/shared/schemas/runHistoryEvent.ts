@@ -263,53 +263,58 @@ export const ModelMessagePayloadSchema = Schema.Union([
 
 /* ----------------------------------------------------------- context.edit */
 
+/** The messages `[from, to)` of the history an edit applies to. */
+const EditRangeSchema = Schema.Struct({
+  from: NonNegativeIntSchema,
+  to: NonNegativeIntSchema,
+}).check(
+  Schema.makeFilter(({ from, to }) => from <= to, {
+    message: 'An edit range ends before it starts.',
+  }),
+);
+
 /**
  * The one row that edits the model's view of the run other than by
- * appending: the messages in `range` (`[from, to)` of the history it
- * applies to) are replaced by `messages`. An edit drops the provider-side
- * continuation, which was over the old view, and the offered system text.
- * Its `cause` is what replaced the range: a summary by a model call
- * (`compaction`), the agent's own text through its `context` tool
- * (`edit`), or a fork's seed (`fork`). `trigger` says what asked for a
- * compaction: the threshold (`context-limit`), the user's `/compact`
- * (`user`), or a request the model's window could not hold (`overflow`);
- * null for the other causes. A fork's seed carries the source's `input`
- * with its messages. `usage` is a summary call's priced usage, applied as a
- * response's (`null` when no model was called). Compaction and the agent's
- * edits (`run/compaction.ts`), on the run's own fiber at a request
- * boundary, and the fork seed (`forkRun.ts`), a run's first row, write it,
- * so an edit always applies to the view it was computed from. Whether the result is
- * preparable is the run history's check, at write and cold load: a payload
- * cannot see the history it edits.
+ * appending. An edit drops the provider-side continuation, which was over
+ * the old view, and the offered system text. Its `cause` is what replaced
+ * the view:
+ *
+ * - `compaction`: a summary by a model call replaces `range`. `trigger`
+ *   says what asked for it: the threshold (`context-limit`), the user's
+ *   `/compact` (`user`), or a request the model's window could not hold
+ *   (`overflow`). `usage` is the summary call's priced usage, applied as a
+ *   response's (`null` when the call reported none).
+ * - `edit`: the agent's own text, through its `context` tool, replaces
+ *   `range`.
+ * - `fork`: a fork's seed, its run's first view, replaces nothing; it
+ *   carries the source's `input` with its messages.
+ *
+ * Compaction and the agent's edits (`run/compaction.ts`), on the run's own
+ * fiber at a request boundary, and the fork seed (`forkRun.ts`), a run's
+ * first row, write it, so an edit always applies to the view it was
+ * computed from. Whether the result is preparable is the run history's
+ * check, at write and cold load: a payload cannot see the history it
+ * edits.
  */
-export const ContextEditPayloadSchema = Schema.Struct({
-  cause: Schema.Literals(['compaction', 'edit', 'fork']),
-  trigger: Schema.NullOr(
-    Schema.Literals(['context-limit', 'user', 'overflow']),
-  ),
-  range: Schema.Struct({
-    from: NonNegativeIntSchema,
-    to: NonNegativeIntSchema,
+export const ContextEditPayloadSchema = Schema.Union([
+  Schema.Struct({
+    cause: Schema.Literal('compaction'),
+    trigger: Schema.Literals(['context-limit', 'user', 'overflow']),
+    range: EditRangeSchema,
+    messages: Schema.Array(StoredMessageSchema),
+    usage: Schema.NullOr(NormalizedUsageSchema),
   }),
-  messages: Schema.Array(StoredMessageSchema),
-  usage: Schema.NullOr(NormalizedUsageSchema),
-  input: Schema.optional(RunInputSchema),
-})
-  .check(
-    Schema.makeFilter(({ range }) => range.from <= range.to, {
-      path: ['range'],
-      message: 'An edit range ends before it starts.',
-    }),
-  )
-  .check(
-    Schema.makeFilter(
-      ({ cause, trigger }) => (cause === 'compaction') === (trigger !== null),
-      {
-        path: ['trigger'],
-        message: 'A compaction names its trigger, and no other cause has one.',
-      },
-    ),
-  );
+  Schema.Struct({
+    cause: Schema.Literal('edit'),
+    range: EditRangeSchema,
+    messages: Schema.Array(StoredMessageSchema),
+  }),
+  Schema.Struct({
+    cause: Schema.Literal('fork'),
+    messages: Schema.Array(StoredMessageSchema),
+    input: RunInputSchema,
+  }),
+]);
 
 /** The tool an agent reads and edits its own context with. */
 export const CONTEXT_TOOL_NAME = 'context';

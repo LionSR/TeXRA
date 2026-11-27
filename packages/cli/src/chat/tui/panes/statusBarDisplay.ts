@@ -42,10 +42,6 @@ import {
 } from '@ui/copy/subscriptionUsage';
 import { RUN_GRANT_TONE, runStatus, type RunTone } from '@ui/copy/runStatus';
 import {
-  approvalPolicyLabel,
-  approvalPolicyTone,
-} from '@ui/copy/approvalPolicy';
-import {
   AGENT_LIST,
   NESTED_AGENT,
   nestedCountsCompact,
@@ -321,7 +317,6 @@ const STATUS_BAR_PRIORITY = {
   activeSubagent: 20,
   usage: 40,
   queuedFollowUp: 50,
-  approvalPolicy: 55,
   approvalDepth: 60,
   rootActive: 65,
   subscriptionQuota: 67,
@@ -520,22 +515,6 @@ function childListBindingsText(
   });
 }
 
-function approvalPolicySegment(
-  policy: ApprovalPolicy,
-): StatusBarSegment | undefined {
-  // A policy that blocks earns a segment, in its tone.
-  const tone = approvalPolicyTone(policy);
-  if (tone === undefined) return undefined;
-  // The label the /approval picker and every other surface uses for this
-  // policy — the bar is how users confirm their selection took effect.
-  return {
-    text: approvalPolicyLabel(policy),
-    color: TONE_PAINT[tone].color,
-    priority: STATUS_BAR_PRIORITY.approvalPolicy,
-    policy: 'drop',
-  };
-}
-
 interface StatusBarRunTarget {
   readonly ctrlCAction: CtrlCAction;
   readonly displayRunId: RunId | undefined;
@@ -719,7 +698,6 @@ export function buildStatusBarDisplay(
             }
           : accessModeSegment(input.modelAccess),
         subscriptionQuotaSegment(input.subscriptionQuota),
-        approvalPolicySegment(input.approvalPolicy),
         input.locationLabel !== undefined
           ? {
               text: input.locationLabel,

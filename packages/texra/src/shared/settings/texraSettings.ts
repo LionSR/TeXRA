@@ -32,12 +32,6 @@ import {
 import { CliOutputFormatSchema } from '@texra/shared/cliOutputFormat';
 import { CURATED_MODELS } from '@texra/model/curatedModels';
 import { LATEX_FORMATTER_VALUES } from '@texra/shared/constants/latexConfig';
-import {
-  DEFAULT_ENABLED_REGEX_REPLACEMENTS,
-  DEFAULT_ENABLED_REPLACEMENTS,
-  NON_REGEX_REPLACEMENT_CATEGORIES,
-  REGEX_REPLACEMENT_CATEGORIES,
-} from '@texra/shared/constants/replacementCategories';
 import { LATEXDIFF_SETTINGS } from '@texra/shared/settings/latexdiffSettings';
 import {
   CLAUDE_AGENT_SETTINGS,
@@ -162,48 +156,6 @@ export const TIKZ_TEMPLATE_SETTING = Object.freeze({
   description:
     'Standalone LaTeX template used when extracting and compiling TikZ figures.',
 } as const satisfies SettingRow<string>);
-
-export const ENABLED_REPLACEMENTS_SETTING = Object.freeze({
-  key: 'latex.enabledReplacements',
-  slot: 'config',
-  schema: decodingDefault(
-    Schema.Array(Schema.Literals(NON_REGEX_REPLACEMENT_CATEGORIES)),
-    DEFAULT_ENABLED_REPLACEMENTS,
-  ),
-  title: 'Cleanup replacements',
-  description: 'Enabled groups of direct LaTeX cleanup replacements.',
-} as const satisfies SettingRow<
-  readonly (typeof NON_REGEX_REPLACEMENT_CATEGORIES)[number][]
->);
-
-export const ENABLED_REGEX_REPLACEMENTS_SETTING = Object.freeze({
-  key: 'latex.enabledReplacementsRegex',
-  slot: 'config',
-  schema: decodingDefault(
-    Schema.Array(Schema.Literals(REGEX_REPLACEMENT_CATEGORIES)),
-    DEFAULT_ENABLED_REGEX_REPLACEMENTS,
-  ),
-  title: 'Pattern cleanup replacements',
-  description: 'Enabled groups of pattern-based LaTeX cleanup replacements.',
-} as const satisfies SettingRow<
-  readonly (typeof REGEX_REPLACEMENT_CATEGORIES)[number][]
->);
-
-export const CUSTOM_REGEX_REPLACEMENTS_SETTING = Object.freeze({
-  key: 'latex.customReplacementsRegex',
-  slot: 'config',
-  schema: decodingDefault(Schema.Record(Schema.String, Schema.String), {}),
-  title: 'Custom pattern replacements',
-  description: 'Custom regular-expression replacements.',
-} as const satisfies SettingRow<Readonly<Record<string, string>>>);
-
-export const CUSTOM_REPLACEMENTS_SETTING = Object.freeze({
-  key: 'latex.customReplacements',
-  slot: 'config',
-  schema: decodingDefault(Schema.Record(Schema.String, Schema.String), {}),
-  title: 'Custom replacements',
-  description: 'Custom direct text replacements.',
-} as const satisfies SettingRow<Readonly<Record<string, string>>>);
 
 /**
  * What each field of a usage record is, in the words every surface uses, in
@@ -330,10 +282,6 @@ const TEXRA_UNSHOWN_ROWS: readonly SettingRow[] = [
   TIKZ_INPUT_DIRECTORY_SETTING,
   INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING,
   TIKZ_TEMPLATE_SETTING,
-  ENABLED_REPLACEMENTS_SETTING,
-  ENABLED_REGEX_REPLACEMENTS_SETTING,
-  CUSTOM_REGEX_REPLACEMENTS_SETTING,
-  CUSTOM_REPLACEMENTS_SETTING,
 ];
 
 /** TeXRA's rows a TeXRA UI shows, its plugins' last, in catalog order. */

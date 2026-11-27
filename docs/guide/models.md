@@ -64,17 +64,17 @@ full capabilities.
 
 ## Google models
 
-| Model                           | Use Case                                    | Cost | Speed  |
-| :------------------------------ | :------------------------------------------ | :--- | :----- |
-| `google/gemini-4-neon`          | Top Gemini 4 tier, up to `@xhigh`, 1M ctx   | $$$  | Medium |
-| `google/gemini-4-carbon`        | Balanced Gemini 4, 1M context               | $$$  | Medium |
-| `google/gemini-4-argon`         | Complex coding, math & science, 1M context  | $$$  | Medium |
-| `google/gemini-4-hydrogen`      | Lower-cost Gemini 4, up to `@xhigh`, 1M ctx | $$   | Fast   |
-| `google/gemini-3.8-flash`       | Flash model with 1M context                 | $$   | Fast   |
-| `google/gemini-3.5-flash-lite`  | Lightweight Flash, 1M context               | $    | Fast   |
-| `google/gemini-3.1-pro-preview` | Previous Pro with reasoning, 1M context     | $$$  | Medium |
+| Model                           | Use Case                                        | Cost | Speed  |
+| :------------------------------ | :---------------------------------------------- | :--- | :----- |
+| `google/gemini-4-neon`          | Frontier Gemini 4, fast, up to `@xhigh`, 1M ctx | $$$  | Medium |
+| `google/gemini-4-carbon`        | Deepest reasoning Gemini 4, 1M context          | $$$  | Medium |
+| `google/gemini-4-argon`         | Complex coding, math & science, 1M context      | $$$  | Medium |
+| `google/gemini-4-hydrogen`      | Everyday Gemini 4, up to `@xhigh`, 1M context   | $$   | Fast   |
+| `google/gemini-3.8-flash`       | Flash model with 1M context                     | $$   | Fast   |
+| `google/gemini-3.5-flash-lite`  | Lightweight Flash, 1M context                   | $    | Fast   |
+| `google/gemini-3.1-pro-preview` | Previous Pro with reasoning, 1M context         | $$$  | Medium |
 
-The Gemini 4 family shares a 1M-token window across input, thinking, and output (up to 65,536 output tokens per response) with native vision, PDF, and audio support. Gemini 4 Neon ($3 / $15 per 1M tokens) and Gemini 4 Hydrogen ($1.50 / $7.50) support reasoning effort up to `@xhigh`; Gemini 4 Carbon ($2 / $10) and Gemini 4 Argon ($2 / $10 introductory pricing, cached input at $0.10, until November 30, 2026, then $4 / $20) support `@low`, `@medium`, and `@high`. None of the Gemini 4 models take `@none`. Caching is automatic, and Gemini 4 models are not available on Google's Free tier.
+The Gemini 4 family shares a 1M-token window across input, thinking, and output (up to 65,536 output tokens per response) with native vision, PDF, and audio support. Gemini 4 Neon ($3 / $15 per 1M tokens) and Gemini 4 Hydrogen ($1.50 / $7.50) support reasoning effort up to `@xhigh`; Gemini 4 Carbon ($2 / $10 introductory pricing through November 30, 2026) and Gemini 4 Argon ($2 / $10 introductory pricing, cached input at $0.10, until November 30, 2026, then $4 / $20) support `@low`, `@medium`, and `@high`. None of the Gemini 4 models take `@none`. Caching is automatic; Gemini 4 Hydrogen is available on Google's Free tier, while Carbon, Neon, and Argon require the paid tier.
 
 ## DeepSeek models
 

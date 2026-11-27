@@ -15,7 +15,6 @@ import {
   type Layer,
   type Path,
   Result,
-  type Schema,
 } from 'effect';
 
 // Local imports

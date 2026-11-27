@@ -616,6 +616,29 @@ on `./node`, `isStrictlyWithin`, `toPosixPath`, `createSymlink`; on
 run over these entries removes after both PRs merge (`./plugins` 148 → 139
 and `./schemas` 291 → 281, beyond the names the PRs remove themselves).
 
+Landed on the evening of 2026-11-26, after #15229 merged and with #15230
+still open, re-measured with the same script at `05c476a`: nineteen names,
+one `refactor!:` commit per entry. `./schemas` (287 → 279): `ToolFact`
+(read only inside the harness), `ExternalFileLocation` (its alias deleted;
+the schema stays a case of `FileLocation`), and `DiffStats`,
+`DiffStatsSchema`, `fileLocationShortDisplayPath`, `runStorageFilePath`,
+`fileLocationAddressPath` and `AgentConfigInput`, the last two not in the
+list above (their last reader was a file #15229 deleted), each deleted with
+its definition. `./plugins` (146 → 138): `formatToolOutput`,
+`buildApprovalRejectedResult`, `unifiedDiffText`, `parseWorkingDirectory`,
+`sourceLocationUnder` and `jitteredExponentialBackoffMs` keep their harness
+callers; `isTransportReason` is file-local in `tools/timeouts.ts`; the
+`EditRecord` alias is deleted. `./node` (62 → 60): `toPosixPath`, and
+`createSymlink`, deleted with its errno table. `@texra-ai/llm` (101 → 100):
+`resolveCredential`, called only by llm's API-key providers.
+`LoadedMediaMetadata` went with #15229. The nine whose last importer is a
+file #15230 deletes stay until it merges: `causeChain`, `formatWallTime`,
+`previewLabel` and `McpToolOutput` (`./schemas`), `buildMcpToolName`
+(`./transcript`), `noLaterTurn` (`./plugins`), `isStrictlyWithin`
+(`./node`), `codexBackendModelId` and `DEFAULT_EFFORT` (`@texra-ai/llm`).
+After this run the only names nobody imports and no live name names are
+`NativeEntryModule` and `NativePluginHost`, which stay (above).
+
 Stays, with its reason:
 
 - `RunServices` and `PlatformServices` on `./host`, though `./plugins`
@@ -702,8 +725,11 @@ llm adapters; `sessionViewUpdate.ts` at 1,169
 lines (1,074 at `c78e9f9`; 1,045 on 2026-11-26, of which 286 are comments
 and blank lines: a reducer over six input tags and the display row kinds,
 each concern in its own functions, with no fact kept twice found; what is
-left is small, such as the thirteen `applyRunEvent` cases that return the
-run unchanged); the CLI approval stack versus the webview request panels; and four
+left is small, such as the eleven `applyRunEvent` cases that return the
+run unchanged, which stay: the switch is exhaustive over the view's own row
+kinds, so a new kind fails to compile until it is placed, and a `default`
+would drop it silently; `createRun`'s spread of an untyped object and the
+relink re-read's own guard went on 2026-11-26 evening); the CLI approval stack versus the webview request panels; and four
 CLAUDE.md rules with no check (the barrel ban, the single-caller ban, renderer
 `Date.now()`, and silent degradation outside the harness and llm).
 

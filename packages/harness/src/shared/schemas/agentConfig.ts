@@ -12,7 +12,7 @@ export const AgentConfigSchema = FileFieldsSchema.mapFields(
      *  directory show. The launch names it; nothing resolves it. */
     label: Schema.String,
     /** The run's own system text, before what the harness appends (project
-     *  instructions, memories, tool-use instructions, plugin sections). */
+     *  instructions, memories, plugin sections). */
     system: decodingDefault(Schema.String, ''),
     /** The tools the run declares, by name; `mcp__<server>__*` is every
      *  tool that server lists. A run that declares none writes text only. */
@@ -84,8 +84,6 @@ export const AgentConfigSchema = FileFieldsSchema.mapFields(
     ),
   }),
 );
-
-export type AgentConfigInput = typeof AgentConfigSchema.Encoded;
 
 export type AgentConfig = typeof AgentConfigSchema.Type;
 

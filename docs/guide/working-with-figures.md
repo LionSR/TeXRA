@@ -17,7 +17,7 @@ and `.bib` sources, not images.)
 ## <wa-icon library="texra" name="rocket"></wa-icon> Quick task: add a figure caption
 
 1. Open a new task in the TeXRA panel.
-2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>), for example `openai/gpt-6.1-sol`, `anthropic/claude-sonnet-5-5`, or `google/gemini-4-argon`.
+2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>), for example `openai/gpt-6.2-sol`, `anthropic/claude-sonnet-5-5`, or `google/gemini-4-neon`.
 3. Select **Attach** (<wa-icon library="texra" name="file-media"></wa-icon>) in the instruction box and pick your figure, or paste it.
 4. Type the instruction: "Write a detailed caption for this figure."
 5. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>, the arrow button at the end of the composer).
@@ -104,7 +104,7 @@ A chat agent has no dedicated extraction tool. It finds the figures a document i
 
 When you provide media files, they are handed to the model according to its capabilities:
 
-- **Vision models** (GPT-6.1 Sol, Claude Fable 5.1 / Opus 5.5 / Sonnet 5.5, Gemini 4 Argon, …): images are encoded and attached to the prompt.
+- **Vision models** (GPT-6.2 Sol, Claude Fable 5.2 / Opus 5.5 / Sonnet 5.5, Gemini 4 Neon, …): images are encoded and attached to the prompt.
 - **Audio models**: audio files are uploaded for transcription.
 - **Non-multimodal models**: only filenames are passed as context.
 

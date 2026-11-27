@@ -1,7 +1,6 @@
 /**
  * KaTeX macros for LaTeX shortcuts in markdown rendered to HTML
  * (progress view, HTML chat export).
- * Based on patterns from packages/texra/src/replacement/maxRules.ts
  */
 
 export const katexMacros = Object.freeze({

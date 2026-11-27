@@ -266,13 +266,7 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
   const absolutePath =
     input.path == null
       ? undefined
-      : (yield* resolveToolPath(call.env, input.path ?? undefined).pipe(
-          Effect.mapError((error) =>
-            error instanceof ToolError
-              ? error
-              : new ToolError(error.message, { cause: error }),
-          ),
-        )).absolute;
+      : (yield* resolveToolPath(call.env, input.path ?? undefined)).absolute;
   const threads = (yield* requireProvider).list({ absolutePath });
   if (threads.length === 0) {
     return executed(

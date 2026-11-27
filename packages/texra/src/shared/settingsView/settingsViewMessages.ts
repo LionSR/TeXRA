@@ -10,7 +10,6 @@
 import { Schema, Struct } from 'effect';
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
-  RunIdSchema,
   SkillDisplayIssueSchema,
   SkillDisplayItemSchema,
   DISABLED_SKILLS_SETTING,
@@ -18,11 +17,7 @@ import {
   ToolDependencyStatusSchema,
 } from '@texra-ai/worldline/schemas';
 
-import {
-  API_KEY_PROVIDER_IDS,
-  CredentialOriginSchema,
-  ReasoningEffortSchema,
-} from '@texra-ai/llm';
+import { API_KEY_PROVIDER_IDS } from '@texra-ai/llm';
 import {
   LATEX_DEPENDENCIES,
   LATEX_RECOMMENDED_SETTINGS,
