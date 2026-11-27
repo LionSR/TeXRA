@@ -70,8 +70,8 @@ export function optionalInput<S extends Schema.Top>(
  */
 export const timeoutMsField = Schema.optional(
   Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
-      Schema.isLessThanOrEqualTo(24 * 60 * 60 * 1000),
+    Schema.Int.check(
+      Schema.isBetween({ minimum: 1000, maximum: 24 * 60 * 60 * 1000 }),
     ),
   ),
 );

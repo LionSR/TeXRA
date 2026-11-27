@@ -21,6 +21,11 @@ import { LineRangeSchema } from '../formatting';
 /** Listing entries or conversation messages a call returns when it names no `limit`. */
 export const EXECUTIONS_DEFAULT_LIMIT = 100;
 
+/** How many list entries or conversation messages one call may ask for. */
+const ListLimit = Schema.Int.check(
+  Schema.isBetween({ minimum: 1, maximum: 200 }),
+);
+
 /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/workspace-files/{path} */
 const PathFieldSchema = Schema.String.annotate({
   description: 'Path starting with /executions',
@@ -53,9 +58,7 @@ const ViewActionSchema = Schema.Struct({
 
   /** Maximum list entries or conversation messages to return. */
   limit: nullishWithDefault(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(
-      Schema.isLessThanOrEqualTo(200),
-    ),
+    ListLimit,
     EXECUTIONS_DEFAULT_LIMIT,
     'Max entries or conversation messages to return. Use on /executions or /executions/{id}/conversation. Max: 200.',
   ),
@@ -100,9 +103,7 @@ const WaitActionSchema = Schema.Struct({
 
   /** Maximum list entries in the /executions listing returned once the wait resolves. */
   limit: nullishWithDefault(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(
-      Schema.isLessThanOrEqualTo(200),
-    ),
+    ListLimit,
     EXECUTIONS_DEFAULT_LIMIT,
     'Max entries in the executions list returned once the wait resolves (with /executions only). Max: 200.',
   ),
