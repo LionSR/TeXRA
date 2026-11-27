@@ -247,6 +247,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     bindings,
   });
 
+  // The page gets the list when it asks and on every change after that. A
+  // change before it has asked is in the answer.
+  let pageAskedForProjects = false;
   const postProjects = () => {
     const {
       projects: open,
@@ -293,13 +296,14 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
           for (const binding of bindings.all()) binding.browserViews.hideAll();
         }
         yield* surface.attach();
-        postProjects();
+        if (pageAskedForProjects) postProjects();
       }),
     );
   /** A document reload destroys its request correlations (an open prompt
    *  answers undefined) and recording ownership: new ports, same sessions. */
   const resetForNewDocument = reconcileLane.withPermits(1)(
     Effect.gen(function* () {
+      pageAskedForProjects = false;
       yield* promptController.reset;
       yield* bindings.releaseAll;
       yield* bindings.sync;
@@ -356,7 +360,10 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       // The project list the renderer asks for once it boots, and its select
       // and close requests.
       [DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS]: () =>
-        Effect.sync(postProjects),
+        Effect.sync(() => {
+          pageAskedForProjects = true;
+          postProjects();
+        }),
       [DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT]: parsedRoute(
         DesktopSelectProjectMessageSchema,
         (message) => navigation.select(message.key),

@@ -123,6 +123,10 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
     });
   }
 
+  // Whether the last message about this project's browser view placed it:
+  // a view is attached only by its bounds, so one that was hidden, or never
+  // placed, has nothing to hide and every later layout pass says nothing.
+  let browserPlaced = false;
   function syncBrowserViewBounds() {
     const tab = getState().workbenchTabs.find(
       (entry) => entry.kind === 'browser',
@@ -136,11 +140,14 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       deps.isBrowserCovered() ||
       dragging
     ) {
+      if (!browserPlaced) return;
+      browserPlaced = false;
       postMessage({ command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE });
       return;
     }
     const rect = slot.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
+    browserPlaced = true;
     postMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS,
       tabId: tab.id,
