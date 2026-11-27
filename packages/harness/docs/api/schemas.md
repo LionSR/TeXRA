@@ -130,6 +130,16 @@ Who answers a request ({@link AnsweredBySchema}).
 type AnsweredBy = typeof AnsweredBySchema.Type;
 ```
 
+## appendTail
+
+```ts
+function appendTail(
+  current: string,
+  chunk: string,
+  maxChars: number,
+): string
+```
+
 ## APPROVAL_BYPASS_KINDS
 
 ```ts
@@ -227,7 +237,8 @@ const AssembleTraceResultSchema: Union<readonly [Struct<{ readonly status: Liter
 ## Attention
 
 What wants this window: the requests it can answer (the badge), and since
-`previous` (none without it) the new ones and the runs that ended.
+`previous` (none without it) the new ones and the runs whose turn
+finished.
 
 ```ts
 interface Attention<Request> {
@@ -240,8 +251,10 @@ interface Attention<Request> {
 ## attentionOf
 
 The one attention rule every host reads (the extension's badge and reveal,
-the desktop's dock badge, notifications, and rail): a pending
-request wants the user, and a run when its outcome lands.
+the desktop's dock badge, notifications, and rail, the terminal's bell): a
+pending request wants the user, and a run when its turn finishes, waiting
+for the next message or at its outcome. A run that ends after waiting was
+already announced, and a stop somebody asked for is not news.
 
 ```ts
 function attentionOf<View extends SessionView>(
@@ -638,6 +651,21 @@ Discriminated union of all file location types
 const FileLocationSchema: Union<readonly [Struct<{ readonly kind: Literal<"workspace">; readonly absolutePath: String; readonly relativePath: String; }>, Struct<{ readonly kind: Literal<"runStorage">; readonly absolutePath: String; readonly relativePath: String; readonly runId: brand<String, "RunId">; }>, Struct<{ readonly kind: Literal<"external">; readonly absolutePath: String; }>]>
 ```
 
+## filePathOfFileUrl
+
+The file path a `file:` URL names, or `null` when `url` is not one or its
+percent-escapes are malformed. A Windows drive path follows one extra
+slash, and a network share's server is the host (`//server/share/x`);
+`localhost` names this machine, as an empty host does.
+
+- `@example` filePathOfFileUrl('file:///home/a%20b.pdf')   // '/home/a b.pdf'
+  filePathOfFileUrl('file:///C:/Users/a.pdf')   // 'C:/Users/a.pdf'
+  filePathOfFileUrl('file://server/share/a')    // '//server/share/a'
+
+```ts
+function filePathOfFileUrl(url: string): string | null
+```
+
 ## FinishedToolResult
 
 A call's result as its `tool.result` row stores it.
@@ -785,6 +813,15 @@ interface FormattedIssue {
   readonly path: string;
   readonly message: string;
 }
+```
+
+## formatUtcSecond
+
+A time, in epoch milliseconds, in UTC to the second
+(`2026-11-20 09:15:02`): what a listing or a log row shows.
+
+```ts
+const formatUtcSecond: (millis: number) => string
 ```
 
 ## formatWallTime
