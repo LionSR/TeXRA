@@ -441,7 +441,7 @@ function anthropicWire() {
       stopped = true;
       return [
         { kind: 'usage', usage: canonicalUsage(usage) },
-        { kind: 'finish', finish: { finishReason: FINISH[reason] } },
+        { kind: 'finish', finishReason: FINISH[reason] },
       ];
     }
     if (stop.stop_reason != null)

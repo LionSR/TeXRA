@@ -74,9 +74,7 @@ export type PartEvent =
       readonly kind: 'finish';
       /** A `null` reason leaves it to the final content: a tool-call
        *  finish when it holds calls, else a plain stop. */
-      readonly finish: {
-        readonly finishReason: TurnResult['finishReason'] | null;
-      };
+      readonly finishReason: TurnResult['finishReason'] | null;
       /** The terminal item list. It supplies content only for a turn with
        *  no item events, or the items a resumed observation joined too late
        *  to see close (see `finishedContent`). */
