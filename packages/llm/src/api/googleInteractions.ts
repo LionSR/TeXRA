@@ -3,7 +3,11 @@ import { GoogleGenAI, type Interactions } from '@google/genai';
 import { Effect, Ref, Result, Schema, Stream } from 'effect';
 
 // Local imports - canonical model contract
-import { anchoredPrefix, coveredPrefix } from './continuation.js';
+import {
+  anchoredPrefix,
+  anchorResponseId,
+  coveredPrefix,
+} from './continuation.js';
 import {
   completedTurn,
   type GoogleInteractionsConfiguration,
@@ -533,8 +537,8 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
   result: TurnResult,
   origin: ModelOrigin,
 ) {
-  if (!turn.controls.store || result.providerResponseId === null)
-    return undefined;
+  const interactionId = anchorResponseId(result);
+  if (!turn.controls.store || interactionId === null) return undefined;
   const { prefix, ...covered } = anchoredPrefix(
     GOOGLE_PREFIX_DOMAIN,
     origin,
@@ -550,7 +554,7 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
     origin: { ...origin, protocol: turn.protocol },
     ...covered,
     anchor: {
-      interactionId: result.providerResponseId,
+      interactionId,
       coveredSteps: coveredSteps.length,
     },
   };

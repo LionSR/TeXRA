@@ -1,7 +1,8 @@
 /**
- * The protocol-neutral rules of a stored continuation: the prefix an anchor
- * covers after a turn, and whether an incoming anchor still covers the
- * turn's history. A protocol adds its own covered count and request field.
+ * The protocol-neutral rules of a stored continuation: which turn can anchor
+ * one, the prefix an anchor covers after a turn, and whether an incoming
+ * anchor still covers the turn's history. A protocol adds its own covered
+ * count and request field.
  */
 // Node imports
 import { hash } from 'node:crypto';
@@ -11,7 +12,7 @@ import { Order, Predicate } from 'effect';
 
 // Local imports - canonical model contract
 import { sameModelOrigin, type ModelOrigin } from '../protocol.js';
-import type { ResolvedTurn } from '../turn.js';
+import type { ResolvedTurn, TurnResult } from '../turn.js';
 
 /**
  * JSON with every object's keys in sorted order, so one value serialized in
@@ -42,6 +43,16 @@ function prefixFingerprint(
     'hex',
   );
 }
+
+/**
+ * The stored response the next request can extend, or null: a turn the
+ * provider identified that ran to its end, a plain stop or a request for
+ * tool calls. A turn cut short or refused is not one to build on.
+ */
+export const anchorResponseId = (result: TurnResult): string | null =>
+  result.finishReason === 'stop' || result.finishReason === 'tool-calls'
+    ? result.providerResponseId
+    : null;
 
 /** The turn's history and system input. */
 type History = Pick<ResolvedTurn, 'messages' | 'system'>;

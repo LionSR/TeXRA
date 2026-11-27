@@ -6,7 +6,11 @@ import OpenAI from 'openai';
 import { replayableHistory, systemUpdateText } from '../message.js';
 import { sameModelOrigin } from '../protocol.js';
 import { ModelError } from '../errors.js';
-import { anchoredPrefix, coveredPrefix } from './continuation.js';
+import {
+  anchoredPrefix,
+  anchorResponseId,
+  coveredPrefix,
+} from './continuation.js';
 import { onOpenAiEndpoint } from './responsesConfiguration.js';
 import {
   responsesContent,
@@ -226,12 +230,8 @@ export const withResponsesContinuation = Effect.fn(
     });
   // HTTP stored-response chaining is separate from temporary background retrieval.
   // https://developers.openai.com/api/docs/guides/conversation-state
-  if (
-    !turn.controls.store ||
-    result.providerResponseId === null ||
-    (result.finishReason !== 'stop' && result.finishReason !== 'tool-calls')
-  )
-    return result;
+  const responseId = anchorResponseId(result);
+  if (!turn.controls.store || responseId === null) return result;
   const origin = { ...result.requestedOrigin, protocol: turn.protocol };
   const { prefix, ...covered } = anchoredPrefix(
     RESPONSES_PREFIX_DOMAIN,
@@ -243,7 +243,7 @@ export const withResponsesContinuation = Effect.fn(
     origin,
     ...covered,
     anchor: {
-      responseId: result.providerResponseId,
+      responseId,
       // Counted, not lowered: the covered prefix is never materialized
       // again, and the same count validates the continuation later.
       coveredItems: coveredItemCount(prefix),
