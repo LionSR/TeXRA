@@ -377,14 +377,6 @@ function providerCommand<T extends string>(command: T) {
   });
 }
 
-/** Inbound message addressed to a model by name. */
-function modelCommand<T extends string>(command: T) {
-  return Schema.Struct({
-    command: Schema.Literal(command),
-    modelName: Schema.NonEmptyString,
-  });
-}
-
 // Provider key inbound messages (settings-only)
 const SetProviderKeyMessageSchema = providerCommand(
   SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
@@ -401,9 +393,11 @@ const OpenExternalUrlMessageSchema = Schema.Struct({
 });
 
 // Model selection inbound messages
-const SetModelEnabledMessageSchema = modelCommand(
-  SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
-).mapFields(Struct.assign({ enabled: Schema.Boolean }));
+const SetModelEnabledMessageSchema = Schema.Struct({
+  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED),
+  modelName: Schema.NonEmptyString,
+  enabled: Schema.Boolean,
+});
 
 // Tool dashboard inbound messages
 const InstallExtensionMessageSchema = Schema.Struct({

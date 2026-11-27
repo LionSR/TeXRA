@@ -16,6 +16,8 @@ import { Array as Arr, Predicate } from 'effect';
 import {
   AGENT_TOOL_NAME,
   PROGRAM_TOOL_NAME,
+  SELF_TOOL_NAME,
+  SKIPPED_RESULT_NAME,
   TOOL_CALL_STATUS,
   type RequestPayload,
   type RunId,
@@ -49,7 +51,7 @@ const nameOf = (input: Readonly<Record<string, unknown>>): string | undefined =>
 const CHILD_TOOLS: ReadonlySet<string> = new Set([
   AGENT_TOOL_NAME,
   PROGRAM_TOOL_NAME,
-  'self',
+  SELF_TOOL_NAME,
 ]);
 
 export type ScriptCallStatus =
@@ -159,7 +161,7 @@ function statusOf(
         ? 'reused'
         : 'finished';
     case TOOL_CALL_STATUS.FAILED:
-      if (result?.status === 'error' && result.name === 'Skipped')
+      if (result?.status === 'error' && result.name === SKIPPED_RESULT_NAME)
         return 'skipped';
       if (row.cutByRunEnd === true)
         return agent && child === undefined ? 'not run' : 'cancelled';

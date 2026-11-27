@@ -6,6 +6,7 @@ import {
   decodingDefault,
   entryDetail,
   entryLine,
+  formatUtcSecond,
   truncateSummary,
 } from '@texra-ai/worldline/schemas';
 import { postToMain } from './messageRoutes';
@@ -54,11 +55,10 @@ function desktopLogLineText(line: DesktopLogLine): string {
   return [entryLine(line), ...entryDetail(line)].join('\n');
 }
 
-/** An ISO timestamp as `YYYY-MM-DD HH:MM:SS` in UTC; an unparsable one as is. */
+/** An ISO timestamp in UTC to the second; an unparsable one as is. */
 function formatTimestamp(isoTimestamp: string): string {
-  const parsed = new Date(isoTimestamp);
-  if (!Number.isFinite(parsed.getTime())) return isoTimestamp;
-  return parsed.toISOString().replace('T', ' ').slice(0, 19);
+  const millis = Date.parse(isoTimestamp);
+  return Number.isFinite(millis) ? formatUtcSecond(millis) : isoTimestamp;
 }
 
 type DesktopLogLevel = keyof typeof LOG_LEVEL_LOOK | 'unknown';
@@ -71,8 +71,8 @@ interface DesktopLogEntry {
   readonly level: DesktopLogLevel;
   readonly raw: string;
   readonly summary: string;
-  readonly timestamp?: string;
-  readonly timestampLabel: string;
+  /** Absent on a partial entry: a line the sink did not write whole. */
+  readonly timestamp: string | undefined;
 }
 
 interface LogViewerState {
@@ -152,8 +152,7 @@ function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
       raw,
       summary:
         truncateSummary(message, LOG_SUMMARY_MAX_LENGTH) || '(no message)',
-      ...(timestamp ? { timestamp } : {}),
-      timestampLabel: timestamp ? formatTimestamp(timestamp) : 'Partial entry',
+      timestamp: timestamp || undefined,
     };
   });
 }
@@ -191,7 +190,11 @@ export function createLogsPane(): LogsPaneController {
           </span>
           <span class="desktop-log-entry-level">${presentation.label}</span>
           <time class="desktop-log-entry-time" datetime=${entry.timestamp ?? ''}
-            >${entry.timestampLabel}</time
+            >${
+              entry.timestamp
+                ? formatTimestamp(entry.timestamp)
+                : 'Partial entry'
+            }</time
           >
           <span class="desktop-log-entry-preview truncate"
             >${entry.summary}</span

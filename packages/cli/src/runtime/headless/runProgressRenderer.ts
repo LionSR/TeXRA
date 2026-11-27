@@ -88,9 +88,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private lastLine = '';
   private liveLine = false;
   private view: SessionView | undefined;
-  /** The run this line describes, once the view holds it. */
-  private rootRunId: RunId | undefined;
-  private wantedRunId: RunId | undefined;
+  /** The run this line describes. */
+  private runId: RunId | undefined;
   /** Where the root stood when the renderer last painted; a repeat is not
    *  a change. */
   private painted: RunStanding | undefined;
@@ -112,7 +111,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     runId: RunId,
   ): Effect.Effect<void, never, Scope.Scope> {
     return Effect.suspend(() => {
-      this.wantedRunId = runId;
+      this.runId = runId;
       return Effect.addFinalizer(() =>
         Effect.sync(() => {
           this.view = undefined;
@@ -133,7 +132,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
                   session.view.changes,
                   Effect.fnUntraced({ self: this }, function* (view) {
                     this.applyView(view);
-                    if (this.rootRunTerminal || !this.rootRunId) {
+                    if (this.rootRunTerminal || this.root() === undefined) {
                       yield* FiberHandle.clear(heartbeat);
                     } else if (this.ansi && this.suspended === 0) {
                       // A start waits a full interval.
@@ -181,7 +180,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private root(): RunView | undefined {
-    return this.rootRunId ? this.view?.runs.get(this.rootRunId) : undefined;
+    return this.runId ? this.view?.runs.get(this.runId) : undefined;
   }
 
   private get rootRunTerminal(): boolean {
@@ -191,13 +190,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private applyView(view: SessionView): void {
     const previous = this.view;
     this.view = view;
-    if (this.wantedRunId !== undefined && view.runs.has(this.wantedRunId))
-      this.rootRunId ??= this.wantedRunId;
     const root = this.root();
     if (!root) return;
     const wasTerminal =
-      (previous && this.rootRunId
-        ? previous.runs.get(this.rootRunId)?.outcome
+      (previous && this.runId
+        ? previous.runs.get(this.runId)?.outcome
         : null) != null;
     const standingChanged =
       (root.position !== 'ready' || root.outcome !== null) &&

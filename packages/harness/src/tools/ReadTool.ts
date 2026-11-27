@@ -82,19 +82,10 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
   const call = yield* ToolContext;
   const resolved = yield* resolveToolPath(call.env, input.path);
   const displayPath = resolved.display;
-  // The result names the file read as an edit's result names an edited
-  // file, so an edit of it later in the run finds the read in the rows.
-  const reads = [displayPath];
 
   const attachmentKind = getAttachmentConfig(resolved.absolute);
-  if (attachmentKind) {
-    const result = yield* returnBinaryAttachment(
-      input,
-      attachmentKind,
-      resolved,
-    );
-    return { ...result, reads };
-  }
+  if (attachmentKind)
+    return yield* returnBinaryAttachment(input, attachmentKind, resolved);
 
   const fs = yield* FileSystem.FileSystem;
 
@@ -137,7 +128,7 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
     );
   }
 
-  return { ...result, reads };
+  return result;
 });
 
 function getAttachmentConfig(filePath: string): AttachmentKind | null {
@@ -149,9 +140,8 @@ function getAttachmentConfig(filePath: string): AttachmentKind | null {
     return 'pdf';
   }
 
-  // Treat SVG as an image attachment so vision-capable models can inspect its rendered appearance
-  // even though the underlying file is XML text.
-  if (isImageMimeType(mimeType)) {
+  // An SVG is XML no model takes as an image, so it is read as the text it is.
+  if (isImageMimeType(mimeType) && mimeType !== 'image/svg+xml') {
     return 'image';
   }
 
@@ -178,11 +168,10 @@ const returnBinaryAttachment = Effect.fn('ReadFileTool.returnBinaryAttachment')(
     ToolContext | FileSystem.FileSystem
   > {
     const copy = ATTACHMENT_COPY[kind];
-    const attachment = yield* buildFileAttachment({
-      filePath: resolved.fsPath,
-      description: `${copy.label} returned by read_file tool.`,
+    const attachment = yield* buildFileAttachment(
       resolved,
-    });
+      `${copy.label} returned by read_file tool.`,
+    );
 
     const baseSummary = `Attached ${copy.label} ${attachment.path}.`;
     const summary = input.range

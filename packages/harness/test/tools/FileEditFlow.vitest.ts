@@ -5,6 +5,7 @@ import { replaceLiteralMatches } from '@tools/fileEditFlow';
 
 describe('replaceLiteralMatches', () => {
   const notFoundError = () => 'missing';
+  const multipleMatchesError = () => 'ambiguous';
 
   // String.prototype.replace interprets these as replacement patterns; the
   // replacement must insert them verbatim for LaTeX and code edits.
@@ -27,6 +28,7 @@ describe('replaceLiteralMatches', () => {
           replacement,
           replaceAll: false,
           notFoundError,
+          multipleMatchesError,
         }),
       ).toEqual(
         Result.succeed({ content: `before ${replacement} after`, count: 1 }),

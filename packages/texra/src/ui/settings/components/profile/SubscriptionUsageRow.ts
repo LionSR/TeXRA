@@ -2,26 +2,26 @@ import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
 import { joinFacts } from '@texra-ai/worldline/schemas';
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import {
   formatSubscriptionUsageReset,
   formatSubscriptionUsageUpdated,
-  subscriptionQuotaTone,
   subscriptionQuotaUsed,
   subscriptionUsageUnavailable,
   subscriptionUsageWindowLabel,
 } from '@ui/copy/subscriptionUsage';
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
+import { quotaBarStyles, renderQuotaBar } from '@ui/wa/quotaBar';
 
 @customElement('subscription-usage-row')
 export class SubscriptionUsageRow extends TexraElement {
   static override styles = [
     TexraElement.styles,
     toneStyles,
+    quotaBarStyles,
     css`
       :host {
         display: contents;
@@ -57,13 +57,7 @@ export class SubscriptionUsageRow extends TexraElement {
       }
 
       wa-progress-bar {
-        --track-height: 0.45rem;
-        --indicator-color: var(--wa-color-progress-bg);
         width: 100%;
-      }
-
-      wa-progress-bar:is(.tone-warning, .tone-danger) {
-        --indicator-color: var(--tone-color);
       }
 
       .usage-window,
@@ -149,18 +143,16 @@ export class SubscriptionUsageRow extends TexraElement {
                 window.resetAt,
                 this.now,
               );
-              const tone = subscriptionQuotaTone(window);
               return html`
                 <div class="usage-window">
                   <span class="usage-summary"
                     ><bdi dir="auto">${label}</bdi>:
                     <bdi dir="auto">${percent}</bdi></span
                   >
-                  <wa-progress-bar
-                    class=${tone === undefined ? '' : `tone-${tone}`}
-                    value=${window.percentUsed}
-                    label="${snapshot.providerName} ${label} usage"
-                  ></wa-progress-bar>
+                  ${renderQuotaBar(
+                    window,
+                    `${snapshot.providerName} ${label} usage`,
+                  )}
                   <span class="usage-reset"
                     ><bdi dir="auto">${reset ?? ''}</bdi></span
                   >

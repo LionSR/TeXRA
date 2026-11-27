@@ -16,7 +16,6 @@
     "@texra-ai/llm": "workspace:*",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
-    "content-disposition": "catalog:",
     "diff": "catalog:",
     "diff-match-patch": "catalog:",
     "effect": "catalog:",
@@ -29,7 +28,7 @@
     "lru-cache": "catalog:",
     "markdown-it": "^15.0.3",
     "markdown-it-texmath": "^1.0.0",
-    "monaco-editor": "^0.57.0",
+    "monaco-editor": "^0.58.0",
     "pretty-bytes": "catalog:",
     "sortablejs": "^1.15.7",
     "which": "catalog:"

@@ -36,6 +36,7 @@ import {
   programGrants,
   RUN_OUTCOME,
   AGENT_TOOL_NAME,
+  SKIPPED_RESULT_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -228,7 +229,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
     return errorResult(
       `The agent run ${runId} for '${agentName}' was stopped, so this call was skipped.`,
       {
-        name: 'Skipped',
+        name: SKIPPED_RESULT_NAME,
         summary: `Skipped '${agentName}'`,
       },
     );
@@ -375,8 +376,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     launch.program === null ? launch.schema : null,
   );
   // The call's files, the program's file arguments among them: a
-  // run-storage file must be this run's own or a declared output of a
-  // completed child of it; a listed program's files pass as named, those
+  // run-storage file must be this run's own; a listed program's files pass
+  // as named, those
   // of a program read from a file are resolved like a model's.
   const verbatim = programGrants(run.config).appAuthored;
   const resolved = yield* Effect.result(
@@ -528,7 +529,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   if (relaunched !== null && Result.isFailure(relaunched))
     return errorResult(relaunched.failure.message);
   const programConfig = relaunched?.success ?? null;
-  const grants = delegatedChildGrants(decided.approvalMeta.childApproval);
+  const grants = delegatedChildGrants(decided.childApproval);
   const config = Schema.decodeUnknownSync(AgentConfigSchema)({
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
@@ -544,7 +545,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       runId,
       config,
       registration,
-      decided.approvalMeta,
+      decided.childApproval,
+      model,
     );
     // What a script's `await` gets for a child sent to the background.
     return { ...receipt, value: { runId } };
@@ -560,7 +562,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     : yield* childResult(call, approved.label, launched.success, key);
 });
 
-export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
+export const AgentTool: DefinedTool<AgentInput, PluginToolServices> =
   defineTool({
     name: AGENT_TOOL_NAME,
     requiresApproval: 'inBody',

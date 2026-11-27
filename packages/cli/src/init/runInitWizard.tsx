@@ -47,11 +47,11 @@ const STEP_TITLES: Record<Step, string> = {
   gitignore: 'Add .texra/ to .gitignore?',
 };
 
-interface Draft {
-  model?: string;
-  outputFormat?: CliOutputFormat;
-  gitignore?: boolean;
-}
+/** The answers collected so far, by the step that asks next. */
+type WizardState =
+  | { readonly step: 'model' }
+  | { readonly step: 'output'; readonly model: string }
+  | { readonly step: 'gitignore'; readonly answers: InitAnswers };
 
 function initWizardModelSelectItems(
   models: readonly ModelOptionData[],
@@ -77,43 +77,17 @@ interface WizardAppProps {
 function WizardApp(props: WizardAppProps): React.JSX.Element {
   const app = useApp();
   const stepCount = STEPS.length;
-  const [index, setIndex] = useState(0);
-  const [draft, setDraft] = useState<Draft>({});
-  const step = STEPS[index];
+  const [state, setState] = useState<WizardState>({ step: 'model' });
+  const step = state.step;
 
-  const cancel = (): void => {
-    props.onResolve(undefined);
+  const finish = (result: InitWizardResult | undefined): void => {
+    props.onResolve(result);
     app.exit();
   };
-
-  const commit = (patch: Draft): void => {
-    const merged = { ...draft, ...patch };
-    setDraft(merged);
-    if (index + 1 < stepCount) {
-      setIndex(index + 1);
-      return;
-    }
-    // Last step — every field is set by construction of `STEPS`. A gap means
-    // the step list and the answer shape drifted apart, which is a bug in this
-    // file: report it instead of resolving as "the user backed out", which
-    // would drop the answers they just gave with no explanation.
-    if (merged.model === undefined || merged.outputFormat === undefined) {
-      throw new Error(
-        'texra init wizard reached its last step with an unanswered question: STEPS and InitAnswers are out of sync.',
-      );
-    }
-    props.onResolve({
-      answers: {
-        model: merged.model,
-        outputFormat: merged.outputFormat,
-      },
-      gitignore: merged.gitignore ?? false,
-    });
-    app.exit();
-  };
+  const cancel = (): void => finish(undefined);
 
   let picker: React.JSX.Element;
-  switch (step) {
+  switch (state.step) {
     case 'model':
       picker = (
         <Select
@@ -125,7 +99,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
             ),
           )}
           items={initWizardModelSelectItems(props.options.models)}
-          onSelect={(model) => commit({ model })}
+          onSelect={(model) => setState({ step: 'output', model })}
           onCancel={cancel}
         />
       );
@@ -139,7 +113,12 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
             label: format,
             description: OUTPUT_DESCRIPTIONS[format],
           }))}
-          onSelect={(outputFormat) => commit({ outputFormat })}
+          onSelect={(outputFormat) =>
+            setState({
+              step: 'gitignore',
+              answers: { model: state.model, outputFormat },
+            })
+          }
           onCancel={cancel}
         />
       );
@@ -160,7 +139,9 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
               description: 'leave .gitignore unchanged',
             },
           ]}
-          onSelect={(gitignore) => commit({ gitignore })}
+          onSelect={(gitignore) =>
+            finish({ answers: state.answers, gitignore })
+          }
           onCancel={cancel}
         />
       );
@@ -173,7 +154,10 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
         texra init
       </Text>
       <Text dimColor>
-        {joinFacts([`Step ${index + 1}/${stepCount}`, STEP_TITLES[step]])}
+        {joinFacts([
+          `Step ${STEPS.indexOf(step) + 1}/${stepCount}`,
+          STEP_TITLES[step],
+        ])}
       </Text>
       <Box marginTop={1} flexDirection="column">
         {picker}

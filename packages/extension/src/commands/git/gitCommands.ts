@@ -5,10 +5,9 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import { CommandDirs } from '@texra-ai/worldline/node';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
-import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { copyText, vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { inputBox } from '@frontend/ui/dialogs';
 import type { HostFailed } from '@texra/hosts/uiHosts';
-import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
@@ -22,6 +21,7 @@ import {
   LATEX_TOOL_ENTRIES,
 } from '@texra/shared/constants/latexToolchain';
 import { osPlatformOf } from '@texra/shared/osPlatform';
+import { commandCatalogById } from '@texra/shared/commands/catalog';
 import {
   CLONE_COPY,
   cloneProviderLabel,
@@ -96,9 +96,7 @@ const promptGitMissing = Effect.fnUntraced(function* () {
     undefined,
   );
   if (selected === 'Copy Command' && command) {
-    yield* fromHost('clipboard.writeText', async () =>
-      vscode.env.clipboard.writeText(command),
-    ).pipe(
+    yield* copyText(command).pipe(
       Effect.catch((error) =>
         Effect.logWarning(`Could not copy the command: ${error.message}`).pipe(
           withLogChannel(CHANNEL),
@@ -178,8 +176,8 @@ const presentCloneOutcome = Effect.fn('gitCommands.presentCloneOutcome')(
 export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
   function* () {
     const input = yield* promptInput(
-      'Clone Overleaf/ShareLaTeX Project',
-      'Enter project URL or 24-character project ID.',
+      commandCatalogById['texra.cloneOverleafProject'].title,
+      CLONE_COPY.projectPrompt,
     );
     if (!input) return;
 

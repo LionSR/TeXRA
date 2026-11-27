@@ -23,7 +23,7 @@ import { Duration, Effect, Fiber, Option, Ref, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { ensureError } from '@texra-ai/worldline/schemas';
+import { appendTail, ensureError } from '@texra-ai/worldline/schemas';
 // Local imports - hosts
 import {
   TERMINAL_OUTPUT_MAX_CHARS,
@@ -180,7 +180,7 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
     Stream.fromAsyncIterable(stream, ensureError).pipe(
       Stream.runForEach((chunk: string) =>
         Ref.update(tail, (read) =>
-          (read + chunk).slice(-TERMINAL_OUTPUT_MAX_CHARS),
+          appendTail(read, chunk, TERMINAL_OUTPUT_MAX_CHARS),
         ),
       ),
     ),
@@ -225,5 +225,9 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
 
 /** Strip ANSI control sequences and retain the captured output tail. */
 function truncateTerminalOutput(output: string): string {
-  return stripVTControlCharacters(output).slice(-TERMINAL_OUTPUT_MAX_CHARS);
+  return appendTail(
+    stripVTControlCharacters(output),
+    '',
+    TERMINAL_OUTPUT_MAX_CHARS,
+  );
 }

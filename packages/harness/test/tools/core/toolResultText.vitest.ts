@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - utils
-import { formatToolResultAsText } from '@shared/toolResultText';
+import { formatToolResultAsText } from '@tools/core/toolResultText';
 
 /** The formatter's cap: a result longer than this is truncated head+tail. */
 const TOOL_RESULT_TEXT_CAP = 200_000;

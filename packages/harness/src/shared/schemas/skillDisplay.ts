@@ -10,8 +10,6 @@ export const SkillDisplayItemSchema = Schema.Struct({
   scope: ActiveSkillSourceScopeSchema,
   label: Schema.String,
   path: Schema.String,
-  /** The directory the skill was discovered under, i.e. its source's path. */
-  sourcePath: Schema.String,
   enabled: Schema.Boolean,
 });
 

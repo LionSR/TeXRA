@@ -76,6 +76,10 @@ again, and the two texts have drifted ("Choose an active model" against
 "Choose another model"). `modelAvailability.ts` says a surface's words for
 each kind are the app's. Decision needed: one harness sentence both read, or
 a reason kind the app words.
+Landed 2026-11-27: one sentence. llm's `decideModelRoute` gives an unserved
+route its `reason` (the clause after the model's name), and the bind's
+refusal and the model listing both word it as `<name> <reason>. Choose
+another model.`
 
 ## 4. The settings view decides model-list rules at render time
 

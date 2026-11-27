@@ -2,6 +2,10 @@
  * The words of the conversation's two summary lines: a stretch of tool
  * calls read as one sentence, and a finished turn's work.
  */
+// Third-party imports
+import { String as Str } from 'effect';
+
+// Local imports
 import { formatCompactDuration, pluralize } from '@texra-ai/worldline/schemas';
 
 /** What a call counts as in a run's sentence. */
@@ -35,10 +39,9 @@ const LIST = new Intl.ListFormat('en', { type: 'conjunction' });
 
 /** "Read 3 files, searched 2 times and edited 1 file". */
 export function toolRunSentence(counts: ToolRunCounts): string {
-  const sentence = LIST.format(
-    counts.map(([clause, count]) => CLAUSE[clause](count)),
+  return Str.capitalize(
+    LIST.format(counts.map(([clause, count]) => CLAUSE[clause](count))),
   );
-  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
 }
 
 /** A run's failed calls, beside its sentence. */

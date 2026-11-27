@@ -32,10 +32,7 @@ import { providerDisplayName } from '@texra-ai/llm';
 import { Effect, Result, Schema } from 'effect';
 
 import { setCodingPlanPreference } from '@texra/controllers/modelAccess/modelAccessPreference';
-import {
-  CODING_PLAN_SUBSCRIPTIONS,
-  type CodingPlanSubscription,
-} from '@texra/shared/model/codingPlans';
+import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
 
 import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
@@ -44,19 +41,40 @@ import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
  *  effects when it has them. */
 export type WritableRow = SettingRow & Pick<TexraSettingRow, 'onWrite'>;
 
-/** Outcome of {@link applyStateSettingUpdate}, for host-specific UI feedback. */
-export type StateSettingUpdateResult<E extends WritableRow> =
+/**
+ * Outcome of {@link applyStateSettingUpdate}, for host-specific UI feedback.
+ * A write that did not land carries the one sentence every surface shows,
+ * and whether it is a `notice` (the person can fix it: open a folder, add a
+ * key) or an `alert` (the value was invalid or the write failed).
+ */
+export type StateSettingUpdateResult =
   | { readonly kind: 'ignored' }
-  | { readonly kind: 'rejected'; readonly entry: E; readonly error: Error }
-  | { readonly kind: 'workspace-required'; readonly entry: E }
+  | { readonly kind: 'applied' }
   | {
-      /** A coding plan's switch, not turned on: its provider key is not set. */
-      readonly kind: 'needs-key';
-      readonly entry: E;
-      readonly plan: CodingPlanSubscription;
-    }
-  | { readonly kind: 'applied'; readonly entry: E }
-  | { readonly kind: 'failed'; readonly entry: E; readonly error: Error };
+      readonly kind: 'failed';
+      readonly shownAs: 'notice' | 'alert';
+      readonly error: SettingsRequestFailed;
+    };
+
+const invalidValue = (entry: WritableRow, error: unknown) =>
+  ({
+    kind: 'failed',
+    shownAs: 'alert',
+    error: new SettingsRequestFailed({
+      message: formatError(`Invalid value for "${entry.title}"`, error),
+      cause: error,
+    }),
+  }) as const;
+
+const writeFailed = (entry: WritableRow, error: unknown) =>
+  ({
+    kind: 'failed',
+    shownAs: 'alert',
+    error: new SettingsRequestFailed({
+      message: formatError(`Failed to update “${entry.title}”`, error),
+      cause: error,
+    }),
+  }) as const;
 
 /**
  * Host-neutral write path for a catalog-backed setting: guard, persist, and
@@ -64,27 +82,34 @@ export type StateSettingUpdateResult<E extends WritableRow> =
  * whose change re-routes models, `approvalPolicyChanged` for the approval
  * policy. The extension and desktop `UPDATE_STATE_SETTING` boundaries and the
  * CLI `/config` panel call it, and each caller adds its UI feedback and its
- * snapshot rebroadcast. A failed persist returns as the `failed` result.
+ * snapshot rebroadcast. A write that did not land returns as the `failed`
+ * result.
  * A coding plan's switch goes through `setCodingPlanPreference`, the one
  * writer of that preference.
  */
-export function applyStateSettingUpdate<E extends WritableRow>(
-  entry: E,
+export function applyStateSettingUpdate(
+  entry: WritableRow,
   value: unknown,
   roots: SettingsStores & { readonly workspace: string | undefined },
-): Effect.Effect<StateSettingUpdateResult<E>, never, AppSignals | Secrets> {
+): Effect.Effect<StateSettingUpdateResult, never, AppSignals | Secrets> {
   if (value === undefined) return Effect.succeed({ kind: 'ignored' });
   const parsed =
     value === null ? null : Schema.decodeUnknownResult(entry.schema)(value);
   if (parsed && !Result.isSuccess(parsed)) {
-    return Effect.succeed({ kind: 'rejected', entry, error: parsed.failure });
+    return Effect.succeed(invalidValue(entry, parsed.failure));
   }
   if (
     entry.slot === 'config' &&
     entry.configTarget !== 'global' &&
     roots.workspace === undefined
   ) {
-    return Effect.succeed({ kind: 'workspace-required', entry });
+    return Effect.succeed({
+      kind: 'failed',
+      shownAs: 'notice',
+      error: new SettingsRequestFailed({
+        message: `Open a project folder before changing "${entry.title}".`,
+      }),
+    });
   }
   const plan = CODING_PLAN_SUBSCRIPTIONS.find(
     ({ preference }) => preference.key === entry.key,
@@ -94,9 +119,15 @@ export function applyStateSettingUpdate<E extends WritableRow>(
       Effect.match({
         onSuccess: (outcome) =>
           outcome === 'needs-key'
-            ? ({ kind: 'needs-key', entry, plan } as const)
-            : ({ kind: 'applied', entry } as const),
-        onFailure: (error) => ({ kind: 'failed', entry, error }) as const,
+            ? ({
+                kind: 'failed',
+                shownAs: 'notice',
+                error: new SettingsRequestFailed({
+                  message: `Add a ${providerDisplayName(plan.apiProvider)} API key before turning on "${entry.title}".`,
+                }),
+              } as const)
+            : ({ kind: 'applied' } as const),
+        onFailure: (error) => writeFailed(entry, error),
       }),
     );
   }
@@ -116,49 +147,10 @@ export function applyStateSettingUpdate<E extends WritableRow>(
         : Effect.void,
     ),
     Effect.match({
-      onSuccess: () => ({ kind: 'applied', entry }) as const,
-      onFailure: (error) => ({ kind: 'failed', entry, error }) as const,
+      onSuccess: () => ({ kind: 'applied' }) as const,
+      onFailure: (error) => writeFailed(entry, error),
     }),
   );
-}
-
-/**
- * Why a write did not land, worded for the person who made it; `undefined`
- * when it landed or asked for nothing. Every surface that writes a setting
- * shows this one sentence.
- */
-export function settingWriteFailure(
-  result: StateSettingUpdateResult<WritableRow>,
-): SettingsRequestFailed | undefined {
-  switch (result.kind) {
-    case 'applied':
-    case 'ignored':
-      return undefined;
-    case 'workspace-required':
-      return new SettingsRequestFailed({
-        message: `Open a project folder before changing "${result.entry.title}".`,
-      });
-    case 'needs-key':
-      return new SettingsRequestFailed({
-        message: `Add a ${providerDisplayName(result.plan.apiProvider)} API key before turning on "${result.entry.title}".`,
-      });
-    case 'rejected':
-      return new SettingsRequestFailed({
-        message: formatError(
-          `Invalid value for "${result.entry.title}"`,
-          result.error,
-        ),
-        cause: result.error,
-      });
-    case 'failed':
-      return new SettingsRequestFailed({
-        message: formatError(
-          `Failed to update “${result.entry.title}”`,
-          result.error,
-        ),
-        cause: result.error,
-      });
-  }
 }
 
 /** A disabled-skills list: of skill names, or of skill source scopes. */
@@ -177,11 +169,7 @@ export function setSkillEnabled(
   item: string,
   enabled: boolean,
   roots: SettingsStores & { readonly workspace: string | undefined },
-): Effect.Effect<
-  StateSettingUpdateResult<SkillListRow>,
-  never,
-  AppSignals | Secrets
-> {
+): Effect.Effect<StateSettingUpdateResult, never, AppSignals | Secrets> {
   return Settings.get(roots, row).pipe(
     Effect.flatMap((disabled: readonly string[]) =>
       applyStateSettingUpdate(
@@ -193,8 +181,6 @@ export function setSkillEnabled(
       ),
     ),
     // A list that cannot be read is a failed write: nothing was changed.
-    Effect.catch((error) =>
-      Effect.succeed({ kind: 'failed', entry: row, error } as const),
-    ),
+    Effect.catch((error) => Effect.succeed(writeFailed(row, error))),
   );
 }

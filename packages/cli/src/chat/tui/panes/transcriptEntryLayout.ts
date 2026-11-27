@@ -7,7 +7,8 @@ import {
   ERROR_ENTRY_PREFIX,
   NOTICE_ENTRY_PREFIX,
   STATUS_DOT,
-  TOOL_OUTPUT_CORNER,
+  hangingIndent,
+  TOOL_OUTPUT_PREFIX,
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
@@ -20,7 +21,6 @@ import { transcriptRowHeadline } from './transcriptEntries';
 import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
 import type { TranscriptRowKind } from '@texra-ai/worldline/transcript';
 
-const DEFAULT_TRANSCRIPT_COLUMNS = 80;
 const USER_ENTRY_MARGIN_TOP_ROWS = 1;
 const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 const ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS = 0;
@@ -91,7 +91,7 @@ const ROW_GEOMETRY = {
   progressStatus: DETAIL_GEOMETRY,
   error: {
     firstPrefix: ERROR_ENTRY_PREFIX,
-    continuationPrefix: ' '.repeat(ERROR_ENTRY_PREFIX.length),
+    continuationPrefix: hangingIndent(ERROR_ENTRY_PREFIX),
     inset: 2,
     marginBottomRows: 0,
     marginTopRows: 0,
@@ -105,7 +105,7 @@ const ROW_GEOMETRY = {
   },
   user: {
     firstPrefix: USER_ENTRY_PREFIX,
-    continuationPrefix: ' '.repeat(USER_ENTRY_PREFIX.length),
+    continuationPrefix: hangingIndent(USER_ENTRY_PREFIX),
     inset: 2,
     marginBottomRows: USER_ENTRY_MARGIN_BOTTOM_ROWS,
     marginTopRows: USER_ENTRY_MARGIN_TOP_ROWS,
@@ -121,15 +121,8 @@ export interface TranscriptEntryLayout {
   readonly kind: TranscriptRowKind;
 }
 
-export function transcriptColumns(
-  width: number | undefined,
-  inset = 0,
-): number {
-  const raw =
-    width != null && Number.isFinite(width)
-      ? width
-      : DEFAULT_TRANSCRIPT_COLUMNS;
-  return Math.max(1, Math.floor(raw) - inset);
+export function transcriptColumns(width: number, inset = 0): number {
+  return Math.max(1, Math.floor(width) - inset);
 }
 
 function wrapWithPrefix(
@@ -138,8 +131,8 @@ function wrapWithPrefix(
   firstPrefix: string,
   continuationPrefix: string,
 ): readonly string[] {
-  // Budget against the wider gutter: roles like `fileList` indent continuations
-  // further than the first line, so wrapping to the first prefix alone would
+  // Budget against the wider gutter: an activity row indents continuations
+  // further than its first line, so wrapping to the first prefix alone would
   // push every wrapped row past `columns` and let the terminal re-wrap it.
   const gutter = Math.max(
     textDisplayWidth(firstPrefix),
@@ -154,19 +147,17 @@ function wrapWithPrefix(
     );
 }
 
-const CORNER_PREFIX = `${TOOL_OUTPUT_CORNER} `;
-
 function leadingWhitespacePrefix(line: string): string {
   return line.match(/^\s+/)?.[0] ?? '';
 }
 
 function wrapDisplayLine(line: string, columns: number): readonly string[] {
-  if (line.startsWith(CORNER_PREFIX)) {
+  if (line.startsWith(TOOL_OUTPUT_PREFIX)) {
     return wrapWithPrefix(
-      line.slice(CORNER_PREFIX.length),
+      line.slice(TOOL_OUTPUT_PREFIX.length),
       columns,
-      CORNER_PREFIX,
-      ' '.repeat(CORNER_PREFIX.length),
+      TOOL_OUTPUT_PREFIX,
+      hangingIndent(TOOL_OUTPUT_PREFIX),
     );
   }
   const prefix = leadingWhitespacePrefix(line);
@@ -187,7 +178,7 @@ function liveAssistantDisplayLines({
 }: {
   readonly rows: number;
   readonly text: string;
-  readonly width?: number;
+  readonly width: number;
 }): readonly string[] {
   const columns = transcriptColumns(width);
   // Keep only the tail that could occupy the visible rows, so a very long
@@ -240,7 +231,7 @@ function entryLines(
           headline,
           columns,
           NOTICE_ENTRY_PREFIX,
-          ' '.repeat(NOTICE_ENTRY_PREFIX.length),
+          hangingIndent(NOTICE_ENTRY_PREFIX),
         );
       }
       // An answer its model ended early says so under its text, wrapped
@@ -314,7 +305,7 @@ export function transcriptEntryLayout(
      *  where both sides declare a separator costs two blank rows instead of
      *  one (user to user). */
     readonly previousEntry?: TranscriptRow;
-    readonly width?: number;
+    readonly width: number;
   },
 ): TranscriptEntryLayout {
   const base = ROW_GEOMETRY[row.kind];

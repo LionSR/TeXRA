@@ -80,29 +80,12 @@ const TaskFilesReasonSchema = Schema.TaggedUnion({
 });
 export type TaskFilesReason = typeof TaskFilesReasonSchema.Type;
 
-/** The named files cannot start the run; `reason` says which and why. */
+/** The named files cannot start the run; `reason` says which and why. The
+ *  caller words it in the terms the files were named in (a flag, a field). */
 export class TaskFilesRejected extends Schema.TaggedError<TaskFilesRejected>()(
   'TaskFilesRejected',
   { reason: TaskFilesReasonSchema },
-) {
-  override get message(): string {
-    const { reason } = this;
-    switch (reason._tag) {
-      case 'NotFound':
-        return `${reason.role} file not found: ${reason.path}`;
-      case 'NoMatch':
-        return `no ${reason.role} files matched: ${reason.pattern}`;
-      case 'NoTexFiles':
-        return `no .tex files in ${reason.role} directory: ${reason.directory}`;
-      case 'OutsideProject':
-        return `${reason.role} file is outside the project: ${reason.path}`;
-      case 'EmptyText':
-        return `the ${reason.role} text is empty`;
-      case 'NoInput':
-        return 'at least one input file is required';
-    }
-  }
-}
+) {}
 
 /** What the files are for: a program reads files from anywhere and needs
  *  an input; an agent works inside its project. */
@@ -134,12 +117,6 @@ const GLOB_OPTIONS = {
   magicalBraces: true,
   windowsPathsNoEscape: IS_WINDOWS,
 };
-
-/** Whether a named path is a glob the resolution would expand, for a host
- *  that checks a name before it resolves. */
-function isTaskFileGlob(spec: string): boolean {
-  return hasMagic(spec, GLOB_OPTIONS);
-}
 
 /**
  * `candidate` in the launcher's form: relative to `root` (symlinks on
@@ -189,7 +166,7 @@ const expandSpec = Effect.fn('taskFiles.expandSpec')(function* (
     .stat(absolutePath)
     .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(null)));
 
-  if (!stats && isTaskFileGlob(trimmed)) {
+  if (!stats && hasMagic(trimmed, GLOB_OPTIONS)) {
     const isAbsolute = path.isAbsolute(trimmed);
     const matches = yield* listMatches(trimmed, {
       cwd: isAbsolute ? undefined : root,

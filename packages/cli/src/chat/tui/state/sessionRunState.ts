@@ -30,7 +30,7 @@ export interface RootLaunch {
   /** For a launch that ended without a run: the code the chat exits with
    *  unless a later root replaces it (a refused resume is a usage error, a
    *  failed launch an agent error, a resume with nothing to resume a usage
-   *  error, a document task's resume a success). */
+   *  error, a program run's resume a success). */
   readonly exitCode: CliExitCode | undefined;
 }
 

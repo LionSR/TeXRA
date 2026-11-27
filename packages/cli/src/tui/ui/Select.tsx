@@ -39,6 +39,20 @@ export interface SelectItem<T> {
   readonly disabled?: boolean;
 }
 
+/** A group's heading among a list's rows: what `renderItem` returns for
+ *  the disabled item that names the group. One row, clipped to the list. */
+export function SelectGroupHeading(props: {
+  readonly text: string;
+}): React.JSX.Element {
+  return (
+    <Box height={1} overflowY="hidden">
+      <Text bold dimColor wrap="truncate-end">
+        {props.text}
+      </Text>
+    </Box>
+  );
+}
+
 interface SelectProps<T> {
   readonly items: ReadonlyArray<SelectItem<T>>;
   /** Value currently active in the system (rendered with a tick). */

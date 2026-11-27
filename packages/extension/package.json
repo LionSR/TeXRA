@@ -233,7 +233,7 @@
           {
             "id": "texra.gettingStarted.firstTask",
             "title": "Start your first task",
-            "description": "Open **New task**, describe what you need (e.g., \"tighten the introduction\"), and send. Track running or past work under **Tasks**.\n\n[New task](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMainView%22%5D)\n\nNew projects default to **Auto-approve**; switch to **Ask** or **Block** anytime in **Settings → General → Approval**.\n\n[Approval settings](command:texra.walkthroughWorkspaceAction?%5B%22texra.showApprovalSettings%22%5D)",
+            "description": "Open **New task**, describe what you need (e.g., \"tighten the introduction\"), and send. Track running or past work under **Tasks**.\n\n[New task](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMainView%22%5D)\n\nNew projects default to **Auto-approve**; switch to **Ask** anytime in **Settings → General → Approval**.\n\n[Approval settings](command:texra.walkthroughWorkspaceAction?%5B%22texra.showApprovalSettings%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/vscode-compare.png",
               "altText": "Screenshot of the VS Code diff view"

@@ -73,7 +73,9 @@ export function modelAccessContribution(): SlashCommandContribution & {
               return 'Updating model access';
             case 'login': {
               const args = parseChatLoginSlashArgs(value.target);
-              return args ? loginStartMessage(args) : 'Signing in';
+              return typeof args === 'object'
+                ? loginStartMessage(args)
+                : 'Signing in';
             }
             case 'logout':
               return 'Signing out';

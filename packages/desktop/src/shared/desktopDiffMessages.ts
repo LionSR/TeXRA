@@ -21,8 +21,7 @@ export const DesktopShowDiffMessageSchema = Schema.Struct({
   command: Schema.Literal(DESKTOP_DIFF_COMMANDS.SHOW_DIFF),
   /**
    * Names the diff this message opens, so the `desktop:closeDiff` below can
-   * close that diff and no other. A tool-edit preview uses its request id;
-   * every other producer gets one minted by `desktopDiffHost.openDiff`.
+   * close that diff and no other. A tool-edit preview uses its request id.
    */
   previewId: Schema.NonEmptyString,
   title: Schema.String,

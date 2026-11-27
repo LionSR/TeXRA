@@ -39,12 +39,13 @@ export function presentCliSignInUrl(options: {
   /** The account the browser session belongs to ('ChatGPT', 'xAI'). */
   readonly sessionName: string;
   readonly url: string;
-  readonly noBrowser: boolean;
+  /** False prints the URL for the person to open themselves. */
+  readonly openBrowser: boolean;
 }): Effect.Effect<void, HostFailed, ChildProcessSpawner> {
-  const { writeProgress, displayName, sessionName, url, noBrowser } = options;
+  const { writeProgress, displayName, sessionName, url, openBrowser } = options;
   return Effect.gen(function* () {
     writeProgress(`${displayName} sign-in URL:\n${url}`, { copyable: true });
-    if (noBrowser) {
+    if (!openBrowser) {
       writeProgress(REMOTE_CALLBACK_HINT, { persistent: true });
       return;
     }

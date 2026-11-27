@@ -22,11 +22,15 @@ export interface CompletionFlag {
   readonly name: string;
   readonly aliases: readonly string[];
   readonly description: string;
-  readonly takesValue: boolean;
-  readonly values: readonly string[];
-  readonly valueKind?: string;
+  readonly value: CompletionFlagValue;
   readonly negatedName?: string;
 }
+
+/** What follows a flag: nothing, one of a fixed set, a path, or any text. */
+type CompletionFlagValue =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'choice'; readonly values: readonly string[] }
+  | { readonly kind: 'file' | 'directory' | 'value' };
 
 export type CompletionFlagVariant = Omit<CompletionFlag, 'negatedName'>;
 
@@ -47,8 +51,16 @@ const PATH_VALUE_FLAGS: Readonly<Record<string, 'file' | 'directory'>> =
     'instruction-file': 'file',
   });
 
+function completionFlagValue(
+  flag: Completions.FlagDescriptor,
+): CompletionFlagValue {
+  if (flag.type._tag === 'Boolean') return { kind: 'none' };
+  if (flag.type._tag === 'Choice' && flag.type.values.length > 0)
+    return { kind: 'choice', values: flag.type.values };
+  return { kind: PATH_VALUE_FLAGS[flag.name] ?? 'value' };
+}
+
 function completionFlag(flag: Completions.FlagDescriptor): CompletionFlag {
-  const takesValue = flag.type._tag !== 'Boolean';
   const negation =
     flag.type._tag === 'Boolean' && typeof flag.negation === 'string'
       ? flag.negation
@@ -57,9 +69,7 @@ function completionFlag(flag: Completions.FlagDescriptor): CompletionFlag {
     name: flag.name,
     aliases: flag.aliases,
     description: flag.description ?? '',
-    takesValue,
-    values: flag.type._tag === 'Choice' ? flag.type.values : [],
-    valueKind: PATH_VALUE_FLAGS[flag.name],
+    value: completionFlagValue(flag),
     ...(negation === undefined ? {} : { negatedName: negation }),
   };
 }
@@ -75,8 +85,7 @@ export function completionFlagVariants(
       name: negatedName,
       aliases: [],
       description: flag.description,
-      takesValue: false,
-      values: [],
+      value: { kind: 'none' },
     },
   ];
 }
