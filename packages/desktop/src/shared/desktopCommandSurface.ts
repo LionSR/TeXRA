@@ -103,9 +103,7 @@ export function desktopCommandEntry(
   id: DesktopOnlyCommandId | CommandId,
 ): DesktopCommandEntry {
   if (isDesktopOnlyCommand(id)) return DESKTOP_ONLY_COMMANDS[id];
-  const entry = commandCatalogById.get(id);
-  if (!entry) throw new Error(`Missing command catalog entry: ${id}`);
-  return { ...entry, category: COMMAND_CATEGORY };
+  return { ...commandCatalogById[id], category: COMMAND_CATEGORY };
 }
 
 function isDesktopOnlyCommand(id: string): id is DesktopOnlyCommandId {
