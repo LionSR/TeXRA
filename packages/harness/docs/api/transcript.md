@@ -278,6 +278,25 @@ interface LogRow extends TranscriptRowBase {
 }
 ```
 
+## MessageSender
+
+Who sent a message a run took, when not the person: another run (with
+its label as the session names it, when it has one, and whether the
+session still holds it, so a host links only to a run it can show), a
+host's notice by its source, or the run's own note for a later time.
+
+```ts
+type MessageSender =
+  | {
+      readonly kind: 'run';
+      readonly runId: RunId;
+      readonly label?: string;
+      readonly inSession: boolean;
+    }
+  | { readonly kind: 'notification'; readonly source: string }
+  | { readonly kind: 'self' };
+```
+
 ## normalizeToolName
 
 Canonical lookup key for a tool name: namespaces stripped, lowercased.
@@ -392,7 +411,10 @@ interface ScriptCallView {
         readonly kind: 'request';
         readonly payload: ReadonlyDeep<RequestPayload>;
       };
-  /** The child run an `agent` call launched: the row opens it. */
+  /** The child run an `agent` call launched: the row opens it, and a host
+   *  shows the call as a summary of that run. A call with none (any other
+   *  tool's, or an `agent` call that launched nothing: rejected before its
+   *  launch, reused, still queued) has only its own card to show. */
   readonly childRunId?: RunId;
   /** The run under the call waiting on the user: Review opens it. */
   readonly askingRunId?: RunId;
@@ -928,6 +950,9 @@ function transcriptTimeline<
 ```ts
 interface UserRow extends TranscriptRowBase {
   readonly kind: 'user';
+  /** Who sent it; absent on the person's own message. Every host draws a
+   *  message with a sender as received from it, never as the person's. */
+  readonly sender?: MessageSender;
   /** The message as its follow-up shows it (`followUpDisplay`): a delivery
    *  or notice is its summary, not its envelope. */
   readonly text: TranscriptText;

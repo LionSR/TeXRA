@@ -140,12 +140,15 @@ export class RunTabs extends TexraElement {
    *  none and carries the rollup alone, with no disclosure; the drawer and
    *  the docked list show every child, a document task run's calls
    *  included, so a call's own subagents stay reachable under their
-   *  parent. */
+   *  parent. A command is not listed: the list is of agents, and a
+   *  command is reached from its call in its task's conversation and from
+   *  the task's background panel. */
   private childrenOf(run: RunView): RunView[] {
     if (this.topLevelOnly) return [];
     return run.childIds
       .map((id) => this.runOfEvent(id))
-      .filter((child): child is RunView => child !== undefined);
+      .filter((child): child is RunView => child !== undefined)
+      .filter((child) => child.identity.kind !== 'process');
   }
 
   private renderNode(run: RunView, selected: RunId | null): TemplateResult {

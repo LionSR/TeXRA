@@ -34,6 +34,7 @@ import {
 } from '@shared/tools/toolDisplayName';
 import { isEditLikeToolName, toolDisplayKind } from '@shared/tools/toolKind';
 
+import { SCRIPT_RETURNED_HEADING } from './scriptCall';
 import { stringifyPayload, transcriptText } from './transcriptText';
 import type {
   ToolCodeSection,
@@ -439,11 +440,49 @@ function buildMcpSections(ctx: SectionContext): ToolSection[] {
   return sections;
 }
 
+/**
+ * A finished script's output, read apart by the value its result carries:
+ * the value as JSON, and what the output says around it (a note before the
+ * heading, the tail of the script's log after the value). Undefined for a
+ * script that returned nothing readable as JSON, failed, or whose output
+ * does not hold its value, which then shows as plain output.
+ */
+function scriptReturn(
+  ctx: SectionContext,
+): { json: string; note: string; log: string } | undefined {
+  const value = Predicate.isObject(ctx.parsedOutput)
+    ? ctx.parsedOutput.value
+    : undefined;
+  if (ctx.failed || value === undefined) return undefined;
+  const json = JSON.stringify(value, null, 2);
+  const at = ctx.outputText.indexOf(json);
+  if (at === -1) return undefined;
+  return {
+    json,
+    note: ctx.outputText
+      .slice(0, at)
+      .replace(SCRIPT_RETURNED_HEADING, '')
+      .trim(),
+    log: ctx.outputText.slice(at + json.length).trim(),
+  };
+}
+
 function buildScriptSections(ctx: SectionContext): ToolSection[] {
   const code = Predicate.isObject(ctx.input)
     ? asString(ctx.input.code)
     : undefined;
-  return code === undefined ? [] : [codeSection('', code, 'javascript')];
+  if (code === undefined) return [];
+  const returned = scriptReturn(ctx);
+  return [
+    codeSection('', code, 'javascript'),
+    ...(returned === undefined
+      ? []
+      : [
+          ...(returned.note ? [textSection('', returned.note)] : []),
+          codeSection('Returned:', returned.json, 'json'),
+          ...(returned.log ? [textSection('', returned.log)] : []),
+        ]),
+  ];
 }
 
 function buildDefaultSections(ctx: SectionContext): ToolSection[] {
@@ -533,6 +572,8 @@ export function dispatchSections(ctx: SectionContext): {
       // no diff shows, and a host may paint no diff for it at all.
       carriesOutput:
         isMcpToolName(ctx.toolName) ||
+        (toolDisplayKind(ctx.toolName) === 'script' &&
+          scriptReturn(ctx) !== undefined) ||
         (DELEGATION_TOOLS.has(ctx.toolName) &&
           childAnswer(ctx.parsedOutput) !== undefined) ||
         (!ctx.failed && sections.some((section) => section.kind === 'diff')),

@@ -13,11 +13,13 @@
 import {
   MESSAGE_TYPES,
   type ErrorLogData,
+  type FollowUpSender,
   modelFailureMessage,
   reasonPhrase,
   type LogPayload,
   type ToolCallLog,
 } from '@shared/schemas';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
@@ -32,6 +34,7 @@ import {
   type ErrorRow,
   type ErrorRowDetail,
   type LogRow,
+  type MessageSender,
   type StatItem,
   type StreamingTextRow,
   type ToolRow,
@@ -213,17 +216,39 @@ export type LogRowPayload = Exclude<
   }
 >;
 
+/** A user message's sender as its row carries it: nobody for the person,
+ *  and a run with its label in the session, when it has one. */
+function messageSender(
+  from: FollowUpSender | undefined,
+  runLabels: RunLabels | undefined,
+): MessageSender | undefined {
+  if (from === undefined || from.kind === 'user') return undefined;
+  if (from.kind === 'self') return { kind: 'self' };
+  if (from.kind === 'notification') return from;
+  const run = runLabels?.get(from.runId);
+  const label = run?.label.trim();
+  return {
+    kind: 'run',
+    runId: from.runId,
+    ...(label && label !== from.runId ? { label } : {}),
+    inSession: run !== undefined,
+  };
+}
+
 export function logPayloadRow(
   base: TranscriptRowBase,
   text: string,
   payload: LogRowPayload,
   forkAt?: number,
+  runLabels?: RunLabels,
 ): TranscriptRow | undefined {
   switch (payload.messageType) {
     case MESSAGE_TYPES.USER_MESSAGE: {
+      const sender = messageSender(payload.data?.from, runLabels);
       return {
         ...base,
         kind: 'user',
+        ...(sender === undefined ? {} : { sender }),
         text: transcriptText(text),
         ...(payload.data?.scriptSummary
           ? { scriptSummary: payload.data.scriptSummary }

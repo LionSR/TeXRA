@@ -134,6 +134,8 @@ interface DetailsSummaryOptions {
   running?: boolean;
   label: string;
   labelClass?: string;
+  /** The label's tooltip. */
+  title?: string;
   /** What the label acts on (a path, a command), in the reading color
    *  beside the quieter label. */
   detail?: string;
@@ -148,12 +150,15 @@ interface DetailsSummaryOptions {
 
 /** The summary-slot header of {@link buildDetailsCard}: icon, label, and
  *  optional extras. */
-function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
+export function buildDetailsSummary(
+  options: DetailsSummaryOptions,
+): TemplateResult {
   const {
     iconName,
     running = false,
     label,
     labelClass = 'label',
+    title,
     detail,
     timestamp,
     copyButton,
@@ -172,7 +177,7 @@ function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
     : nothing;
   const extraTemplate = extraContent ?? nothing;
   // prettier-ignore
-  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto">${label}${detail ? html` <span class="summary-detail">${detail}</span>` : nothing}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
+  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto" title=${ifDefined(title)}>${label}${detail ? html`${label ? ' ' : nothing}<span class="summary-detail">${detail}</span>` : nothing}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
 }
 
 /**

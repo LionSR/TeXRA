@@ -16,6 +16,7 @@ import {
   type ScriptOpResult,
 } from '@agent/codeSandbox/codeSandbox';
 import { RUN_LOG_MAX_LINES } from '@agent/codeSandbox/limits';
+import { SCRIPT_RETURNED_HEADING } from '@shared/transcript/scriptCall';
 import { ToolContext } from '@tools/core/ToolTypes';
 import {
   noLaterTurn,
@@ -312,7 +313,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
       : [];
   return {
     ...executed(
-      [...foreground, `The script returned:`, shown(value), ...log].join('\n'),
+      [...foreground, SCRIPT_RETURNED_HEADING, shown(value), ...log].join('\n'),
       input.title == null
         ? 'Script finished'
         : `Script finished: ${input.title}`,
