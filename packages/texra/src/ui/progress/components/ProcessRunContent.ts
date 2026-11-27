@@ -17,17 +17,16 @@ export class ProcessRunContent extends BaseRunContent {
         padding-top: var(--wa-space-xs);
       }
 
-      /* "$ <command>" strip above the process output. */
+      /* The command as the session's first line: "$ <command>" on the
+         same surface and in the same type as the output under it, with no
+         frame of its own. */
       .command-strip {
         display: flex;
         align-items: baseline;
-        gap: var(--wa-space-2xs);
-        padding: var(--wa-space-2xs) var(--wa-space-s);
+        gap: var(--wa-space-xs);
+        padding: 0 0 var(--wa-space-2xs);
         margin: 0;
-        background: var(--wa-color-terminal-background);
         color: var(--wa-color-terminal-foreground);
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius-large);
         font-family: var(--wa-font-family-mono);
         font-size: var(--wa-editor-font-size);
         max-height: min(32vh, 320px);

@@ -488,26 +488,59 @@ export class StageList extends LitElement {
     `;
   }
 
-  /** Rows of a stage, in transcript order. A script stage leads with its
-   *  calls as the script-stage model reads them; the calls' own cards, with
-   *  their output, open below it from the card's Log. */
+  /** Rows of a stage, in transcript order. A script stage is its calls as
+   *  the script-stage model reads them: a call that launched a child is
+   *  that view's row, and any other call's own card is slotted in at its place
+   *  in the list, so its disclosure opens its output where its row is. A
+   *  row of the stage that is no call follows the list. */
   private renderStageBody(node: StageEntry): TemplateResult {
     const script = this.scripts.get(node.stage.id);
-    const rows = this.renderRowEntries(node.rows, `stage:${node.stage.id}`);
-    const callsKey = `calls:${node.stage.id}`;
-    const callsOpen = this.expanded?.get(callsKey) === true;
+    if (!script || !this.view || !this.surface)
+      return this.renderRowEntries(node.rows, `stage:${node.stage.id}`);
+    const cards = new Set(
+      script.calls.flatMap((call) =>
+        call.childRunId === undefined ? [call.id] : [],
+      ),
+    );
+    const calls = new Set(script.calls.map((call) => call.id));
+    // Bounded like any stage's rows: a card mounts its sections (a
+    // terminal, a diff) whether or not it is open, so a script with
+    // thousands of calls shows its recent cards and reveals the rest. An
+    // older call's place in the list stays, empty, until then.
+    const scope = `stage:${node.stage.id}`;
+    const cardRows = node.rows.filter((row) => cards.has(row.id));
+    const hiddenCount = Math.max(
+      0,
+      cardRows.length -
+        (this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW),
+    );
     return html`${
-      script && this.view && this.surface
-        ? html`<script-stage
-              .stage=${script}
-              .view=${this.view}
-              .surface=${this.surface}
-              .runId=${this.runId}
-              ?logOpen=${callsOpen}
-            ></script-stage>
-            ${callsOpen ? rows : nothing}`
-        : rows
-    }`;
+        hiddenCount > 0
+          ? this.renderRevealButton({
+              hiddenCount,
+              step: STAGE_ROW_WINDOW_STEP,
+              scope,
+              kind: 'rows',
+              label: 'call',
+            })
+          : nothing
+      }<script-stage
+        .stage=${script}
+        .view=${this.view}
+        .surface=${this.surface}
+        >${repeat(
+          cardRows.slice(hiddenCount),
+          (row) => row.id,
+          (row) =>
+            html`<div slot=${row.id} class="script-call">
+              ${this.renderLogEntry(row)}
+            </div>`,
+        )}</script-stage
+      >${repeat(
+        node.rows.filter((row) => !calls.has(row.id)),
+        (row) => row.id,
+        (row) => this.renderLogEntry(row),
+      )}`;
   }
 
   /** Render a stage: a script stage as a plain container, its script-stage

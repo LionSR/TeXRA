@@ -142,6 +142,14 @@ export const toolUseStyles = css`
     margin: 0;
   }
 
+  /* A received message that fits its line: the same line, nothing to open. */
+  .received-line > .details-summary {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    min-height: var(--control-size-s);
+  }
+
   .activity-row + :not(.activity-row) {
     margin-block-start: var(--message-gap);
   }

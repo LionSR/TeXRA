@@ -915,6 +915,32 @@ appRoot.addEventListener('surface-action', (event) => {
   }
 });
 
+// A web link in a message opens in its project's browser tab. Left to the
+// window it would be a navigation, which the window refuses for every host
+// but its own allowed few, so the click would do nothing.
+appRoot.addEventListener('click', (event) => {
+  if (event.defaultPrevented || event.button !== 0) return;
+  const path = event.composedPath();
+  const link = path.find(
+    (node): node is HTMLAnchorElement => node instanceof HTMLAnchorElement,
+  );
+  if (
+    !link ||
+    !path.some(
+      (node) =>
+        node instanceof HTMLElement &&
+        node.classList.contains('markdown-content'),
+    )
+  )
+    return;
+  const url = URL.parse(link.href);
+  if (url?.protocol !== 'http:' && url?.protocol !== 'https:') return;
+  const project = projectWorkbenches.get(sessionOf(event) ?? shell.active);
+  if (!project) return;
+  event.preventDefault();
+  project.openBrowser(url);
+});
+
 // The projects list arrives in reply; each project's session subscribes as it
 // opens, and the file tree refreshes when the list names the project this
 // window shows.

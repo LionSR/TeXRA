@@ -20,7 +20,7 @@ import { TokenUsageStatsSchema } from './usage';
  * Who put the input on the run. A run names only itself: where it stands
  * relative to the recipient changes nothing about how its message is read.
  */
-const FollowUpSenderSchema = Schema.Union([
+export const FollowUpSenderSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('user') }),
   Schema.Struct({
     kind: Schema.Literal('run'),

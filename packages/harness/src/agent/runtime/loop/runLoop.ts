@@ -314,9 +314,15 @@ export const openToolUse = Effect.fn('toolUse.open')(
     // A fresh run's transcript opens with the user's instruction, with the
     // kinds of the media its opening inserts (a conversation's; a fork's
     // history or a script's call inserts none).
+    // A child's instruction is its parent's message, not the person's.
+    const { parent } = run.entry;
     const echo = (attachments: readonly MediaAttachmentKind[] = []) => {
       const text = getDisplayedInstruction(run.config);
-      if (text) logUserMessage(logger, text, { attachments });
+      if (text)
+        logUserMessage(logger, text, {
+          ...(parent !== null && { from: { kind: 'run', runId: parent } }),
+          attachments,
+        });
     };
     const bound = yield* ScopedRef.get(run.model);
     // The state its first step opens on: what the opening batch records.

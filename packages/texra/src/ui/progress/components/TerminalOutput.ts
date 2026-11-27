@@ -134,7 +134,12 @@ export class TerminalOutput extends LitElement {
   override firstUpdated(): void {
     const container = this.terminalContainer.value;
     if (!container) throw new Error('TerminalOutput rendered no container');
-    const { theme, fontFamily } = resolveXtermTheme(this, this.reportedTokens);
+    // The container, not the host: this element's shadow root has no slot,
+    // so a colour probe appended to the host itself is never rendered.
+    const { theme, fontFamily } = resolveXtermTheme(
+      container,
+      this.reportedTokens,
+    );
     const editorFontSize = Number.parseFloat(
       getComputedStyle(this).getPropertyValue('--wa-editor-font-size'),
     );

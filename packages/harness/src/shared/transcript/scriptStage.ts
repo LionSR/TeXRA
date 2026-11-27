@@ -83,7 +83,10 @@ export interface ScriptCallView {
         readonly kind: 'request';
         readonly payload: ReadonlyDeep<RequestPayload>;
       };
-  /** The child run an `agent` call launched: the row opens it. */
+  /** The child run an `agent` call launched: the row opens it, and a host
+   *  shows the call as a summary of that run. A call with none (any other
+   *  tool's, or an `agent` call that launched nothing: rejected before its
+   *  launch, reused, still queued) has only its own card to show. */
   readonly childRunId?: RunId;
   /** The run under the call waiting on the user: Review opens it. */
   readonly askingRunId?: RunId;
