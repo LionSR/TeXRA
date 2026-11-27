@@ -49,7 +49,6 @@ type ActiveFileGuardFailureReason = keyof typeof GUARD_FAILURE_MESSAGES;
 
 interface ActiveFileGuardSuccess {
   status: 'ok';
-  editor: vscode.TextEditor;
   relativePath: string;
 }
 
@@ -105,7 +104,6 @@ const getActiveLatexEditor = Effect.fn('activeFileGuards.getActiveLatexEditor')(
 
     return {
       status: 'ok',
-      editor,
       relativePath,
     } satisfies ActiveFileGuardResult;
   },
