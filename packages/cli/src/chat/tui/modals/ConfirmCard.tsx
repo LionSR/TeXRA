@@ -102,16 +102,15 @@ export function ConfirmCard({
   let hints: readonly KeyHint[];
   if (feedbackMode) {
     hints = confirmCardFeedbackHints();
-  } else if (compact) {
-    hints = compactHintLayout?.inlineHints ?? [];
+  } else if (compactHintLayout) {
+    hints = compactHintLayout.hints;
   } else {
     hints = confirmCardKeyHintsForWidth({
       ...keyOptions,
       maxColumns: Math.max(0, columns - BORDERED_PANEL_CHROME_COLUMNS),
     });
   }
-  const stackedCompactHints = compactHintLayout?.stackedHints ?? hints;
-  const stackCompactHints = compactHintLayout?.stack ?? false;
+  const stackCompactHints = compactHintLayout?.stacked ?? false;
 
   const feedbackState = {
     mode: feedbackMode,
@@ -133,7 +132,7 @@ export function ConfirmCard({
               <Text bold color={color} wrap="truncate-end">
                 {pulsedTitle}
               </Text>
-              <KeyHints hints={stackedCompactHints} />
+              <KeyHints hints={hints} />
             </>
           ) : (
             <Text bold color={color} wrap="truncate-end">

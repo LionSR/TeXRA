@@ -152,7 +152,7 @@ export function resultFacts(
 }
 
 /** A replacement the agent asked for (`ContextReplaceSchema`). */
-export type ContextReplace = typeof ContextReplaceSchema.Type;
+type ContextReplace = typeof ContextReplaceSchema.Type;
 
 /** The tool `callId` of `pending` names: its `script.call`'s for a call a
  *  script issued, else the response's own call's. */

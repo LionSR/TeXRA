@@ -49,6 +49,7 @@ import {
 } from '@ui/wa/actionButtons';
 import { isCommitEnter } from '@ui/wa/keyActivation';
 import { selectedItemValue } from '@ui/wa/selectTemplates';
+import { factDot } from '@ui/wa/factDot';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import './QueuedFollowUps';
 import { launcherChipMenus, type ChipMenu } from './composerChipMenus';
@@ -511,7 +512,7 @@ export class SessionComposer extends TexraElement {
     return html`<div class="routing">
       ${waIcon('code-branch')}
       <span class="routing-target">Your message goes to ${run.label}</span>
-      <span aria-hidden="true">·</span>
+      ${factDot()}
       ${renderLabeledActionButton({
         text: `reply to ${parent.label} instead`,
         kind: 'link',

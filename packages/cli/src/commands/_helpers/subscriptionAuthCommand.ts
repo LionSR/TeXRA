@@ -7,11 +7,12 @@ import { cliPlatform } from '@cli/runtime/platform/initPlatform';
 import { writeErrorStderr } from '@cli/runtime/platform/logSinks';
 import { cliProgressWriter, emitCliResult } from '@cli/runtime/platform/output';
 import {
-  shouldUseSubscriptionDeviceCode,
+  resolveLoginTransport,
   signInCliSubscription,
   signOutCliSubscription,
   subscriptionSignOutOutcomeMessage,
 } from '@cli/runtime/models/subscriptionLogin';
+import type { LoginTransport } from '@cli/runtime/models/loginOptions';
 import {
   subscriptionProvider,
   type SubscriptionAccount,
@@ -65,7 +66,7 @@ export function defineSubscriptionAuthCommand(
   /** Registered ndjson discriminator; the status record appends '-status'. */
   const ndjsonKind = `${options.providerId}-auth` as const;
 
-  function runLogin(init: { device: boolean; noBrowser: boolean }) {
+  function runLogin(requested: LoginTransport) {
     return Effect.gen(function* () {
       const { context } = yield* CliInvocation;
       const writeProgress = yield* cliProgressWriter;
@@ -74,7 +75,7 @@ export function defineSubscriptionAuthCommand(
         signInCliSubscription(
           services,
           options.providerId,
-          { ...init, device: shouldUseSubscriptionDeviceCode(context, init) },
+          resolveLoginTransport(context, requested),
           { writeProgress },
         ),
       );
@@ -111,7 +112,9 @@ export function defineSubscriptionAuthCommand(
         'Print the loopback sign-in URL instead of opening a browser',
       ),
     },
-    run: (_, input) => runLogin(input),
+    // `--device` wins when both are given.
+    run: (_, { device, noBrowser }) =>
+      runLogin(device ? 'device' : noBrowser ? 'no-browser' : 'auto'),
   });
 
   const logoutCommand = cliCommand('logout', {

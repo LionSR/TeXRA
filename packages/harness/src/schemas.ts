@@ -143,7 +143,6 @@ export {
 // resolve against the policy.
 export {
   APPROVAL_BYPASS_KINDS,
-  launchPolicy,
   resolveBypass,
   runBypasses,
   type ApprovalBypasser,
@@ -191,8 +190,10 @@ export {
   type TraceDocument,
 } from '@shared/schemas/traceDocument';
 // Path basics that hold in a browser: forward slashes, a path's base name,
-// its base name without the extension, and a case-free extension check.
+// its base name without the extension, a case-free extension check, and
+// the path a `file:` URL names.
 export {
+  filePathOfFileUrl,
   getBasename,
   getFileStem,
   hasExtension,
@@ -268,6 +269,7 @@ export {
   formatCostUsd,
   formatResetDuration,
   formatResultCount,
+  formatUtcSecond,
   formatWallTime,
   formatWordList,
   joinFacts,

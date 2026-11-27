@@ -22,7 +22,7 @@ const WebSearchInputSchema = Schema.Struct({
   max_results: nullishWithDefault(
     Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 5 })),
     3,
-    'Maximum number of search results to return, up to 5.',
+    'Maximum number of search results to return.',
   ),
 });
 

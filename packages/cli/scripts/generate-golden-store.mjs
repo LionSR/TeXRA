@@ -106,8 +106,13 @@ import { parseArgs } from 'node:util';
 import { zstdDecompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
 
-import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
-import { splitValidationAgent } from './validationAgent.mjs';
+import { loadPtySpawn } from './nodePtySpawnHelper.mjs';
+import {
+  buildValidationCli,
+  splitValidationAgent,
+  VALIDATION_FAKE_API_KEY,
+  VALIDATION_PROVIDER_KEYS,
+} from './validationAgent.mjs';
 import { GOLDEN_AGENTS } from '../src/runtime/models/validationAgents.ts';
 import {
   VALIDATION_FLAG,
@@ -139,18 +144,6 @@ const effectPath = path.join(
   'golden-effect',
   'approved.txt',
 );
-const FAKE_KEY = 'texra-validation-fake-key';
-const PROVIDER_KEYS = [
-  'OPENAI_API_KEY',
-  'ANTHROPIC_API_KEY',
-  'GOOGLE_API_KEY',
-  'XAI_API_KEY',
-  'DEEPSEEK_API_KEY',
-  'MOONSHOT_API_KEY',
-  'DASHSCOPE_API_KEY',
-  'MINIMAX_API_KEY',
-  'GLM_API_KEY',
-];
 
 /** The processes a step starts, reaped however the generation ends. */
 const spawned = new Set();
@@ -177,29 +170,6 @@ const { 'no-build': noBuild, keep, twice } = options;
 
 function fail(message) {
   throw new Error(`[golden-store] ${message}`);
-}
-
-function build() {
-  for (const [script, env] of [
-    [
-      'bundle',
-      {
-        TEXRA_CLI_BUNDLE_OUTFILE: binaryPath,
-        TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
-      },
-    ],
-    [
-      'copy:resources',
-      { TEXRA_CLI_RESOURCES_OUTDIR: path.join(validationRoot, 'resources') },
-    ],
-  ]) {
-    const result = spawnSync('pnpm', ['run', script], {
-      cwd: cliRoot,
-      env: { ...process.env, ...env },
-      stdio: 'inherit',
-    });
-    if (result.status !== 0) fail(`pnpm run ${script} failed`);
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -308,10 +278,10 @@ process.stdin.on('end', function answer() {
         ([name]) => !name.startsWith('TEXRA_') && name !== 'CI',
       ),
     ),
-    ...Object.fromEntries(PROVIDER_KEYS.map((name) => [name, ''])),
-    OPENAI_API_KEY: FAKE_KEY,
+    ...Object.fromEntries(VALIDATION_PROVIDER_KEYS.map((name) => [name, ''])),
+    OPENAI_API_KEY: VALIDATION_FAKE_API_KEY,
     // The helper model's provider: a run's session label (`run.description`).
-    DEEPSEEK_API_KEY: FAKE_KEY,
+    DEEPSEEK_API_KEY: VALIDATION_FAKE_API_KEY,
     PATH: [bin, process.env.PATH].join(path.delimiter),
     npm_config_prefix: path.join(root, 'npm'),
     ...testLaunchEnv(home),
@@ -351,9 +321,8 @@ process.stdin.on('end', function answer() {
   };
   // The interactive chat, on a PTY whose screen a headless terminal keeps.
   const chat = async (command) => {
-    ensureNodePtySpawnHelperExecutable();
+    const spawnPty = await loadPtySpawn();
     const require = createRequire(import.meta.url);
-    const { spawn: spawnPty } = require('node-pty');
     const { Terminal } = require('@xterm/headless');
     const cols = 100;
     const rows = 40;
@@ -1416,7 +1385,7 @@ async function generation() {
   }
 }
 
-if (!noBuild) build();
+if (!noBuild) buildValidationCli(binaryPath);
 if (!existsSync(binaryPath)) fail(`no validation bundle at ${binaryPath}`);
 const text = await generation();
 if (twice) {

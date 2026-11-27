@@ -8,6 +8,7 @@ import { Option, Schema, SchemaGetter } from 'effect';
 // Local imports
 import { RunIdSchema, NonNegativeIntSchema } from '@shared/schemas';
 import {
+  EXECUTIONS_DEFAULT_ACTION,
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
@@ -21,10 +22,14 @@ import { LineRangeSchema } from '../formatting';
 /** Listing entries or conversation messages a call returns when it names no `limit`. */
 export const EXECUTIONS_DEFAULT_LIMIT = 100;
 
-/** How many list entries or conversation messages one call may ask for. */
-const ListLimit = Schema.Int.check(
-  Schema.isBetween({ minimum: 1, maximum: 200 }),
-);
+/** A call's `limit`: how many listing entries or conversation messages it
+ *  returns, at most 200. */
+const limitField = (description: string) =>
+  nullishWithDefault(
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 200 })),
+    EXECUTIONS_DEFAULT_LIMIT,
+    description,
+  );
 
 /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/workspace-files/{path} */
 const PathFieldSchema = Schema.String.annotate({
@@ -39,8 +44,8 @@ const ViewActionSchema = Schema.Struct({
   // picks the first branch that decodes, and this is the only one whose
   // `action` takes null and absence.
   action: nullishWithDefault(
-    Schema.Literal('view'),
-    'view',
+    Schema.Literal(EXECUTIONS_DEFAULT_ACTION),
+    EXECUTIONS_DEFAULT_ACTION,
     'Read run data (returns immediately). Default action.',
   ),
 
@@ -56,11 +61,8 @@ const ViewActionSchema = Schema.Struct({
     'Zero-based offset into the executions list or conversation messages. Use with limit on /executions or /executions/{id}/conversation.',
   ),
 
-  /** Maximum list entries or conversation messages to return. */
-  limit: nullishWithDefault(
-    ListLimit,
-    EXECUTIONS_DEFAULT_LIMIT,
-    'Max entries or conversation messages to return. Use on /executions or /executions/{id}/conversation. Max: 200.',
+  limit: limitField(
+    'Max entries or conversation messages to return. Use on /executions or /executions/{id}/conversation.',
   ),
 });
 
@@ -101,11 +103,8 @@ const WaitActionSchema = Schema.Struct({
     'Zero-based offset into the executions list returned once the wait resolves (with /executions only).',
   ),
 
-  /** Maximum list entries in the /executions listing returned once the wait resolves. */
-  limit: nullishWithDefault(
-    ListLimit,
-    EXECUTIONS_DEFAULT_LIMIT,
-    'Max entries in the executions list returned once the wait resolves (with /executions only). Max: 200.',
+  limit: limitField(
+    'Max entries in the executions list returned once the wait resolves (with /executions only).',
   ),
 });
 

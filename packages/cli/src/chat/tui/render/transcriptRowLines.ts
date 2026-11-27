@@ -12,7 +12,7 @@ import {
 } from '@texra-ai/worldline/transcript';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import { hiddenRowsText } from '@cli/tui/overflowText';
-import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
+import { hangingIndent, TOOL_OUTPUT_PREFIX } from '@cli/tui/ui/glyphs';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { errorRowText } from '@ui/copy/modelAccess';
 
@@ -64,8 +64,9 @@ export function elidedTextLines(
 
 /** Open a block with the corner glyph and indent its continuation rows. */
 function cornerBlock(lines: readonly string[]): string[] {
+  const indent = hangingIndent(TOOL_OUTPUT_PREFIX);
   return lines.map((line, index) =>
-    index === 0 ? `${TOOL_OUTPUT_CORNER} ${line}` : `  ${line}`,
+    index === 0 ? `${TOOL_OUTPUT_PREFIX}${line}` : `${indent}${line}`,
   );
 }
 

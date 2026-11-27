@@ -124,10 +124,6 @@ const ExecutedResultFieldsSchema = Schema.Struct({
   endTurn: Schema.optional(Schema.Boolean),
   /** Records of edits made during tool run */
   edits: Schema.optional(Schema.Array(EditRecordSchema)),
-  /** The files the call read, spelled as `edits[].path` spells a file: a
-   *  later edit of an existing file requires one of them (or an edit of it)
-   *  in the run's rows, whichever process runs the edit. */
-  reads: Schema.optional(Schema.Array(Schema.NonEmptyString)),
   /** What a script's `await` gets for this call in place of
    *  `{ output, summary }`: a tool whose answer is data, not prose. */
   value: Schema.optional(Schema.Json),
@@ -183,6 +179,12 @@ export const PROGRAM_TOOL_NAME = 'program';
 /** The tool that runs a script. A script's own run makes its one call to it,
  *  whatever launched the run. */
 export const SCRIPT_TOOL_NAME = 'script';
+
+/** A script's function that runs the calling agent again as a child. */
+export const SELF_TOOL_NAME = 'self';
+
+/** The tool that reads run history and manages live runs. */
+export const EXECUTIONS_TOOL_NAME = 'executions';
 
 export const ToolResultSchema = Schema.Union([
   ExecutedToolResultSchema,

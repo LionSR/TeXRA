@@ -1,35 +1,15 @@
 // Local imports - shared schemas
+import { filePathOfFileUrl } from '@texra-ai/worldline/schemas';
 import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 
 // Third-party type imports
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
-const FILE_URI_PREFIX = 'file:';
 const FILE_URI_TEXT_TYPES = [
   'text/uri-list',
   'application/vnd.code.tree.resource',
 ];
-
-function decodeFileUri(value: string): string | null {
-  if (!value.startsWith(FILE_URI_PREFIX)) {
-    return null;
-  }
-
-  const url = URL.parse(value);
-  if (!url || url.protocol !== 'file:') return null;
-  let pathname: string;
-  try {
-    pathname = decodeURIComponent(url.pathname);
-  } catch {
-    // A malformed percent-escape names no file path: the drop offers none.
-    return null;
-  }
-  if (url.hostname && url.hostname !== 'localhost') {
-    return `//${url.hostname}${pathname}`;
-  }
-  return pathname.replace(/^\/([A-Za-z]:)/, '$1');
-}
 
 function normalizeDroppedPath(
   value: string | null | undefined,
@@ -38,7 +18,7 @@ function normalizeDroppedPath(
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed || trimmed.startsWith('#')) return null;
-  const decoded = decodeFileUri(trimmed);
+  const decoded = filePathOfFileUrl(trimmed);
   return fallbackToRaw ? (decoded ?? trimmed) : decoded;
 }
 
