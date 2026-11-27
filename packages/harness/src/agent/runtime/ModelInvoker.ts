@@ -47,8 +47,6 @@ import {
   MESSAGE_TYPES,
   type StepAfterFailure,
   type InvocationRef,
-  type ModelFailure,
-  type NormalizedUsage,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { HistoryMessage } from '@shared/session/historyTurns';
@@ -542,55 +540,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           ),
         );
 
-      /**
-       * Commit the batch that ends attempt `ref` as `failed` with `error`.
-       * One that asks opens its retry request at the request door
-       * (`openRequest`), its `failed` row beside it, with the credential
-       * step a used-up `quota` offers and, where the policy answers at once,
-       * that answer, so no surface lists it pending.
-       */
-      const commitFailed = Effect.fn('ModelInvoker.commitFailed')(function* (
-        cell: RunCell,
-        ref: InvocationRef,
-        error: ModelFailure,
-        next: StepAfterFailure,
-        bound: BoundModel,
-        usage: NormalizedUsage | null,
-      ): Effect.fn.Return<void, CellError, SessionServices> {
-        const failedRow: RunHistoryDraft = {
-          type: 'model.message',
-          aggregateId,
-          payload: {
-            kind: 'failed',
-            invocation: ref,
-            error,
-            next,
-            ...(usage === null ? {} : { usage }),
-          },
-        };
-        if (next.kind !== 'ask')
-          return yield* Effect.asVoid(cell.append([failedRow]));
-        const { requestId } = next;
-        yield* openRequest(
-          { runId, append: (rows) => cell.append(rows) },
-          {
-            kind: 'retry',
-            data: {
-              requestId,
-              runId,
-              operation: 'Model request',
-              model: bound.modelId,
-              failure: error,
-              credentialSwitch: credentialSwitch(
-                bound,
-                error.source === 'model' ? error.quota : undefined,
-              ),
-            },
-          },
-          { beside: [failedRow] },
-        );
-      });
-
       /** Record the failure of attempt `ref` (`observed`: an observation's)
        *  and the step after it, read off the attempts before it, llm's
        *  verdict and the budget of `retries`; answers that step. */
@@ -663,7 +612,44 @@ export const modelInvokerLayer = (): Layer.Layer<
             attribution,
             roots,
           );
-        yield* commitFailed(cell, ref, failure, next, bound, usage);
+        // The batch that ends the attempt: its `failed` row, or, for one
+        // that asks, its retry request opened at the request door with the
+        // row beside it, the credential step a used-up `quota` offers, and,
+        // where the policy answers at once, that answer, so no surface lists
+        // it pending.
+        const failedRow: RunHistoryDraft = {
+          type: 'model.message',
+          aggregateId,
+          payload: {
+            kind: 'failed',
+            invocation: ref,
+            error: failure,
+            next,
+            ...(usage === null ? {} : { usage }),
+          },
+        };
+        if (next.kind !== 'ask') {
+          yield* cell.append([failedRow]);
+          return next;
+        }
+        yield* openRequest(
+          { runId, append: (rows) => cell.append(rows) },
+          {
+            kind: 'retry',
+            data: {
+              requestId: next.requestId,
+              runId,
+              operation: 'Model request',
+              model: bound.modelId,
+              failure,
+              credentialSwitch: credentialSwitch(
+                bound,
+                failure.source === 'model' ? failure.quota : undefined,
+              ),
+            },
+          },
+          { beside: [failedRow] },
+        );
         return next;
       });
 

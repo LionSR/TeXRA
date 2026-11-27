@@ -548,11 +548,11 @@ asked (`shared/session/runRowReads.ts#reportRecipients`).
 **W6.** Every failed attempt of a turn that reaches failure recording MUST
 commit a `failed` row whose `next` is the move after it; a call off the rows
 records none (`agent/runtime/run/modelCall.ts#callModel`)
-(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`, `#commitFailed`). A
+(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`, `#recordFailure`). A
 `failed` row that asks MUST be
 preceded, in its batch, by the `request.opened` of its retry request, which
 opens at the one request door with the `failed` row beside it
-(`agent/runtime/ModelInvoker.ts#commitFailed`,
+(`agent/runtime/ModelInvoker.ts#recordFailure`,
 `agent/runtime/requests.ts#openRequest`,
 `shared/session/turnRowHandlers.ts#a failed attempt asks`).
 
