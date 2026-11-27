@@ -104,7 +104,7 @@ export const COMPLETED_STATUSES: readonly string[] = Object.freeze([
 /** The status of an interaction stopped at its per-request decode limit. */
 export const CONTINUATION_STATUS: string =
   'requires_continuation' satisfies InteractionStatus;
-/** One event of a streamed interaction. */
+/** One event of a streamed interaction, tagged by its `event_type`. */
 export const WireEventSchema = Schema.Union([
   Schema.Struct({
     event_type: Schema.Literal('interaction.created'),
@@ -154,19 +154,7 @@ export const WireEventSchema = Schema.Union([
     ]),
   }),
   Schema.Struct({ event_type: Schema.Literal('error'), error: Schema.Unknown }),
-]);
-/** The event types `WireEventSchema` decodes; the record's key type keeps them in step. */
-export const EVENT_TYPES: ReadonlySet<string> = new Set(
-  Object.keys({
-    'interaction.created': true,
-    'interaction.completed': true,
-    'interaction.status_update': true,
-    'step.start': true,
-    'step.stop': true,
-    'step.delta': true,
-    error: true,
-  } satisfies Record<(typeof WireEventSchema.Type)['event_type'], true>),
-);
+]).pipe(Schema.toTaggedUnion('event_type'));
 
 type Assignable<T extends U, U> = T;
 // The schemas that restate an SDK shape decode into it, so an SDK release
