@@ -8,7 +8,6 @@ import Anthropic, {
   toFile,
 } from '@anthropic-ai/sdk';
 import {
-  Clock,
   DateTime,
   Effect,
   Record,
@@ -128,9 +127,9 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
         'Anthropic manual thinking requires a budget below the output limit.',
     });
   }
-  const nowMs = yield* Clock.currentTimeMillis;
+  const fileIdFor = yield* uploads.fileIds;
   const lowerPart = (part: Parameters<typeof inputPart>[0]) =>
-    inputPart(part, (base64) => uploads.fileIdFor(base64, nowMs));
+    inputPart(part, fileIdFor);
   const messages: MessageParam[] = [];
   const history = yield* replayableHistory(turn.messages, origin);
   for (const [index, message] of history.entries()) {

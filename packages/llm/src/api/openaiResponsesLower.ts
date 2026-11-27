@@ -1,5 +1,5 @@
 // Third-party imports
-import { Clock, Effect, Number as Num } from 'effect';
+import { Effect, Number as Num } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
@@ -22,18 +22,6 @@ import type {
   TurnResult,
 } from '../turn.js';
 import type { UploadCache } from './uploadCache.js';
-
-const documentAccess = Effect.fn('llm.responses.documentAccess')(function* (
-  config: OpenAIResponsesConfiguration,
-  uploads: UploadCache | null,
-) {
-  const nowMs = yield* Clock.currentTimeMillis;
-  return {
-    accepted: config.supportsDocumentInput,
-    fileIdFor: (base64: string) =>
-      uploads === null ? null : uploads.fileIdFor(base64, nowMs),
-  } satisfies DocumentAccess;
-});
 
 /**
  * How many items the messages lower to: one per tool result, one per user
@@ -257,7 +245,10 @@ export const responseInput = Effect.fn('llm.responses.input')(function* (
   config: OpenAIResponsesConfiguration,
   uploads: UploadCache | null,
 ) {
-  const documents = yield* documentAccess(config, uploads);
+  const documents: DocumentAccess = {
+    accepted: config.supportsDocumentInput,
+    fileIdFor: uploads === null ? () => null : yield* uploads.fileIds,
+  };
   const continuation = turn.continuation;
   if (!continuation)
     return {

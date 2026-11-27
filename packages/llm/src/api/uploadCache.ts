@@ -2,7 +2,14 @@
 import { hash } from 'node:crypto';
 
 // Third-party imports
-import { Effect, Result, Schema, SchemaGetter, type Scope } from 'effect';
+import {
+  Clock,
+  Effect,
+  Result,
+  Schema,
+  SchemaGetter,
+  type Scope,
+} from 'effect';
 
 // Local imports - canonical model contract
 import { FileUploadSchema, type FileUpload } from '../turn.js';
@@ -65,8 +72,11 @@ export const uploadedFileSchema = <S extends Schema.Top>(
  * on the model that uploaded it, and a new binding starts empty.
  */
 export interface UploadCache {
-  /** The live file id for these bytes, or `null` to send the bytes. */
-  readonly fileIdFor: (base64: string, nowMs: number) => string | null;
+  /**
+   * The lookup one lowering consults, read against one clock reading: the
+   * live file id for some bytes, or `null` to send the bytes.
+   */
+  readonly fileIds: Effect.Effect<(base64: string) => string | null>;
   readonly uploadFile: (file: FileUpload) => Effect.Effect<void, ModelError>;
 }
 
@@ -169,14 +179,18 @@ export const filesApiUploads = Effect.fn('llm.uploads')(function* (
   const uploads = new Map<string, Uploaded | 'uploading'>();
   let released = false;
 
-  const fileIdFor = (base64: string, nowMs: number): string | null => {
-    const entry = uploads.get(digestOf(base64));
-    if (entry === undefined || entry === 'uploading') return null;
-    return entry.expiresAtMs === null ||
-      entry.expiresAtMs - EXPIRY_MARGIN_MS > nowMs
-      ? entry.fileId
-      : null;
-  };
+  const fileIds = Effect.map(
+    Clock.currentTimeMillis,
+    (nowMs) =>
+      (base64: string): string | null => {
+        const entry = uploads.get(digestOf(base64));
+        if (entry === undefined || entry === 'uploading') return null;
+        return entry.expiresAtMs === null ||
+          entry.expiresAtMs - EXPIRY_MARGIN_MS > nowMs
+          ? entry.fileId
+          : null;
+      },
+  );
 
   const uploadFile = Effect.fn('llm.uploads.uploadFile')(function* (
     file: FileUpload,
@@ -273,5 +287,5 @@ export const filesApiUploads = Effect.fn('llm.uploads')(function* (
         );
     }),
   );
-  return { fileIdFor, uploadFile };
+  return { fileIds, uploadFile };
 });
