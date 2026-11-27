@@ -1,7 +1,7 @@
 /**
  * The filesystem primitives the repo must keep that the standard library's
- * `FileSystem` does not provide: crash-safe replace, symlink-dereferencing
- * copies, and links that fall back to a copy where the host cannot make one.
+ * `FileSystem` does not provide: crash-safe replace and symlink-dereferencing
+ * copies.
  * Directory listings add policy over `FileSystem` operations. Recorded run
  * paths also need metadata without a process filesystem in scope.
  *
@@ -14,7 +14,6 @@
 
 // Node imports
 import * as nodeFs from 'node:fs/promises';
-import * as path from 'node:path';
 
 // Third-party imports
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
@@ -31,7 +30,7 @@ import {
 import writeFileAtomicLib from 'write-file-atomic';
 
 import { withLogChannel } from '@logger/effectLog';
-import { meansAbsent, entryTypeIn } from './fsEntryExists';
+import { meansAbsent } from './fsEntryExists';
 
 const CHANNEL = 'fsDurability';
 
@@ -267,62 +266,6 @@ export const copyDereferenced = Effect.fn('fsDurability.copyDereferenced')(
     });
   },
 );
-
-/** Errno codes for which symlink creation is unavailable and a copy is used instead. */
-const SYMLINK_UNSUPPORTED_CODES = new Set([
-  'EPERM',
-  'EACCES',
-  'EINVAL',
-  'ENOTSUP',
-]);
-
-/**
- * Link `destination` to `sourceAbsolute`, parent directories included. An
- * existing link there is replaced; any other entry fails `AlreadyExists` and
- * stays. A host that cannot make links (`EPERM`, `EACCES`, `EINVAL`,
- * `ENOTSUP`) gets a copy of the source instead.
- */
-export const createSymlink = Effect.fn('fsDurability.createSymlink')(function* (
-  sourceAbsolute: string,
-  destination: string,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  yield* fs.makeDirectory(path.dirname(destination), { recursive: true });
-  yield* fs.symlink(sourceAbsolute, destination).pipe(
-    // One recovery: an existing link is replaced, while any other entry (a
-    // file the run wrote) fails `AlreadyExists` and stays; a host that cannot
-    // make links copies instead, and a second failure of either propagates
-    // rather than re-entering this branch.
-    Effect.catch((error) => {
-      if (error.reason._tag === 'AlreadyExists') {
-        return entryTypeIn(fs, destination).pipe(
-          Effect.flatMap((type) =>
-            type === 'SymbolicLink'
-              ? fs
-                  .remove(destination)
-                  .pipe(Effect.andThen(fs.symlink(sourceAbsolute, destination)))
-              : Effect.fail(error),
-          ),
-        );
-      }
-      // cast: a failed Node `symlink` carries its errno error as the cause.
-      const code = (error.reason.cause as NodeJS.ErrnoException | undefined)
-        ?.code;
-      if (!code || !SYMLINK_UNSUPPORTED_CODES.has(code)) {
-        return Effect.fail(error);
-      }
-      return Effect.gen(function* () {
-        yield* Effect.logWarning(
-          `Falling back to copy ${sourceAbsolute} -> ${destination} due to ${code}`,
-        ).pipe(withLogChannel(CHANNEL));
-        const sourceType = yield* entryTypeIn(fs, sourceAbsolute);
-        yield* sourceType === 'Directory'
-          ? fs.copy(sourceAbsolute, destination, { overwrite: true })
-          : fs.copyFile(sourceAbsolute, destination);
-      });
-    }),
-  );
-});
 
 /**
  * The file's bytes decoded as UTF-8, with line endings normalized and a

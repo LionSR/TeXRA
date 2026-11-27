@@ -26,12 +26,7 @@ import { requestErrorText } from '@ui/copy/requestErrors';
 import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { cliEntryAgent } from '../runtime/cliEntryAgent';
-import {
-  CliUsageError,
-  launchApproval,
-  launchApprovalNotice,
-  projectApprovalPolicy,
-} from '../runtime/platform/cliContext';
+import { CliUsageError, launchApproval } from '../runtime/platform/cliContext';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
@@ -185,11 +180,6 @@ const startCommand = cliCommand('start', {
     // with what this command asked for riding the launch
     // (`launchApproval`).
     const requested = context.requestedApprovalPolicy;
-    const refused = launchApprovalNotice(
-      requested,
-      projectApprovalPolicy(services.config),
-    );
-    if (refused !== undefined) writeTextStderr(refused);
     const model = yield* selectCliRunModel(
       context,
       Option.getOrUndefined(input.model),

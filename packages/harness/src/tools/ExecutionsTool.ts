@@ -25,6 +25,10 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { RunsShape } from '@agent/runtime/runs';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
+import {
+  HISTORY_QUERY_PAGE_LIMIT_BYTES,
+  HISTORY_QUERY_ROW_CAP,
+} from '@agent/runtime/historyQuery/HistoryQuery';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots, StorageFs } from '@platform/rootedFs';
@@ -68,6 +72,7 @@ import { queryHistory } from './executions/queryAction';
 import { showOutput } from './executions/processOutput';
 import { listRunGeneratedFiles } from './executions/runGeneratedFiles';
 import {
+  EXECUTIONS_DEFAULT_LIMIT,
   ExecutionsToolInputSchema,
   type ExecutionsToolInput,
 } from './executions/toolInput';
@@ -679,13 +684,13 @@ Paths:
 ${EXECUTION_PATH_LIST}
 
 Use "current" as {id} to access the active run.
-Use offset/limit to paginate the /executions listing or conversation messages (default: offset 0, limit 100).
+Use offset/limit to paginate the /executions listing or conversation messages (default: offset 0, limit ${EXECUTIONS_DEFAULT_LIMIT}).
 Use view_range: [start, end] to paginate file and background-command output content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed runs to change.
 Use action: "kill" on /executions/{id} to terminate a live run.
 Use action: "send" with message on /executions/{id} to message any other run in this project: your subagent (a follow-up it continues from), your orchestrator, a sibling, or any other run. It reads the message after its current turn; an idle or ended run wakes to read it. A run that takes none (a headless one-shot run, a background command, an agent-CLI turn) refuses it.
-Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). In a script, query returns { columns, rows, more }; other actions return { output, summary }. Queries return at most 200 rows and refuse a JSON page larger than 4 MiB; use LIMIT or substr() to narrow it. Children: SELECT * FROM runs WHERE parent_id = ?. Views:
+Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). In a script, query returns { columns, rows, more }; other actions return { output, summary }. Queries return at most ${HISTORY_QUERY_ROW_CAP} rows and refuse a JSON page larger than ${HISTORY_QUERY_PAGE_LIMIT_BYTES / (1024 * 1024)} MiB; use LIMIT or substr() to narrow it. Children: SELECT * FROM runs WHERE parent_id = ?. Views:
 ${HISTORY_VIEW_SUMMARY}
 Delegated subagent and document task results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
   schema: ExecutionsToolInputSchema,

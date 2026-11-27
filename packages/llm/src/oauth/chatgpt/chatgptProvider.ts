@@ -29,7 +29,11 @@ import {
 } from 'effect';
 
 // Local imports
-import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
+import {
+  NonEmptyJwtClaim,
+  absentWhenInvalid,
+  decodeJwtClaimsWithSchema,
+} from '../jwtDecode.js';
 import { verifyIdToken } from '../idToken.js';
 import { oauthHttpError, postOAuthForm } from '../oauthRequest.js';
 import { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
@@ -125,13 +129,13 @@ type ChatgptClaims = typeof ChatgptClaimsSchema.Type;
 const ChatgptJwtPayloadSchema = Schema.Struct({
   chatgpt_account_id: NonEmptyJwtClaim,
   chatgpt_plan_type: NonEmptyJwtClaim,
-  [CHATGPT_AUTH_CLAIM]: Schema.optional(
+  [CHATGPT_AUTH_CLAIM]: absentWhenInvalid(
     Schema.Struct({
       chatgpt_account_id: NonEmptyJwtClaim,
       chatgpt_plan_type: NonEmptyJwtClaim,
     }),
-  ).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined)))),
-  organizations: Schema.optional(
+  ),
+  organizations: absentWhenInvalid(
     Schema.Array(
       Schema.Struct({ id: NonEmptyJwtClaim }).pipe(
         Schema.catchDecoding(() =>
@@ -139,7 +143,7 @@ const ChatgptJwtPayloadSchema = Schema.Struct({
         ),
       ),
     ),
-  ).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined)))),
+  ),
   email: NonEmptyJwtClaim,
 }).pipe(
   Schema.decodeTo(ChatgptClaimsSchema, {

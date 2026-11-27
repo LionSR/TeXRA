@@ -323,7 +323,6 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
       inputFiles: toStringArray(input.inputFiles),
       contextFiles: toStringArray(input.contextFiles),
       mediaFiles: toStringArray(input.mediaFiles),
-      outputFiles: toStringArray(input.outputFiles),
     }),
   );
   if (files) sections.push(files);

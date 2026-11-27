@@ -281,9 +281,11 @@ const commit = Effect.fn('RunCell.commit')(function* (
       const edit = rows.find((row) => row.type === 'context.edit');
       const held = state.messages.length;
       const kept =
-        edit?.type === 'context.edit'
-          ? Math.min(edit.payload.range.from, held)
-          : held;
+        edit?.type !== 'context.edit'
+          ? held
+          : edit.payload.cause === 'fork'
+            ? 0
+            : Math.min(edit.payload.range.from, held);
       const refusal = unprepared(run, after.messages, kept);
       if (refusal !== null) return yield* refusal;
     }

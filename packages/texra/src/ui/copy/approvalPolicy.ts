@@ -10,37 +10,23 @@ import {
   APPROVAL_POLICY_SETTING,
   type ApprovalPolicy,
 } from '@texra-ai/worldline/schemas';
-import type { RunTone } from '@ui/copy/runStatus';
 
 /** Each policy's name is the setting row's, which `/config` lists. */
 const labels = APPROVAL_POLICY_SETTING.choices;
 
-/** Each policy's copy, declared in the order selectors list them, and the
- *  tone a surface showing the policy paints it with: a policy that blocks
- *  is a caution; the default, Auto-approve, and Ask have nothing to say. */
+/** Each policy's copy, declared in the order selectors list them. */
 const APPROVAL_POLICY_COPY = {
   yolo: {
     label: labels.yolo.label,
     description: 'Allow shell commands and file edits without asking.',
-    tone: undefined,
   },
   ask: {
     label: labels.ask.label,
     description: 'Ask before shell commands and file edits.',
-    tone: undefined,
-  },
-  never: {
-    label: labels.never.label,
-    description: 'Block shell commands and file edits.',
-    tone: 'warning',
   },
 } as const satisfies Record<
   ApprovalPolicy,
-  {
-    label: string;
-    description: string;
-    tone: RunTone | undefined;
-  }
+  { label: string; description: string }
 >;
 
 export const APPROVAL_POLICY_OPTIONS = Object.freeze(
@@ -53,14 +39,7 @@ export const APPROVAL_POLICY_OPTIONS = Object.freeze(
   ),
 );
 
-/** The tone a policy paints with where it is shown; only Block has one. */
-export function approvalPolicyTone(
-  policy: ApprovalPolicy,
-): RunTone | undefined {
-  return APPROVAL_POLICY_COPY[policy].tone;
-}
-
-/** The policy's user-facing name: `never` reads "Block" on every surface. */
+/** The policy's user-facing name, the same on every surface. */
 export function approvalPolicyLabel(policy: ApprovalPolicy): string {
   return APPROVAL_POLICY_COPY[policy].label;
 }

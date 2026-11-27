@@ -9,7 +9,13 @@ import { Effect } from 'effect';
 import { listCost, turnCost, type TurnResult } from '@texra-ai/llm';
 
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import type { NormalizedUsage, RunId } from '@shared/schemas';
+import {
+  programGrants,
+  programOf,
+  type AgentConfig,
+  type NormalizedUsage,
+  type RunId,
+} from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
 import type { SettingsStores } from '@shared/config/settings';
 import { environment } from '@utils/system/nodeWorkspace';
@@ -51,6 +57,21 @@ export function priceTurnUsage(
     ...(reasoningTokens !== null ? { reasoningTokens } : {}),
     ...(toolUsePromptTokens !== null ? { toolUsePromptTokens } : {}),
   };
+}
+
+/**
+ * The program name a usage entry may carry (`agentName`). Telemetry is
+ * metadata only, and a run's label, an installed plugin's program name or
+ * an agent's own program name can be any private string, so only the name
+ * of a program the app wrote goes out; a chat run, or any other program's,
+ * carries none.
+ */
+export function usageAgentName(
+  config: Pick<AgentConfig, 'script'>,
+): string | undefined {
+  return programGrants(config).appAuthored
+    ? programOf(config)?.name
+    : undefined;
 }
 
 /**

@@ -19,8 +19,7 @@ interface LaunchRoots {
 /**
  * The run option an Auto-approve launch adds: its run starts with every
  * bypass on, the same state the run header's switches write, so the header
- * shows it and the user can take it back mid-run. Block still denies: the
- * policy is decided before any bypass.
+ * shows it and the user can take it back mid-run.
  */
 export function launchApprovalOptions({
   launch,
@@ -53,7 +52,6 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
       // on a program's proposal, so a launch carries none of them.
       inputFiles: [],
       contextFiles: [],
-      outputFiles: [],
       mediaFiles: launch.mediaFiles.map((file) =>
         isPastedImage(file) ? pastedImageFullPath(roots.storage, file) : file,
       ),

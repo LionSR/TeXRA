@@ -10,7 +10,6 @@
  * functions in `traceLogs.ts` that operate on this interface — there is no
  * host subtype. SDK consumers program directly against `AgentTrace`.
  */
-import type { Effect } from 'effect';
 
 import type {
   MessageType,
@@ -74,17 +73,7 @@ export interface AgentTrace {
   /** A chunk of a process run's output, on its stream (`process.output`). */
   output(stream: ProcessOutputStream, text: string): void;
 
-  // ─── Stages and stream handles ──────────────────────────────────────
-  /**
-   * Run `use` as a labelled stage (`stage.start`): what it logs on the trace
-   * it is handed nests under the stage, which closes once `use` exits
-   * (`stage.end`): completed when it succeeds, else as its cause reads
-   * (`outcomeFromCause`).
-   */
-  stage<A, E, R>(
-    label: string,
-    use: (trace: AgentTrace) => Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, R>;
+  // ─── Stream handles ─────────────────────────────────────────────────
   /**
    * Open a streaming message. Its `stream.start` waits for the first
    * non-empty chunk (or a finalize that carries text): subscribers read

@@ -13,10 +13,7 @@ import type { ProcessRuntime, ProcessServices } from '@texra-ai/worldline/host';
 import { logFailure, withLogChannel } from '@texra-ai/worldline/plugins';
 import { fromHostSync } from '@texra/controllers/session/hostCallFailure';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
-import {
-  openGuiWindow,
-  type GuiWindowSettingsRuns,
-} from '@texra/controllers/session/openGuiWindow';
+import { openGuiWindow } from '@texra/controllers/session/openGuiWindow';
 import type {
   AttachedPort,
   SessionBridge,
@@ -49,7 +46,6 @@ interface ProjectBinding {
   /** This window's port on the project's bridge. */
   readonly port: AttachedPort;
   /** The settings view's verbs on the project's runs. */
-  readonly settingsRuns: GuiWindowSettingsRuns;
   readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
   readonly browserViews: DesktopBrowserViews;
   /** The binding's lifetime; closing it releases everything above. */
@@ -260,7 +256,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
           openExternalUrl: host.openExternalUrl,
         }),
       });
-      const { bridge, snapshot, settingsRuns } = gui;
+      const { bridge, snapshot } = gui;
       yield* Effect.forkScoped(
         Stream.runForEach(snapshot.filesWritten, () => workspace.filesChanged),
         { startImmediately: true },
@@ -281,7 +277,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         project,
         bridge,
         port,
-        settingsRuns,
         workspace,
         browserViews,
       };

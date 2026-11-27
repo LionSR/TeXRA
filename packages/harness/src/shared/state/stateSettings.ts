@@ -345,7 +345,6 @@ export const APPROVAL_POLICY_SETTING = {
     'Whether agents ask before running shell commands and editing files.',
   configTarget: 'local',
   choices: {
-    never: { label: 'Block' },
     ask: { label: 'Ask' },
     yolo: { label: 'Auto-approve' },
   },
@@ -478,19 +477,6 @@ export const GLM_CODING_PLAN_SETTING = {
     'Use your GLM API key with GLM Coding Plan quota tracking (ignored with a custom endpoint).',
 } as const satisfies SettingRow<boolean>;
 
-/**
- * Keep file-oriented tools inside the active working directory unless the
- * user explicitly grants them access to arbitrary filesystem paths.
- */
-export const TOOL_PATH_PROTECTION_SETTING = {
-  key: 'tools.restrictPathsToWorkingDirectory',
-  slot: 'workspaceState',
-  schema: booleanWithDefault(true),
-  title: 'Restrict tools to project folder',
-  description:
-    'Keep file read/edit, search, diagnostics, and PDF tools inside the current project folder. Turn off only if an agent needs outside files.',
-} as const satisfies SettingRow<boolean>;
-
 // ============================================================================
 // The catalog — the harness's rows followed by an app's
 // ============================================================================
@@ -525,7 +511,6 @@ const HARNESS_SETTINGS = [
   GLM_CODING_PLAN_SETTING,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
-  TOOL_PATH_PROTECTION_SETTING,
 ] as const satisfies readonly SettingRow[];
 
 /** The key of each of the harness's rows: what an app's table of where it

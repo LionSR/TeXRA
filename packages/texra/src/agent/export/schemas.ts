@@ -17,7 +17,6 @@ export type ExportConfig = Pick<
   | 'inputFiles'
   | 'mediaFiles'
   | 'contextFiles'
-  | 'outputFiles'
 >;
 
 /** A run's export input: its setup and its conversation's nodes. */

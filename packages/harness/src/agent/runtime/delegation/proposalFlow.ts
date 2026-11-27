@@ -116,9 +116,10 @@ const GRANTED_CHILD = {
   human: 'auto-approved',
 } as const;
 
-/** Request the shared proposal decision, honoring the run's bypass policy.
- *  `ask` presents it in place of this call's own proposal request: the
- *  calls of one script share one request (`agent`). */
+/** The decision on a delegation: approved unless the policy blocks it or a
+ *  hook asked a person, under the run's bypass grant where one holds.
+ *  `ask` presents a hook's question in place of this call's own proposal
+ *  request: the calls of one script share one request (`agent`). */
 const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   function* (
     proposal: AgentProposal,
@@ -140,6 +141,11 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     const answer = approvals.permission(runId, 'proposal', hook);
     if (answer !== 'allow' && answer !== 'ask')
       return { result: answer, childApproval: 'inherit' };
+    // Starting an agent is the model's call: where the policy would ask, the
+    // child starts unasked and inherits the policy, so its own commands and
+    // edits still ask. Only a hook that asked puts a delegation to a person.
+    if (answer === 'ask' && hook !== 'ask')
+      return { result: { action: 'approve' }, childApproval: 'inherit' };
     if (answer === 'allow') {
       // Under `yolo` alone the child inherits, so its bash and edits still
       // gate; the run's delegated-work grant approves them too.
@@ -182,7 +188,6 @@ function formEdits(
       instruction !== proposal.instruction && { instruction }),
     ...(changed(inputFiles, proposal.inputFiles) && {
       inputFiles: [...inputFiles],
-      outputFiles: [],
     }),
     ...(changed(contextFiles, proposal.contextFiles) && {
       contextFiles: [...contextFiles],

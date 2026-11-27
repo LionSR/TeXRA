@@ -33,7 +33,7 @@ Instructions you want followed in full, every time, belong in [`AGENTS.md`](./cu
 
 Memory is **on by default**. To turn it off, open **Settings** (Command Palette → `TeXRA: Open Settings`), switch to the **Memory** tab, and flip the **Enable memory for chat agents** switch. While it is off, agents are given neither folder and no index.
 
-Memory needs the file tools: an agent with no tool to read a file has no memory, and under the **Block** approval policy an agent can read its notes but not write them. Writing a note is a file edit like any other, so under **Ask** you review it; under the default, Auto-approve, it is written without asking.
+Memory needs the file tools: an agent with no tool to read a file has no memory. Writing a note is a file edit like any other, so under **Ask** you review it; under the default, Auto-approve, it is written without asking.
 
 ## Reading and editing notes yourself
 

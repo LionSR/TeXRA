@@ -18,7 +18,6 @@ import { app, clipboard, dialog, Menu } from 'electron';
 
 import { withLogChannel } from '@texra-ai/worldline/plugins';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
-import { followGitHubTokenRejections } from '@texra/controllers/session/windowNotices';
 import {
   DESKTOP_PROJECT_COMMANDS,
   DesktopCloseProjectMessageSchema,
@@ -26,7 +25,6 @@ import {
   DesktopSelectProjectMessageSchema,
 } from '../shared/desktopProjectMessages.js';
 import { DESKTOP_WORKSPACE_INBOUND_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
-import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import {
   DESKTOP_PDF_COMMANDS,
   DesktopPdfLoadFailedMessageSchema,
@@ -164,13 +162,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   const { previewHost } = host;
   const promptController = yield* makeDesktopPrompts(host.post);
   attachRendererConsoleLog(window.webContents);
-  // A rejected GitHub token is told in this window, whose Git settings
-  // replace it; the window's close ends the follower and its notices.
-  spawn(
-    followGitHubTokenRejections(host.dialogs.ask, (target) =>
-      Effect.sync(() => postDesktopSettingsView(host.post, target)),
-    ),
-  );
   installDesktopNavigationPolicy(window.webContents, {
     openExternal: host.openExternalInBackground,
   });

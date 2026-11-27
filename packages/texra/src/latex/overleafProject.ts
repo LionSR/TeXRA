@@ -74,33 +74,24 @@ export function parseLatexGitUrl(input: string): OverleafRemote | null {
   return null;
 }
 
-/** How a host should prompt for and validate the project's git token. */
+/** Where a remote's git token is stored and what one must look like. How a
+ *  host asks for it is worded in `@ui/copy/clone`. */
 export interface OverleafTokenSpec {
   /** Secret-storage key the token is cached under. */
   tokenKey: string;
-  /** Prompt title shown when requesting the token. */
-  tokenTitle: string;
   /** Optional format check; rejects obviously-wrong tokens before cloning. */
   tokenValidator?: (token: string) => boolean;
-  /** Optional hint copy explaining where to obtain a token. */
-  tokenHint?: string;
 }
 
-/** Derive the per-host token prompt/validation rules for a remote. */
+/** The token storage key and format rule for a remote. */
 export function overleafTokenSpec(remote: OverleafRemote): OverleafTokenSpec {
   if (remote.isOverleaf) {
     return {
       tokenKey: 'overleaf.gitToken',
-      tokenTitle: 'Overleaf Git Token',
       tokenValidator: (t) => t.startsWith('olp_'),
-      tokenHint:
-        'Overleaf tokens start with olp_. Generate one at Account Settings → Git Integration.',
     };
   }
-  return {
-    tokenKey: `sharelatex.${remote.host}.token`,
-    tokenTitle: `ShareLaTeX Token (${remote.host})`,
-  };
+  return { tokenKey: `sharelatex.${remote.host}.token` };
 }
 
 /**

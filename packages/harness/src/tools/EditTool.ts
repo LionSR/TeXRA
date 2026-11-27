@@ -22,7 +22,8 @@ const EditInputSchema = Schema.Struct({
     description: 'Workspace-relative or absolute file path to edit.',
   }),
   old_str: Schema.String.annotate({
-    description: 'Exact literal text to replace, copied from read_file output.',
+    description:
+      'Exact literal text to replace, without read_file line-number prefixes.',
   }),
   new_str: Schema.String.annotate({
     description: 'Replacement text to write in place of old_str.',
@@ -44,10 +45,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
 > {
   const { old_str, new_str, replace_all } = input;
   const prepared = yield* resolveWritableTarget(input.path);
-  if ('blocked' in prepared) {
-    return prepared.blocked;
-  }
-  const { displayPath, original } = prepared.target;
+  const { displayPath, original } = prepared;
   if (original === null) {
     return yield* new ToolError(
       `${displayPath} does not exist. Create it with write_file.`,
@@ -83,7 +81,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
 
   const occurrenceWord = pluralize(replacement.count, 'occurrence');
   return yield* applyApprovedFileEdit({
-    target: prepared.target,
+    target: prepared,
     proposedContent: replacement.content,
     sourceTool: 'edit_file',
     present: () => ({
@@ -97,9 +95,7 @@ export const EditFileTool = defineTool({
   name: 'edit_file',
   requiresApproval: 'inBody',
   description:
-    'Performs exact string replacements in workspace files using literal matching. Copy text exactly as it appears in read_file output after the line-number prefix.',
+    'Performs exact string replacements in workspace files using literal matching.',
   schema: EditInputSchema,
-  // The file this call rewrites; refused loop-side before the body runs.
-  guard: { writes: (input: EditInput) => [input.path] },
   execute: edit,
 });

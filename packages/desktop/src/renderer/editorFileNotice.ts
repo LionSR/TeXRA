@@ -9,6 +9,7 @@ import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 interface Notice {
@@ -30,6 +31,25 @@ export function renderNoticeCallout(
     <span class="desktop-editor-notice-text">${message}</span>
     ${buttons}
   </wa-callout>`;
+}
+
+/** The footer under a file pane: the file's path and the pane's one action. */
+export function createPathToolbar(
+  path: string,
+  action: { readonly text: string; readonly icon: IconName; onClick(): void },
+): HTMLElement {
+  const footer = document.createElement('footer');
+  footer.className = 'shell-editor-toolbar';
+  render(
+    html`<span class="shell-editor-path truncate" title=${path}>${path}</span>
+      ${renderLabeledActionButton({
+        ...action,
+        kind: 'ghost',
+        className: 'is-compact',
+      })}`,
+    footer,
+  );
+  return footer;
 }
 
 export function createEditorFileNotice(options: {

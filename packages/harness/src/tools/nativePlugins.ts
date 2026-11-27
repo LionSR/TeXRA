@@ -22,9 +22,8 @@
  * `provides` declared to the trust review, and that it asks for nothing a
  * native plugin may not have: row kinds (a store reads them when it opens and
  * the rows outlive the plugin), a switch or a dependency probe (its switch
- * is its installed plugin's enable), injected tools (its tools reach the
- * runs that take installed plugins' tools) and a program result (it reads a
- * row kind). A module that fails any of it, or throws, is withheld with the
+ * is its installed plugin's enable) and injected tools (its tools reach the
+ * runs that take installed plugins' tools). A module that fails any of it, or throws, is withheld with the
  * reason; it never fails a step or another plugin.
  *
  * The host, not the module, decides how its tools run ({@link hostRun}):
@@ -274,7 +273,7 @@ const hostRun = (
   name: string,
   tool: ITool<Error, PluginToolServices>,
 ): ITool<Error, PluginToolServices> => {
-  const { definition, replay, hostCapability, guard } = tool;
+  const { definition, replay, hostCapability } = tool;
   const what = `${definition.name} of plugin ${name}`;
   const failed = (message: string): ToolResult => ({
     status: 'error',
@@ -285,7 +284,6 @@ const hostRun = (
     ...(replay !== undefined && { replay }),
     ...(hostCapability !== undefined && { hostCapability }),
     guard: {
-      ...(guard?.writes !== undefined && { writes: guard.writes }),
       command: thirdPartyCommand(
         (input: unknown) =>
           `plugin ${name} ${definition.name} ${JSON.stringify(input)}`,
@@ -351,13 +349,6 @@ const checked = (
     Object.hasOwn(plugin, field),
   );
   if (refused !== undefined) return Result.fail(refused[1]);
-  const withResult = Object.entries(plugin.programs ?? {}).find(
-    ([, program]) => program.result !== undefined,
-  );
-  if (withResult !== undefined)
-    return Result.fail(
-      `its program ${withResult[0]} declares a result, which reads a row kind of its plugin`,
-    );
   const contributed = new Set(contributions(plugin));
   const declared = new Set(provides);
   const undeclared = Arr.filter(contributed, (item) => !declared.has(item));

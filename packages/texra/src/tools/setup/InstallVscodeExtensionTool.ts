@@ -82,6 +82,8 @@ const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
 
 export const InstallVscodeExtensionTool = defineTool({
   name: 'install_vscode_extension',
+  // A function of scripts: offered with the script tool, never sent.
+  scriptGlobal: { positional: 'extensionId', withScript: true },
   // Offered where the host has an editor (VS Code).
   hostCapability: EDITOR_EXTENSIONS_CAPABILITY,
   requiresApproval: true,

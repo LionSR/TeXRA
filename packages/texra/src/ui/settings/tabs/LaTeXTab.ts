@@ -48,20 +48,15 @@ import {
   renderStateSettingSelectRow,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
-import { settingSignal } from '../settingsState';
 import { latexTabStyles } from './LaTeXTab.styles';
 import {
   INLINE_CRITICISM_SETTING,
   LATEX_FORMATTER_SETTING,
 } from '@texra/shared/settings/texraSettings';
 import {
-  LATEXDIFF_BETWEEN_ROUNDS_SETTING,
   LATEXDIFF_CHANGES_ONLY_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
-  DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
-  DOCUMENTS_OPEN_PDF_SETTING,
-  DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
-} from '@texra/shared/settings/documentsSettings';
+} from '@texra/shared/settings/latexdiffSettings';
 
 /** What the Dependencies section says of one dependency: the toolchain's
  *  dependencies, and LaTeX Workshop, which installs through a VS Code
@@ -443,28 +438,16 @@ export class LaTeXTab extends TexraSignalElement {
   }
 
   private renderCompileDiffSettings(): TemplateResult {
-    const autoCompile = settingSignal(
-      DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
-    ).get();
     return html`
       <div class="settings-section">
         ${renderSettingsSectionHeading({
-          title: 'Compile and diff',
+          title: 'Edit previews',
           description:
-            'What TeXRA does with LaTeX files an agent writes in this project.',
+            'How the latexdiff preview of a LaTeX edit awaiting approval is drawn.',
           icon: 'bolt',
         })}
-        ${renderStateSettingToggleRow(DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING)}
-        ${renderStateSettingToggleRow(DOCUMENTS_OPEN_PDF_SETTING, {
-          disabled: !autoCompile,
-        })}
-        ${renderStateSettingToggleRow(
-          DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
-          { disabled: !autoCompile },
-        )}
         ${renderStateSettingToggleRow(LATEXDIFF_CHANGES_ONLY_SETTING)}
         ${renderStateSettingSelectRow(LATEXDIFF_MATH_MARKUP_SETTING)}
-        ${renderStateSettingToggleRow(LATEXDIFF_BETWEEN_ROUNDS_SETTING)}
       </div>
     `;
   }

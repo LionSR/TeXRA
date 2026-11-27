@@ -9,6 +9,7 @@
  * component adds its case here with its first dispatch.
  */
 import { Schema } from 'effect';
+import { ReasoningEffortSchema } from '@texra-ai/llm';
 
 import {
   APPROVAL_BYPASS_KINDS,
@@ -16,10 +17,7 @@ import {
   RunIdSchema,
   StoredMediaSchema,
 } from '@texra-ai/worldline/schemas';
-import {
-  CurrentFileTypeSchema,
-  DocumentFileTypeSchema,
-} from '@texra/shared/launcher/fileTypes';
+import { DocumentFileTypeSchema } from '@texra/shared/launcher/fileTypes';
 import { SettingsTargetSchema } from '@texra/shared/settingsView/settingsTarget';
 
 import { LaunchSurfaceSchema } from './surface';
@@ -32,14 +30,6 @@ const GettingStartedActionSchema = Schema.Literals([
 export type GettingStartedAction = typeof GettingStartedActionSchema.Type;
 
 const runScoped = { runId: RunIdSchema };
-
-/** The verbs over an edited file and the base it revises: the file list's
- *  on a run's output, the Tools sheet's on the launcher's two files. */
-export const FileActionSchema = Schema.Literals([
-  'compare',
-  'latexdiff',
-  'accept',
-]);
 
 export const HostCommandSchema = Schema.Union([
   Schema.Struct({
@@ -68,8 +58,6 @@ export const HostCommandSchema = Schema.Union([
     draft: Schema.optional(Schema.String),
     media: Schema.optional(Schema.Array(StoredMediaSchema)),
   }),
-  /** The latexFixer follow-up over a document task run's compile failures. */
-  Schema.Struct({ kind: Schema.Literal('runCompileFixer'), ...runScoped }),
   /** A retry on the user's own API key: the host stores one, then finishes
    *  the pending retry on personal credentials. `credentialSwitch` is the
    *  move the retry request carried, as the run decided it. */
@@ -78,21 +66,6 @@ export const HostCommandSchema = Schema.Union([
     ...runScoped,
     requestId: Schema.NonEmptyString,
     credentialSwitch: CredentialSwitchSchema,
-  }),
-  Schema.Struct({ kind: Schema.Literal('latexdiff'), ...runScoped }),
-  Schema.Struct({ kind: Schema.Literal('pack'), ...runScoped }),
-  Schema.Struct({ kind: Schema.Literal('clean'), ...runScoped }),
-  /** The Tools sheet's latexdiff-vc verbs over the launcher's base file
-   *  and its commit, as the sheet's surface holds them. */
-  Schema.Struct({
-    kind: Schema.Literal('latexdiffCommit'),
-    baseFile: Schema.optional(Schema.String),
-    commit: Schema.optional(Schema.String),
-    action: Schema.Literals([
-      'latexdiffvc',
-      'packLatexdiffvc',
-      'cleanLatexdiffvc',
-    ]),
   }),
   Schema.Struct({
     kind: Schema.Literal('record'),
@@ -106,8 +79,19 @@ export const HostCommandSchema = Schema.Union([
   }),
   Schema.Struct({ kind: Schema.Literal('popOut') }),
   Schema.Struct({ kind: Schema.Literal('popBack') }),
-  Schema.Struct({ kind: Schema.Literal('refreshCommits') }),
-  Schema.Struct({ kind: Schema.Literal('refreshFiles') }),
+  /** Read the plans' quotas again; `force` asks each plan's endpoint
+   *  instead of taking an answer still fresh. */
+  Schema.Struct({
+    kind: Schema.Literal('refreshUsage'),
+    force: Schema.optional(Schema.Boolean),
+  }),
+  /** Remember `level` as a model's reasoning level: every later run on the
+   *  model starts at it, until another is picked. */
+  Schema.Struct({
+    kind: Schema.Literal('setReasoningLevel'),
+    model: Schema.NonEmptyString,
+    level: ReasoningEffortSchema,
+  }),
   /** Settings at a target, or where it last was when `target` is absent
    *  (the header's gear). */
   Schema.Struct({
@@ -123,7 +107,7 @@ export const HostCommandSchema = Schema.Union([
   /** The current editor file into a launcher field. */
   Schema.Struct({
     kind: Schema.Literal('useCurrentFile'),
-    fileType: CurrentFileTypeSchema,
+    fileType: DocumentFileTypeSchema,
   }),
   Schema.Struct({
     kind: Schema.Literal('addOpenedFiles'),
@@ -183,20 +167,6 @@ export const HostCommandSchema = Schema.Union([
       'showLatexdiff',
     ]),
     grant: Schema.optional(Schema.Literals(APPROVAL_BYPASS_KINDS)),
-  }),
-  /** A file verb over `file` and its base. An empty path is refused by the
-   *  host, which says which file to choose. */
-  Schema.Struct({
-    kind: Schema.Literal('fileAction'),
-    action: FileActionSchema,
-    file: Schema.String,
-    base: Schema.Union([
-      /** `file` is an output of this run: the host takes its base from
-       *  the run's record of what the output revises. */
-      Schema.Struct({ kind: Schema.Literal('runOutput'), ...runScoped }),
-      /** The base file the Tools sheet names. */
-      Schema.Struct({ kind: Schema.Literal('file'), path: Schema.String }),
-    ]),
   }),
   // The New-task state's banners and onboarding cards (host-owned state,
   // HostSnapshot.banners and .onboarding).

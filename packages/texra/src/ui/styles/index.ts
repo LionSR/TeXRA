@@ -8,11 +8,8 @@
 // reached indirectly through another export — see the two call-outs below.
 
 // Core styles
-export {
-  commonViewStyles,
-  visuallyHiddenDeclarations,
-  visuallyHiddenStyles,
-} from './commonViewStyles';
+export { commonViewStyles, visuallyHiddenStyles } from './commonViewStyles';
+export { visuallyHiddenDeclarations } from './controlStyles';
 export { designTokens } from './litStyles';
 
 // The canonical button/input/focus-ring/settings-row skins reach consumers

@@ -14,7 +14,7 @@ import { positionRow } from '@agent/runtime/loop/rows';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { publishTestRunStart, seedRows } from '@test/support/sessionTestUtils';
-import { asDocumentTask } from '@test/support/documentTasks';
+import { asProgramRun } from '@test/support/programRuns';
 import {
   FakeHost,
   SessionGraph,
@@ -86,7 +86,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 type: 'run.config',
                 aggregateId: runId,
                 config: Schema.decodeUnknownSync(AgentConfigSchema)(
-                  asDocumentTask({ model: 'test-model' }),
+                  asProgramRun({ model: 'test-model' }),
                 ),
               },
             ]);

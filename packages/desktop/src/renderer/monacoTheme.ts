@@ -1,3 +1,7 @@
+// Third-party imports
+import { Predicate, Record } from 'effect';
+
+// Local imports
 import type { Theme } from '@texra/shared/ipc';
 import { cssTokenColors } from '@ui/wa/cssTokenColor';
 import {
@@ -35,8 +39,8 @@ export function applyMonacoTheme(
       { token: 'comment', foreground: quiet?.slice(1, 7) },
       { token: 'keyword', foreground: accent?.slice(1, 7) },
     ],
-    colors: Object.fromEntries(
-      Object.entries({
+    colors: Record.filter(
+      {
         foreground,
         focusBorder: accent,
         'widget.border': border,
@@ -105,7 +109,8 @@ export function applyMonacoTheme(
         'keybindingLabel.foreground': quiet,
         'keybindingLabel.border': border,
         'keybindingLabel.bottomBorder': border,
-      }).filter((entry): entry is [string, string] => entry[1] !== undefined),
+      },
+      Predicate.isNotUndefined,
     ),
   });
   monaco.editor.setTheme(name);

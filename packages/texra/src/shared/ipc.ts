@@ -35,7 +35,6 @@ export const SETTINGS_VIEW_COMMANDS = Object.freeze({
   OPEN_EXTERNAL_URL: 'openExternalUrl',
   // Model selection commands
   SET_MODEL_ENABLED: 'setModelEnabled',
-  SET_MODEL_REASONING_LEVEL: 'setModelReasoningLevel',
   // Generic settings-view scalar write. The backend looks up {key, value} in the
   // unified catalog, validates and persists it using the row's metadata, then
   // refreshes the row's owning snapshot.
@@ -49,17 +48,11 @@ export const SETTINGS_VIEW_COMMANDS = Object.freeze({
   // Plugin page actions: install, enable, disable, update, remove an installed
   // plugin, and open the MCP config file
   PLUGIN_ACTION: 'pluginAction',
-  // GitHub token commands (for PR subscription tool)
-  SET_GITHUB_TOKEN: 'setGitHubToken',
-  REMOVE_GITHUB_TOKEN: 'removeGitHubToken',
-  OPEN_GITHUB_TOKEN_URL: 'openGitHubTokenUrl',
   // Subscription sign-in commands, provider-keyed in their payload.
   SIGN_IN_SUBSCRIPTION: 'signInSubscription',
   SIGN_OUT_SUBSCRIPTION: 'signOutSubscription',
   SET_SUBSCRIPTION_PREFERENCE: 'setSubscriptionPreference',
   GET_SUBSCRIPTION_USAGE: 'getSubscriptionUsage',
-  UNSUBSCRIBE_PR: 'unsubscribePR',
-  OPEN_PR_SUBSCRIPTION_STREAM: 'openPRSubscriptionStream',
   // LaTeX settings commands
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
   RUN_INSTALL_COMMAND: 'runInstallCommand',

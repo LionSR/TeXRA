@@ -12,7 +12,7 @@
  * every write transaction runs the gate first, since another process can
  * be a newer build.
  */
-import { Duration, Effect, Schedule, Scheduler } from 'effect';
+import { Effect, Schedule, Scheduler } from 'effect';
 import type { SqlError } from 'effect/sql/SqlError';
 import {
   DatabaseAggregateClosed,
@@ -27,13 +27,10 @@ import { isBusy, mapDatabaseFailure, type Sql } from './storeAside';
 /** A busy read's or transaction's retry: from 5 ms, doubling and jittered,
  *  each sleep at most 250 ms, for at most 5 s. The fiber yields between
  *  attempts, so a lock another process holds never freezes the host thread. */
-const BUSY_RETRY = Schedule.exponential('5 millis').pipe(
-  Schedule.jittered,
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, Duration.millis(250))),
-  ),
-  Schedule.upTo({ duration: '5 seconds' }),
-);
+const BUSY_RETRY = Schedule.min([
+  Schedule.exponential('5 millis').pipe(Schedule.jittered),
+  Schedule.spaced('250 millis'),
+]).pipe(Schedule.upTo({ duration: '5 seconds' }));
 
 export interface StoreConnection {
   /** The store's path, as its failures name it. */

@@ -31,9 +31,6 @@ const ProgramInputSchema = Schema.Struct({
     'Read-only context (guidance, references, style files). Say in the prompt what each is for.',
   ),
   mediaFiles: fileList('Images, figures, PDFs or audio.'),
-  outputFiles: fileList(
-    'Output paths, used when one is not among `inputFiles`. Otherwise the program writes its own outputs, or revises the inputs when it names none.',
-  ),
   args: optionalInput(
     Schema.Record(Schema.String, Schema.Json),
     "The program's own arguments, as its description names them.",
@@ -71,7 +68,6 @@ From a script, \`program(name, opts)\` waits for the program and resolves to its
           inputFiles: input.inputFiles,
           contextFiles: input.contextFiles,
           mediaFiles: input.mediaFiles,
-          outputFiles: input.outputFiles,
         },
         program: { name: input.name, args: input.args ?? {} },
       }),

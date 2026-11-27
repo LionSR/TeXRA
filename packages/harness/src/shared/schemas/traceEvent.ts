@@ -10,7 +10,6 @@ import {
   ToolCardSchema,
 } from './toolCard';
 import { FinishedToolResultSchema } from './toolResult';
-import { RunOutcomeSchema } from './run';
 import { TokenUsageStatsSchema } from './usage';
 
 function trace<T extends string, const F extends Schema.Struct.Fields>(
@@ -51,11 +50,6 @@ export const TraceRowFieldsSchema = Schema.Union([
     text: Schema.String,
     elided: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
   }),
-  trace('stage.start', {
-    id: Schema.String,
-    label: Schema.String,
-  }),
-  trace('stage.end', { id: Schema.String, status: RunOutcomeSchema }),
   /**
    * A call's card opens. A run with a run history stores this row only for
    * a call that ends before its body starts (one its guard or a hook denied,

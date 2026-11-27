@@ -24,7 +24,6 @@ import {
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { MODEL_SELECTION_KEY } from '@texra-ai/worldline/host';
 import { nodeFileServices } from '@texra-ai/worldline/node';
 import {
   Secrets,
@@ -43,7 +42,6 @@ import {
   RUN_OUTCOME,
   RunIdSchema,
   toErrorMessage,
-  toJsonValue,
   type AgentProposalRequest,
   type ApprovalPolicy,
   type LogLevel,
@@ -73,8 +71,9 @@ import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 // What no public entry serves: the session's own owners, which the fixtures
-// seed rows through, and the leaves they build rows with (this file is an
-// exemption in oxlint.config.mts).
+// seed rows through, the leaves they build rows with (`toJsonValue` among
+// them), and the stored model selection's key (this file is an exemption in
+// oxlint.config.mts).
 import {
   attachInteractions,
   Interactions,
@@ -86,6 +85,7 @@ import {
 } from '@agent/runtime/requests';
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
+import { MODEL_SELECTION_KEY } from '@model/computeModelOptions';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionRoots } from '@platform/rootedFs';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
@@ -95,6 +95,7 @@ import {
   describeRefusal,
   LOG_LEVELS,
   TOOL_CALL_STATUS,
+  toJsonValue,
 } from '@shared/schemas';
 import {
   RunHistory,

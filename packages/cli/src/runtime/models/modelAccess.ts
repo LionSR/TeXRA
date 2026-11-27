@@ -46,7 +46,8 @@ export interface CliModelListOptions {
   readonly includeUnavailable?: boolean;
 }
 
-const NO_RUNNABLE_MODEL_ACCESS_COPY = 'No models are available';
+/** The one sentence the terminal says when no model can run. */
+export const NO_RUNNABLE_MODEL_COPY = 'No models are currently available.';
 
 /** Points shell users at the guided setup picker rather than leaving them
  *  to figure out key storage on their own. */
@@ -55,7 +56,7 @@ export const CLI_SETUP_RECOVERY = 'Add a provider API key with `texra setup`.';
 export function formatCliNoRunnableModelsMessage(
   recovery: string = CLI_SETUP_RECOVERY,
 ): string {
-  return `${NO_RUNNABLE_MODEL_ACCESS_COPY}. ${recovery}`;
+  return `${NO_RUNNABLE_MODEL_COPY} ${recovery}`;
 }
 
 /** A row's availability as the terminal's sentence-case rows read it: the
@@ -149,7 +150,7 @@ export function formatNoListableModelsMessage(
   options: CliModelListOptions = {},
 ): string {
   return [
-    'No models are currently available.',
+    NO_RUNNABLE_MODEL_COPY,
     ...(options.includeUnavailable === true
       ? []
       : [
@@ -208,7 +209,7 @@ function formatAvailableModels(
   options: CliAvailableModelsMessageOptions,
 ): string {
   if (ids.length > 0) return `Available models: ${ids.join(', ')}.`;
-  return `No models are currently available. ${options.recovery ?? CLI_SETUP_RECOVERY}`;
+  return formatCliNoRunnableModelsMessage(options.recovery);
 }
 
 function formatUnavailableModelMessage(

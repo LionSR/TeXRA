@@ -3,9 +3,9 @@
 // user story, streaming in a terminal. Uses the real chat-TUI vocabulary
 // (packages/cli/src/chat/tui/panes/): session header with `agent: … ·
 // model: …`, a `› ` reverse-video user band, `● tool (preview)` rows (dot dim
-// while running, green when done) and a dim `⎿ ` result line. Tool names are
-// the real grounded-search tools (src/tools/arxiv/ArxivSearchTool.ts
-// `arxiv_search`, src/tools/web/WebSearchTool.ts `web_search`).
+// while running, green when done) and a dim `⎿ ` result line. The calls are
+// the ones a search makes: `bash` running `curl` against arXiv's API, as the
+// bundled `arxiv` skill describes, and `web_search`.
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings; the
 // quoted paper is a real arXiv preprint, not fabricated.
@@ -37,9 +37,9 @@
       <li class="csr-call">
         <div class="csr-row">
           <span class="csr-dot csr-dot--done">●</span>
-          <span class="csr-tname">arxiv_search</span>
+          <span class="csr-tname">bash</span>
           <span class="csr-preview"
-            >(efficient self-attention long documents)</span
+            >(curl -sG https://export.arxiv.org/api/query …)</span
           >
         </div>
         <div class="csr-out">

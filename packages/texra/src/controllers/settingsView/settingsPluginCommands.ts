@@ -70,9 +70,7 @@ export function settingsPluginCommands(ports: {
     const mcpConfigPath = mcpConfigPathOf(roots.storageRoot);
     if (yield* pathExists(fs, mcpConfigPath))
       return yield* bindings.openPath(mcpConfigPath);
-    yield* present.notice(
-      `No MCP servers configured yet. Create ${mcpConfigPath} (same format as Claude Code's .mcp.json).`,
-    );
+    yield* present.notice(PLUGINS_PAGE.noMcpConfig(mcpConfigPath));
   });
 
   const act = (
@@ -110,13 +108,10 @@ export function settingsPluginCommands(ports: {
     handlers: {
       pluginAction: (message: PluginActionMessage) =>
         message.action === 'openMcpConfig'
-          ? present.reported(
-              'Could not open the MCP config file',
-              openMcpConfig,
-            )
+          ? present.reported(PLUGINS_PAGE.mcpOpenFailed, openMcpConfig)
           : present
               .reported(
-                `Plugin ${message.action} failed`,
+                PLUGINS_PAGE.actionFailed(message.action),
                 act({ ...message, action: message.action }),
               )
               // A run reads the install record at its next step on its own;

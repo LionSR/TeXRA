@@ -22,19 +22,15 @@
  */
 
 // Third-party imports
-import { Cause, Effect, type Layer, Schema } from 'effect';
+import { type Layer, Schema } from 'effect';
 
 // Local imports
 import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import { withLogChannel } from '@logger/effectLog';
-import { type AppSignals, emitAppSignal } from '@platform/appSignals';
 import {
   type RunId,
-  type SessionRow,
   type SessionRowDraft,
   type ToolFact,
-  factName,
   type FactName,
 } from '@shared/schemas';
 import type { SettingRow } from '@shared/state/stateSettings';
@@ -67,11 +63,6 @@ export interface FactKind {
    *  starts with of the run's row of the kind: `copy` the row the run held
    *  at the cut, `drop` none. */
   readonly fork: 'copy' | 'drop';
-  /** The workspace files a row of the kind says its run wrote past the
-   *  editor's own write path: every process that folds the run announces
-   *  them (`workspaceFilesWritten`), a window hearing a service task's
-   *  write as it hears its own. */
-  readonly writes?: (value: Schema.Json) => readonly string[];
 }
 
 /**
@@ -173,55 +164,6 @@ export const definePlugin = <ROut = never>(
   // The step that pins the plugin serves its layers' services to its calls.
   // cast: `ROut` is checked by the parameter type and erased here.
   frozenLiterals(plugin) as unknown as Plugin;
-
-/**
- * Announce the workspace files a committed row says its run wrote past the
- * editor's own write path (a fact kind's `writes`): a run records such a change
- * as a fact on its own rows, and every process that reads the run's rows
- * announces it (`workspaceFilesWritten`), so a window hears a background
- * service task's change as it hears its own. Run over the session's applied
- * tail, so each row is announced once, in commit order, and the history a
- * reopened session replays never as news.
- */
-export const announceWrites = (
-  factKinds: FactKinds,
-): ((row: SessionRow) => Effect.Effect<void, never, AppSignals>) => {
-  const writing = new Map(
-    Object.entries(factKinds).flatMap(([name, { writes }]) =>
-      writes === undefined ? [] : [[name, writes] as const],
-    ),
-  );
-  return (row) => {
-    if (row.type !== 'plugin.fact') return Effect.void;
-    const writes = writing.get(factName(row));
-    if (writes === undefined) return Effect.void;
-    // File notifications are advisory; a plugin callback must not stop the
-    // reader that acknowledges committed rows.
-    return Effect.sync(() => [...writes(row.value)]).pipe(
-      Effect.catchDefect((defect) =>
-        Effect.logWarning(
-          'Plugin workspace-write notification failed',
-          Cause.die(defect),
-        ).pipe(
-          Effect.annotateLogs({
-            data: {
-              plugin: row.plugin,
-              kind: row.kind,
-              aggregateId: row.aggregateId,
-              commit: row.commit,
-            },
-          }),
-          withLogChannel('plugins'),
-        ),
-      ),
-      Effect.flatMap((absolutePaths) =>
-        absolutePaths === undefined
-          ? Effect.void
-          : emitAppSignal('workspaceFilesWritten', { absolutePaths }),
-      ),
-    );
-  };
-};
 
 /** The plugin fact kinds a store reads, by `plugin/kind`. */
 export type FactKinds = Readonly<Record<FactName, FactKind>>;
