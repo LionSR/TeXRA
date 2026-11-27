@@ -22,8 +22,13 @@ import {
   stripVTControlCharacters,
 } from 'node:util';
 
-import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
-import { splitValidationAgent } from './validationAgent.mjs';
+import { loadPtySpawn } from './nodePtySpawnHelper.mjs';
+import {
+  buildValidationCli,
+  splitValidationAgent,
+  VALIDATION_FAKE_API_KEY,
+  VALIDATION_PROVIDER_KEYS,
+} from './validationAgent.mjs';
 import {
   VALIDATION_FLAG,
   VALIDATION_FLAG_CONTENT,
@@ -135,29 +140,15 @@ const validationFlagEnv = VALIDATION_FLAG;
 const validationFlagContent = `${VALIDATION_FLAG_CONTENT}\n`;
 const validationFlagName = '.texra-internal-validation-model';
 const validationBundleMarker = VALIDATION_FLAG_CONTENT;
-const VALIDATION_FAKE_API_KEY = 'texra-validation-fake-key';
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
-const validationProviderApiKeyEnv = [
-  'OPENAI_API_KEY',
-  'ANTHROPIC_API_KEY',
-  'GOOGLE_API_KEY',
-  'XAI_API_KEY',
-  'DEEPSEEK_API_KEY',
-  'MOONSHOT_API_KEY',
-  'DASHSCOPE_API_KEY',
-  'MINIMAX_API_KEY',
-  'GLM_API_KEY',
-];
 const validationModelProviderEnv = Object.fromEntries(
-  validationProviderApiKeyEnv.map((name) => [name, VALIDATION_FAKE_API_KEY]),
+  VALIDATION_PROVIDER_KEYS.map((name) => [name, VALIDATION_FAKE_API_KEY]),
 );
 
 function isolatedCliHomeEnv(home, overrides = {}) {
   return {
-    ...Object.fromEntries(
-      validationProviderApiKeyEnv.map((name) => [name, '']),
-    ),
+    ...Object.fromEntries(VALIDATION_PROVIDER_KEYS.map((name) => [name, ''])),
     ...testLaunchEnv(home),
     ...overrides,
   };
@@ -208,13 +199,29 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-/** Poll `check` until it holds, failing the scenario after `timeoutMs`. */
+/** Poll `check` until it returns something truthy, which is the result;
+ *  the scenario fails after `timeoutMs`. */
 async function waitFor(label, check, timeoutMs = 120_000) {
   const deadline = Date.now() + timeoutMs;
-  while (!check()) {
+  for (;;) {
+    const found = check();
+    if (found) return found;
     assert(Date.now() < deadline, `timed out waiting for ${label}`);
     await sleep(250);
   }
+}
+
+/**
+ * The directory of the project store under the TeXRA data root `dataRoot`
+ * whose name starts with `prefix`, or undefined until a session has made
+ * it. A service also keeps a no-workspace store beside it, which holds no
+ * runs.
+ */
+function projectStore(dataRoot, prefix = 'work-') {
+  const storage = path.join(dataRoot, 'v1', 'workspace-storage');
+  if (!existsSync(storage)) return undefined;
+  const name = readdirSync(storage).find((entry) => entry.startsWith(prefix));
+  return name === undefined ? undefined : path.join(storage, name);
 }
 
 function assertSuccess(result, label) {
@@ -405,21 +412,10 @@ function createInteractivePtyEnv(overrides = {}) {
   return env;
 }
 
-async function loadPtySpawn(label) {
-  ensureNodePtySpawnHelperExecutable();
-  const ptyMod = await import('node-pty');
-  const ptySpawn = ptyMod.spawn ?? ptyMod.default?.spawn;
-  assert(
-    typeof ptySpawn === 'function',
-    `node-pty should expose spawn for ${label}`,
-  );
-  return ptySpawn;
-}
-
 async function runTexraPty(written, options = {}) {
   const { command: args, env: agentEnv } = splitValidationAgent(written);
   const label = options.label ?? `texra ${args.join(' ')}`;
-  const ptySpawn = await loadPtySpawn(label);
+  const ptySpawn = await loadPtySpawn();
   const env = { ...createInteractivePtyEnv(options.env), ...agentEnv };
 
   return await new Promise((resolve, reject) => {
@@ -911,7 +907,6 @@ function echoProject(cwd, config = null) {
     [validationEnv]: '1',
     [validationFlagEnv]: validationFlagPath,
   };
-  const storage = path.join(home, '.texra', 'v1', 'workspace-storage');
   return {
     work,
     ptyEnv,
@@ -951,13 +946,7 @@ function echoProject(cwd, config = null) {
       assertSuccess(result, 'texra service stop before durable assertions');
     },
     /** The rows `sql` selects from the project's store (`storeRows`). */
-    readStore: (sql) => {
-      // The project's store: a service also keeps a no-workspace one.
-      const project = readdirSync(storage).find((name) =>
-        name.startsWith('work-'),
-      );
-      return storeRows(path.join(storage, project), sql);
-    },
+    readStore: (sql) => storeRows(projectStore(path.join(home, '.texra')), sql),
     /**
      * `texra resume` with `args` under a PTY, then each exchange in turn:
      * its message typed once the chat idles, and its reply awaited. Exits
@@ -1071,10 +1060,11 @@ function removeScratch(dir) {
   // `serve-<pid>.sock`, which a long home keeps outside `dir`, under `/tmp`.
   // The client opens the log before it starts the service, so a service
   // still starting is waited for briefly.
-  const logs = spawnSync('find', [dir, '-type', 'f', '-name', 'serve.log'], {
-    encoding: 'utf8',
-  });
-  for (const log of logs.stdout.split('\n').filter(Boolean)) {
+  // Listed, not globbed: a glob's `**` skips the hidden `.texra`.
+  const files = existsSync(dir) ? readdirSync(dir, { recursive: true }) : [];
+  for (const found of files) {
+    if (path.basename(found) !== 'serve.log') continue;
+    const log = path.join(dir, found);
     const dataRoot = path.dirname(path.dirname(log));
     if (serviceLogPath(dataRoot) !== log) continue;
     for (
@@ -1674,13 +1664,13 @@ async function validateSdkResumeApproval() {
       'resuming SDK harness',
     );
     // The workspace's store: the global one beside it holds no runs.
-    const store = spawnSync(
-      'find',
-      [storage, '-path', '*/workspace-storage/*', '-name', '*.project-v1.db'],
-      { encoding: 'utf8' },
-    ).stdout.trim();
+    const store = readdirSync(storage, { recursive: true }).find(
+      (file) =>
+        file.endsWith('.project-v1.db') &&
+        file.split(path.sep).includes('workspace-storage'),
+    );
     const rows = storeRows(
-      store,
+      path.join(storage, store),
       `SELECT e.type, json_extract(e.data, '$.requestId') AS requestId,
          json_extract(e.data, '$.decision.action') AS decision,
          json_extract(e.data, '$.payload.callId') AS callId
@@ -2361,11 +2351,10 @@ async function validateServiceHostCalls() {
   };
   // The task's tool results, from the project's store.
   const toolResults = (runId) => {
-    const storage = path.join(storageRoot, 'v1', 'workspace-storage');
-    const dir = readdirSync(storage).find((name) => name.startsWith('work-'));
+    const dir = projectStore(storageRoot);
     if (dir === undefined) return [];
     return storeRows(
-      path.join(storage, dir),
+      dir,
       `SELECT e.data FROM event e
        JOIN event_sequence s ON s.id = e.aggregate
        WHERE s.logical_id = ? AND e.type = 'tool.result'
@@ -2536,16 +2525,12 @@ async function validateServiceSessionIdle() {
     // A project's session is the one holder of its store, which it keeps
     // exclusively: the session is open while a reader is refused
     // (`SQLITE_BUSY`). The service logs nothing as a session closes.
-    const storage = path.join(storageRoot, 'v1', 'workspace-storage');
     const sessionOpen = (prefix) => {
-      const dir = readdirSync(storage).find((name) => name.startsWith(prefix));
+      const dir = projectStore(storageRoot, prefix);
       assert(dir !== undefined, `the ${prefix} project should have a store`);
-      const db = new DatabaseSync(
-        path.join(storage, dir, 'texra.project-v1.db'),
-        {
-          readOnly: true,
-        },
-      );
+      const db = new DatabaseSync(path.join(dir, 'texra.project-v1.db'), {
+        readOnly: true,
+      });
       try {
         db.prepare('SELECT 1 FROM event LIMIT 1').all();
         return false;
@@ -2640,19 +2625,11 @@ async function validateServiceProjectEnv() {
       ],
       'texra tasks start echo_validation',
     );
-    const storage = path.join(storageRoot, 'v1', 'workspace-storage');
-    const deadline = Date.now() + 120_000;
-    let dir;
-    while (
-      (dir = existsSync(storage)
-        ? readdirSync(storage).find((name) => name.startsWith('work-'))
-        : undefined) === undefined
-    ) {
-      assert(Date.now() < deadline, 'timed out waiting for the project store');
-      await sleep(250);
-    }
+    const dir = await waitFor('the project store', () =>
+      projectStore(storageRoot),
+    );
     writeFileSync(
-      path.join(storage, dir, 'config.json'),
+      path.join(dir, 'config.json'),
       `${JSON.stringify({ 'texra.approvalPolicy': 'yolo' })}\n`,
     );
     const started = run(
@@ -2801,30 +2778,17 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
       ),
       `texra tasks start ${agent.label} in ${path.basename(dir)}`,
     );
-  const waitFor = async (what, found) => {
-    const deadline = Date.now() + 120_000;
-    let value;
-    while ((value = found()) === undefined) {
-      assert(Date.now() < deadline, `timed out waiting for ${what}`);
-      await sleep(250);
-    }
-    return value;
-  };
-  const storage = path.join(storageRoot, 'v1', 'workspace-storage');
   try {
     // A first task opens each project in the service, which makes its
     // store; its local setting is then Auto-approve, so the MCP call runs
     // unasked.
     for (const [name, dir] of Object.entries(projects)) {
       start(dir, VALIDATION_RUNS.echo_validation, `Open ${name}`);
-      const prefix = `${path.basename(dir)}-`;
       const store = await waitFor(`${name}'s project store`, () =>
-        existsSync(storage)
-          ? readdirSync(storage).find((entry) => entry.startsWith(prefix))
-          : undefined,
+        projectStore(storageRoot, `${path.basename(dir)}-`),
       );
       writeFileSync(
-        path.join(storage, store, 'config.json'),
+        path.join(store, 'config.json'),
         `${JSON.stringify({ 'texra.approvalPolicy': 'yolo' })}\n`,
       );
     }
@@ -2906,23 +2870,16 @@ async function validateServicePolicyOwner() {
     assertSuccess(result, label);
     return result;
   };
-  const storage = path.join(storageRoot, 'v1', 'workspace-storage');
-  const projectDir = () => {
-    const dir = existsSync(storage)
-      ? readdirSync(storage).find((name) => name.startsWith('work-'))
-      : undefined;
-    return dir === undefined ? null : path.join(storage, dir);
-  };
   // The user's local config for the project: where a window's settings
   // view writes `texra.approvalPolicy`.
   const setPolicy = (policy) =>
     writeFileSync(
-      path.join(projectDir(), 'config.json'),
+      path.join(projectStore(storageRoot), 'config.json'),
       `${JSON.stringify({ 'texra.approvalPolicy': policy })}\n`,
     );
   const rowTypes = (runId, through) =>
     storeRows(
-      projectDir(),
+      projectStore(storageRoot),
       `SELECT e.type FROM event e
        JOIN event_sequence s ON s.id = e.aggregate
        WHERE s.logical_id = ? AND e."commit" <= ? ORDER BY e."commit"`,
@@ -2948,7 +2905,7 @@ async function validateServicePolicyOwner() {
       ],
       'texra tasks start echo_validation',
     );
-    await waitFor('the project store', () => projectDir() !== null);
+    await waitFor('the project store', () => projectStore(storageRoot));
     setPolicy('yolo');
     const child = spawn(
       process.execPath,
@@ -2994,7 +2951,7 @@ async function validateServicePolicyOwner() {
     await sleep(3_000);
     const approved = path.join(project.work, 'approved.txt');
     const setting = JSON.parse(
-      readFileSync(path.join(projectDir(), 'config.json'), 'utf8'),
+      readFileSync(path.join(projectStore(storageRoot), 'config.json'), 'utf8'),
     );
     const firstCommandRan = existsSync(approved);
     const firstPrefix = firstWatch.events();
@@ -3058,7 +3015,7 @@ async function validateServicePolicyOwner() {
     // The limit is what holds it, recorded on its run.start; the project's
     // Auto-approve may land before or after that row.
     const limit = storeRows(
-      projectDir(),
+      projectStore(storageRoot),
       `SELECT json_extract(e.data, '$.grants.limit') AS limit_ FROM event e
        JOIN event_sequence s ON s.id = e.aggregate
        WHERE s.logical_id = ? AND e.type = 'run.start'`,
@@ -3116,13 +3073,10 @@ async function validateServiceTasksInTui() {
   // The task's rows, from the project's own store (the chat also opens
   // the no-workspace one), each with whether it carries the follow-up.
   const taskRows = (runId) => {
-    const storage = path.join(cwd, 'home', '.texra', 'v1', 'workspace-storage');
-    const project = readdirSync(storage).find((name) =>
-      name.startsWith('work-'),
-    );
+    const project = projectStore(path.join(cwd, 'home', '.texra'));
     if (project === undefined) return [];
     return storeRows(
-      path.join(storage, project),
+      project,
       `SELECT e.type, e.data LIKE '%Ping%' AS ping FROM event e
        JOIN event_sequence s ON s.id = e.aggregate
        WHERE s.logical_id = ? ORDER BY e."commit"`,
@@ -3711,24 +3665,8 @@ async function validateCliRunArtifacts(options = {}) {
   console.log('CLI run validation passed');
 }
 
-function runCliPackageScript(script, options = {}) {
-  const result = run('pnpm', ['run', script], {
-    cwd: cliRoot,
-    env: options.env,
-  });
-  assertSuccess(result, `pnpm run ${script}`);
-}
-
 function buildValidationBundle() {
-  runCliPackageScript('bundle', {
-    env: {
-      TEXRA_CLI_BUNDLE_OUTFILE: binaryPath,
-      TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
-    },
-  });
-  runCliPackageScript('copy:resources', {
-    env: { TEXRA_CLI_RESOURCES_OUTDIR: validationResourcesPath },
-  });
+  buildValidationCli(binaryPath);
   assertSuccess(
     run(process.execPath, ['scripts/build-bundle.mjs'], {
       cwd: cliRoot,
