@@ -33,7 +33,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 
 // Local file imports
-import type { ApprovalMeta, DelegatedChildApproval } from './subagentRun';
+import type { DelegatedChildApproval } from './subagentRun';
 
 const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'No feedback provided.',
@@ -202,7 +202,9 @@ function formEdits(
  *  approval finished on, and how it was approved. */
 interface ApprovedDelegation {
   readonly proposal: AgentProposal;
-  readonly approvalMeta: ApprovalMeta;
+  /** How the child's own grants record the approval: `inherit` is a
+   *  person's approval, any other an approval bypass. */
+  readonly childApproval: DelegatedChildApproval;
 }
 
 /**
@@ -223,7 +225,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
     return {
       proposal,
-      approvalMeta: { childApproval: decision.childApproval },
+      childApproval: decision.childApproval,
     } satisfies ApprovedDelegation;
   }
 
@@ -267,11 +269,6 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
       ...edited,
       ...(modelOverride && { model: modelOverride }),
     },
-    approvalMeta: {
-      childApproval: 'inherit',
-      ...(modelOverride && {
-        model: { chosen: modelOverride, proposed: proposal.model },
-      }),
-    },
+    childApproval: 'inherit',
   } satisfies ApprovedDelegation;
 });

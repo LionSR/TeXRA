@@ -528,7 +528,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   if (relaunched !== null && Result.isFailure(relaunched))
     return errorResult(relaunched.failure.message);
   const programConfig = relaunched?.success ?? null;
-  const grants = delegatedChildGrants(decided.approvalMeta.childApproval);
+  const grants = delegatedChildGrants(decided.childApproval);
   const config = Schema.decodeUnknownSync(AgentConfigSchema)({
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
@@ -544,7 +544,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       runId,
       config,
       registration,
-      decided.approvalMeta,
+      decided.childApproval,
+      model,
     );
     // What a script's `await` gets for a child sent to the background.
     return { ...receipt, value: { runId } };
