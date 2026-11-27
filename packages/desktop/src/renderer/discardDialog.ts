@@ -22,7 +22,6 @@ export function createDiscardChangesDialog(appRoot: HTMLElement) {
   const { dialog } = createOverlayDialog({
     appRoot,
     prefix: 'desktop-discard',
-    ariaLabel: 'Discard unsaved changes?',
     closeLabel: 'Keep editing',
     title: 'Discard unsaved changes?',
     content,
