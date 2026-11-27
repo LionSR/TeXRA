@@ -394,6 +394,10 @@ Landed:
     keys are fake, so one owner needs that difference named first. The
     chat scenario's reply wait in `validate-run.mjs` keeps its own loop
     for the output tail in its failure message.
+    **Landed 2026-11-27** for `validate-run.mjs` in the consolidation
+    audit: `validationModelEnv` at its three sites, and the reply wait
+    through `waitFor`; the golden store's copy is item 2 of
+    [`2026-11-27-consolidation-and-natives-left-open.md`](2026-11-27-consolidation-and-natives-left-open.md).
 
 ### Checked and declined on 2026-11-27
 

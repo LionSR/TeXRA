@@ -12,19 +12,17 @@ sites that an earlier note has not landed or declined; most of what is left
 is in the validation scripts and in files the open PRs hold. These landed in
 the PR that adds this note:
 
-- in `packages/cli/scripts/validate-run.mjs`: one `projectStore(storage,
-  prefix)` for eight written-out "find the project store by its directory
-  prefix" lookups, with the storage path read from `echoProject` instead of
-  rebuilt in six scenarios; `waitFor` returning what its check found, for
-  three inline poll loops; one `validationModelEnv(flagPath)` for three
-  copies of the validation-model child environment; a recursive `readdirSync`
-  for one `spawnSync('find', …)`
-- `loadPtySpawn` in `nodePtySpawnHelper.mjs` for the node-pty loader in
-  `validate-run.mjs` and `validate-tui.mjs`
+- in `packages/cli/scripts/validate-run.mjs`: one
+  `validationModelEnv(flagPath)` for three copies of the validation-model
+  child environment, and the chat scenario's reply wait through `waitFor`,
+  which takes the detail its timeout prints. The same morning's package
+  scan (#15256) landed `projectStore`, the value-returning `waitFor`,
+  `loadPtySpawn` and the shared key list; this run had written the first
+  three as well, and the merge kept #15256's.
 - the CLI bundle script's manifest as a JSON import, and
   `import.meta.dirname` for its one `fileURLToPath`
-- `Schema.isBetween` at four tool-input ranges written as two chained
-  checks, with one `ListLimit` for the two identical `limit` fields
+- `Schema.isBetween` for the tool time limit's two chained checks (#15256
+  landed the list and web-search limits)
 - `appendTail` and `appendHead` at two more code-unit cuts (the partial text
   a failed turn stores, a JSON-RPC frame error), `Arr.findLast` for a
   reverse-then-find, `Order.String` for a hand-written comparator
@@ -34,9 +32,10 @@ the PR that adds this note:
 
 ## Open
 
-1. **The provider key list in the validation scripts has drifted from its
-   owner.** `validate-run.mjs` and `generate-golden-store.mjs` each list nine
-   provider key variables; `API_KEY_ENV_NAMES`
+1. **The validation scripts' provider key list has drifted from its
+   owner.** `VALIDATION_PROVIDER_KEYS`
+   (`packages/cli/scripts/validationAgent.mjs`) lists nine provider key
+   variables; `API_KEY_ENV_NAMES`
    (`packages/llm/src/providers/providers.ts`) derives eleven from the
    provider manifest, so `META_API_KEY` and `KIMI_CODE_API_KEY` set in a
    developer's shell reach every validation child. A script cannot import
@@ -45,17 +44,15 @@ the PR that adds this note:
    scripts already import, pinned equal to `API_KEY_ENV_NAMES` by one suite,
    and clearing every `*_API_KEY` by suffix as `validate-tui.mjs` does and
    faking only the provider a scenario names.
-2. **The rest of the validation scripts' repetition is in
-   `generate-golden-store.mjs`, which #15216 holds.** Its validation-model
-   environment, its two-step validation bundle build (also
-   `validate-run.mjs`'s `buildValidationBundle`), its node-pty loader, its
-   store lookup and its `until` are the copies of what `validate-run.mjs`
-   now holds once each. After #15216: export `validationModelEnv`,
-   `projectStore` and `waitFor` from `validationAgent.mjs` and have both
-   scripts read them. `scriptedModel`
-   (`packages/desktop/tests/e2e/serviceFixture.ts`) is a fifth copy of the
-   environment, with one fake key; the flag file's trailing newline differs
-   between the copies and is allowed either way.
+2. **Two more copies of the validation-model environment.**
+   `generate-golden-store.mjs` sets the switch and the flag path itself and
+   fakes two keys where `validationModelEnv` fakes all nine; `scriptedModel`
+   (`packages/desktop/tests/e2e/serviceFixture.ts`) fakes one. Moving
+   `validationModelEnv` to `validationAgent.mjs` with the faked keys as its
+   argument serves the two scripts; the fixture is TypeScript and would
+   need the builder in `validationSwitch.ts`. The golden store's `until`
+   also still polls beside `waitFor`: it gives up when its PTY exits, which
+   `waitFor` does not.
 3. **"Report a failure, pass an interrupt" is written per host.**
    `reportingFailure` (`packages/extension/src/frontend/ui/errorHandlingUtils.ts`)
    is the extension's owner; `reported` in
@@ -73,7 +70,7 @@ the PR that adds this note:
    `RemoteSessionView`'s shape equal to `ActivationViewSource`). One named
    type each; both are public, so the change rewrites
    `config/api-reports/`, which the open PRs hold.
-5. **`bash.ts` holds the fifth chained range check**, and
+5. **`bash.ts` still chains its two range checks**, and
    `chatSessionController.vitest.ts` the second copy of the signal-wait
    `until` (item 6 of the 2026-11-26 note). Both files are held.
 6. **xterm's font size is read two ways.** The desktop terminal pane reads
