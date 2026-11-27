@@ -24,7 +24,6 @@ import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { formatBytes } from '@ui/copy/format';
 import { PROJECT_AGENT_MARK } from '@ui/copy/nestedRuns';
 import { Settings } from '@texra-ai/worldline/plugins';
-import { projectAgentFirst } from '@texra/shared/session/projectAgentFirst';
 import { PROJECT_AGENT_SETTING } from '@texra/shared/settings/texraSettings';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 import type { RunStatusKey } from '@texra/shared/session/runStatusKey';
@@ -164,13 +163,13 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
 export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
   function* (session: Session) {
     const agent = yield* Settings.get(session.roots, PROJECT_AGENT_SETTING);
-    return projectAgentFirst(
-      (yield* session.listRuns).map((entry) =>
-        toCliHistoryEntry(entry, entry.id === agent),
-      ),
-      (entry) => entry.id,
-      agent,
+    const entries = (yield* session.listRuns).map((entry) =>
+      toCliHistoryEntry(entry, entry.id === agent),
     );
+    return [
+      ...entries.filter((entry) => entry.id === agent),
+      ...entries.filter((entry) => entry.id !== agent),
+    ];
   },
 );
 

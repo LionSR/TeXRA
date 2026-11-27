@@ -122,8 +122,7 @@ Landed 2026-11-23, on the recommended answer to owner question 2. The GUI
 window (`openGuiWindow.ts`, both GUI hosts) selects the agent once its first
 surface attaches (`SessionBridge.attached`), and carries it in the host
 snapshot (`HostSnapshot.agent`), from which the run lists put it first and
-mark it (`projectAgentFirst`, `packages/texra/src/shared/session/projectAgentFirst.ts`;
-`RunTabs`/`RunTab`, `SessionDrawer`, `ProgressApp`, the desktop rail). Bare
+mark it (`RunTabs`/`RunTab`, `SessionDrawer`, `ProgressApp`, the desktop rail). Bare
 `texra` and `texra chat` resume it (`packages/cli/src/commands/chat.ts`), and
 `--new` starts over; the CLI's history and `/resume` mark it on the listing
 row (`CliHistoryEntry.projectAgent`). A `--model` given while the project has

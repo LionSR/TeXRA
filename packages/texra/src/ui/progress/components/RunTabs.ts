@@ -12,7 +12,6 @@ import {
   type Surface,
 } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
-import { projectAgentFirst } from '@texra/shared/session/projectAgentFirst';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import { runListSections, runSectionTone, runStatus } from '@ui/copy/runStatus';
@@ -215,7 +214,7 @@ export class RunTabs extends TexraElement {
     const selected = surface ? shownRun(surface) : null;
     this.unseen = view && surface ? unseenRuns(surface, view) : new Set();
     const query = surface?.search ?? '';
-    const top = projectAgentFirst(view?.order ?? [], (id) => id, this.agent)
+    const listed = (view?.order ?? [])
       .map((id) => this.runOfEvent(id))
       .filter((run): run is RunView => run !== undefined)
       .filter((run) => !this.activeOnly || runStatus(run).section !== 'recent')
@@ -228,11 +227,18 @@ export class RunTabs extends TexraElement {
           : 0,
       );
 
+    // The project's agent leads the list, ahead of its sections and of what
+    // needs the person.
+    const agentRun = listed.find((run) => run.id === this.agent);
+    const top = listed.filter((run) => run !== agentRun);
+    const lead =
+      agentRun === undefined ? nothing : this.renderRows([agentRun], selected);
+
     let body: TemplateResult;
     if (!this.sections) {
-      body = this.renderRows(top, selected);
+      body = html`${lead}${this.renderRows(top, selected)}`;
     } else {
-      body = html`${runListSections(top).map(
+      body = html`${lead}${runListSections(top).map(
         ({ section, label, runs }) =>
           html`<div class="group-heading tone-${runSectionTone(section)}">
               <span>${label}</span>
