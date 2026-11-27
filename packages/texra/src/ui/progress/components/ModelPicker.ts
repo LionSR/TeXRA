@@ -31,10 +31,16 @@ import { TexraElement } from '@ui/litBase';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { isCommitEnter } from '@ui/wa/keyActivation';
+import {
+  listMoveOfKey,
+  matchesQuery,
+  nextListIndex,
+} from '@ui/wa/listInteraction';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /** One row of a model choice: a host row, or the selected model as itself. */
-export interface ModelChoice {
+interface ModelChoice {
   readonly value: string;
   readonly label: string;
   readonly disabled: boolean;
@@ -51,7 +57,7 @@ const refOf = (model: string): string =>
  * `selected` names among them whatever effort it carries. A model the host
  * does not list (a proposal's, say) leads the list as itself.
  */
-export function modelChoices(
+function modelChoices(
   selected: string,
   rows: readonly ModelOptionData[],
 ): { readonly current: ModelChoice; readonly choices: readonly ModelChoice[] } {
@@ -84,11 +90,6 @@ function levelOf(
   if (named === undefined) return current.row?.efforts?.sent;
   return levels === undefined ? named : nearestEffort(levels, named);
 }
-
-const matches = (choice: ModelChoice, query: string): boolean =>
-  `${choice.label} ${choice.value} ${choice.row?.provider ?? ''}`
-    .toLowerCase()
-    .includes(query);
 
 /** A composer chip's trigger, shared with the composer's other chips. */
 export const chipTriggerStyles = css`
@@ -252,10 +253,13 @@ export class ModelPicker extends TexraElement {
   @query('.search input') private search?: HTMLInputElement;
 
   private filtered(choices: readonly ModelChoice[]): readonly ModelChoice[] {
-    const needle = this.searchText.trim().toLowerCase();
-    return needle === ''
-      ? choices
-      : choices.filter((choice) => matches(choice, needle));
+    const query = this.searchText.trim();
+    return choices.filter((choice) =>
+      matchesQuery(
+        `${choice.label} ${choice.value} ${choice.row?.provider ?? ''}`,
+        query,
+      ),
+    );
   }
 
   /** Another model, at the level remembered for it (its row's), or its
@@ -284,16 +288,18 @@ export class ModelPicker extends TexraElement {
     );
   }
 
+  /** The search keeps Home and End for its caret; the arrows move. */
   private onSearchKey(event: KeyboardEvent, shown: readonly ModelChoice[]) {
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault();
-      const step = event.key === 'ArrowDown' ? 1 : -1;
-      this.active = (this.active + step + shown.length) % (shown.length || 1);
-    } else if (event.key === 'Enter') {
+    if (isCommitEnter(event)) {
       event.preventDefault();
       const choice = shown.at(this.active);
       if (choice !== undefined) this.pick(choice);
+      return;
     }
+    const move = listMoveOfKey(event.key, 'vertical');
+    if (move !== 'next' && move !== 'previous') return;
+    event.preventDefault();
+    this.active = Math.max(0, nextListIndex(move, this.active, shown.length));
   }
 
   protected override updated(): void {
