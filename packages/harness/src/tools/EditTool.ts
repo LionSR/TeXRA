@@ -53,8 +53,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
   }
   if (old_str.length === 0) {
     return yield* new ToolError(
-      `old_str must not be empty for ${displayPath}. ` +
-        `Provide the exact text to replace, copied from read_file output (excluding the line-number prefix).`,
+      `old_str must not be empty for ${displayPath}.`,
     );
   }
 
@@ -66,16 +65,9 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
       search: old_str,
       replacement: new_str,
       replaceAll: replace_all ?? false,
-      notFoundError: () =>
-        `old_str not found in ${displayPath}.\n` +
-        `To fix:\n` +
-        `- Re-read the file: content may have changed since last read\n` +
-        `- Copy text exactly from read_file output, excluding the line-number prefix (e.g. "  42\t"); whitespace must match`,
+      notFoundError: () => `old_str not found in ${displayPath}.`,
       multipleMatchesError: (count) =>
-        `old_str matches ${count} locations in ${displayPath}.\n` +
-        `To fix, either:\n` +
-        `- Include more surrounding context to make old_str unique\n` +
-        `- Set replace_all to true to replace every occurrence: { "replace_all": true }`,
+        `old_str matches ${count} locations in ${displayPath}.`,
     }),
   );
 

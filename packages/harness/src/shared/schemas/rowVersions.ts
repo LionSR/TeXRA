@@ -157,12 +157,14 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     'process.output': Object.freeze({ ...V1, listing: 'none' }),
     'process.exit': Object.freeze({ ...V1, listing: 'own' }),
     'followup.closed': Object.freeze({ ...V1, listing: 'own' }),
-    'model.message': Object.freeze({ ...V1, listing: 'none' }),
+    // v2: a call's dispatch fact names no duplicate, and no append is a
+    // blank-turn continuation.
+    'model.message': Object.freeze({ version: 2, listing: 'none' }),
     'context.edit': Object.freeze({ version: 2, listing: 'none' }),
     'tool.intent': Object.freeze({ ...V1, listing: 'none' }),
     'script.call': Object.freeze({ ...V1, listing: 'none' }),
-    // v2: no `duplicateOf`; the response's dispatch fact names the primary.
-    'tool.result': Object.freeze({ version: 2, listing: 'none' }),
+    // v3: no `duplicate` disposition.
+    'tool.result': Object.freeze({ version: 3, listing: 'none' }),
     'tools.offered': Object.freeze({ ...V1, listing: 'none' }),
     // The recorded request a blob holds is part of this kind's shape, its
     // controls as each protocol prepares them: a resumed background turn is

@@ -36,6 +36,11 @@ import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspace
 
 // Local file imports
 import { openCodexClient } from './codexImport';
+import {
+  AgentCliEffortSchema,
+  CODEX_DEFAULT_MODEL,
+  CODEX_MODELS,
+} from '@texra/shared/agentCliSettings';
 import { codexRun } from './codexConfig';
 import { CodexThreads } from './agentCliSessionStores';
 import {
@@ -74,6 +79,14 @@ const CodexInputSchema = Schema.Struct({
     description:
       'Instruction for the Codex agent. For a new session, describe the task. For a resume (thread_id set), describe the follow-up.',
   }),
+  model: optionalInput(
+    Schema.String,
+    `OpenAI model reference, optionally with an effort suffix (e.g. '${CODEX_DEFAULT_MODEL}@high'). Current ones: ${CODEX_MODELS.join(', ')}. Default: ${CODEX_DEFAULT_MODEL}.`,
+  ),
+  effort: optionalInput(
+    AgentCliEffortSchema,
+    "Reasoning effort; overrides the model's @effort suffix. A level the model or the installed Codex CLI lacks becomes the nearest one it has.",
+  ),
   thread_id: optionalInput(
     Schema.String,
     'Continue an existing Codex thread with a follow-up instruction, as its next turn. A thread whose turn is still running refuses another until that turn is delivered.',
@@ -322,7 +335,7 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
     workingDir || !input.thread_id
       ? buildAgentWorkspaceOptions(roots.workspace, workingDir)
       : {};
-  const run = yield* codexRun(roots, codexPath);
+  const run = yield* codexRun(codexPath, input);
   if (run.note) {
     yield* Effect.logInfo(run.note).pipe(withLogChannel(CODEX_AGENT_NAME));
   }

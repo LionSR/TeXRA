@@ -1,24 +1,15 @@
 /**
- * The new-task composer's chip menus beside its model picker: approval, and
- * the working directory when there are two or more roots. Each chip is a
- * menu over the launcher's selections; the composer renders them and owns
- * the dispatch.
+ * The new-task composer's chip menu beside its model picker: the working
+ * directory, when there are two or more roots. A chip is a menu over the
+ * launcher's selections; the composer renders it and owns the dispatch.
  */
 import { html, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { joinFacts } from '@texra-ai/worldline/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
-import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { IconName } from '@ui/wa/iconNames';
-import {
-  approvalPolicyLabel,
-  formatApprovalPolicy,
-} from '@ui/copy/approvalPolicy';
-import { TASK_APPROVAL } from '@ui/copy/taskApproval';
-import type { ApprovalPolicy } from '@texra-ai/worldline/schemas';
 
 export interface ChipMenu {
   readonly id: string;
@@ -32,18 +23,14 @@ export interface ChipMenu {
 
 type Launch = Surface['launch'];
 
-/** The launcher's chips beside its model: approval, and the working
- *  directory when there are two or more roots. */
+/** The launcher's chips beside its model: the working directory when there
+ *  are two or more roots. */
 export function launcherChipMenus(
   launch: Launch,
   host: HostSnapshot,
-  actions: {
-    setLaunch(patch: Partial<Launch>): void;
-    openSettings(target: SettingsTarget): void;
-  },
+  actions: { setLaunch(patch: Partial<Launch>): void },
 ): ChipMenu[] {
   const menus: ChipMenu[] = [];
-  menus.push(approvalMenu(launch, host.approvalPolicy, actions));
   if (host.workspaceRoots.length >= 2) {
     const root = host.workspaceRoots.find(
       (option) => option.value === launch.workingDirectory,
@@ -72,61 +59,4 @@ export function launcherChipMenus(
     });
   }
   return menus;
-}
-
-/** Approval sits beside the model because it is chosen per task, at
- *  the moment of delegating; the run header then shows it and can revoke it. */
-function approvalMenu(
-  launch: Launch,
-  policy: ApprovalPolicy,
-  actions: {
-    setLaunch(patch: Partial<Launch>): void;
-    openSettings(target: SettingsTarget): void;
-  },
-): ChipMenu {
-  // The task's own Auto-approve.
-  const overridden = launch.approval === 'autoApprove';
-  const policyLabel = approvalPolicyLabel(policy);
-  const policyDescription = formatApprovalPolicy(policy);
-  return {
-    id: 'composer-approval',
-    icon: overridden ? 'rocket' : 'shield',
-    label: overridden ? TASK_APPROVAL.autoApprove.label : policyLabel,
-    title: TASK_APPROVAL.title,
-    description: overridden
-      ? TASK_APPROVAL.autoApprove.description
-      : policyDescription,
-    items: html`
-      <wa-dropdown-item
-        value="approval:policy"
-        type="checkbox"
-        .checked=${live(!overridden)}
-        ><span class="menu-choice"
-          ><span>${joinFacts(['Use settings', policyLabel])}</span>
-          <small>${policyDescription}</small></span
-        ></wa-dropdown-item
-      >
-      <wa-dropdown-item
-        value="approval:autoApprove"
-        type="checkbox"
-        .checked=${live(overridden)}
-        ><span class="menu-choice"
-          ><span>${TASK_APPROVAL.autoApprove.menuLabel}</span>
-          <small>${TASK_APPROVAL.autoApprove.menuDescription}</small></span
-        ></wa-dropdown-item
-      >
-      <wa-dropdown-item value="settings:general"
-        >Open settings…</wa-dropdown-item
-      >
-    `,
-    onSelect: (value) => {
-      if (value === 'approval:policy' || value === 'approval:autoApprove') {
-        actions.setLaunch({
-          approval: value === 'approval:policy' ? 'policy' : 'autoApprove',
-        });
-      } else if (value === 'settings:general') {
-        actions.openSettings('general/approval');
-      }
-    },
-  };
 }

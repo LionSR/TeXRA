@@ -122,12 +122,6 @@ run's records instead.
 const AgentRunListingEntrySchema: Struct<{ readonly id: brand<String, "RunId">; readonly timestamp: String; readonly outcome: NullOr<Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>>; readonly description: optional<String>; readonly continuation: Union<readonly [Struct<{ readonly kind: Literals<readonly ["continues", "finished"]>; }>, Struct<{ readonly kind: Literal<"blocked">; readonly cause: String; }>]>; readonly identity: Struct<{ readonly kind: Literal<"agent">; readonly agent: NonEmptyString; readonly tool: optional<NonEmptyString>; }>; readonly record: Struct<{ readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly label: String; readonly system: withDecodingDefault<String, never>; readonly tools: withDecodingDefault<$Array<NonEmptyString>, never>; readonly toolScope: optional<Literals<readonly ["declared", "topLevel"]>>; readonly model: String; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<String>; readonly displayInstruction: optional<String>; readonly skills: optional<$Array<String>>; readonly workingDirectory: optional<String>; readonly outputSchema: optional<$Record<String, Unknown>>; readonly script: optional<Union<readonly [Struct<{ readonly kind: Literal<"background">; readonly code: NonEmptyString; readonly title: NonEmptyString; readonly tools: $Array<NonEmptyString>; readonly timeoutMs: optional<Int>; }>, Struct<{ readonly kind: Literal<"program">; readonly name: NonEmptyString; readonly args: $Record<String, Codec<Json, Json, never, never>>; }>]>>; }>; }>
 ```
 
-## ALLOW_ORCHESTRATOR_KILL_SETTING
-
-```ts
-const ALLOW_ORCHESTRATOR_KILL_SETTING: { readonly key: "allowOrchestratorKill"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Let a task stop its agents"; readonly description: "Allow a task to stop the agents it started once they are no longer needed."; }
-```
-
 ## AnsweredBy
 
 Who answers a request ({@link AnsweredBySchema}).

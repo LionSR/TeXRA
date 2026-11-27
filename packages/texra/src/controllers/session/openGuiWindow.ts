@@ -57,7 +57,6 @@ import {
   fieldTakes,
 } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
-  launchApprovalOptions,
   launchFormOf,
   prepareSurfaceLaunch,
 } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
@@ -589,7 +588,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           // `Cancelled` is the answer the form shows nothing for, and it keeps
           // the instruction to send again.
           yield* runActions
-            .runValidated(config, launchApprovalOptions(request))
+            .runValidated(config)
             .pipe(Effect.mapError(() => new Cancelled()));
           return done;
         }

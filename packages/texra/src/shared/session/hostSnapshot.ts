@@ -9,8 +9,6 @@
 import { Schema } from 'effect';
 import {
   getBasename,
-  ApprovalPolicySchema,
-  APPROVAL_POLICY_DEFAULT,
   DeclinableUsageRouteSchema,
   NonNegativeIntSchema,
   PlanQuotaFailureSchema,
@@ -107,8 +105,6 @@ export const HostSnapshotSchema = Schema.Struct({
     terminalOutput: Schema.Array(Schema.String),
   }),
   workspaceRoots: Schema.Array(WorkspaceRootOptionDataSchema),
-  /** The project's configured policy, shown before a task is launched. */
-  approvalPolicy: ApprovalPolicySchema,
   /** The one recorder per process and where its take is going. */
   recording: Schema.NullOr(
     Schema.Struct({ session: Schema.String, target: Schema.String }),
@@ -149,7 +145,6 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     planUsage: [],
     tools: { icons: {}, terminalOutput: [] },
     workspaceRoots: [],
-    approvalPolicy: APPROVAL_POLICY_DEFAULT,
     recording: null,
     banners: {
       apiKey: false,

@@ -52,10 +52,6 @@ import type { SessionServices } from '../rootLaunch';
 import type { PluginToolServices } from '../ToolServices';
 import type { ToolCallHooks } from './hooks';
 
-const DEFAULT_BASH_REJECTION_GUIDANCE =
-  'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
-  'Continue without running it, use a non-shell method, or explain what approval would be needed.';
-
 /**
  * Ask the person about `command`: a `request.opened` on the run, answered
  * by a surface's `request.decide`, or by the grant that answers it turned
@@ -124,8 +120,7 @@ function commandRejectedResult(
     refusal.action === 'reject'
       ? `User rejected command: ${preview}`
       : `${copy.summary}: ${preview}`;
-  const guidance =
-    refusal.action === 'reject' ? DEFAULT_BASH_REJECTION_GUIDANCE : copy.detail;
+  const guidance = refusal.action === 'reject' ? undefined : copy.detail;
   const feedback = copy.feedback;
   const error = feedback || !guidance ? message : `${message}\n\n${guidance}`;
   return errorResult(error, {

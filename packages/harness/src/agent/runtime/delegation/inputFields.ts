@@ -62,30 +62,6 @@ export const rejectUnusableWorkingDirectory = Effect.fn(function* (
   }
   return null;
 });
-const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
-  'The delegated instruction above is your full task contract. This includes any tool, network, file, approval, output-format, or scope constraints it states. If a requested action conflicts with those constraints or needs missing context, report the conflict instead of assuming permission.',
-  'Your final response is delivered verbatim to the agent that gave you this task, and to any agent whose message you take up while you work. End with the substantive result (answer, findings, evidence, unresolved caveats), never only a status note such as "done".',
-].join(' ');
-export function withToolUseSubagentHandoffInstruction(
-  instruction: string,
-  parentInstruction?: string,
-): string {
-  const trimmed = instruction.trim();
-  const trimmedParent = parentInstruction?.trim();
-  const parts = trimmed ? [trimmed] : [];
-  if (trimmedParent) {
-    const contextBlock =
-      trimmedParent === trimmed
-        ? 'The delegated task above is copied verbatim from the request the agent that launched you is working on.'
-        : `The request the agent that launched you is working on (constraint context only):\n${trimmedParent}`;
-    parts.push(
-      `${contextBlock}\n\nConstraints in that request are mandatory and override conflicting delegated-task wording. Do not repeat actions it leaves to the agent that launched you.`,
-    );
-  }
-  parts.push(TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION);
-  return parts.join('\n\n');
-}
-
 /**
  * Shared field for the `working_directory` parameter on delegation tools.
  * Validates and normalizes in one step so downstream code always receives the

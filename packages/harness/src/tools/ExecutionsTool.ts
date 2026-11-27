@@ -68,7 +68,6 @@ import {
 } from './executionFormatters';
 import { defineTool } from './core/definition';
 import { formatFileView, type LineRange } from './formatting';
-import { orchestratorKillDenial } from './executions/killPolicy';
 import { queryHistory } from './executions/queryAction';
 import { showOutput } from './executions/processOutput';
 import { listRunGeneratedFiles } from './executions/runGeneratedFiles';
@@ -484,12 +483,6 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
     );
   }
 
-  // The permission gate: off, or a stored value that fails its schema, denies.
-  const killDenial = yield* orchestratorKillDenial(yield* SessionRoots);
-  if (killDenial !== undefined) {
-    return yield* new ToolError(killDenial);
-  }
-
   // Its children follow the session's stop policy (`RunRegistry.stop`).
   const success = yield* runs.stop(runId, 'user').pipe(Effect.uninterruptible);
   if (success) return executed(`Run ${runId} terminated.`);
@@ -693,7 +686,7 @@ Use action: "kill" on /executions/{id} to terminate a live run.
 Use action: "send" with message on /executions/{id} to message any other run in this project: your subagent (a follow-up it continues from), your orchestrator, a sibling, or any other run. It reads the message after its current turn; an idle or ended run wakes to read it. A run that takes none (a headless one-shot run, a background command, an agent-CLI turn) refuses it.
 Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). In a script, query returns { columns, rows, more }; other actions return { output, summary }. Queries return at most ${HISTORY_QUERY_ROW_CAP} rows and refuse a JSON page larger than ${HISTORY_QUERY_PAGE_LIMIT_BYTES / (1024 * 1024)} MiB; use LIMIT or substr() to narrow it. Children: SELECT * FROM runs WHERE parent_id = ?. Views:
 ${HISTORY_VIEW_SUMMARY}
-Delegated subagent and document task results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
+The result of a run you launched is delivered automatically as a follow-up message.`,
   schema: ExecutionsToolInputSchema,
   execute: (input: ExecutionsToolInput) =>
     inRunSession((call) => executeExecutionsTool(call, input)),

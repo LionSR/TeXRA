@@ -122,7 +122,6 @@ export const memorySection = Effect.fn('memory.section')(function* (
     : ' Their paths are listed with the accessible directories in <workspace_info>.';
   return `<memory>
 You have ${folders.length} folders of Markdown notes that persist across conversations: ${folderSummary}.${pathHint} They are ordinary files: read and write them with your file tools, by absolute path. Each folder's ${MEMORY_INDEX} is its index, shown below as it reads now, one line per note; the notes themselves are not shown, so read one when its line looks relevant to the request.
-When you learn something a later conversation will need (a preference, a decision, a convention, a pitfall), write it to a note in the folder it belongs to and keep that folder's ${MEMORY_INDEX} current. Update or remove a note that is no longer true rather than adding a second one. Do not store what the project's own files already state, and do not write anything when there is nothing worth keeping.
 ${indexes.join('\n')}
 </memory>`;
 });

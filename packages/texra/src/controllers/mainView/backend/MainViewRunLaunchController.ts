@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 
-import { type StartInput } from '@texra-ai/worldline';
 import { type AgentConfig, Rejected } from '@texra-ai/worldline/schemas';
 import { entryAgent } from '@texra/agent/entryAgent';
 import { isPastedImage } from '@texra/shared/utils/pastedImageName';
@@ -14,17 +13,6 @@ type LaunchRequest = Extract<HostCommand, { kind: 'launch' }>;
 /** The session's storage root, under which a launch's pasted images live. */
 interface LaunchRoots {
   readonly storage: string;
-}
-
-/**
- * The run option an Auto-approve launch adds: its run starts with every
- * bypass on, the same state the run header's switches write, so the header
- * shows it and the user can take it back mid-run.
- */
-export function launchApprovalOptions({
-  launch,
-}: LaunchRequest): Pick<StartInput, 'approval'> {
-  return launch.approval === 'autoApprove' ? { approval: 'autoApprove' } : {};
 }
 
 /** Both GUI hosts launch the selections carried by the requesting surface:

@@ -2,6 +2,7 @@ import { Result } from 'effect';
 import * as CommandLine from 'effect/process/CommandLine';
 
 import {
+  APPROVAL_POLICY_DEFAULT,
   formatCount,
   isEmptyUsage,
   type RunId,
@@ -45,7 +46,7 @@ export function formatResumeCommand(
   const cwdArg =
     cwd && cwd !== options.processCwd ? ` --cwd ${shellArgument(cwd)}` : '';
   const policyFlag =
-    options.approvalPolicy && options.approvalPolicy !== 'ask'
+    options.approvalPolicy && options.approvalPolicy !== APPROVAL_POLICY_DEFAULT
       ? ` --approval-policy ${options.approvalPolicy}`
       : '';
   const outputFormatFlag =

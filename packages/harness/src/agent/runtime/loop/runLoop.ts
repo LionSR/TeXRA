@@ -85,8 +85,6 @@ import { RunRegistry, type AgentRunServices } from '../runRegistry';
 import type { RunControls } from '../runs';
 import type { RunReport } from '../runReport';
 
-const BLANK_TOOL_RESULT_CONTINUATION =
-  'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 
 /** What {@link openToolUse} committed: the run's cell and the commit of
@@ -279,18 +277,6 @@ const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
   AgentRun | RunHistory
 > {
   const { runId, finalToolName } = yield* AgentRun;
-  if (
-    !text.trim() &&
-    at.messages.findLast(
-      (message, index, history) =>
-        index < history.length - 1 && message.role !== 'user',
-    )?.role === 'tool'
-  ) {
-    const row = appendRow(runId, [nudge(BLANK_TOOL_RESULT_CONTINUATION)], {
-      reason: 'blank-continuation',
-    });
-    return { state: yield* cell.append([row]), done: false };
-  }
   if (text && !at.answerFinalized)
     at = yield* cell.append(finalizedRows(runId, text, at.lastTurn));
   if (

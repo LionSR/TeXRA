@@ -155,7 +155,7 @@ interface StatusBarChrome {
   readonly subscriptionProbeFailed: boolean;
   /** Latest quota snapshot for the subscription serving this model. */
   readonly subscriptionQuota: SubscriptionUsageSnapshot | undefined;
-  /** Session approval policy; a non-default policy earns a segment. */
+  /** Session approval policy, for the resume hint. */
   readonly approvalPolicy: ApprovalPolicy;
   /** Terminal width in columns. */
   readonly width: number;

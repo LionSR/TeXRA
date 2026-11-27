@@ -1,20 +1,12 @@
 /**
  * What TeXRA's settings UIs read off a catalog row: the row's schema without its default, the enum
- * choices a dropdown lists, and the label a Plugins-page card shows. Plain
+ * choices a dropdown lists. Plain
  * functions of a row, so the extension webview, the desktop renderer and the
  * CLI `/config` panel render the same choices.
  */
 import { Predicate, Schema, SchemaAST } from 'effect';
 
-import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 import type { SettingRow } from '@texra-ai/worldline/schemas';
-
-/** A row a plugin declares, with the short label its Plugins-page card shows
- *  (the card already names the plugin, so 'Model' rather than 'Codex model'). */
-export interface PluginSettingRow {
-  readonly row: TexraSettingRow;
-  readonly label: string;
-}
 
 /**
  * The entry's schema with its decoding default removed: the shape a value that

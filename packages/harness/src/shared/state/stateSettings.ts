@@ -412,20 +412,6 @@ export const GIT_AUTHOR_EMAIL_SETTING = {
     'Author and committer email used for agent-authored commits when commit marking is enabled.',
 } as const satisfies SettingRow<string | undefined>;
 
-// --- Agent coordination ---------------------------------------------
-// Both child-work policy toggles live in `globalState`: they describe how
-// *this user* wants child runs handled, not anything about a particular
-// checkout.
-
-export const ALLOW_ORCHESTRATOR_KILL_SETTING = {
-  key: 'allowOrchestratorKill',
-  slot: 'globalState',
-  schema: booleanWithDefault(true),
-  title: 'Let a task stop its agents',
-  description:
-    'Allow a task to stop the agents it started once they are no longer needed.',
-} as const satisfies SettingRow<boolean>;
-
 /** While on, a step with file tools is given the memory folders and shown
  *  their indexes (`openStep`, `agent/runtime/loop/step.ts`). */
 export const MEMORY_ENABLED_SETTING = {
@@ -501,7 +487,6 @@ const HARNESS_SETTINGS = [
   GIT_MARK_COMMITS_SETTING,
   GIT_AUTHOR_NAME_SETTING,
   GIT_AUTHOR_EMAIL_SETTING,
-  ALLOW_ORCHESTRATOR_KILL_SETTING,
   MEMORY_ENABLED_SETTING,
   WEBSOCKET_OPENAI_SETTING,
   ...PROVIDER_ENDPOINT_SETTINGS,

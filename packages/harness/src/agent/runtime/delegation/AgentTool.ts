@@ -67,7 +67,6 @@ import {
   fileList,
   rejectUnusableWorkingDirectory,
   resolveInvocationFileList,
-  withToolUseSubagentHandoffInstruction,
 } from './inputFields';
 import { pluginAgent } from './pluginAgents';
 import { AgentRequest, decideDelegation } from './proposalFlow';
@@ -417,10 +416,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     return errorResult(
       '`timeoutMs` limits how long a call waits for its child, and this call runs in the background. Call it from a script without `background: true`, or drop the limit; `maxCostUsd` holds for a background child too.',
     );
-  // A program's launch, a structured call and a call from a listed program
-  // reach the child verbatim; any other is handed off with the parent's
-  // instruction.
-  const handsOff = program === null && outputSchema === undefined && !verbatim;
   // A completed call with the same prompt, options and file bytes is reused.
   // The requested model, not the one availability resolves to, so a reuse
   // does not depend on which credentials are configured now. The call's
@@ -430,7 +425,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     awaited && script !== undefined
       ? sha256({
           prompt: launch.prompt,
-          ...(handsOff && { handoff: call.instruction ?? null }),
           agent: agent.name,
           system: agent.system,
           tools: agent.tools,
@@ -489,9 +483,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       model,
       ...(workingDirectory !== undefined && { workingDirectory }),
       task: program !== null,
-      instruction: handsOff
-        ? withToolUseSubagentHandoffInstruction(launch.prompt, call.instruction)
-        : launch.prompt,
+      instruction: launch.prompt,
       inputFiles: inputs.map(({ file }) => file),
       contextFiles,
       mediaFiles: media.map(({ file }) => file),

@@ -33,7 +33,8 @@ import {
 } from '@texra-ai/worldline/plugins';
 import {
   AgentCliEffortSchema,
-  ClaudeAgentModelSchema,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_MODELS,
 } from '@texra/shared/agentCliSettings';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspaceOptions';
 
@@ -78,11 +79,11 @@ const ClaudeAgentInputSchema = Schema.Struct({
   }),
   model: optionalInput(
     Schema.String,
-    `Claude model reference, optionally with an effort suffix (e.g. 'anthropic/claude-opus-5-5' or 'anthropic/claude-opus-5-5@high'). Any non-retired Anthropic model; current ones: ${ClaudeAgentModelSchema.literals.join(', ')}. Defaults to the user-configured model.`,
+    `Claude model reference, optionally with an effort suffix (e.g. 'anthropic/claude-opus-5-5' or 'anthropic/claude-opus-5-5@high'). Any non-retired Anthropic model; current ones: ${CLAUDE_AGENT_MODELS.join(', ')}. Default: ${CLAUDE_AGENT_DEFAULT_MODEL}.`,
   ),
   effort: optionalInput(
     AgentCliEffortSchema,
-    "Reasoning effort; overrides the model's @effort suffix. Defaults to the user-configured effort (medium unless changed). A level the model lacks becomes the nearest one it has.",
+    "Reasoning effort; overrides the model's @effort suffix. A level the model lacks becomes the nearest one it has.",
   ),
   session_id: optionalInput(
     Schema.NonEmptyString,
@@ -328,11 +329,7 @@ const prepareLaunch = Effect.fn('claudeAgent.prepareLaunch')(function* (
   const permissionMode: ClaudePermissionMode = autoApproved
     ? 'bypassPermissions'
     : 'acceptEdits';
-  const claudeRun = yield* readClaudeCodeRun(roots, input).pipe(
-    Effect.catchTag('StateReadFailed', (error) =>
-      Effect.fail(asToolError(error)),
-    ),
-  );
+  const claudeRun = yield* readClaudeCodeRun(input);
   // Mirrors codex so subagents can see the project: a call from inside the
   // workspace runs in that directory with read access to the workspace root
   // for sibling files; an out-of-workspace cwd runs isolated. The SDK's

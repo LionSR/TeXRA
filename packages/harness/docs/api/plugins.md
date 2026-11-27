@@ -964,8 +964,7 @@ interface ITool<E = Error, R = never> {
    * config cannot move an arbitrary tool out of order.
    *
    * - `'parallel'`: side-effect-free AND approval-free, so calls of one
-   *   response (or one script) run concurrently within the parallel window,
-   *   and identical ones collapse onto one (`partitionDuplicateCalls`). A
+   *   response (or one script) run concurrently within the parallel window. A
    *   read-only tool that prompts for approval is not parallel: it needs an
    *   approval round-trip first, so it stays a barrier.
    * - `'barrier'`: waits for every call issued before it and holds back
