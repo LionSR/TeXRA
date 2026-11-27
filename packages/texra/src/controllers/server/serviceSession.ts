@@ -57,7 +57,6 @@ import { attachWindowHost } from './windowHost';
 import {
   SERVICE_OFFLINE,
   environmentApiKeys,
-  linkRefusals,
   linkedClient,
   requestOnService,
   ServiceUnavailable,
@@ -281,19 +280,14 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   /** The client, once the link has one; or why it is away for good (a
    *  newer TeXRA's service refused this window, or the service keeps
    *  failing to start), which no wait undoes. */
-  const connected = Stream.merge(
-    link.client.changes.pipe(
-      Stream.filter(Predicate.isNotNull),
-      Stream.map((client) => ({ client })),
-    ),
-    linkRefusals(link).pipe(Stream.map((refused) => ({ refused }))),
-  ).pipe(
+  const connected = link.state.changes.pipe(
+    Stream.filter((state) => !('away' in state) || state.lasting),
     Stream.runHead,
     Effect.map(Option.getOrThrow),
-    Effect.flatMap((reached) =>
-      'client' in reached
-        ? Effect.succeed(reached.client)
-        : Effect.fail(new ServiceUnavailable({ reason: reached.refused })),
+    Effect.flatMap((state) =>
+      'away' in state
+        ? Effect.fail(new ServiceUnavailable({ reason: state.away }))
+        : Effect.succeed(state.client),
     ),
   );
   /** One service's part of a watch ends when that service goes: its stream
