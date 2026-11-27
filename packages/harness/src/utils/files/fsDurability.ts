@@ -246,28 +246,6 @@ export const readDirectoryTypedTolerant = Effect.fn(
 });
 
 /**
- * Copy a file or directory tree, replacing symlinks with the content they
- * point at, so the copy is self-contained. `FileSystem.copy` always
- * preserves links; a snapshot that must survive its source's deletion
- * cannot. An existing destination fails the copy and is never replaced or
- * merged into.
- */
-export const copyDereferenced = Effect.fn('fsDurability.copyDereferenced')(
-  function* (from: string, to: string) {
-    yield* Effect.tryPromise({
-      try: () =>
-        nodeFs.cp(from, to, {
-          recursive: true,
-          dereference: true,
-          force: false,
-          errorOnExist: true,
-        }),
-      catch: (cause) => systemErrorFrom('copyDereferenced', from, cause),
-    });
-  },
-);
-
-/**
  * The file's bytes decoded as UTF-8, with line endings normalized and a
  * leading BOM kept. `FileSystem.readFileString` is not this -- it decodes
  * through a `TextDecoder`, which drops a leading UTF-8 BOM, and the editor

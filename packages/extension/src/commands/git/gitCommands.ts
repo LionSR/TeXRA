@@ -22,6 +22,7 @@ import {
   LATEX_TOOL_ENTRIES,
 } from '@texra/shared/constants/latexToolchain';
 import { osPlatformOf } from '@texra/shared/osPlatform';
+import { commandCatalogById } from '@texra/shared/commands/catalog';
 import {
   CLONE_COPY,
   cloneProviderLabel,
@@ -178,7 +179,7 @@ const presentCloneOutcome = Effect.fn('gitCommands.presentCloneOutcome')(
 export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
   function* () {
     const input = yield* promptInput(
-      'Clone Overleaf/ShareLaTeX Project',
+      commandCatalogById['texra.cloneOverleafProject'].title,
       'Enter project URL or 24-character project ID.',
     );
     if (!input) return;

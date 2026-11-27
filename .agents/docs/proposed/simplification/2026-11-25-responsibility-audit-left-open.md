@@ -62,10 +62,11 @@ and the log line of a notice that could not be shown.
    available." from one constant in
    `packages/cli/src/runtime/models/modelAccess.ts`, which `doctor.ts`
    reads, and an unknown `--model` points at `texra models list --all`.
-5. **Which finished run each GUI host announces** (item 1 of the
-   2026-11-23 note) is still open. The extension's chime filter reads
-   `isDocumentTaskRun`, which #15229 deletes; decide the rule after it
-   merges.
+5. **Closed (2026-11-27).** Which finished run each GUI host announces
+   (item 1 of the 2026-11-23 note): #15229 deleted the extension's chime
+   and the `chime` surface action with it, so only the desktop announces a
+   finished run (every top-level one), and the extension's attention
+   follower reveals arrivals only.
 6. **The OpenAI ambient-header rejection is stated once per Responses
    transport** (`packages/llm/src/api/openaiResponses.ts`,
    `packages/llm/src/api/openaiResponsesWebSocket.ts`): the same

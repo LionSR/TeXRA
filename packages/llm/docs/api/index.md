@@ -874,8 +874,9 @@ type ModelRoute =
     }
   /** No provider key can serve the model directly. */
   | { readonly kind: 'no-api-key' }
-  /** No route TeXRA reaches serves the model (see {@link isUnservedModel}). */
-  | { readonly kind: 'unserved' };
+  /** No route TeXRA reaches serves the model: `reason`, the clause after
+   *  its name, says why ({@link isUnservedModel}). */
+  | { readonly kind: 'unserved'; readonly reason: string };
 ```
 
 ## MODELS

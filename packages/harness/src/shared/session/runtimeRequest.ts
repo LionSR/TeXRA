@@ -259,8 +259,8 @@ export const StartOptionsSchema = Schema.Struct({
   continues: Schema.optional(RunIdSchema),
   /** Run on the configured helper model instead of the selected one. */
   helperModel: Schema.optional(Schema.Boolean),
-  /** Auto-approve this run's work, or narrow its policy (`launchPolicy`).
-   *  Absent, it follows the project's. */
+  /** Auto-approve this run's work (its grants start on), or narrow its
+   *  policy to Ask. Absent, it follows the project's. */
   approval: Schema.optional(LaunchApprovalSchema),
   /** Keep the run open for follow-up messages after each answer, as a chat
    *  window does. Absent, the run ends after its first answer. */

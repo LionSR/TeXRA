@@ -68,6 +68,7 @@ import {
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import {
   probeService,
+  serviceRecordUnreadable,
   ServiceUnavailable,
   WINDOWS_UNSUPPORTED,
 } from './client';
@@ -415,11 +416,7 @@ export const serve = Effect.fn('server.serve')(function* (
   ).pipe(
     Effect.catchTags({
       DatabaseReadFailed: (error) =>
-        Effect.fail(
-          new ServiceUnavailable({
-            reason: `The service record could not be read: ${error.message}`,
-          }),
-        ),
+        Effect.fail(serviceRecordUnreadable(error)),
       DatabaseWriteFailed: (error) =>
         Effect.fail(
           new ServiceUnavailable({

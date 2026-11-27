@@ -7,6 +7,9 @@
  */
 
 import { Predicate } from 'effect';
+
+import { EXECUTIONS_TOOL_NAME } from '@shared/schemas';
+
 import { executionsAction } from './executionsDisplay';
 import { normalizeToolName } from './toolDisplayName';
 import { toolDisplayKind } from './toolKind';
@@ -52,7 +55,7 @@ export function deriveToolInputPreview(
 ): string {
   if (!Predicate.isObject(input)) return '';
   const name = normalizeToolName(toolName);
-  if (name === 'executions') return executionsInputPreview(input);
+  if (name === EXECUTIONS_TOOL_NAME) return executionsInputPreview(input);
   // A script is named by its title; its source is the card's code section.
   if (toolDisplayKind(name) === 'script')
     return typeof input.title === 'string' && input.title

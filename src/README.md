@@ -41,7 +41,6 @@ CLI surfaces, and ships in nothing.
 | `shared/`       | App wire contracts (`ipc.ts`, settings rows and handlers, session frames and host requests) and the host-neutral logic over them                  |
 | `ui/`           | The browser UI kit all three hosts render with (`wa/`, `styles/`, `markdown/`, `copy/`); see [`ui/README.md`](../packages/texra/src/ui/README.md) |
 | `latex/`        | LaTeX compilation, diffing, formatting and log parsing; see [`latex/README.md`](../packages/texra/src/latex/README.md)                            |
-| `replacement/`  | Text replacement for editing tools                                                                                                                |
 | `model/`        | Model options, provider presentation, setup credentials and defaults                                                                              |
 | `common/`       | The app's file rules (`files/`), secrets helpers, terminal output                                                                                 |
 | `platform/`     | Node defaults for host services (`defaults/`)                                                                                                     |

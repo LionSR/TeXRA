@@ -574,7 +574,6 @@ export const stepFor = Effect.fn('Step.for')(function* (
       step.memory?.section ?? null,
       {
         offered,
-        isChild: run.entry.parent !== null,
         config: roots.config,
       },
     ),
