@@ -190,6 +190,20 @@ interface ResolveBinaryConfig {
   readonly pathCommand: string;
 }
 
+/** Found binary paths by PATH command name, and npm's global prefix, kept
+ *  for the process. A missed binary is not kept, so a CLI installed
+ *  meanwhile is found by the next lookup. */
+const FoundCliBinaries = Context.Reference(
+  '@texra-ai/texra/tools/agentCli/FoundCliBinaries',
+  {
+    defaultValue: () => ({
+      found: new Map<string, string>(),
+      npmPrefix: undefined as string | undefined,
+      probing: Semaphore.makeUnsafe(1),
+    }),
+  },
+);
+
 /**
  * Resolve a native CLI binary via the shared 4-stage probe. Returns the
  * resolved path, or `undefined` to let the caller fall back to its own
@@ -239,12 +253,19 @@ const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
   //
   // `npm prefix -g` reports the global prefix, which does not depend on the
   // directory it is asked from: the process cwd, not a workspace root, and
-  // no workspace settings either.
-  const prefixResult = yield* executeCommand(['npm', 'prefix', '-g'], {
-    cwd: process.cwd(),
-    timeout: 5000,
-  });
-  const prefix = prefixResult.success ? prefixResult.stdout : undefined;
+  // no workspace settings either. So the answer is kept for the process:
+  // every probe that misses (each CLI, for each open project) would
+  // otherwise start npm again. A failed read is not kept.
+  const kept = yield* FoundCliBinaries;
+  if (kept.npmPrefix === undefined) {
+    const prefixResult = yield* executeCommand(['npm', 'prefix', '-g'], {
+      cwd: process.cwd(),
+      timeout: 5000,
+    });
+    if (prefixResult.success && prefixResult.stdout)
+      kept.npmPrefix = prefixResult.stdout;
+  }
+  const prefix = kept.npmPrefix;
   if (prefix) {
     const found = yield* Effect.findFirstFilter(
       config.globalPrefixRoots(prefix),
@@ -275,19 +296,6 @@ const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
     }) ?? undefined
   );
 });
-
-/** Found binary paths by PATH command name, kept for the process: a probe
- *  spawns `npm prefix -g`. A miss is not kept, so a CLI installed meanwhile
- *  is found by the next lookup. */
-const FoundCliBinaries = Context.Reference(
-  '@texra-ai/texra/tools/agentCli/FoundCliBinaries',
-  {
-    defaultValue: () => ({
-      found: new Map<string, string>(),
-      probing: Semaphore.makeUnsafe(1),
-    }),
-  },
-);
 
 /**
  * The binary {@link resolveBinary} finds for `config`, kept for the process
