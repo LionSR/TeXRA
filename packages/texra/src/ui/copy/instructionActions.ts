@@ -25,8 +25,8 @@ export type InstructionAction =
 // change what every later notice with that key offers.
 const NO_ACTIONS: readonly InstructionAction[] = Object.freeze([]);
 
-/** The actions beside each of the harness's notices; TeXRA's own notices
- *  (document outputs, a store moved aside) offer none. */
+/** The actions beside each of the harness's notices; TeXRA's own notice
+ *  (a store moved aside) offers none. */
 const ACTIONS_BY_KEY: Record<
   HarnessInstructionKey,
   readonly InstructionAction[]
