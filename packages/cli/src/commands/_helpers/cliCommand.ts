@@ -26,6 +26,8 @@ import * as NodeServices from '@effect/platform-node/NodeServices';
 import { setLogSink } from '@texra-ai/worldline/node';
 import {
   APPROVAL_POLICIES,
+  APPROVAL_POLICY_DEFAULT,
+  APPROVAL_POLICY_SETTING,
   ensureError,
   formatWordList,
 } from '@texra-ai/worldline/schemas';
@@ -114,11 +116,14 @@ const OutputFormat = GlobalFlag.Setting('output-format')({
     Flag.optional,
   ),
 });
+// Each value with the setting row's label, and the row's default.
+const APPROVAL_POLICY_VALUES = APPROVAL_POLICIES.map(
+  (policy) =>
+    `${policy} (${APPROVAL_POLICY_SETTING.choices[policy].label}${policy === APPROVAL_POLICY_DEFAULT ? '; default' : ''})`,
+).join(' or ');
 const ApprovalPolicy = GlobalFlag.Setting('approval-policy')({
   flag: Flag.Literals('approval-policy', APPROVAL_POLICIES).pipe(
-    Flag.withDescription(
-      'Approval policy: ask (Ask) or yolo (Auto-approve; default)',
-    ),
+    Flag.withDescription(`Approval policy: ${APPROVAL_POLICY_VALUES}`),
     Flag.optional,
   ),
 });
