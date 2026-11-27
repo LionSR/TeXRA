@@ -41,7 +41,7 @@ import {
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /** One row of a model choice: a host row, or the selected model as itself. */
-interface ModelChoice {
+export interface ModelChoice {
   readonly value: string;
   readonly label: string;
   readonly disabled: boolean;
@@ -58,7 +58,7 @@ const refOf = (model: string): string =>
  * `selected` names among them whatever effort it carries. A model the host
  * does not list (a proposal's, say) leads the list as itself.
  */
-function modelChoices(
+export function modelChoices(
   selected: string,
   rows: readonly ModelOptionData[],
 ): { readonly current: ModelChoice; readonly choices: readonly ModelChoice[] } {
