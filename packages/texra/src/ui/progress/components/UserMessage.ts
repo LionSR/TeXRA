@@ -13,7 +13,6 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import './CopyButton';
@@ -243,13 +242,10 @@ export class UserMessage extends LitElement {
         </div>
         <div class="message-meta">
           <time
-            id="user-message-timestamp"
             class="message-timestamp"
             datetime=${messageDate.toISOString()}
+            title=${tooltipTimestamp}
             >${timeDisplay}</time
-          >
-          <wa-tooltip for="user-message-timestamp"
-            >${tooltipTimestamp}</wa-tooltip
           >
           <copy-button
             .text=${this.text}

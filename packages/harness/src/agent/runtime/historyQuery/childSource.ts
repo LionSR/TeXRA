@@ -20,10 +20,16 @@ import type { CommitOrdinal, RunId } from '@shared/schemas';
 import {
   HistoryQueryFailed,
   HistoryQueryRefused,
+  type HistoryCell,
 } from '@shared/session/runHistory';
 import type { SessionView } from '@shared/session/sessionView';
 
-import { HISTORY_SCHEMA_SQL, HISTORY_WRITE_SQL, type FedRun } from './views';
+import {
+  HISTORY_SCHEMA_SQL,
+  HISTORY_WRITE_SQL,
+  type FedRun,
+  type HistoryWrite,
+} from './views';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
 
@@ -129,9 +135,26 @@ export interface CallPositions {
   readonly byCard: Map<string, number>;
 }
 
+/** One line to the store process: the cases its `handle` switches on. */
+type StoreRequest =
+  | {
+      readonly kind: 'init';
+      readonly schema: string;
+      readonly writes: typeof HISTORY_WRITE_SQL;
+      readonly heapLimit: number;
+    }
+  | { readonly kind: 'append'; readonly ops: readonly HistoryWrite[] }
+  | {
+      readonly kind: 'query';
+      readonly sql: string;
+      readonly params: readonly HistoryCell[];
+      readonly cap: number;
+      readonly maxBytes: number;
+    };
+
 /** One open store process and what the session side last fed it. */
 export interface Store {
-  readonly requests: Queue.Queue<Record<string, unknown>>;
+  readonly requests: Queue.Queue<StoreRequest>;
   readonly replies: Queue.Queue<
     typeof ReplySchema.Type,
     Cause.Done | HistoryQueryFailed
@@ -162,7 +185,7 @@ export const failedWith =
 /** One request to the store and its reply. */
 export const request = Effect.fn('HistoryQuery.request')(function* (
   store: Store,
-  message: Record<string, unknown>,
+  message: StoreRequest,
 ) {
   yield* Queue.offer(store.requests, message);
   return yield* Queue.take(store.replies).pipe(
@@ -214,7 +237,7 @@ export const spawnQueryStore = Effect.fn('HistoryQuery.spawn')(function* (
     );
   // One request at a time: each offers its line and takes its reply
   // before the next (the store's lane), so one of each is ever waiting.
-  const requests = yield* Queue.bounded<Record<string, unknown>>(1);
+  const requests = yield* Queue.bounded<StoreRequest>(1);
   const replies = yield* Queue.bounded<
     typeof ReplySchema.Type,
     Cause.Done | HistoryQueryFailed

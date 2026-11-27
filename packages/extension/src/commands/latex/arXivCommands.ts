@@ -18,7 +18,7 @@ import { tokenCancelled } from '@frontend/vscode/vscodeEvents';
 import {
   downloadArxivSource,
   indentsDestination,
-  getArxivPaperDirName,
+  arxivReferencesDir,
   validateArxivId,
   type ArxivDownloadDestination,
 } from '@latex/arxivProcessor';
@@ -52,14 +52,12 @@ export const downloadArXivSource: (
       return;
     }
 
-    const paperId = getArxivPaperDirName(arxivId);
-
     const destinationPick = yield* quickPick<
       vscode.QuickPickItem & { value: ArxivDownloadDestination }
     >(
       [
         {
-          label: `References/${paperId}`,
+          label: arxivReferencesDir(arxivId),
           value: 'references',
         },
         {

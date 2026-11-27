@@ -375,8 +375,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     launch.program === null ? launch.schema : null,
   );
   // The call's files, the program's file arguments among them: a
-  // run-storage file must be this run's own or a declared output of a
-  // completed child of it; a listed program's files pass as named, those
+  // run-storage file must be this run's own; a listed program's files pass
+  // as named, those
   // of a program read from a file are resolved like a model's.
   const verbatim = programGrants(run.config).appAuthored;
   const resolved = yield* Effect.result(
@@ -561,7 +561,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     : yield* childResult(call, approved.label, launched.success, key);
 });
 
-export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
+export const AgentTool: DefinedTool<AgentInput, PluginToolServices> =
   defineTool({
     name: AGENT_TOOL_NAME,
     requiresApproval: 'inBody',

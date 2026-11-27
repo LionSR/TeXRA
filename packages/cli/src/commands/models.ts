@@ -11,6 +11,7 @@ import {
   listCliEnabledModelCatalog,
   setCliModelEnabled,
 } from '../runtime/models/enabledModels';
+import { unknownCliModelMessage } from '../runtime/platform/cliConfig';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
@@ -79,7 +80,7 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
   const entry = yield* loadCliModelAccessEntry(id, services);
 
   if (!entry) {
-    return yield* failUsage(`Model not found: ${id}`);
+    return yield* failUsage(unknownCliModelMessage(id));
   }
 
   // A reference with `@effort` or `+mode` is valid when a run's bind takes

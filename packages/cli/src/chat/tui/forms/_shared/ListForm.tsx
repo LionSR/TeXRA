@@ -1,5 +1,5 @@
-import { Box, Text, useWindowSize } from 'ink';
-import type { ReactNode } from 'react';
+import { Box, Text, useBoxMetrics, useWindowSize, type DOMElement } from 'ink';
+import { useRef, type ReactNode } from 'react';
 
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
@@ -33,7 +33,7 @@ const COMPACT_FORM_MAX_ROWS = 9;
 /**
  * How many list rows the form's `Select` may show and whether to spend rows
  * on overflow markers. The frame (`frameRows`), the wrapped description
- * (`descriptionRows`) and detail rows come off the budget first; on a very
+ * (`descriptionRows`) and the measured detail rows come off the budget first; on a very
  * short terminal (fewer than 3 list rows) the active choice stays visible
  * instead of the whole budget going to overflow markers.
  */
@@ -42,7 +42,7 @@ function listFormSelectWindow(args: {
   readonly itemCount: number;
   readonly frameRows: number;
   readonly descriptionRows: number;
-  readonly detailRows?: number;
+  readonly detailRows: number;
   readonly selectMarginTop?: number;
 }): {
   readonly maxVisibleItems: number;
@@ -51,7 +51,7 @@ function listFormSelectWindow(args: {
   const chromeRows =
     args.frameRows +
     args.descriptionRows +
-    Math.max(0, args.detailRows ?? 0) +
+    args.detailRows +
     Math.max(0, args.selectMarginTop ?? 0);
   const selectRows = Math.max(1, args.availableRows - chromeRows);
   if (args.itemCount <= selectRows) {
@@ -73,8 +73,9 @@ interface ListFormProps<T> {
    *  counts the rows it wraps to, so a long line never pushes the list out
    *  of the frame. */
   readonly description?: string;
+  /** Anything else between the description and the list. The form
+   *  measures the rows it takes, wrapped lines and margins included. */
   readonly detail?: ReactNode;
-  readonly detailRows?: number;
   readonly compactDetail?: ReactNode;
   readonly compactVisibleItems?: number;
   readonly emptyMessage?: string;
@@ -93,6 +94,9 @@ interface ListFormProps<T> {
 /** Common list-picker layout, geometry, compact mode, and key vocabulary. */
 export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
   const { columns } = useWindowSize();
+  const detailRef = useRef<DOMElement>(null);
+  // Zero until the first layout, and in the layouts that draw no detail box.
+  const detailRows = useBoxMetrics(detailRef).height;
   if (props.items.length === 0 && props.emptyMessage !== undefined) {
     return (
       <FormFrame
@@ -144,13 +148,15 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
     descriptionRows: props.description
       ? wrappedRowCount(props.description, contentWidth)
       : 0,
-    detailRows: props.detailRows,
+    detailRows,
     selectMarginTop: props.selectMarginTop,
   });
   return (
     <FormFrame title={props.title} hints={hints}>
       {props.description ? <Text dimColor>{props.description}</Text> : null}
-      {props.detail}
+      <Box ref={detailRef} flexDirection="column" flexShrink={0}>
+        {props.detail}
+      </Box>
       <Box
         flexDirection="column"
         marginTop={Math.max(0, props.selectMarginTop ?? 0)}
@@ -177,7 +183,7 @@ interface AsyncListFormControls<TData> {
 
 interface AsyncListFormProps<TData, TValue> extends Omit<
   ListFormProps<TValue>,
-  'items' | 'onSelect' | 'detail' | 'detailRows' | 'compactDetail'
+  'items' | 'onSelect' | 'detail' | 'compactDetail'
 > {
   readonly loadingLabel: string;
   readonly load: () => Effect.Effect<TData, Error, ProcessServices>;
@@ -186,7 +192,6 @@ interface AsyncListFormProps<TData, TValue> extends Omit<
   /** `false` renders a read-only list where selecting closes the form. */
   readonly selectable?: boolean;
   readonly detailFor?: (data: TData) => ReactNode;
-  readonly detailRowsFor?: (data: TData) => number;
   readonly compactDetailFor?: (data: TData) => ReactNode;
   readonly onSelect: (
     value: TValue,
@@ -210,7 +215,6 @@ export function AsyncListForm<TData, TValue>(
     isEmpty,
     selectable = true,
     detailFor,
-    detailRowsFor,
     compactDetailFor,
     onSelect,
     ...listProps
@@ -245,7 +249,6 @@ export function AsyncListForm<TData, TValue>(
       {...listProps}
       items={items}
       detail={detailFor?.(data)}
-      detailRows={detailRowsFor?.(data)}
       compactDetail={compactDetailFor?.(data)}
       onSelect={select}
     />

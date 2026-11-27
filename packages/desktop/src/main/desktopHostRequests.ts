@@ -6,6 +6,10 @@
 // perform is `Rejected` with its reason, never dropped.
 
 import { Effect } from 'effect';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+} from '@texra-ai/worldline/host';
 import { Rejected } from '@texra-ai/worldline/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
@@ -30,6 +34,7 @@ import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 interface DesktopHostRequestsOptions {
   host: DesktopAgentRunHost;
+  runtime: ProcessRuntime;
   openFiles: OpenFilesDialog;
   postToRenderer(message: DesktopPush): void;
   /** The window's settings surface, absent while the window switches
@@ -95,9 +100,14 @@ export const createDesktopHostRequests = (
     return {
       bindings,
       own,
-      // Desktop has no editor integration to preview through, so the
-      // resolved path goes to the preview-with-fallback host directly.
-      openFile: (data) => host.openPath(data.location.absolutePath),
+      // A TeX file is built into the PDF tab and any other file goes to the
+      // OS. The build takes this window's file services from the runtime's
+      // context, which the session that forks it does not carry.
+      openFile: (data) =>
+        withProcessServices(
+          options.runtime,
+          host.openBuildDisplay(data.location),
+        ),
       window: {},
       notify: host.notify,
       ask: host.ask,

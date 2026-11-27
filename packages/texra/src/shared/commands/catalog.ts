@@ -138,9 +138,12 @@ export const COMMAND_CATALOG = Object.freeze([
  *  renamed. */
 export type CommandId = (typeof COMMAND_CATALOG)[number]['id'];
 
-/** Each command's row by its id. */
-export const commandCatalogById: ReadonlyMap<CommandId, CommandCatalogEntry> =
-  new Map(COMMAND_CATALOG.map((entry) => [entry.id, entry]));
+/** Each command's row by its id, for a host that names a command (its
+ *  palette, a button that runs it) in the catalog's words. */
+// cast: the entries are keyed by their own ids, so every CommandId is there.
+export const commandCatalogById = Object.freeze(
+  Object.fromEntries(COMMAND_CATALOG.map((entry) => [entry.id, entry])),
+) as Readonly<Record<CommandId, CommandCatalogEntry>>;
 
 /** Ids of the catalog entries that open the settings view on a specific tab. */
 export type SettingsTabCommandId = Extract<

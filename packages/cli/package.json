@@ -69,7 +69,6 @@
     "cli-truncate": "^6.2.0",
     "effect": "catalog:",
     "esbuild": "^0.28.2",
-    "glob": "catalog:",
     "ink": "^8.0.0",
     "lru-cache": "^11.5.3",
     "markdown-it": "^15.0.3",

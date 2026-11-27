@@ -12,7 +12,7 @@ const FAILED_ENTRY_ESTIMATE_ROWS = 1;
 // Live mode captures the pending-pane paint contract: assistant text uses its
 // capped raw tail, while rich tool rows keep one descriptor line per terminal
 // row instead of being reflowed like plain projections.
-export function estimateLiveTranscriptEntryRows(
+function estimateLiveTranscriptEntryRows(
   entry: TranscriptRow,
   width: number,
 ): number {

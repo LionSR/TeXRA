@@ -40,7 +40,6 @@ import {
   MESSAGE_TYPES,
   parseApprovalPolicy,
   RUN_OUTCOME,
-  runBypasses,
   RunIdSchema,
   toErrorMessage,
   type AgentProposalRequest,
@@ -70,7 +69,6 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { runStatus } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 // What no public entry serves: the session's own owners, which the fixtures
 // seed rows through, the leaves they build rows with (`toJsonValue` among
@@ -135,10 +133,7 @@ import {
   runViewOf,
 } from '../src/chat/tui/state/sessionView';
 import { TuiSession } from '../src/chat/tui/state/sessionRunState';
-import {
-  formatCliSessionStatus,
-  taskCostStatus,
-} from '../src/chat/tui/sessionStatus';
+import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { chatScrollback } from '../src/chat/tui/panes/staticTranscriptRing';
 import {
   EMPTY_DRAFT,
@@ -1827,21 +1822,14 @@ function appendHarnessStatus(): void {
   const runId = selectedRunId.get() ?? HARNESS_RUN_ID;
   const run = runViewOf(view, runId);
   appendHarnessAssistantTranscript(
-    formatCliSessionStatus({
+    formatCliSessionStatus(view, run, {
       commandName: HARNESS_CLI_CONTEXT.commandName,
       agent: meta.chat.label,
       model: meta.model,
-      modelAccess: run?.usage.usageRoute,
+      modelAccess: undefined,
       approvalPolicy: harnessApprovalPolicy(),
-      approvalBypasses: runBypasses(view, runId),
-      statusLabel: run && runStatus(run).word,
-      activeChildSessions: run?.rollup.running,
       // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
-      queuedFollowUpMessages: (view.runs.get(runId)?.queuedFollowUps ?? []).map(
-        (followUp) => followUp.text,
-      ),
-      cost: taskCostStatus(view, run),
     }),
   );
 }

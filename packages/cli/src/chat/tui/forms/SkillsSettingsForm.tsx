@@ -82,7 +82,6 @@ export function SkillsSettingsForm(
           </Text>
         ) : undefined
       }
-      detailRowsFor={(data) => (data.issueCount > 0 ? 1 : 0)}
       action="toggle"
       onSelect={(toggle, { data, update }) => {
         const row =

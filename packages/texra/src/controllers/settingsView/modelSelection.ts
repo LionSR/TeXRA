@@ -65,10 +65,10 @@ export const buildModelSelectionPage = Effect.fn('buildModelSelectionPage')(
   },
 );
 
-/** Save one model's reasoning level, or clear it with a null `level`. */
+/** Save one model's reasoning level. */
 export function setReasoningLevel(
   globalState: SettingsStores['globalState'],
-  input: { modelName: string; level: ReasoningEffort | null },
+  input: { modelName: string; level: ReasoningEffort },
 ): Effect.Effect<void, StateWriteFailed> {
   // One read-modify-write at the store's authority: hosts in separate
   // processes share the record, so a get-then-update would drop a
@@ -79,12 +79,8 @@ export function setReasoningLevel(
   return globalState.modify([key], ({ [key]: stored }) => {
     const overrides: Record<string, unknown> = {
       ...(Predicate.isObject(stored) && stored),
+      [input.modelName]: input.level,
     };
-    if (input.level == null) {
-      delete overrides[input.modelName];
-    } else {
-      overrides[input.modelName] = input.level;
-    }
     return Result.succeed([undefined, { [key]: overrides }] as const);
   });
 }

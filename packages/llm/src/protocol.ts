@@ -67,6 +67,49 @@ export const IMAGE_LIMITS = Object.freeze({
   }),
 } satisfies Record<typeof TurnProtocolSchema.Type, ImageLimits>);
 
+/**
+ * The image MIME types Anthropic and Responses take, matched exactly. The
+ * pinned `openai` typings name no input-image formats (only image
+ * generation's output formats), so this is the conservative raster set; an
+ * exact match also keeps a value carrying data-URL delimiters out of a URL
+ * built from it.
+ */
+export const ImageMimeTypeSchema = Schema.Literals([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+]);
+
+/**
+ * The image MIME types each wire protocol takes as input. Every protocol has
+ * a row, so a new one does not compile without its types.
+ */
+const INPUT_IMAGE_MIME_TYPES: Readonly<
+  Record<typeof TurnProtocolSchema.Type, readonly string[]>
+> = Object.freeze({
+  'anthropic-messages': ImageMimeTypeSchema.literals,
+  'openai-responses': ImageMimeTypeSchema.literals,
+  // The types the pinned `@google/genai` typings name for image content.
+  'google-interactions': Object.freeze([
+    ...ImageMimeTypeSchema.literals,
+    'image/heic',
+    'image/heif',
+    'image/bmp',
+    'image/tiff',
+  ]),
+});
+
+/**
+ * Whether `protocol` takes an image of this MIME type as input. A caller
+ * asks before it offers a file as an image part: any other type fails the
+ * turn as `invalid-request`.
+ */
+export const takesImageInput = (
+  protocol: typeof TurnProtocolSchema.Type,
+  mimeType: string,
+): boolean => INPUT_IMAGE_MIME_TYPES[protocol].includes(mimeType.toLowerCase());
+
 /** Selected binding, distinct from an optional returned model version. */
 export const ModelOriginSchema = BindingSchema.mapFields(
   Struct.assign({

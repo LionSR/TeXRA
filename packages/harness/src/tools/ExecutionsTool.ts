@@ -33,6 +33,7 @@ import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots, StorageFs } from '@platform/rootedFs';
 import {
+  EXECUTIONS_TOOL_NAME,
   isRunId,
   ToolError,
   type RunId,
@@ -554,33 +555,12 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
       yield* SessionRoots,
     );
 
-    if (conversation.length === 0) {
-      // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
-      // the run's aggregate.
-      if (!(yield* records.exists())) {
-        return yield* new ToolError(`Run not found: ${runId}`);
-      }
-      return executed(
-        formatConversation([], {
-          totalMessages: 0,
-          metadata: ['Returned message interval: [0, 0)', 'Next offset: none'],
-        }),
-      );
+    // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
+    // the run's aggregate.
+    if (conversation.length === 0 && !(yield* records.exists())) {
+      return yield* new ToolError(`Run not found: ${runId}`);
     }
-
-    const pageStart = Math.min(offset, conversation.length);
-    const page = conversation.slice(pageStart, pageStart + limit);
-    const pageEnd = pageStart + page.length;
-    const output = formatConversation(page, {
-      offset: pageStart,
-      totalMessages: conversation.length,
-      metadata: [
-        `Returned message interval: [${pageStart}, ${pageEnd})`,
-        `Next offset: ${pageEnd < conversation.length ? pageEnd : 'none'}`,
-      ],
-    });
-
-    return executed(output);
+    return executed(formatConversation(conversation, offset, limit));
   },
 );
 
@@ -696,7 +676,7 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
 );
 
 export const ExecutionsTool = defineTool({
-  name: 'executions',
+  name: EXECUTIONS_TOOL_NAME,
   scriptReturns:
     '{ columns: string[]; rows: (string | number | null)[][]; more: boolean } | ToolOutput',
   description: `View run history and manage live runs.
