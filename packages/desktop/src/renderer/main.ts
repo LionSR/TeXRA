@@ -72,6 +72,7 @@ import {
   type DesktopShellState,
 } from '../shared/desktopShellState';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
+import { DESKTOP_SHELL_COMMANDS } from '../shared/desktopShellMessages';
 import {
   resolveDesktopPushes,
   resolveSessionWire,
@@ -894,9 +895,9 @@ appRoot.addEventListener('surface-action', (event) => {
   }
 });
 
-// A web link in a message opens in its project's browser tab. Left to the
-// window it would be a navigation, which the window refuses for every host
-// but its own allowed few, so the click would do nothing.
+// A web link in a message opens in the user's browser. Left to the window
+// it would be a navigation, which the window refuses for every host but its
+// own allowed few, so the click would do nothing.
 appRoot.addEventListener('click', (event) => {
   if (event.defaultPrevented || event.button !== 0) return;
   const path = event.composedPath();
@@ -914,10 +915,8 @@ appRoot.addEventListener('click', (event) => {
     return;
   const url = URL.parse(link.href);
   if (url?.protocol !== 'http:' && url?.protocol !== 'https:') return;
-  const project = projectWorkbenches.get(sessionOf(event) ?? shell.active);
-  if (!project) return;
   event.preventDefault();
-  project.openBrowser(url);
+  postToMain({ command: DESKTOP_SHELL_COMMANDS.OPEN_LINK, url: url.href });
 });
 
 // The projects list arrives in reply; each project's session subscribes as it

@@ -24,6 +24,10 @@ import {
   DesktopOpenRecentProjectMessageSchema,
   DesktopSelectProjectMessageSchema,
 } from '../shared/desktopProjectMessages.js';
+import {
+  DESKTOP_SHELL_COMMANDS,
+  DesktopOpenLinkMessageSchema,
+} from '../shared/desktopShellMessages.js';
 import { DESKTOP_WORKSPACE_INBOUND_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
 import {
   DESKTOP_PDF_COMMANDS,
@@ -380,6 +384,19 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
             : dropped(
                 `${message.command}: ${message.root} is not a recent project`,
               ),
+      ),
+    },
+    {
+      // The page checked the scheme; it is checked again here, where the
+      // address is handed to the operating system.
+      [DESKTOP_SHELL_COMMANDS.OPEN_LINK]: parsedRoute(
+        DesktopOpenLinkMessageSchema,
+        ({ url }) => {
+          const protocol = URL.parse(url)?.protocol;
+          return protocol === 'http:' || protocol === 'https:'
+            ? Effect.sync(() => host.openExternalInBackground(url))
+            : dropped(`a link that is not a web address: ${url}`);
+        },
       ),
     },
     createDesktopLogIpc(host.post, {

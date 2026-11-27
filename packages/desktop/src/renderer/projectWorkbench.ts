@@ -298,32 +298,6 @@ export function createProjectWorkbench(options: {
     reviewPane,
     pdfPane,
     workbench,
-    /** Show `url` in the project's browser tab, opening the tab when there
-     *  is none. An open tab is reused: it loads `url` in place. */
-    openBrowser(url: URL) {
-      const id = workbenchTabId('browser');
-      const current = getState();
-      const open = current.workbenchTabs.some((tab) => tab.id === id);
-      updateState(
-        openWorkbenchTab(
-          {
-            ...current,
-            workbenchTabs: current.workbenchTabs.map((tab) =>
-              tab.id === id ? { ...tab, target: url.href } : tab,
-            ),
-          },
-          { kind: 'browser', target: url.href, title: url.host },
-        ),
-      );
-      // A new tab loads its target when its panel is first laid out.
-      if (!open) return;
-      loadedBrowserTabs.add(id);
-      send({
-        command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN,
-        tabId: id,
-        url: url.href,
-      });
-    },
     setTheme(theme: Theme) {
       currentTheme = theme;
       for (const editor of editors.values()) editor.setTheme(theme);
