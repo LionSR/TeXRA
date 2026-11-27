@@ -677,7 +677,7 @@ The move a `failed` row records is decided once, by `failedNext`
 
 - A `continuation-gone` failure of an attempt that sent a continuation answers
   `unchain`, once per invocation (`shared/session/inFlight.ts#failedNext`,
-  `agent/runtime/ModelInvoker.ts#moveAfter`).
+  `agent/runtime/ModelInvoker.ts#recordFailure`).
 - A retryable failure answers `retry` while the invocation's earlier recorded
   failures, `unchain` ones excluded, are fewer than the budget
   (`shared/session/inFlight.ts#failuresBefore`, `#spentRetries`,
@@ -692,7 +692,7 @@ The move a `failed` row records is decided once, by `failedNext`
   request id; where nobody can be asked, `stop`
   (`shared/session/inFlight.ts#failedNext`).
 - A failed observation of an accepted operation never resubmits it automatically
-  (`agent/runtime/ModelInvoker.ts#moveAfter`).
+  (`agent/runtime/ModelInvoker.ts#recordFailure`).
 
 Every automatic send MUST run under the process's `ModelRetryGate`
 (`agent/runtime/ModelRetryGate.ts#RouteRetries`,

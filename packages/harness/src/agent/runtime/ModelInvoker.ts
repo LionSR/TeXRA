@@ -591,14 +591,43 @@ export const modelInvokerLayer = (): Layer.Layer<
         );
       });
 
-      /** Record the failure of attempt `ref` and the step after it. */
+      /** Record the failure of attempt `ref` (`observed`: an observation's)
+       *  and the step after it, read off the attempts before it, llm's
+       *  verdict and the budget of `retries`; answers that step. */
       const recordFailure = Effect.fn('ModelInvoker.failed')(function* (
         cell: RunCell,
         ref: InvocationRef,
-        { error }: AttemptFailure,
-        next: StepAfterFailure,
+        { error, unsent }: AttemptFailure,
+        observed: boolean,
+        retries: number,
         bound: BoundModel,
-      ): Effect.fn.Return<void, InvokeError, SessionServices> {
+      ): Effect.fn.Return<StepAfterFailure, InvokeError, SessionServices> {
+        const next = failedNext(
+          failuresBefore((yield* cell.current).invocation, ref),
+          {
+            // A failed observation is never resubmitted unasked: the work
+            // it watched was already billed.
+            unchain:
+              !observed &&
+              error instanceof ModelError &&
+              error.kind === 'continuation-gone',
+            automatic:
+              !observed &&
+              !unsent &&
+              error instanceof ModelError &&
+              error.retryable,
+            // A person is offered a retry whenever llm says the same
+            // request can succeed, and after a used-up quota, whose retry
+            // carries the switch onto their own credential; a missing
+            // route is fixed outside the run.
+            offered:
+              !unsent &&
+              error instanceof ModelError &&
+              (error.retryable || error.quota !== undefined),
+          },
+          retries,
+          `retry-${randomUUID()}`,
+        );
         const failure = modelFailureOf(error, bound.config.provider);
         if (next.kind !== 'retry' && next.kind !== 'unchain')
           yield* logProviderError(
@@ -635,45 +664,8 @@ export const modelInvokerLayer = (): Layer.Layer<
             roots,
           );
         yield* commitFailed(cell, ref, failure, next, bound, usage);
+        return next;
       });
-
-      /** The step after `failure` of attempt `ref`, read off the attempts
-       *  before it, llm's verdict and the budget. */
-      const moveAfter = (
-        cell: RunCell,
-        { error, unsent }: AttemptFailure,
-        ref: InvocationRef,
-        observed: boolean,
-        retries: number,
-      ): Effect.Effect<StepAfterFailure> =>
-        Effect.map(cell.current, ({ invocation }) =>
-          failedNext(
-            failuresBefore(invocation, ref),
-            {
-              // A failed observation is never resubmitted unasked: the work
-              // it watched was already billed.
-              unchain:
-                !observed &&
-                error instanceof ModelError &&
-                error.kind === 'continuation-gone',
-              automatic:
-                !observed &&
-                !unsent &&
-                error instanceof ModelError &&
-                error.retryable,
-              // A person is offered a retry whenever llm says the same
-              // request can succeed, and after a used-up quota, whose retry
-              // carries the switch onto their own credential; a missing
-              // route is fixed outside the run.
-              offered:
-                !unsent &&
-                error instanceof ModelError &&
-                (error.retryable || error.quota !== undefined),
-            },
-            retries,
-            `retry-${randomUUID()}`,
-          ),
-        );
 
       /**
        * Make the attempt `step` names on `bound`: a send under the process's
@@ -780,8 +772,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             );
             if (Result.isFailure(rebound)) {
               const failure = { error: rebound.failure, unsent: true };
-              const next = yield* moveAfter(cell, failure, ref, false, retries);
-              yield* recordFailure(cell, ref, failure, next, bound);
+              yield* recordFailure(cell, ref, failure, false, retries, bound);
               continue;
             }
             // The binding the retry is sent on, with the routes it declines,
@@ -799,14 +790,14 @@ export const modelInvokerLayer = (): Layer.Layer<
           const tried = yield* tryAttempt(cell, request, step, ref, bound);
           if ('ok' in tried) return tried.ok;
           const failure = tried;
-          const next = yield* moveAfter(
+          const next = yield* recordFailure(
             cell,
-            failure,
             ref,
+            failure,
             step.kind === 'observe',
             retries,
+            bound,
           );
-          yield* recordFailure(cell, ref, failure, next, bound);
           if (next.kind === 'stop') return yield* endedAs(cell, 'failed');
           if (next.kind !== 'retry' && next.kind !== 'unchain') continue;
           // The pause before an automatic resend, unchained or not.
