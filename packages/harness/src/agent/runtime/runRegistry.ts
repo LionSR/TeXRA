@@ -188,12 +188,9 @@ type StopClaim =
   | { readonly kind: 'live'; readonly live: Live }
   | { readonly kind: 'ending'; readonly ending: Ending };
 
-/** How a stop went: whether a fiber here took it, and whether the run had
- *  no rows to record it on. */
-interface StopResult {
-  readonly took: boolean;
-  readonly unknown: boolean;
-}
+/** How a stop went: a fiber here took it, none did, or none did and the
+ *  run had no rows to record it on. */
+type StopResult = 'took' | 'none' | 'no-rows';
 
 /** A run as its own fiber runs it ({@link SessionRunRegistry.start}): the
  *  opening, whose answer its launcher awaits; the run over what it opened;
@@ -775,14 +772,14 @@ export class SessionRunRegistry implements RunsShape {
       (claim): Effect.Effect<StopResult, Error> => {
         switch (claim.kind) {
           case 'done':
-            return Effect.succeed({ took: claim.took, unknown: false });
+            return Effect.succeed(claim.took ? 'took' : 'none');
           case 'again':
             return Effect.map(
               Effect.andThen(
                 claim.after,
                 this.stopping(runId, reason, cascade),
               ),
-              (took) => ({ took, unknown: false }),
+              (took) => (took ? 'took' : 'none'),
             );
           // Its `run.stop` row, then the runs under it, then its fiber's
           // interruption. A stop the store refused still stops the work:
@@ -798,14 +795,14 @@ export class SessionRunRegistry implements RunsShape {
               Effect.ensuring(
                 Effect.sync(() => claim.live.fiber.interruptUnsafe()),
               ),
-              Effect.as({ took: true, unknown: false }),
+              Effect.as('took' as const),
             );
           // No fiber here drives it: its end commits with its stop. No
           // rows: the launch has not registered yet.
           case 'ending':
             return this.inSession(stopRun(runId, reason, true)).pipe(
               Effect.tap((known) => (known ? under : Effect.void)),
-              Effect.map((known) => ({ took: false, unknown: !known })),
+              Effect.map((known) => (known ? 'none' : 'no-rows')),
             );
         }
       },
@@ -827,12 +824,12 @@ export class SessionRunRegistry implements RunsShape {
             this.pass(
               runId,
               claim.ending,
-              Exit.isSuccess(exit) && exit.value.unknown
+              Exit.isSuccess(exit) && exit.value === 'no-rows'
                 ? { kind: 'pending', reason }
                 : undefined,
             );
         }),
-    ).pipe(Effect.map(({ took }) => took));
+    ).pipe(Effect.map((result) => result === 'took'));
   }
 
   /** A stop's first step: what the run's state here makes of it, marked on
