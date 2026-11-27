@@ -587,24 +587,17 @@ export const googleInteractionsModel = Effect.fn('llm.google.model')(function* (
       request,
       origin,
       background,
-      (input) => {
-        const store = config.defaults.store;
-        return input.mode === 'background' && !store
-          ? Effect.fail(
-              new ModelError({
-                kind: 'invalid-request',
-                message: 'Google background execution requires store:true.',
-              }),
-            )
-          : Effect.succeed({
-              controls: {
-                maxOutputTokens:
-                  input.maxOutputTokens ?? config.defaults.maxOutputTokens,
-                store,
-                thinkingLevel: config.defaults.thinkingLevel,
-              },
-            });
-      },
+      // A background turn on a binding that does not store is refused
+      // before this: such a binding has no `background` member.
+      (input) =>
+        Effect.succeed({
+          controls: {
+            maxOutputTokens:
+              input.maxOutputTokens ?? config.defaults.maxOutputTokens,
+            store: config.defaults.store,
+            thinkingLevel: config.defaults.thinkingLevel,
+          },
+        }),
       (turn) =>
         Effect.flatMap(boundTurn(turn, origin, turn.mode), (bound) =>
           invocationInput(bound, origin),
