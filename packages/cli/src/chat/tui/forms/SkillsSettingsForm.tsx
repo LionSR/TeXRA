@@ -12,10 +12,7 @@ import {
 } from '@texra-ai/worldline/schemas';
 import { Skills } from '@texra-ai/worldline/host';
 import { Settings } from '@texra-ai/worldline/plugins';
-import {
-  setSkillEnabled,
-  settingWriteFailure,
-} from '@texra/controllers/settingsView/stateSettingWrite';
+import { setSkillEnabled } from '@texra/controllers/settingsView/stateSettingWrite';
 import { enabledLabel } from '@ui/copy/format';
 import { skillSourceToggleLabel } from '@ui/copy/skills';
 
@@ -98,10 +95,8 @@ export function SkillsSettingsForm(
         update(
           Effect.flatMap(
             setSkillEnabled(row, value, current.includes(value), roots),
-            (result) => {
-              const failure = settingWriteFailure(result);
-              return failure === undefined ? Effect.void : Effect.fail(failure);
-            },
+            (result) =>
+              result.kind === 'failed' ? Effect.fail(result.error) : Effect.void,
           ),
         );
       }}

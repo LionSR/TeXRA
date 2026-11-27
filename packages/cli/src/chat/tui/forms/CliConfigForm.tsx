@@ -10,10 +10,7 @@ import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
 import { commitProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
 import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import {
-  applyStateSettingUpdate,
-  settingWriteFailure,
-} from '@texra/controllers/settingsView/stateSettingWrite';
+import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 
 import { ConfigForm } from './ConfigForm';
@@ -70,8 +67,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     const result = yield* applyStateSettingUpdate(entry, value, roots);
     // ConfigForm rolls its optimistic value back on a failure and reports
     // it, so a refused write must fail rather than read as applied.
-    const failure = settingWriteFailure(result);
-    if (failure !== undefined) return yield* failure;
+    if (result.kind === 'failed') return yield* result.error;
     if (result.kind === 'ignored') return;
     settings.reload();
   });
