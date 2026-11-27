@@ -30,11 +30,7 @@ describe('PromptBuilder', () => {
         const roots = { workspace, storageRoot } as WorkspaceRoots;
         const system = yield* buildOpeningSystemPrompt(
           'Work in {{ CWD }}.',
-          {
-            inputs: { CWD: '/work' },
-            activated: [],
-          },
-          { roots, textOnly: false, offered: ['bash'], memory: [] },
+          { cwd: '/work', roots, textOnly: false, offered: ['bash'], memory: [] },
         );
         expect(system).toContain('Work in /work.');
         expect(system).toContain('Working directory: /work');
@@ -60,11 +56,7 @@ describe('PromptBuilder', () => {
         const roots = { workspace, storageRoot } as WorkspaceRoots;
         const system = yield* buildOpeningSystemPrompt(
           'Answer the task.',
-          {
-            inputs: { CWD: '/work' },
-            activated: [],
-          },
-          { roots, textOnly: true, offered: [], memory: [] },
+          { cwd: '/work', roots, textOnly: true, offered: [], memory: [] },
         );
         expect(system.indexOf('Use British spelling.')).toBeGreaterThan(-1);
         expect(system.indexOf('Label equations eq:.')).toBeGreaterThan(
