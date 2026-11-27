@@ -18,8 +18,8 @@ import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@texra-ai/worldline/host';
-import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
-import type { ChatExportInput } from '@texra/agent/export/schemas';
+import { loadChatExportInput } from '@texra/controllers/export/loadChatExportInput';
+import type { ChatExportInput } from '@texra/controllers/export/schemas';
 import { formatBytes } from '@ui/copy/format';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 import type { RunStatusKey } from '@texra/shared/session/runStatusKey';

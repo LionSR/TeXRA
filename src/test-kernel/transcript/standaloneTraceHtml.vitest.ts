@@ -9,7 +9,7 @@ import {
 } from '@texra-ai/worldline/schemas';
 import { DisplayRowSchema } from '@texra-ai/worldline/transcript';
 import { LOG_LEVELS } from '@shared/schemas';
-import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
+import { injectStandaloneTrace } from '@texra/controllers/export/standaloneTraceHtml';
 
 const RUN_ID = Schema.decodeSync(RunIdSchema)('ab0001');
 

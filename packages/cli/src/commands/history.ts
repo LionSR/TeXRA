@@ -2,8 +2,8 @@ import { Effect, Option, absurd } from 'effect';
 import { Argument, Command, Flag } from 'effect/cli';
 
 import { type RunId } from '@texra-ai/worldline/schemas';
-import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
-import { traceHtml } from '@texra/agent/export/standaloneTraceHtml';
+import { formatChatAsMarkdown } from '@texra/controllers/export/chatExport/markdownSpec';
+import { traceHtml } from '@texra/controllers/export/standaloneTraceHtml';
 
 import { EMPTY_TASK_LIST } from '@ui/copy/nestedRuns';
 import { CliExitCode } from '../runtime/platform/exitCodes';

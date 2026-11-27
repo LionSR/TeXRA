@@ -14,7 +14,7 @@ import type {
   ChatExportInput,
   DocumentMeta,
   ExportConfig,
-} from '@texra/agent/export/schemas';
+} from '@texra/controllers/export/schemas';
 import type {
   ExportNode,
   MediaAttachmentKind,

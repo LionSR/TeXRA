@@ -20,24 +20,19 @@ import {
 import { toErrorMessage, Rejected } from '@texra-ai/worldline/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { ResourcesRoot } from '@texra/hosts/resourcesRoot';
-import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
-import { formatChatAsLatex } from '@texra/agent/export/chatExport/latexSpec';
-import { generateExportFilename } from '@texra/agent/export/chatExport/filenames';
-import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
+import { formatChatAsMarkdown } from '@texra/controllers/export/chatExport/markdownSpec';
+import { formatChatAsLatex } from '@texra/controllers/export/chatExport/latexSpec';
+import { generateExportFilename } from '@texra/controllers/export/chatExport/filenames';
+import { loadChatExportInput } from '@texra/controllers/export/loadChatExportInput';
 import {
   traceHtml,
   TraceUnavailable,
   TraceViewerMissing,
-} from '@texra/agent/export/standaloneTraceHtml';
+} from '@texra/controllers/export/standaloneTraceHtml';
+import { TRANSCRIPT_EXPORT_COPY } from '@ui/copy/transcriptExport';
 import { TranscriptExportFailed } from './exportTranscript';
 import type { Session } from '@texra-ai/worldline';
 import type { RunId } from '@texra-ai/worldline/schemas';
-
-/** Why a run has nothing to export, in every format. */
-const EXPORT_UNAVAILABLE = {
-  no_record: 'This task has no saved data to export.',
-  no_rows: 'No conversation was saved for this task.',
-} as const;
 
 /** Write one export beneath its run's storage directory. */
 const writeExport = Effect.fn('writeTranscript.writeExport')(function* (
@@ -91,7 +86,7 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
           if (error instanceof TraceUnavailable)
             return Effect.fail(
               new Rejected({
-                reason: EXPORT_UNAVAILABLE[error.status],
+                reason: TRANSCRIPT_EXPORT_COPY.unavailable[error.status],
               }),
             );
           if (error instanceof TraceViewerMissing)
@@ -129,9 +124,9 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
 
   const loaded = yield* loadChatExportInput(runId, options.session);
   if (loaded._tag === 'noConfig')
-    return yield* new Rejected({ reason: EXPORT_UNAVAILABLE.no_record });
+    return yield* new Rejected({ reason: TRANSCRIPT_EXPORT_COPY.unavailable.no_record });
   if (loaded._tag === 'noConversation')
-    return yield* new Rejected({ reason: EXPORT_UNAVAILABLE.no_rows });
+    return yield* new Rejected({ reason: TRANSCRIPT_EXPORT_COPY.unavailable.no_rows });
   const exportInput = loaded.input;
 
   const result = yield* writeExport(
