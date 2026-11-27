@@ -40,7 +40,7 @@ one disclosure, no separators and no frame around a row.
 | 1    | A one-line report that opened to the same line                    | A plain line with nothing to open                           |
 | 4    | A web link in a message did nothing                               | Opens in the project's browser tab                          |
 | 4    | A report's link to a run the session no longer holds              | No link                                                     |
-| 5    | A finished command listed under its task like an agent            | Leaves the list when it ends                                |
+| 5    | A command listed under its task like an agent                     | Not listed: the list is of agents                           |
 
 ## Open
 
@@ -62,9 +62,9 @@ Each is an instance of a rule above, seen in the pass and not changed.
   its call's row. The panel also says "in the background" of an agent the
   task waited for and that has finished. The panel should hold what is
   running now, and say so.
-- **Rule 1. An agent call's card repeats its header.** "Completed
-  'golden_child'" opens to `Agent: golden_child`, then the instruction and
-  result the child's own conversation shows.
+- **Rule 1. An agent call's card repeats its child.** "Completed
+  'golden_child'" opens to the instruction and result the child's own
+  conversation shows.
 - **Rule 1. A read's card repeats its header.** "Read notes.tex" opens to
   `File: notes.tex`. The link could be the header.
 - **Rule 7. Absolute paths.** A call's header shows a path from the

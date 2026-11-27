@@ -108,7 +108,9 @@ function formatReceivedMessageTemplate(
   const [head = '', ...rest] = text.split('\n');
   const summary = {
     iconName: SENDER_ICON[sender.kind],
-    label: from,
+    // A report that opens with its sender's name ("✓ drafter completed")
+    // is not headed by it again.
+    label: head.includes(from) ? '' : from,
     labelClass: 'tool-use-title',
     detail: truncateWithEllipsis(head, RECEIVED_PREVIEW_MAX_CHARS),
     extraContent: open,

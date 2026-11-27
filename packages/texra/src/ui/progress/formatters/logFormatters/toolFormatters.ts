@@ -157,7 +157,13 @@ export function formatToolUseTemplate(
   // sentence the call reports ("Read notes.tex") needs no "read_file" before
   // it; the name is spelled out where no icon of the tool's stands for it
   // (a generic or a state icon, a spinner) or the row has nothing else to say.
-  const named = !iconNamesTool || running || headerPreview === '';
+  // Nor is it spelled out before a sentence that opens with it ("plan Plan
+  // approved").
+  const opensWithName = headerPreview
+    .toLowerCase()
+    .startsWith(model.headerLabel.toLowerCase());
+  const named =
+    headerPreview === '' || (!opensWithName && (!iconNamesTool || running));
   return buildToolUseDetails({
     row,
     iconName,

@@ -223,6 +223,13 @@ export function renderToolSections(
       filePath = section.path;
       if (section.path === said) return [];
     }
+    // The header already names it ("Completed 'drafter'").
+    if (
+      section.kind === 'identifier' &&
+      section.note === undefined &&
+      said.includes(section.value)
+    )
+      return [];
     return [renderToolSection(section, filePath)];
   });
 }
