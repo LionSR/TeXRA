@@ -20,7 +20,6 @@ import { transcriptRowHeadline } from './transcriptEntries';
 import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
 import type { TranscriptRowKind } from '@texra-ai/worldline/transcript';
 
-const DEFAULT_TRANSCRIPT_COLUMNS = 80;
 const USER_ENTRY_MARGIN_TOP_ROWS = 1;
 const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 const ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS = 0;
@@ -121,15 +120,8 @@ export interface TranscriptEntryLayout {
   readonly kind: TranscriptRowKind;
 }
 
-export function transcriptColumns(
-  width: number | undefined,
-  inset = 0,
-): number {
-  const raw =
-    width != null && Number.isFinite(width)
-      ? width
-      : DEFAULT_TRANSCRIPT_COLUMNS;
-  return Math.max(1, Math.floor(raw) - inset);
+export function transcriptColumns(width: number, inset = 0): number {
+  return Math.max(1, Math.floor(width) - inset);
 }
 
 function wrapWithPrefix(
@@ -187,7 +179,7 @@ function liveAssistantDisplayLines({
 }: {
   readonly rows: number;
   readonly text: string;
-  readonly width?: number;
+  readonly width: number;
 }): readonly string[] {
   const columns = transcriptColumns(width);
   // Keep only the tail that could occupy the visible rows, so a very long
@@ -314,7 +306,7 @@ export function transcriptEntryLayout(
      *  where both sides declare a separator costs two blank rows instead of
      *  one (user to user). */
     readonly previousEntry?: TranscriptRow;
-    readonly width?: number;
+    readonly width: number;
   },
 ): TranscriptEntryLayout {
   const base = ROW_GEOMETRY[row.kind];

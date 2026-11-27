@@ -14,7 +14,7 @@ const FAILED_ENTRY_ESTIMATE_ROWS = 1;
 // row instead of being reflowed like plain projections.
 export function estimateLiveTranscriptEntryRows(
   entry: TranscriptRow,
-  width?: number,
+  width: number,
 ): number {
   try {
     return transcriptEntryLayoutRows(
@@ -38,7 +38,7 @@ interface TranscriptEntrySelection {
 export function selectTranscriptEntriesForViewport(
   entries: readonly TranscriptRow[],
   maxRows: number,
-  width?: number,
+  width: number,
 ): TranscriptEntrySelection {
   if (!Number.isFinite(maxRows) || maxRows <= 0) {
     return { entries: [], rowLimits: new Map() };
