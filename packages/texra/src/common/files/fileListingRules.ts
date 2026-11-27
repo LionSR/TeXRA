@@ -1,9 +1,7 @@
 import { getBasename, normalizeFilePath } from '@texra-ai/worldline/schemas';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
-import {
-  getIncludedExtensions,
-  type ExtensionCategory,
-} from '@texra/common/files/fileTypeUtils';
+import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
+import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
 
 /**
  * One include/exclude file-filter shape, shared verbatim from category
@@ -26,29 +24,17 @@ function normalizeList(values: readonly string[]): string[] {
 
 const { ignored } = FILE_HANDLING_RULES;
 
+/** The files a text field of the launch form lists. */
 export function getFileListConfig(
-  fileType: ExtensionCategory,
+  fileType: Exclude<DocumentFileType, 'media'>,
 ): FileFilterConfig {
-  switch (fileType) {
-    case 'input':
-    case 'context':
-    case 'edited':
-      return {
-        include: getIncludedExtensions(fileType),
-        excludeExtensions: [...ignored.fileExtensions],
-        excludeDirs: [...ignored.directories],
-        excludeKeywords: [...ignored.keywords],
-        excludeFiles: [...ignored.inputFiles],
-      };
-    case 'media':
-      return {
-        include: getIncludedExtensions('media'),
-        excludeExtensions: [],
-        excludeDirs: [...ignored.mediaDirectories],
-        excludeKeywords: [...ignored.keywords],
-        excludeFiles: [],
-      };
-  }
+  return {
+    include: getIncludedExtensions(fileType),
+    excludeExtensions: [...ignored.fileExtensions],
+    excludeDirs: [...ignored.directories],
+    excludeKeywords: [...ignored.keywords],
+    excludeFiles: [...ignored.inputFiles],
+  };
 }
 
 export function prepareFileFilters(config: FileFilterConfig): FileFilterConfig {
