@@ -100,11 +100,7 @@ function commandEnv(
   });
 }
 
-function execResult(
-  stdout: string,
-  stderr: string,
-  end: ExecEnd,
-): ExecResult {
+function execResult(stdout: string, stderr: string, end: ExecEnd): ExecResult {
   return {
     success: end._tag === 'Exited' && end.code === 0,
     stdout: stdout.trim(),

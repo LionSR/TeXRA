@@ -148,8 +148,7 @@ const enterRun = Effect.fn('enterRun')(function* (
     entry: {
       parent,
       awaited,
-      fresh:
-        registration === null ? null : { registration, seed: asked?.seed },
+      fresh: registration === null ? null : { registration, seed: asked?.seed },
       enter,
     },
   };

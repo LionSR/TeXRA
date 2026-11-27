@@ -272,9 +272,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   });
 
   const runWord = level.run && runStatus(level.run).word;
-  const status = ended
-    ? `detached: ${ended}`
-    : (runWord ?? 'connecting…');
+  const status = ended ? `detached: ${ended}` : (runWord ?? 'connecting…');
   const title = joinFacts([task.label, status]);
   // While a request is on screen its card owns Esc (reject or skip);
   // detaching waits until it is answered.

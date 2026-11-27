@@ -96,7 +96,9 @@ export function SkillsSettingsForm(
           Effect.flatMap(
             setSkillEnabled(row, value, current.includes(value), roots),
             (result) =>
-              result.kind === 'failed' ? Effect.fail(result.error) : Effect.void,
+              result.kind === 'failed'
+                ? Effect.fail(result.error)
+                : Effect.void,
           ),
         );
       }}

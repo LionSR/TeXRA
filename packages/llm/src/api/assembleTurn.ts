@@ -265,8 +265,7 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
     return yield* fail(turn, 'ended without an identified terminal result');
   const content = yield* finishedContent(turn, turn.finish.snapshot);
   const calls = content.some((part) => part.kind === 'local-call');
-  const reason =
-    turn.finish.finishReason ?? (calls ? 'tool-calls' : 'stop');
+  const reason = turn.finish.finishReason ?? (calls ? 'tool-calls' : 'stop');
   // A tool-call finish names calls, and a plain stop leaves none.
   if (
     (reason === 'tool-calls' || reason === 'stop') &&
