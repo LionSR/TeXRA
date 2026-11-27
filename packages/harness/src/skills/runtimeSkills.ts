@@ -201,7 +201,6 @@ function skillDisplayItem(
     scope: source.scope,
     label: source.label,
     path: skill.path,
-    sourcePath: source.path,
     enabled: !isSkillDisabled(entry, disabled),
   };
 }
