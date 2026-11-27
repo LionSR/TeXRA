@@ -16,6 +16,7 @@ import { Array as Arr, Predicate } from 'effect';
 import {
   AGENT_TOOL_NAME,
   PROGRAM_TOOL_NAME,
+  SELF_TOOL_NAME,
   TOOL_CALL_STATUS,
   type RequestPayload,
   type RunId,
@@ -49,7 +50,7 @@ const nameOf = (input: Readonly<Record<string, unknown>>): string | undefined =>
 const CHILD_TOOLS: ReadonlySet<string> = new Set([
   AGENT_TOOL_NAME,
   PROGRAM_TOOL_NAME,
-  'self',
+  SELF_TOOL_NAME,
 ]);
 
 export type ScriptCallStatus =

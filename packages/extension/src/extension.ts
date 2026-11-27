@@ -70,7 +70,10 @@ import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { HostTelemetrySwitch } from '@telemetry/UsageLogService';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
-import type { CommandId } from '@texra/shared/commands/catalog';
+import {
+  commandCatalogById,
+  type CommandId,
+} from '@texra/shared/commands/catalog';
 import {
   openGlobalConfig,
   openProjectRoots,
@@ -289,7 +292,7 @@ const WALKTHROUGH_WORKSPACE_ACTION_COMMAND = 'texra.walkthroughWorkspaceAction';
 const explainWorkspaceRequired = Effect.fn('explainWorkspaceRequired')(
   function* (extensionPath: string) {
     const openFolder = 'Open Folder';
-    const createSample = 'Create Sample Project';
+    const createSample = commandCatalogById['texra.createSampleProject'].title;
     const choice = yield* vscodeUi.ask(
       'info',
       'Open a single project folder or create the sample project first.',

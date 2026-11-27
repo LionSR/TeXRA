@@ -26,11 +26,13 @@ import * as NodeServices from '@effect/platform-node/NodeServices';
 import { setLogSink } from '@texra-ai/worldline/node';
 import {
   APPROVAL_POLICIES,
+  APPROVAL_POLICY_DEFAULT,
   ensureError,
   formatWordList,
 } from '@texra-ai/worldline/schemas';
 import { withForkFailureReporting } from '@texra-ai/worldline/transcript';
 import { CLI_OUTPUT_FORMATS } from '@texra/shared/cliOutputFormat';
+import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 
 // Local imports - CLI
 import type { RunChatInit } from '@cli/chat/tui/runChatTui';
@@ -117,7 +119,10 @@ const OutputFormat = GlobalFlag.Setting('output-format')({
 const ApprovalPolicy = GlobalFlag.Setting('approval-policy')({
   flag: Flag.Literals('approval-policy', APPROVAL_POLICIES).pipe(
     Flag.withDescription(
-      'Approval policy: ask (Ask) or yolo (Auto-approve; default)',
+      `Approval policy: ${APPROVAL_POLICIES.map(
+        (policy) =>
+          `${policy} (${approvalPolicyLabel(policy)}${policy === APPROVAL_POLICY_DEFAULT ? '; default' : ''})`,
+      ).join(' or ')}`,
     ),
     Flag.optional,
   ),

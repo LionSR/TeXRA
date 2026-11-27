@@ -2,7 +2,6 @@ import { absurd, Predicate } from 'effect';
 import {
   runBypasses,
   type ContextStateData,
-  type RunId,
   type TokenUsageStats,
   type UsageRoute,
   formatCompactDuration,
@@ -53,7 +52,6 @@ import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { taskCostStatus } from '../sessionStatus';
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
-import { runViewOf } from '../state/sessionView';
 import type {
   ApprovalPolicy,
   RequestKind,
@@ -515,35 +513,17 @@ function childListBindingsText(
   });
 }
 
-interface StatusBarRunTarget {
-  readonly ctrlCAction: CtrlCAction;
-  readonly displayRunId: RunId | undefined;
-  readonly isChildRun: boolean;
-}
-
 /**
- * Which run the status bar describes (the active run when the view
- * holds it), and what Ctrl-C does there. `canStop` is the SIGINT handler's
- * own predicate (`canStopRootRun`), so the hint cannot disagree
- * with what the key does.
+ * What Ctrl-C does while the status bar describes `run`. `canStop` is the
+ * SIGINT handler's own predicate (`canStopRootRun`), so the hint cannot
+ * disagree with what the key does.
  */
-export function statusBarRunTarget({
-  activeRunId,
-  canStop,
-  view,
-}: {
-  readonly activeRunId: RunId | undefined;
-  readonly canStop: boolean;
-  readonly view: SessionView;
-}): StatusBarRunTarget {
-  const active = runViewOf(view, activeRunId);
-  let ctrlCAction: CtrlCAction = 'exit';
-  if (canStop) ctrlCAction = active?.parentId ? 'stop root' : 'stop';
-  return {
-    ctrlCAction,
-    displayRunId: active?.id,
-    isChildRun: active?.parentId != null,
-  };
+export function ctrlCActionFor(
+  run: RunView | undefined,
+  canStop: boolean,
+): CtrlCAction {
+  if (!canStop) return 'exit';
+  return run?.parentId ? 'stop root' : 'stop';
 }
 
 // Which text occupies the bindings row is a priority order, not a single
@@ -575,7 +555,7 @@ function resolveStatusBarBindings(input: StatusBarChrome): string {
 }
 
 /**
- * The bar for the displayed run (`statusBarRunTarget`), read straight off
+ * The bar for the displayed run, read straight off
  * its `RunView` and the view's runs, around the chrome the TUI supplies.
  */
 export function buildStatusBarDisplay(

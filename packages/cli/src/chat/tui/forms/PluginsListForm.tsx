@@ -149,10 +149,6 @@ export function PluginsListForm(
       // A trust question shows what it declares in every layout: the compact
       // one keeps the lines, not the list's warnings.
       compactDetailFor={() => reviewLines}
-      detailRowsFor={(data) => {
-        if (pending) return pending.review.lines.length;
-        return data.mcpWarnings.length > 0 ? 1 : 0;
-      }}
       action={pending ? PLUGINS_TUI.chooseAction : PLUGINS_TUI.switchAction}
       onSelect={(value, { data, update }) => {
         if (pending) {

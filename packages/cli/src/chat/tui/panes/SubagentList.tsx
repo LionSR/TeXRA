@@ -122,12 +122,7 @@ function SessionRow({
   const positionLabel = formatLoopPositionLabel(run.turn);
   const modelLabel = run.parentId === null ? undefined : run.modelLabel;
   const metadataText = metadataColumn
-    ? childRowMetadataText({
-        elapsed,
-        outputTokens:
-          run.usage.outputTokens > 0 ? run.usage.outputTokens : undefined,
-        toolCallCount: run.toolCalls,
-      })
+    ? childRowMetadataText(run, elapsed)
     : undefined;
   const summary = run.description;
   const color = TONE_PAINT[runStatus(run).tone].color;

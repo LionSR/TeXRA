@@ -24,8 +24,8 @@ lands.
    `FileSelectGroup.ts`, `LaunchAttachments.ts` and `htmlBuilders.ts`. A
    `<wa-tooltip>` anchors by `id`, and the formatter rows render many to a
    shadow root, so the choice is between a native `title` everywhere and an
-   id per row. (A message's time left the question when the transcript
-   became a conversation: only the error row keeps a header.)
+   id per row. (The 2026-11-27 run gave the user message's time the native
+   `title`; the file-path hint is still open.)
 2. **Closed.** `buildFileLinkSpan` draws every clickable file path and
    `fileLinkTarget` reads the click.
 3. **`PluginsTab.renderSelectRow` restates `renderStateSettingSelectRow`**
@@ -44,6 +44,8 @@ lands.
    The success mark is `check` in three places and `circle-check`
    (`TONE_GLYPH.success`) in one, in three greens. `statusGlyph({ tone })`
    with a `tone-*` class is the owner; which green stays is a design call.
+   (The 2026-11-27 run gave `LaTeXTab.ts`'s missing dependency
+   `circle-exclamation`, the error glyph its colour already said.)
 7. **Closed.** `toneVariant` (`wa/waVariant.ts`) maps a `RunTone` to a
    badge or tag variant; the approval badge reads the waiting status's
    glyph and name.
@@ -77,13 +79,9 @@ lands.
 
 ## Terminal
 
-13. **`detailRows` is still counted by the caller.** `ListForm` now measures
-    its description; `AccountAccessForm.tsx`, `GitHubTokenForm.tsx` and the
-    skills forms still pass a row count for a `detail` they render, at one
-    row a line. Ink's `useBoxMetrics` measures the rendered block, which
-    would delete `detailRows`, `detailRowsFor` and the description's own
-    count; it reports zero until the first layout, so the first frame needs
-    a list budget that cannot overflow the terminal, and an Ink render check.
+13. **Closed.** `ListForm` measures the box it draws its `detail` in
+    (Ink's `useBoxMetrics`), so no form passes a row count and a wrapped
+    line is counted.
 14. **Closed.** `TasksForm.tsx` shows the newest rows under a dim
     `previousRowsText` marker when the transcript is longer than its budget.
 15. **Clipping text to fit beside a fixed suffix** is written in

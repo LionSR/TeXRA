@@ -10,7 +10,7 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   deleteCliHistory,
   formatCliHistoryDetailsText,
-  formatCliHistoryNotFoundText,
+  taskNotFoundText,
   formatCliHistoryText,
   listCliHistoryEntries,
   parseCliHistoryId,
@@ -70,7 +70,7 @@ const runHistoryShow = Effect.fn('runHistoryShow')(function* (
     { includeFullConversation: options.full === true },
   );
   if (!details) {
-    return yield* failUsage(formatCliHistoryNotFoundText(id, context.cwd));
+    return yield* failUsage(taskNotFoundText(id, context.cwd));
   }
 
   yield* emitCliResult(
@@ -103,7 +103,7 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
       id,
     );
     if (exportResult.status === 'not_found') {
-      return yield* failUsage(formatCliHistoryNotFoundText(id, context.cwd));
+      return yield* failUsage(taskNotFoundText(id, context.cwd));
     }
     if (exportResult.status === 'incomplete') {
       return yield* failUsage(
@@ -123,7 +123,7 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
       TraceUnavailable: ({ status }) => {
         switch (status) {
           case 'no_record':
-            return failUsage(formatCliHistoryNotFoundText(id, context.cwd));
+            return failUsage(taskNotFoundText(id, context.cwd));
           case 'no_rows':
             return failUsage(`Task ${id} has no saved conversation to export.`);
           default:
@@ -181,9 +181,7 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
   // found" usefully.
   if (result.deleted === 'one' && context.outputFormat === 'text') {
     if (result.status === 'not-found') {
-      return yield* failUsage(
-        formatCliHistoryNotFoundText(result.id, context.cwd),
-      );
+      return yield* failUsage(taskNotFoundText(result.id, context.cwd));
     }
     if (result.status === 'active') {
       return yield* failUsage(

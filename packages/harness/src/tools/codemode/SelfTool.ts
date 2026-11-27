@@ -42,6 +42,7 @@ import {
   AgentConfigSchema,
   backgroundScriptOf,
   runsScript,
+  SELF_TOOL_NAME,
   ToolError,
 } from '@shared/schemas';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
@@ -227,7 +228,7 @@ function selfTask(prompt: string, forked: boolean): string {
 
 /** The `self` function of a script. */
 export const SelfTool = defineTool({
-  name: 'self',
+  name: SELF_TOOL_NAME,
   // A resumed call finds the child its earlier attempt launched and takes
   // its result, or resumes it under its own id: it never launches a second one.
   replay: 'safe',

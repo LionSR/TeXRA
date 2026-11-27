@@ -13,6 +13,7 @@
  */
 import { Predicate } from 'effect';
 import {
+  EXECUTIONS_TOOL_NAME,
   TOOL_CALL_STATUS,
   type ProposalFileGroup,
   type ToolCallLog,
@@ -242,7 +243,7 @@ function toolHeaderPreview(
   ctx: ToolRowModelContext,
 ): string {
   const labeled =
-    normalizeToolName(toolName) === 'executions' && ctx.runLabels
+    normalizeToolName(toolName) === EXECUTIONS_TOOL_NAME && ctx.runLabels
       ? executionsSubagentSummary(input, ctx.runLabels)
       : undefined;
   const inputPreview =
@@ -331,7 +332,7 @@ const TOOL_DEFAULT_TIMEOUTS: Readonly<
   Record<string, { readonly ms: number; readonly action?: string }>
 > = {
   bash: { ms: BASH_TOOL_DEFAULT_TIMEOUT_MS },
-  executions: {
+  [EXECUTIONS_TOOL_NAME]: {
     ms: EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS * 1000,
     action: 'wait',
   },
@@ -345,7 +346,7 @@ function toolTimeoutMs(toolName: string, input: unknown): number | undefined {
   if (spec.action && input.action !== spec.action) return undefined;
   // A background call returns at once: the limit is not what it waits on.
   if (input.run_in_background === true) return undefined;
-  if (toolName === 'executions') {
+  if (toolName === EXECUTIONS_TOOL_NAME) {
     return executionsWaitTimeoutSeconds(input.timeout) * 1000;
   }
   return typeof input.timeout === 'number' ? input.timeout : spec.ms;

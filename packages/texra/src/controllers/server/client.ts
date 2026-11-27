@@ -39,7 +39,7 @@ import {
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
-import { isOutcomeOf } from '@texra-ai/worldline';
+import { type DatabaseReadFailed, isOutcomeOf } from '@texra-ai/worldline';
 import {
   formatResultCount,
   type RuntimeCommand,
@@ -187,6 +187,13 @@ export class ServiceUnavailable extends Schema.TaggedError<ServiceUnavailable>()
   }
 }
 
+/** The service record could not be read, for the client that looks for
+ *  the service and the service that claims the record alike. */
+export const serviceRecordUnreadable = (error: DatabaseReadFailed) =>
+  new ServiceUnavailable({
+    reason: `The service record could not be read: ${error.message}`,
+  });
+
 /** Why no service runs on Windows yet: a named pipe there takes the
  *  default ACL, which other local users can read and pre-create. */
 export const WINDOWS_UNSUPPORTED =
@@ -314,12 +321,7 @@ export const probeRecordedService: Effect.Effect<
   ServiceUnavailable,
   GlobalValues
 > = readServiceRecord.pipe(
-  Effect.mapError(
-    (error) =>
-      new ServiceUnavailable({
-        reason: `The service record could not be read: ${error.message}`,
-      }),
-  ),
+  Effect.mapError(serviceRecordUnreadable),
   Effect.flatMap((record) =>
     record === null ? Effect.succeed(null) : probeService(record.socket),
   ),

@@ -3,7 +3,7 @@
  * `./direct/leanServerPool`, served as the Lean 4 plugin's process layer.
  */
 
-import { Context, type Effect, type Scope } from 'effect';
+import { Context, type Effect, type Result, type Scope } from 'effect';
 
 import type { LeanServerInfo } from './leanServerInfo';
 import type {
@@ -13,7 +13,6 @@ import type {
   LeanUnavailable,
   FetchDiagnosticsResult,
   LspHover,
-  LspResult,
   PlainGoal,
   PlainTermGoal,
 } from './leanTypes';
@@ -44,17 +43,17 @@ export interface LeanLanguageServicesShape {
     filePath: string,
     line: number,
     column: number,
-  ): Effect.Effect<LspResult<PlainGoal>, never, Scope.Scope>;
+  ): Effect.Effect<Result.Result<PlainGoal, string>, never, Scope.Scope>;
   getTermGoal(
     filePath: string,
     line: number,
     column: number,
-  ): Effect.Effect<LspResult<PlainTermGoal>, never, Scope.Scope>;
+  ): Effect.Effect<Result.Result<PlainTermGoal, string>, never, Scope.Scope>;
   getHoverInfo(
     filePath: string,
     line: number,
     column: number,
-  ): Effect.Effect<LspResult<LspHover>, never, Scope.Scope>;
+  ): Effect.Effect<Result.Result<LspHover, string>, never, Scope.Scope>;
   fetchDiagnosticsForFile(
     file: string,
   ): Effect.Effect<

@@ -26,7 +26,6 @@ import {
 import {
   APPROVAL_POLICY_SETTING,
   parseApprovalPolicy,
-  launchPolicy,
   type ApprovalPolicy,
   type LaunchApproval,
   toErrorMessage,
@@ -55,9 +54,8 @@ export interface CliContext {
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
   /** The policy this invocation's launches decide privileged actions
-   *  under (`launchPolicy` over the configured one and
-   *  `launchApproval({@link requestedApprovalPolicy})`); what the CLI's
-   *  headless guards and resume hints read. */
+   *  under ({@link effectiveApprovalPolicy}); what the CLI's headless guards
+   *  and resume hints read. */
   readonly approvalPolicy: ApprovalPolicy;
   /** The policy this invocation asked for itself (`--approval-policy`,
    *  `TEXRA_APPROVAL_POLICY`), absent when it follows the config: what a
@@ -533,11 +531,12 @@ export function projectApprovalPolicy(config: ConfigProvider): ApprovalPolicy {
   return Settings.getConfig(config, APPROVAL_POLICY_SETTING);
 }
 
-/** The policy a launch decides privileged actions under: the harness's
- *  rule (`launchPolicy`) over what this invocation asked for. */
+/** The policy a launch decides privileged actions under: the one this
+ *  invocation asked for, which its launch carries (`launchApproval`), else
+ *  the project's. */
 export function effectiveApprovalPolicy(
   requested: ApprovalPolicy | undefined,
   configured: ApprovalPolicy,
 ): ApprovalPolicy {
-  return launchPolicy(configured, launchApproval(requested));
+  return requested ?? configured;
 }
