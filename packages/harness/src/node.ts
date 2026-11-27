@@ -107,7 +107,8 @@ export {
 // with a path under a file read as absent, text with a leading BOM kept and
 // line endings normalized, a listing that types each entry from its dirent
 // and drops one it cannot type, an entry's own (lstat) type, and the
-// failures a probe reads as absent (`NotFound`, or a parent that is a file).
+// failures a probe reads as absent (`NotFound`, or a parent that is a file)
+// or a walk reads as an entry that went away (`listedEntryGone`).
 export {
   readDirectoryTypedTolerant,
   readNormalizedFile,
@@ -117,6 +118,7 @@ export {
   meansAbsent,
   entryTypeIn,
   isNotADirectoryError,
+  listedEntryGone,
   pathExists,
 } from '@utils/files/fsEntryExists';
 // The harness's log path as Effect diagnostics (its logger over the installed
