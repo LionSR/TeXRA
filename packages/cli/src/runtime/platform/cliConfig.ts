@@ -53,6 +53,11 @@ function modelLookupKeys(id: string): string[] {
   );
 }
 
+/** What a command says of a model argument {@link resolveKnownCliModelId}
+ *  does not know, naming the listing that holds every id it takes. */
+export const unknownCliModelMessage = (model: string): string =>
+  `Model not found: ${model}. Use an id from \`texra models list --all\`.`;
+
 /**
  * The model string a CLI argument names: a model reference with optional
  * `@effort`/`+pro` as given, or an unambiguous spelling of a model's API id or label

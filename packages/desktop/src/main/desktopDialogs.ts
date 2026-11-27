@@ -7,6 +7,7 @@ import { Effect, Predicate, type Scope } from 'effect';
 
 import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
+import { TRANSCRIPT_EXPORT_COPY } from '@ui/copy/transcriptExport';
 import type {
   HostFailed,
   ConfirmQuestion,
@@ -125,15 +126,11 @@ export function createDesktopDialogs(
     );
   return {
     notify,
-    confirm: (
-      question: ConfirmQuestion,
-      project?: string,
-    ): Effect.Effect<boolean, HostFailed> =>
+    confirm: (question: ConfirmQuestion): Effect.Effect<boolean, HostFailed> =>
       choose(window, {
         type: 'warning',
         message: question.message,
         detail: question.detail,
-        project,
         choices: [{ label: question.action, value: true, default: true }],
         close: 'Cancel',
       }).pipe(Effect.map((confirmed) => confirmed ?? false)),
@@ -155,27 +152,19 @@ export function createDesktopDialogs(
       }),
     /** The export's format dialog; a cancelled dialog answers `undefined`. */
     pickTranscriptExportFormat: (project: string) =>
-      fromHost(
-        'pickTranscriptExportFormat',
-        () => import('@texra/controllers/progressView/exportTranscript'),
-      ).pipe(
-        Effect.flatMap(
-          ({ TRANSCRIPT_EXPORT_FORMAT_CHOICES, TRANSCRIPT_EXPORT_PICK }) =>
-            choose(window, {
-              type: 'question',
-              message: TRANSCRIPT_EXPORT_PICK.title,
-              detail: TRANSCRIPT_EXPORT_PICK.prompt,
-              project,
-              choices: TRANSCRIPT_EXPORT_FORMAT_CHOICES.map(
-                ({ label, format }, index) => ({
-                  label,
-                  value: format,
-                  ...(index === 0 && { default: true as const }),
-                }),
-              ),
-              close: 'Cancel',
-            }),
+      choose(window, {
+        type: 'question',
+        message: TRANSCRIPT_EXPORT_COPY.pick.title,
+        detail: TRANSCRIPT_EXPORT_COPY.pick.prompt,
+        project,
+        choices: TRANSCRIPT_EXPORT_COPY.formats.map(
+          ({ label, format }, index) => ({
+            label,
+            value: format,
+            ...(index === 0 && { default: true as const }),
+          }),
         ),
-      ),
+        close: 'Cancel',
+      }),
   };
 }

@@ -182,6 +182,10 @@ class VscodeUiHost implements Dialogs {
  */
 export const vscodeUi = new VscodeUiHost();
 
+/** `text` on the system clipboard. */
+export const copyText = (text: string): Effect.Effect<void, HostFailed> =>
+  fromHost('clipboard.writeText', () => vscode.env.clipboard.writeText(text));
+
 /** A notice with one button per label: the `ask` the app's window notices
  *  take (`windowNotices`). */
 export const askNotice = (

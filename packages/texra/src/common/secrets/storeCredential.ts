@@ -30,7 +30,7 @@ interface StoreCredentialOptions {
    * because hosts resolve it through their own (region-aware) provider config;
    * looking it up here would silently drop those variants.
    */
-  readonly label?: string;
+  readonly label: string;
 }
 
 /** A value refused before it reaches the secret store: empty, or a masked
@@ -53,7 +53,7 @@ export function storeCredential<E>(
   options: StoreCredentialOptions,
 ): Effect.Effect<void, CredentialRejected | E> {
   return Effect.suspend((): Effect.Effect<void, CredentialRejected | E> => {
-    const subject = `${options.label ?? 'provider'} API key`;
+    const subject = `${options.label} API key`;
     const normalized = options.value.trim();
     if (!normalized) {
       return Effect.fail(

@@ -2,11 +2,6 @@ import { Effect, FileSystem, Option } from 'effect';
 import * as vscode from 'vscode';
 
 import {
-  type DiffLabel,
-  type DiffSource,
-  type DiffViewHost,
-} from '@texra/hosts/uiHosts';
-import {
   fromHost,
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
@@ -36,37 +31,34 @@ function tabInputFileUri(tab: vscode.Tab): vscode.Uri | null {
 }
 
 /**
- * The two sides and the title one open diff was shown under. Only this host
- * reads one back: closing a diff, revealing its first change and reading its
- * proposed side are all written against VS Code's tab model.
+ * VS Code's diff surface, addressed by the two staged paths a diff shows.
+ * Closing a diff, revealing its first change and reading back its proposed
+ * side are written against VS Code's tab model.
  */
-export interface DiffSession {
-  original: DiffSource;
-  proposed: DiffSource;
-  label: DiffLabel;
-}
-
-export class VscodeDiffViewHost implements DiffViewHost {
+export class VscodeDiffViewHost {
   openDiff(
-    original: DiffSource,
-    proposed: DiffSource,
-    { title }: DiffLabel,
+    originalPath: string,
+    proposedPath: string,
+    title: string,
   ): Effect.Effect<void, EditorCallFailed> {
     return fromHost('vscode.diff', () =>
       vscode.commands.executeCommand(
         'vscode.diff',
-        this.toUri(original),
-        this.toUri(proposed),
+        vscode.Uri.file(originalPath),
+        vscode.Uri.file(proposedPath),
         title,
         { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
       ),
     ).pipe(Effect.asVoid);
   }
 
-  closeDiff(session: DiffSession): Effect.Effect<void, EditorCallFailed> {
+  closeDiff(
+    originalPath: string,
+    proposedPath: string,
+  ): Effect.Effect<void, EditorCallFailed> {
     return Effect.suspend(() => {
-      const originalUri = this.toUri(session.original).toString();
-      const proposedUri = this.toUri(session.proposed).toString();
+      const originalUri = vscode.Uri.file(originalPath).toString();
+      const proposedUri = vscode.Uri.file(proposedPath).toString();
 
       const tabsToClose = vscode.window.tabGroups.all
         .flatMap((group) => group.tabs)
@@ -91,9 +83,9 @@ export class VscodeDiffViewHost implements DiffViewHost {
     });
   }
 
-  revealFirstChange(session: DiffSession, line: number): Effect.Effect<void> {
+  revealFirstChange(proposedPath: string, line: number): Effect.Effect<void> {
     return Effect.suspend(() => {
-      const targetUri = this.toUri(session.proposed).toString();
+      const targetUri = vscode.Uri.file(proposedPath).toString();
       const position = new vscode.Position(line, 0);
 
       const tryReveal = () => {
@@ -139,14 +131,14 @@ export class VscodeDiffViewHost implements DiffViewHost {
   }
 
   readProposedContent(
-    session: DiffSession,
+    proposedPath: string,
   ): Effect.Effect<string, EditorCallFailed, FileSystem.FileSystem> {
     return Effect.suspend(() => {
-      const openDocument = this.proposedDocument(session);
+      const openDocument = this.proposedDocument(proposedPath);
       return openDocument
         ? Effect.succeed(openDocument.getText())
         : FileSystem.FileSystem.use((fs) =>
-            fs.readFileString(this.toUri(session.proposed).fsPath),
+            fs.readFileString(proposedPath),
           ).pipe(
             Effect.mapError((cause) =>
               hostFailure('readProposedContent', cause),
@@ -162,10 +154,10 @@ export class VscodeDiffViewHost implements DiffViewHost {
    * that is about to be removed.
    */
   keepProposedText(
-    session: DiffSession,
+    proposedPath: string,
     text: string,
   ): Effect.Effect<void, EditorCallFailed> {
-    const proposedDocument = () => this.proposedDocument(session);
+    const proposedDocument = () => this.proposedDocument(proposedPath);
     return Effect.gen(function* () {
       const proposed = proposedDocument();
       const copy = yield* fromHost('openTextDocument', () =>
@@ -187,15 +179,11 @@ export class VscodeDiffViewHost implements DiffViewHost {
 
   /** The proposed side's open document, if the editor holds one. */
   private proposedDocument(
-    session: DiffSession,
+    proposedPath: string,
   ): vscode.TextDocument | undefined {
-    const proposedUri = this.toUri(session.proposed).toString();
+    const proposedUri = vscode.Uri.file(proposedPath).toString();
     return vscode.workspace.textDocuments.find(
       (doc) => doc.uri.toString() === proposedUri,
     );
-  }
-
-  private toUri(source: DiffSource): vscode.Uri {
-    return vscode.Uri.file(source.filePath);
   }
 }

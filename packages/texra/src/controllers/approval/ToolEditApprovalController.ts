@@ -460,11 +460,9 @@ export class ToolEditApprovalController {
    *  build runs to its end, in the request's scope, so its close waits for
    *  it rather than delete the files it reads. */
   private buildDisplayFor(entry: StagedPreview): BuildDisplayFn {
-    return (location, options) =>
+    return (location) =>
       Effect.forkIn(
-        Effect.uninterruptible(
-          this.options.host.openBuildDisplay(location, options),
-        ),
+        Effect.uninterruptible(this.options.host.openBuildDisplay(location)),
         entry.scope,
       ).pipe(Effect.flatMap(Fiber.join));
   }

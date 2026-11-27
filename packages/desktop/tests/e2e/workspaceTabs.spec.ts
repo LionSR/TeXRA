@@ -421,7 +421,7 @@ test('moves live terminals and unsaved editors without recreating resources', as
       '.shell-dock-editor[data-panel-id="workbench:editor:first.ts"]:visible .view-lines',
     ),
   ).toContainText('retained edit');
-  // Closing the unsaved editor asks in a styled dialog; Cancel keeps it.
+  // Closing the unsaved editor asks in a styled dialog; Keep editing keeps it.
   await first.locator('.shell-dock-tab-close wa-button').click();
   const discard = page.locator('wa-dialog.desktop-discard-overlay[open]');
   await expect(discard).toContainText('first.ts has unsaved changes');

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Array as Arr, Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 
 // Local imports - common
 import { ToolContext } from '@tools/core/ToolTypes';
@@ -29,38 +29,18 @@ function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
-/**
- * 1-indexed line numbers of every line that contains `needle`. Used to build
- * the "not unique — found in lines X, Y" guidance when a search string matches
- * more than once.
- */
-function findOccurrenceLineNumbers(content: string, needle: string): number[] {
-  if (needle.length === 0) {
-    return [];
-  }
-  return Arr.filterMap(content.split('\n'), (line, index) =>
-    line.includes(needle) ? Result.succeed(index + 1) : Result.failVoid,
-  );
-}
-
+/** A file an edit tool may rewrite, with the content it holds now. */
 interface WritableFileTarget {
   path: string;
   displayPath: string;
-  exists: boolean;
-  originalContent: string;
-}
-
-interface ResolveWritableTargetOptions {
-  /** Load a missing file as empty content instead of reading (and failing) on
-   *  it; defaults to false, so a missing file is an error. */
-  allowMissing?: boolean;
+  /** The file's content; null when there is no file yet. */
+  original: string | null;
 }
 
 /** Resolve and load a file for editing. */
 export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
   function* (
     inputPath: string,
-    options: ResolveWritableTargetOptions = {},
   ): Effect.fn.Return<
     WritableFileTarget,
     Error,
@@ -76,19 +56,13 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
     const fs = yield* FileSystem.FileSystem;
     const exists = yield* entryExists(fs, absolutePath);
 
-    const originalContent =
-      exists || !(options.allowMissing ?? false)
-        ? yield* readNormalizedFile(fs, absolutePath)
-        : '';
-
-    return { path, displayPath, exists, originalContent };
+    return {
+      path,
+      displayPath,
+      original: exists ? yield* readNormalizedFile(fs, absolutePath) : null,
+    };
   },
 );
-
-interface LiteralMatchContext {
-  count: number;
-  lineNumbers: number[];
-}
 
 interface LiteralReplacementRequest {
   content: string;
@@ -98,7 +72,7 @@ interface LiteralReplacementRequest {
    *  not unique. */
   replaceAll: boolean;
   notFoundError: () => string;
-  multipleMatchesError?: (context: LiteralMatchContext) => string;
+  multipleMatchesError: (count: number) => string;
 }
 
 interface LiteralReplacement {
@@ -121,15 +95,7 @@ export function replaceLiteralMatches({
   }
 
   if (!replaceAll && count > 1) {
-    // Only ambiguous matches need the per-line guidance, so the scan over the
-    // whole file stays out of the common single-match path.
-    const lineNumbers = findOccurrenceLineNumbers(content, search);
-    return Result.fail(
-      new ToolError(
-        multipleMatchesError?.({ count, lineNumbers }) ??
-          'The text to replace must be unique.',
-      ),
-    );
+    return Result.fail(new ToolError(multipleMatchesError(count)));
   }
 
   // A function replacer inserts its result verbatim: dollar patterns in prose
@@ -153,11 +119,7 @@ interface FileEditPresentation {
 }
 
 interface ApprovedFileEditRequest {
-  path: string;
-  displayPath: string;
-  /** Whether the file existed when the edit was proposed. */
-  exists: boolean;
-  originalContent: string;
+  target: WritableFileTarget;
   proposedContent: string;
   sourceTool: string;
   present: (edit: AppliedFileEdit) => FileEditPresentation;
@@ -171,10 +133,7 @@ interface ApprovedFileEditRequest {
  */
 export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   function* ({
-    path,
-    displayPath,
-    exists,
-    originalContent,
+    target: { path, displayPath, original },
     proposedContent,
     sourceTool,
     present,
@@ -185,7 +144,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   > {
     const approval = yield* requestToolEditApproval({
       path,
-      originalContent: exists ? originalContent : null,
+      originalContent: original,
       proposedContent,
       sourceTool,
     });

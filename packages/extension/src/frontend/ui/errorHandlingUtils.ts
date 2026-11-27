@@ -57,7 +57,7 @@ const INSTALL_GUIDE_ACTION = 'View Installation Guide';
 export function showLoggedErrorMessage(
   prefix: string,
   err: unknown,
-): Effect.Effect<string> {
+): Effect.Effect<void> {
   if (!(err instanceof ToolMissing))
     return showLoggedMessage(formatError(prefix, err));
   // Whole, not truncated as `formatError` would: the install steps are the
@@ -75,7 +75,6 @@ export function showLoggedErrorMessage(
           Effect.logError('Could not open the installation guide', error),
         ),
       );
-    return message;
   });
 }
 
@@ -88,18 +87,16 @@ export function showLoggedErrorMessage(
  *  without waiting for the notice to be dismissed. */
 export const showLoggedMessage = Effect.fn('showLoggedMessage')(function* (
   message: string,
-): Effect.fn.Return<string> {
+): Effect.fn.Return<void> {
   yield* Effect.logError(message);
   yield* vscodeUi.notify('error', message);
-  return message;
 });
 
 /** Log a message and display it to the user as an information notification,
  *  without waiting for the notice to be dismissed. */
 export const showLoggedInfoMessage = Effect.fn('showLoggedInfoMessage')(
-  function* (message: string): Effect.fn.Return<string> {
+  function* (message: string): Effect.fn.Return<void> {
     yield* Effect.logInfo(message);
     yield* vscodeUi.notify('info', message);
-    return message;
   },
 );

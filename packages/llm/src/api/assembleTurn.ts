@@ -189,7 +189,7 @@ function close(turn: Assembly, { index, content }: Of<'close'>): StepEvents {
 function finish(turn: Assembly, event: Of<'finish'>): StepEvents {
   if (
     turn.finish !== undefined &&
-    !isDeepStrictEqual(turn.finish.finish, event.finish)
+    turn.finish.finishReason !== event.finishReason
   )
     return fail(turn, 'changed the finish reason');
   turn.finish = event;
@@ -265,8 +265,7 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
     return yield* fail(turn, 'ended without an identified terminal result');
   const content = yield* finishedContent(turn, turn.finish.snapshot);
   const calls = content.some((part) => part.kind === 'local-call');
-  const reason =
-    turn.finish.finish.finishReason ?? (calls ? 'tool-calls' : 'stop');
+  const reason = turn.finish.finishReason ?? (calls ? 'tool-calls' : 'stop');
   // A tool-call finish names calls, and a plain stop leaves none.
   if (
     (reason === 'tool-calls' || reason === 'stop') &&
@@ -278,7 +277,6 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
     requestedOrigin: turn.options.origin,
     returnedModel: turn.model ?? null,
     content,
-    ...turn.finish.finish,
     finishReason: reason,
     usage: turn.usage,
   });

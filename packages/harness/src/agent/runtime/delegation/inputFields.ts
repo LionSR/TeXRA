@@ -17,7 +17,7 @@ import {
 } from 'effect';
 
 // Local imports
-import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
+import { resolveOwnRunFile } from '@agent/storage/ownRunFile';
 import { runStorageLocationUnder } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import { asToolError, ToolError, type RunId } from '@shared/schemas';
@@ -258,7 +258,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
             runStorageLocationUnder(storage, storagePath) === undefined
           ) {
             return yield* new ToolError(
-              `${file}; workspace-storage files must be declared outputs of a completed child run.`,
+              `${file}; a file in workspace storage must be in this run's own storage.`,
             );
           }
           // Explicit run paths still pass the resolver's symlink rejection,
@@ -285,10 +285,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
         references,
         Effect.fnUntraced(function* ({ file, absolutePath, runStoragePath }) {
           if (runStoragePath !== undefined) {
-            const output = yield* resolveChildRunOutput(
-              parentId,
-              runStoragePath,
-            );
+            const output = yield* resolveOwnRunFile(parentId, runStoragePath);
             if (!output)
               return yield* new ToolError(
                 `${runStoragePath}; pass a matching file option whose files still exist.`,

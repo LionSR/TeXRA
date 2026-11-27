@@ -44,6 +44,10 @@ These landed in the PR that adds this note:
    `packages/cli/scripts/validationAgent.mjs` owner for the key list, the
    child environment and the bundle build; `waitFor` returning what its
    check found; `projectStore(root, prefix)`.
+   **Landed 2026-11-27** across the package scan (`validationAgent.mjs`,
+   `loadPtySpawn`, `projectStore`, `waitFor`) and the consolidation audit
+   (`validationModelEnv`); the remaining provider-key drift and
+   `generate-golden-store.mjs` copies stay in the 2026-11-27 notes.
 2. **Tool inputs in files the open PRs hold.** `ZoteroAddTool.ts` (eleven
    fields) and `ZoteroCollectionsTool.ts` (two) write
    `Schema.optional(Schema.NullOr(S.annotate({ description })))` where

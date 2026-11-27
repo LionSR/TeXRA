@@ -40,7 +40,7 @@
  */
 import { hash } from 'node:crypto';
 
-import { type Effect, Schema, Struct } from 'effect';
+import { type Effect, Order, Schema, Struct } from 'effect';
 import { Rpc, RpcGroup, RpcSchema } from 'effect/rpc';
 
 import {
@@ -430,7 +430,8 @@ export const PROTOCOL: {
   // history must finish its tasks before the new host attaches.
   digest: digest12([
     PROJECT_STORE_FORMAT,
-    Object.entries(shapes).toSorted(([a], [b]) => a.localeCompare(b)),
+    // Code-unit order: the two ends of a link may run under different locales.
+    Object.entries(shapes).toSorted(([a], [b]) => Order.String(a, b)),
   ]),
   shapes,
 });

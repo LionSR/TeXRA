@@ -11,6 +11,8 @@ export const LATEXDIFF_MATH_MARKUP_VALUES = Object.freeze([
   'coarse',
   'fine',
 ] as const);
+export type LatexdiffMathMarkupValue =
+  (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number];
 
 /** Allowed values for the LaTeX formatter selector. */
 export const LATEX_FORMATTER_VALUES = Object.freeze([

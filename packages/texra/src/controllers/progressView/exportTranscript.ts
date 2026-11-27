@@ -15,6 +15,7 @@ import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import type { RunId } from '@texra-ai/worldline/schemas';
+import { TRANSCRIPT_EXPORT_COPY } from '@ui/copy/transcriptExport';
 import type { writeTranscript } from './ChatExportController';
 
 export type TranscriptExportFormat = Parameters<typeof writeTranscript>[1];
@@ -37,34 +38,6 @@ export class TranscriptExportFailed extends Schema.TaggedError<TranscriptExportF
 ) {}
 
 export type TranscriptExportOpenKind = 'text' | 'pdf' | 'external';
-
-/** How every host's format pick is titled and what it asks. */
-export const TRANSCRIPT_EXPORT_PICK = Object.freeze({
-  title: 'Export transcript',
-  prompt: 'Choose a format',
-});
-
-export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = Object.freeze([
-  Object.freeze({
-    format: 'html',
-    label: 'HTML',
-    description: 'Shareable webpage',
-  }),
-  Object.freeze({
-    format: 'md',
-    label: 'Markdown',
-    description: 'Plain-text conversation',
-  }),
-  Object.freeze({
-    format: 'tex',
-    label: 'PDF',
-    description: 'Formatted via LaTeX',
-  }),
-] as const satisfies ReadonlyArray<{
-  readonly format: TranscriptExportFormat;
-  readonly label: string;
-  readonly description: string;
-}>);
 
 /** What a host does for a transcript export: ask for a format and open
  *  what was written. */
@@ -108,7 +81,7 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
     );
     yield* ports.notify(
       'info',
-      `Transcript exported: ${path.basename(result.storagePath)}`,
+      TRANSCRIPT_EXPORT_COPY.exported(path.basename(result.storagePath)),
     );
     return;
   }
@@ -116,7 +89,7 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
     yield* ports.openPath(result.pdfPath, 'pdf');
     yield* ports.notify(
       'info',
-      `Transcript exported and compiled: ${path.basename(result.pdfPath)}`,
+      TRANSCRIPT_EXPORT_COPY.compiled(path.basename(result.pdfPath)),
     );
     return;
   }
@@ -131,8 +104,5 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
     );
   }
   yield* ports.openPath(result.absolutePath, 'text');
-  yield* ports.notify(
-    'warning',
-    'LaTeX compilation failed. The .tex source file has been opened instead.',
-  );
+  yield* ports.notify('warning', TRANSCRIPT_EXPORT_COPY.compileFailed);
 });

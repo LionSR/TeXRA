@@ -1,6 +1,6 @@
 // What the desktop tells the user about projects they are not looking at: the
 // dock badge counts the requests this window can answer across the open
-// projects (`attentionOf`), and a new one, or a top-level run that finishes,
+// projects (`attentionOf`), and a new one, or a top-level run whose turn finishes,
 // where the user cannot see it raises one OS notification that leads back to
 // its run.
 

@@ -11,7 +11,7 @@ import { subscriptionProvider } from '@texra/controllers/modelAccess/subscriptio
 import { ACCOUNT_OUTCOME, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import {
-  shouldUseSubscriptionDeviceCode,
+  resolveLoginTransport,
   signInCliSubscription,
   type CliSubscriptionLoginOptions,
 } from './subscriptionLogin';
@@ -49,18 +49,12 @@ export const updateCliModelAccess = Effect.fn(
       };
     }
     // Signing in turns the preference on.
-    const init = { device: false, noBrowser: false };
     const account =
       outcome === 'needs-sign-in'
         ? yield* signInCliSubscription(
             stores,
             provider,
-            {
-              ...init,
-              device:
-                context != null &&
-                shouldUseSubscriptionDeviceCode(context, init),
-            },
+            context == null ? 'auto' : resolveLoginTransport(context, 'auto'),
             options,
           )
         : yield* getStatus();

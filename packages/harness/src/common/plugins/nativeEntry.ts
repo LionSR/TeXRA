@@ -83,9 +83,9 @@ export const describeProvides = (provides: readonly string[]): string => {
 
 /**
  * The native entry of the plugin at `dir`, read as text and never run:
- * `entry` null when the plugin has none, `refused` naming why one it has is
- * not loaded (a link, an unreadable file, a header that does not declare
- * what it provides). Never fails.
+ * `entry` null when the plugin has none or the one it has is not loaded,
+ * and then `warnings` says why (a link, an unreadable file, a header that
+ * does not declare what it provides). Never fails.
  */
 export const readNativeEntry = Effect.fn('readNativeEntry')(function* (
   dir: string,
@@ -93,7 +93,7 @@ export const readNativeEntry = Effect.fn('readNativeEntry')(function* (
 ): Effect.fn.Return<
   {
     readonly entry: NativeEntry | null;
-    readonly refused: string | null;
+    readonly warnings: readonly string[];
   },
   never,
   FileSystem.FileSystem
@@ -101,14 +101,16 @@ export const readNativeEntry = Effect.fn('readNativeEntry')(function* (
   const file = path.join(dir, NATIVE_ENTRY_FILE);
   const refused = (reason: string) => ({
     entry: null,
-    refused: `The native code ${NATIVE_ENTRY_FILE} of plugin ${plugin} is not loaded: ${reason}.`,
+    warnings: [
+      `The native code ${NATIVE_ENTRY_FILE} of plugin ${plugin} is not loaded: ${reason}.`,
+    ],
   });
   const declared = yield* readDeclaredFile(file, {
     name: 'provides',
     holds: 'what its plugin contributes',
     example: "['tool:word_count', 'processLayer']",
   });
-  if (declared === null) return { entry: null, refused: null };
+  if (declared === null) return { entry: null, warnings: [] };
   if (Result.isFailure(declared)) return refused(declared.failure);
   const { description, names } = declared.success;
   const unknown = names.find((name) => !CONTRIBUTION.test(name));
@@ -118,6 +120,6 @@ export const readNativeEntry = Effect.fn('readNativeEntry')(function* (
     );
   return {
     entry: { file, description, provides: [...new Set(names)] },
-    refused: null,
+    warnings: [],
   };
 });

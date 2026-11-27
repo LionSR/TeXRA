@@ -874,8 +874,9 @@ type ModelRoute =
     }
   /** No provider key can serve the model directly. */
   | { readonly kind: 'no-api-key' }
-  /** No route TeXRA reaches serves the model (see {@link isUnservedModel}). */
-  | { readonly kind: 'unserved' };
+  /** No route TeXRA reaches serves the model: `reason`, the clause after
+   *  its name, says why ({@link isUnservedModel}). */
+  | { readonly kind: 'unserved'; readonly reason: string };
 ```
 
 ## MODELS
@@ -1287,6 +1288,16 @@ The model and reasoning request a stored model string names, or `undefined` when
 
 ```ts
 function selectModel(id: string): SelectedModel | undefined
+```
+
+## takesImageInput
+
+Whether `protocol` takes an image of this MIME type as input. A caller
+asks before it offers a file as an image part: any other type fails the
+turn as `invalid-request`.
+
+```ts
+const takesImageInput: (protocol: "google-interactions" | "openai-responses" | "anthropic-messages", mimeType: string) => boolean
 ```
 
 ## turnCost

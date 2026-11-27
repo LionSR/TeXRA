@@ -17,7 +17,7 @@ const PositionSchema = Schema.Struct({
 /**
  * Minimal diagnostic shape required by the formatting functions, and what a
  * service window answers a diagnostics call with. Compatible with
- * `vscode.Diagnostic` and `LeanDiagnostic`. Severity levels match
+ * `vscode.Diagnostic` and a Lean diagnostic. Severity levels match
  * `vscode.DiagnosticSeverity` values (Error=0, Warning=1, Information=2,
  * Hint=3).
  */

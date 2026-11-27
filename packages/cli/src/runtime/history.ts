@@ -18,8 +18,8 @@ import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@texra-ai/worldline/host';
-import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
-import type { ChatExportInput } from '@texra/agent/export/schemas';
+import { loadChatExportInput } from '@texra/controllers/export/loadChatExportInput';
+import type { ChatExportInput } from '@texra/controllers/export/schemas';
 import { formatBytes } from '@ui/copy/format';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 import type { RunStatusKey } from '@texra/shared/session/runStatusKey';
@@ -319,13 +319,13 @@ export function formatCliHistoryText(
     .join('\n');
 }
 
-export function formatCliHistoryNotFoundText(id: RunId, cwd?: string): string {
-  const project = cwd?.trim();
+/** A task id this project's store has no run under, for every command and
+ *  chat step that looks one up by id: tasks are kept per project, so the
+ *  usual cause is the wrong project. */
+export function taskNotFoundText(id: RunId, cwd: string): string {
   return [
-    project
-      ? `Task not found in project ${project}: ${id}`
-      : `Task not found: ${id}`,
-    'History is scoped by --cwd; use the project from the original task or run `texra history list --cwd <project>`.',
+    `Task not found in project ${cwd}: ${id}`,
+    'Tasks are scoped by --cwd; use the project from the original task or run `texra history list --cwd <project>`.',
   ].join('\n');
 }
 

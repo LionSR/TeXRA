@@ -14,7 +14,7 @@ import { Effect } from 'effect';
 import { RUN_LIFECYCLE_CHANNEL } from '@agent/storage/runLifecycle';
 import { logFailure } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
-import { DELIVERY_FAMILY } from '@shared/deliveryTags';
+import { DELIVERY_ATTRIBUTE, DELIVERY_FAMILY } from '@shared/deliveryTags';
 import {
   backgroundScriptOf,
   programOf,
@@ -76,7 +76,7 @@ export const childEndReport = Effect.fn('childEndReport')(
       wallTimeMs,
       lines: contextLines(ctx.workingDirectory),
     };
-    const agent = { name: 'agent', value: config.label };
+    const agent = { name: DELIVERY_ATTRIBUTE.agent, value: config.label };
     switch (report.outcome) {
       case RUN_OUTCOME.CANCELLED: {
         // Stopped at its own cap: its parent, which may not be waiting for
@@ -115,7 +115,7 @@ export const childEndReport = Effect.fn('childEndReport')(
             ...(program === null
               ? []
               : [{ name: 'kind', value: program.name }]),
-            { name: 'status', value: report.outcome },
+            { name: DELIVERY_ATTRIBUTE.status, value: report.outcome },
             // A run that reported before (resumed for a message after its
             // end) reports again: said on the envelope, so its parent tells
             // the two reports apart.

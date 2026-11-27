@@ -90,7 +90,7 @@ import { Settings } from '@texra-ai/worldline/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
-export interface ToolPluginSetup {
+interface ToolPluginSetup {
   /**
    * The install and sign-in steps the card offers, in order: the guide, a
    * command the dashboard runs in a terminal to install the tool or sign

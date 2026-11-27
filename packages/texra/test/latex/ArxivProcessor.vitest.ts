@@ -58,16 +58,8 @@ describe('arXiv source download filenames', () => {
           indent: false,
           destination: 'root',
         }).pipe(
-          onFetch(
-            vi.fn(
-              async () =>
-                new Response(archive, {
-                  headers: {
-                    'content-disposition': 'attachment; filename="source.tar"',
-                  },
-                }),
-            ),
-          ),
+          // No header names the file: the archive is known by its bytes.
+          onFetch(vi.fn(async () => new Response(archive))),
         );
         const listRoot = Effect.promise(async () =>
           (await fs.readdir(workspaceRoot)).sort(),

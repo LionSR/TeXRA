@@ -80,6 +80,7 @@ These landed in the PR that adds this note:
    accepts the import (`vitest list` loads the config and lists the same
    250 suites). `packages/cli/scripts/build-bundle.mjs` is held by an open
    PR and still reads its manifest by hand.
+   **Landed 2026-11-27** for `build-bundle.mjs`.
 6. **`vitest.config.mjs` is the root's one importer of the `glob` package.**
    `globSync` from `node:fs` returns the same 250 suites on Linux; it has no
    `posix` option, so the Windows shards need the separators replaced.

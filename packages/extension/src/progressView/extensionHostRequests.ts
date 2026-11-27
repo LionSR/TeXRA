@@ -31,11 +31,8 @@ import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import type { HostFailed, NoticeLevel } from '@texra/hosts/uiHosts';
 
-import {
-  TRANSCRIPT_EXPORT_FORMAT_CHOICES,
-  TRANSCRIPT_EXPORT_PICK,
-  type TranscriptExportOpenKind,
-} from '@texra/controllers/progressView/exportTranscript';
+import type { TranscriptExportOpenKind } from '@texra/controllers/progressView/exportTranscript';
+import { TRANSCRIPT_EXPORT_COPY } from '@ui/copy/transcriptExport';
 import {
   hostFailed,
   hostFailure,
@@ -228,9 +225,9 @@ export function createExtensionHostRequests(
     // Each command is named, so a failure carries a tag, never a rejection.
     openDirectory: revealFileInOS,
     export: {
-      pickFormat: quickPick(TRANSCRIPT_EXPORT_FORMAT_CHOICES, {
-        title: TRANSCRIPT_EXPORT_PICK.title,
-        placeHolder: TRANSCRIPT_EXPORT_PICK.prompt,
+      pickFormat: quickPick(TRANSCRIPT_EXPORT_COPY.formats, {
+        title: TRANSCRIPT_EXPORT_COPY.pick.title,
+        placeHolder: TRANSCRIPT_EXPORT_COPY.pick.prompt,
         ignoreFocusOut: true,
       }).pipe(Effect.map((choice) => choice?.format)),
       openPath: openExportPath,

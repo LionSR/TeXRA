@@ -68,7 +68,7 @@ export type UnreadableRun = typeof UnreadableRunSchema.Type;
  * holds (`runsHere`), written by the session's run registry. A run that
  * has not ended and is not among them is interrupted.
  */
-export const LocalRuntimeStateSchema = Schema.Struct({
+const LocalRuntimeStateSchema = Schema.Struct({
   runsHere: Schema.Array(RunIdSchema),
 });
 export type LocalRuntimeState = typeof LocalRuntimeStateSchema.Type;

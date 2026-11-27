@@ -449,6 +449,17 @@ this store serves deliberate configuration files.
 class JsonStore
 ```
 
+## listedEntryGone
+
+Whether the stat of an entry a walk just listed failed because the path no
+longer names something a stat can follow: it vanished in between
+({@link meansAbsent}), or any `BadResource` (a link that now loops, say).
+A walk drops such an entry; any other stat failure is real.
+
+```ts
+const listedEntryGone: (error: PlatformError) => boolean
+```
+
 ## localBranchExists
 
 Whether the local branch `branch` exists.

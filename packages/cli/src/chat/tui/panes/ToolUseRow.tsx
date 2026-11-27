@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { Box, Text } from 'ink';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
 
-import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
+import { TOOL_OUTPUT_PREFIX } from '@cli/tui/ui/glyphs';
 import { clipToWidth } from '@cli/runtime/terminal/terminalText';
 
 import { DiffView } from '../render/DiffView';
@@ -45,10 +45,7 @@ function PatchPreview({
       {groups.map((group, index) => (
         <Box key={`${group.fileLabel}-${index}`} flexDirection="column">
           <Text dimColor>
-            {clipToWidth(
-              `${TOOL_OUTPUT_CORNER} ${group.fileLabel}`,
-              labelWidth,
-            )}
+            {clipToWidth(`${TOOL_OUTPUT_PREFIX}${group.fileLabel}`, labelWidth)}
           </Text>
           <Box flexDirection="column" paddingLeft={2}>
             <DiffView
