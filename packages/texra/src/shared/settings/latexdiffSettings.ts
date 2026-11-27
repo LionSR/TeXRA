@@ -10,7 +10,10 @@ import { Schema } from 'effect';
 import { decodingDefault } from '@texra-ai/worldline/schemas';
 
 // Local imports
-import { LATEXDIFF_MATH_MARKUP_VALUES } from '@texra/shared/constants/latexConfig';
+import {
+  LATEXDIFF_MATH_MARKUP_VALUES,
+  type LatexdiffMathMarkupValue,
+} from '@texra/shared/constants/latexConfig';
 import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 
 export const LATEXDIFF_TIMEOUT_SETTING = Object.freeze({
@@ -44,9 +47,7 @@ export const LATEXDIFF_MATH_MARKUP_SETTING = Object.freeze({
     fine: Object.freeze({ description: 'small changes inside equations' }),
   }),
   surfaces: Object.freeze({ settingsView: 'latex' }),
-} as const satisfies TexraSettingRow<
-  (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number]
->);
+} as const satisfies TexraSettingRow<LatexdiffMathMarkupValue>);
 
 export const LATEXDIFF_CHANGES_ONLY_SETTING = Object.freeze({
   key: 'latexdiff.changesOnly',

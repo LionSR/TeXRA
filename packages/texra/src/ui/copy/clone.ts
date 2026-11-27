@@ -93,7 +93,7 @@ export const CLONE_COPY = Object.freeze({
  * lines in the terminal) and git's own words where it failed. A host adds
  * only its own next step, and its own buttons for a missing git.
  */
-export interface OverleafCloneNotice {
+interface OverleafCloneNotice {
   readonly level: 'info' | 'warning' | 'error';
   readonly message: string;
   readonly links: readonly { readonly label: string; readonly url: string }[];

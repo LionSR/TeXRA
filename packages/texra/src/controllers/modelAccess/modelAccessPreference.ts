@@ -32,9 +32,7 @@ import {
 
 /** What a model-access preference belongs to: a sign-in subscription or a
  *  coding plan a provider key pays through. */
-export type ModelAccessProviderId =
-  | SubscriptionProviderId
-  | CodingPlanSubscriptionId;
+type ModelAccessProviderId = SubscriptionProviderId | CodingPlanSubscriptionId;
 
 /** Every model-access preference, with the credential each one needs. */
 export interface ModelAccessStatus {
@@ -91,7 +89,7 @@ export const readModelAccessStatus = Effect.fn('readModelAccessStatus')(
  * its credential, so the host gets the credential first (its sign-in, which
  * turns the preference on when it succeeds, or its way to add a key).
  */
-export type ModelAccessPreferenceOutcome =
+type ModelAccessPreferenceOutcome =
   | 'enabled'
   | 'disabled'
   | 'needs-sign-in'
