@@ -33,6 +33,7 @@ import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots, StorageFs } from '@platform/rootedFs';
 import {
+  EXECUTIONS_TOOL_NAME,
   isRunId,
   ToolError,
   type RunId,
@@ -696,7 +697,7 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
 );
 
 export const ExecutionsTool = defineTool({
-  name: 'executions',
+  name: EXECUTIONS_TOOL_NAME,
   scriptReturns:
     '{ columns: string[]; rows: (string | number | null)[][]; more: boolean } | ToolOutput',
   description: `View run history and manage live runs.

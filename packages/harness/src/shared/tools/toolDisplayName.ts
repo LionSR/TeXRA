@@ -10,10 +10,13 @@
  * This browser-safe module is the single source of truth for both halves: the canonical lookup key and the
  * label a user sees.
  */
+import { AGENT_TOOL_NAME } from '@shared/schemas';
 
 /** Friendly labels for tool names that shouldn't be shown verbatim, keyed by
  *  normalized name. */
-const TOOL_LABEL = new Map<string, string>([['agent', 'Agent']]);
+const TOOL_LABEL = new Map<string, string>([
+  [AGENT_TOOL_NAME, 'Agent'],
+]);
 
 const MCP_PREFIX = 'mcp:';
 /** Every harness MCP tool's name starts with this, then `<server>__<tool>`. */

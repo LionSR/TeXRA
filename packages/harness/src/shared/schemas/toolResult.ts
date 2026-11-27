@@ -184,6 +184,12 @@ export const PROGRAM_TOOL_NAME = 'program';
  *  whatever launched the run. */
 export const SCRIPT_TOOL_NAME = 'script';
 
+/** A script's function that runs the calling agent again as a child. */
+export const SELF_TOOL_NAME = 'self';
+
+/** The tool that reads run history and manages live runs. */
+export const EXECUTIONS_TOOL_NAME = 'executions';
+
 export const ToolResultSchema = Schema.Union([
   ExecutedToolResultSchema,
   ErrorToolResultSchema,
