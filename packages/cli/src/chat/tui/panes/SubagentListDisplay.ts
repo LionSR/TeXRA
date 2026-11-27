@@ -4,6 +4,7 @@ import { REQUEST_NOUN } from '@ui/copy/requestCards';
 
 import {
   type RequestKind,
+  type RunView,
   formatCompactTokenCount,
   formatResultCount,
   joinFacts,
@@ -22,21 +23,17 @@ export const CHILD_ROW_METADATA_MIN_COLUMNS = 60;
  *  shows elapsed/tokens.
  *  Output tokens are the "work produced" figure — deliberately not the
  *  context-fill number the status bar reports for the focused stream. */
-export function childRowMetadataText({
-  elapsed,
-  outputTokens,
-  toolCallCount,
-}: {
-  readonly elapsed: string | null | undefined;
-  readonly outputTokens: number | undefined;
-  readonly toolCallCount: number;
-}): string | undefined {
+export function childRowMetadataText(
+  run: Pick<RunView, 'toolCalls' | 'usage'>,
+  elapsed: string | undefined,
+): string | undefined {
   const toolCalls =
-    toolCallCount > 0
-      ? formatResultCount(toolCallCount, 'tool call')
+    run.toolCalls > 0
+      ? formatResultCount(run.toolCalls, 'tool call')
       : undefined;
+  const { outputTokens } = run.usage;
   const tokens =
-    outputTokens !== undefined && outputTokens > 0
+    outputTokens > 0
       ? `${TOKENS_GENERATED}${formatCompactTokenCount(outputTokens)}`
       : undefined;
   return joinFacts([elapsed, toolCalls, tokens]) || undefined;

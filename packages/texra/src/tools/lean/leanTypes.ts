@@ -97,20 +97,6 @@ export type PlainGoal = typeof PlainGoalSchema.Type;
 export const PlainTermGoalSchema = Schema.Struct({ goal: Schema.String });
 export type PlainTermGoal = typeof PlainTermGoalSchema.Type;
 
-/** Typed result from an LSP request */
-export interface LspResult<T> {
-  data: T | null;
-  error?: string;
-}
-
-/**
- * Platform-agnostic diagnostic representation for Lean files.
- * Extends GenericDiagnostic with an optional source field.
- */
-export interface LeanDiagnostic extends GenericDiagnostic {
-  source?: string;
-}
-
 /**
  * A file's diagnostics, the answer of
  * {@link LeanLanguageServices.fetchDiagnosticsForFile}. A file that could not
@@ -118,7 +104,7 @@ export interface LeanDiagnostic extends GenericDiagnostic {
  * values here.
  */
 export interface FetchDiagnosticsResult {
-  readonly diagnostics: LeanDiagnostic[];
+  readonly diagnostics: GenericDiagnostic[];
   /**
    * False when Lean had not reported the file elaborated by the end of the
    * wait: `diagnostics` are the ones so far, not the file's verdict.

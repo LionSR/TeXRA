@@ -38,7 +38,7 @@ import { useSignal } from '../state/useSignal';
 import {
   approvalQueueStatusKind,
   buildStatusBarDisplay,
-  statusBarRunTarget,
+  ctrlCActionFor,
   subscriptionUsageProviderForStatus,
 } from './statusBarDisplay';
 import type { ProcessServices } from '@texra-ai/worldline/host';
@@ -110,13 +110,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // closure's identity, which froze the hint at its boot-time value for the
   // whole run (#8273).
   const canStop = useSignal(canStopRootRunSignal);
-  const target = statusBarRunTarget({
-    activeRunId,
-    canStop,
-    view,
-  });
-  const displayRunId = target.displayRunId;
-  const displayRun = runViewOf(view, displayRunId);
+  const displayRun = runViewOf(view, activeRunId);
   // The run's cumulative usage: the same figure the subagent rows and the
   // exit summary present.
   const displayUsage =
@@ -189,11 +183,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const attention = useSignal(attentionRequestsSignal);
 
   // Nested-session location: the focused stream's label.
-  const focusedRunId = target.isChildRun ? displayRunId : undefined;
   const focusedLabel =
-    focusedRunId === undefined
-      ? undefined
-      : (runViewOf(view, focusedRunId)?.label ?? focusedRunId);
+    displayRun?.parentId != null ? displayRun.label : undefined;
 
   const display = buildStatusBarDisplay(displayRun, view, {
     turn:
@@ -220,7 +211,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     subscriptionQuota,
     approvalPolicy: sessionMeta.approvalPolicy,
     width: columns,
-    ctrlCAction: target.ctrlCAction,
+    ctrlCAction: ctrlCActionFor(displayRun, canStop),
     locationLabel: focusedLabel,
     foreground: {
       inputActive: props.foregroundInputActive,
@@ -235,9 +226,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       holdAvailable:
         props.chatInputAvailable && displayRun != null && isWorking(displayRun),
       childNavigationAvailable: listedRuns.length > 0,
-      parentNavigationAvailable: runViewOf(view, activeRunId)?.parentId != null,
-      transcriptAvailable:
-        (runViewOf(view, activeRunId)?.transcript.rows.length ?? 0) > 0,
+      parentNavigationAvailable: displayRun?.parentId != null,
+      transcriptAvailable: (displayRun?.transcript.rows.length ?? 0) > 0,
       scriptAvailable: props.scriptAvailable,
     },
   });
