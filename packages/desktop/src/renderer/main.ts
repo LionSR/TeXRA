@@ -838,6 +838,9 @@ const routeMessage = createMessageRoutes({
       applyingProjectList = false;
     }
     rerenderShell();
+    // The page shows the open projects: what a test's launch waits for. The
+    // page itself loads before the main process has opened them.
+    document.body.dataset.desktopReady = 'true';
     if (previousKey !== message.activeKey) {
       settingsDialog.remount();
       currentWorkbench().workbench.layoutVisibleSurfaces();
@@ -923,7 +926,6 @@ appRoot.addEventListener('click', (event) => {
 // opens, and the file tree refreshes when the list names the project this
 // window shows.
 postToMain({ command: DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS });
-document.body.dataset.desktopReady = 'true';
 
 // Sole owner of "the workspace has unsaved editor changes": the main process
 // keeps no copy and learns of it only when this veto raises will-prevent-unload.
