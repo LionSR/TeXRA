@@ -882,9 +882,8 @@ const SCENARIOS = [
       '/approval',
       'Choose when commands and edits ask first. Press a on a',
       'Ask',
-      'Block',
       'Auto-approve',
-      '1-3/Enter select',
+      '1-2/Enter select',
       'Esc cancel',
     ],
     unexpect: ['Goal: approve all work', 'Stop auto-approving'],
@@ -901,23 +900,9 @@ const SCENARIOS = [
       HARNESS_ROOT_WAITING: '1',
     },
     bootExpect: ' Ctrl-C ',
-    keys: ['a', '/approval', '\r', '4'],
+    keys: ['a', '/approval', '\r', '3'],
     expect: ['Auto-approving commands: off'],
     unexpect: ['AUTO: COMMANDS', 'Run a command'],
-  },
-  {
-    name: 'approval-policy-status-bar',
-    frame: 'scrollback',
-    env: { HARNESS_ENTRIES: '4' },
-    keys: ['/approval never', '\r', '/status', '\r'],
-    expect: [
-      'Approval mode: Block shell commands and file edits.',
-      'API keys',
-      // The bar names the policy by its one user-facing label.
-      '◆ Ready Block',
-      '/ commands',
-    ],
-    unexpect: ['keys deny', 'approval: deny privileged actions', 'Ready never'],
   },
   {
     // The status bar is the single owner of active-run liveness. The harness
@@ -1103,7 +1088,7 @@ const SCENARIOS = [
       '/approval',
       'Ask',
       '↑/↓ navigate',
-      '1-3/Enter select',
+      '1-2/Enter select',
       'Esc cancel',
     ],
     unexpect: [
