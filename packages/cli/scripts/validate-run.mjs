@@ -148,7 +148,7 @@ const validationProviderApiKeyEnv = [
   'GLM_API_KEY',
 ];
 /** What switches a child to the validation model whose flag file is at
- *  `flagPath`, with a key for every provider. */
+ *  `flagPath`, with a key for each provider listed above. */
 const validationModelEnv = (flagPath) => ({
   ...Object.fromEntries(
     validationProviderApiKeyEnv.map((name) => [name, VALIDATION_FAKE_API_KEY]),
