@@ -7,7 +7,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Predicate, Schema } from 'effect';
+import { Predicate } from 'effect';
 
 // Local imports - canonical model contract
 import type { ResolvedTurn, TurnResult } from '../turn.js';
