@@ -21,8 +21,8 @@ the PR that adds this note:
   three as well, and the merge kept #15256's.
 - the CLI bundle script's manifest as a JSON import, and
   `import.meta.dirname` for its one `fileURLToPath`
-- `Schema.isBetween` for the tool time limit's two chained checks (#15256
-  landed the list and web-search limits)
+- `Schema.isBetween` for the tool time limit's two chained checks (the
+  ownership sweep, #15263, landed the list and web-search limits)
 - `appendTail` and `appendHead` at two more code-unit cuts (the partial text
   a failed turn stores, a JSON-RPC frame error), `Arr.findLast` for a
   reverse-then-find, `Order.String` for a hand-written comparator
