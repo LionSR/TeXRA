@@ -32,8 +32,9 @@ import { Array as Arr, Effect, FileSystem, Result } from 'effect';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 import { collapseWhitespace, formatWordList } from '@utils/text/stringUtils';
 
-/** The directory of a plugin that holds its programs. */
-const PROGRAMS_DIRECTORY = 'programs';
+/** The directory that holds programs: a plugin's, and a project memory
+ *  folder's for the agent's own. */
+export const PROGRAMS_DIRECTORY = 'programs';
 
 /** A program's own name, the part after the colon: the grammar of a
  *  plugin's name and of a skill's. */
