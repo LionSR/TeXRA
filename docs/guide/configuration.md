@@ -23,7 +23,7 @@ The page remembers the sub-tab you last opened while Settings stays open.
   multi-agent coordination).
 - **Memory**: the memories TeXRA keeps across tasks.
 - **Plugins**: everything that adds tools or programs: TeXRA's plugins (such
-  as Codex, Claude Code, Lean, and GitHub), installed Claude Code and Codex
+  as Lean and Wolfram), installed Claude Code and Codex
   plugins, and your MCP servers. Each plugin can be switched on or off.
 - **LaTeX**: **Dependencies**, **Compile & diff**, **Formatting**, and, in VS
   Code, the recommended **VS Code settings**.
