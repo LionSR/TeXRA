@@ -13,9 +13,9 @@ import { resolveToolPath } from '@tools/pathResolution';
 // Local imports - tools
 import {
   appendApprovalDiffNote,
-  buildApprovalRejectedResult,
   requestToolEditApproval,
 } from '@tools/approval/toolEditApproval';
+import { refusalResult } from '@tools/approval/refusalCopy';
 import { writeApprovedContent } from '@tools/approval/approvedWrite';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -149,7 +149,10 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
       sourceTool,
     });
     if (approval.action !== 'apply') {
-      return buildApprovalRejectedResult(displayPath, sourceTool, approval);
+      return refusalResult('Tool edit', approval, {
+        rejected: `User rejected ${sourceTool} for ${displayPath}.`,
+        target: `${sourceTool} for ${displayPath}.`,
+      });
     }
 
     const written = yield* writeApprovedContent(

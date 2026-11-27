@@ -8,7 +8,6 @@ import Anthropic, {
   toFile,
 } from '@anthropic-ai/sdk';
 import {
-  Clock,
   DateTime,
   Effect,
   Record,
@@ -37,10 +36,9 @@ import {
   sdkModelError,
 } from '../errors.js';
 import {
-  decodeWireOrFail,
+  decodeStreamEvent,
   parseOutboundToolArguments,
   refuseAmbientHeaders,
-  refuseUnknownEvent,
   sdkStream,
   wireFail as fail,
 } from './transport.js';
@@ -51,7 +49,6 @@ import {
 } from './uploadCache.js';
 import {
   BlockSchema,
-  EVENT_TYPES,
   EventSchema,
   StopSchema,
   UsageSchema,
@@ -130,9 +127,9 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
         'Anthropic manual thinking requires a budget below the output limit.',
     });
   }
-  const nowMs = yield* Clock.currentTimeMillis;
+  const fileIdFor = yield* uploads.fileIds;
   const lowerPart = (part: Parameters<typeof inputPart>[0]) =>
-    inputPart(part, (base64) => uploads.fileIdFor(base64, nowMs));
+    inputPart(part, fileIdFor);
   const messages: MessageParam[] = [];
   const history = yield* replayableHistory(turn.messages, origin);
   for (const [index, message] of history.entries()) {
@@ -376,8 +373,8 @@ function anthropicWire() {
   const parts = Effect.fnUntraced(function* (
     raw: unknown,
   ): Effect.fn.Return<PartEvent[], ModelError> {
-    yield* refuseUnknownEvent('Anthropic', 'type', EVENT_TYPES, raw);
-    const event = yield* decodeWireOrFail(
+    const event = yield* decodeStreamEvent(
+      'Anthropic',
       EventSchema,
       'Anthropic returned a malformed stream event.',
       raw,

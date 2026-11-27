@@ -23,13 +23,12 @@ import {
 import {
   type DecisionOf,
   type HookOutcomePayload,
-  type RefusalDecision,
   type RequestPayload,
   type RunId,
   toJsonValue,
   type ToolResult,
 } from '@shared/schemas';
-import { refusalCopy } from '@tools/approval/refusalCopy';
+import { refusalResult } from '@tools/approval/refusalCopy';
 import {
   callRequestId,
   type AttemptRequests,
@@ -41,7 +40,6 @@ import type {
   ApprovalOperation,
   HookAnswer,
 } from '@shared/session/sessionApprovals';
-import { errorResult } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
 
 import { Interactions } from '../HostInteractions';
@@ -104,30 +102,13 @@ export const commandApproval = Effect.fn('commandApproval')(function* (
   if (answer === 'allow') return undefined;
   const decision =
     answer === 'ask' ? yield* askCommandApproval(runId, requests, ask) : answer;
-  return decision.action === 'approve'
-    ? undefined
-    : commandRejectedResult(ask.command, decision);
-});
-
-/** What the model is told when the person refuses `command`. */
-function commandRejectedResult(
-  command: string,
-  refusal: RefusalDecision,
-): ToolResult {
-  const preview = previewLabel(command);
-  const copy = refusalCopy('Command', refusal);
-  const message =
-    refusal.action === 'reject'
-      ? `User rejected command: ${preview}`
-      : `${copy.summary}: ${preview}`;
-  const guidance = refusal.action === 'reject' ? undefined : copy.detail;
-  const feedback = copy.feedback;
-  const error = feedback || !guidance ? message : `${message}\n\n${guidance}`;
-  return errorResult(error, {
-    summary: message,
-    ...(feedback && { userInstruction: feedback }),
+  if (decision.action === 'approve') return undefined;
+  const preview = previewLabel(ask.command);
+  return refusalResult('Command', decision, {
+    rejected: `User rejected command: ${preview}`,
+    target: preview,
   });
-}
+});
 
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 

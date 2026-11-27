@@ -48,7 +48,6 @@ import {
 } from '@texra-ai/worldline/plugins';
 import { activationView, replayTrace } from '@texra-ai/worldline/host';
 import { remoteSessionView } from '@texra/shared/session/webviewSessionLayer';
-import { requestErrorText } from '@ui/copy/requestErrors';
 import {
   writeFileIfUnchanged,
   type WriteProjectFile,
@@ -58,7 +57,6 @@ import { attachWindowHost } from './windowHost';
 import {
   SERVICE_OFFLINE,
   environmentApiKeys,
-  linkRefusals,
   linkedClient,
   requestOnService,
   ServiceUnavailable,
@@ -282,19 +280,14 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   /** The client, once the link has one; or why it is away for good (a
    *  newer TeXRA's service refused this window, or the service keeps
    *  failing to start), which no wait undoes. */
-  const connected = Stream.merge(
-    link.client.changes.pipe(
-      Stream.filter(Predicate.isNotNull),
-      Stream.map((client) => ({ client })),
-    ),
-    linkRefusals(link).pipe(Stream.map((refused) => ({ refused }))),
-  ).pipe(
+  const connected = link.state.changes.pipe(
+    Stream.filter((state) => !('away' in state) || state.lasting),
     Stream.runHead,
     Effect.map(Option.getOrThrow),
-    Effect.flatMap((reached) =>
-      'client' in reached
-        ? Effect.succeed(reached.client)
-        : Effect.fail(new ServiceUnavailable({ reason: reached.refused })),
+    Effect.flatMap((state) =>
+      'away' in state
+        ? Effect.fail(new ServiceUnavailable({ reason: state.away }))
+        : Effect.succeed(state.client),
     ),
   );
   /** One service's part of a watch ends when that service goes: its stream
@@ -403,18 +396,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     callService(
       link,
       (reason) => new Rejected({ reason }),
-      (client) =>
-        requestOnService(client, workspace, runtimeRequest).pipe(
-          // The service's own bridge error (a request it could not parse, a
-          // handler that died) is a refusal worded for the user; a runtime
-          // refusal arrives as its class.
-          Effect.catchTags({
-            Invalid: (error) =>
-              Effect.fail(new Rejected({ reason: requestErrorText(error) })),
-            Internal: (error) =>
-              Effect.fail(new Rejected({ reason: requestErrorText(error) })),
-          }),
-        ),
+      (client) => requestOnService(client, workspace, runtimeRequest),
     );
   // The watch names its runs to this window's own view too, so the view
   // folds their transcripts while it runs; each service the link holds

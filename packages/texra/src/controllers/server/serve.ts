@@ -96,7 +96,7 @@ import {
 import type { HostWindows } from './hostWindows';
 
 /** A live service already answers on this storage root's socket. */
-export class ServiceAlreadyRunning extends Schema.TaggedError<ServiceAlreadyRunning>()(
+class ServiceAlreadyRunning extends Schema.TaggedError<ServiceAlreadyRunning>()(
   'ServiceAlreadyRunning',
   {
     info: ServiceInfoSchema,

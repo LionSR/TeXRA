@@ -161,7 +161,7 @@ const runSelf = Effect.fn('self.call')(function* (
   const limited = yield* countLaunch(script, name);
   if (limited !== null) return limited;
   const runId = agentChildRunId(call);
-  const { rootUserInstruction: _root, script: _script, ...launch } = config;
+  const { script: _script, ...launch } = config;
   // Forked, the child is born on the conversation's history; fresh, on its
   // framed prompt alone. Either way it is launched, never resumed, so it starts
   // with the grants its parent holds now.

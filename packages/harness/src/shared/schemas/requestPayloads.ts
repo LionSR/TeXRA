@@ -184,7 +184,6 @@ export const AgentProposalSchema = BaseProposalFieldsSchema.mapFields(
   Struct.assign({
     /** Runs a registered program over the files, not a conversation. */
     task: Schema.Boolean,
-    rootUserInstruction: Schema.optional(Schema.String),
   }),
 );
 export type AgentProposal = typeof AgentProposalSchema.Type;

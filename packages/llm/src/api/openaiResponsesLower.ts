@@ -1,12 +1,16 @@
 // Third-party imports
-import { Clock, Effect, Number as Num } from 'effect';
+import { Effect, Number as Num } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
 import { replayableHistory, systemUpdateText } from '../message.js';
 import { sameModelOrigin } from '../protocol.js';
 import { ModelError } from '../errors.js';
-import { anchoredPrefix, coveredPrefix } from './continuation.js';
+import {
+  anchoredPrefix,
+  anchorResponseId,
+  coveredPrefix,
+} from './continuation.js';
 import { onOpenAiEndpoint } from './responsesConfiguration.js';
 import {
   responsesContent,
@@ -18,18 +22,6 @@ import type {
   TurnResult,
 } from '../turn.js';
 import type { UploadCache } from './uploadCache.js';
-
-const documentAccess = Effect.fn('llm.responses.documentAccess')(function* (
-  config: OpenAIResponsesConfiguration,
-  uploads: UploadCache | null,
-) {
-  const nowMs = yield* Clock.currentTimeMillis;
-  return {
-    accepted: config.supportsDocumentInput,
-    fileIdFor: (base64: string) =>
-      uploads === null ? null : uploads.fileIdFor(base64, nowMs),
-  } satisfies DocumentAccess;
-});
 
 /**
  * How many items the messages lower to: one per tool result, one per user
@@ -226,12 +218,8 @@ export const withResponsesContinuation = Effect.fn(
     });
   // HTTP stored-response chaining is separate from temporary background retrieval.
   // https://developers.openai.com/api/docs/guides/conversation-state
-  if (
-    !turn.controls.store ||
-    result.providerResponseId === null ||
-    (result.finishReason !== 'stop' && result.finishReason !== 'tool-calls')
-  )
-    return result;
+  const responseId = anchorResponseId(result);
+  if (!turn.controls.store || responseId === null) return result;
   const origin = { ...result.requestedOrigin, protocol: turn.protocol };
   const { prefix, ...covered } = anchoredPrefix(
     RESPONSES_PREFIX_DOMAIN,
@@ -243,7 +231,7 @@ export const withResponsesContinuation = Effect.fn(
     origin,
     ...covered,
     anchor: {
-      responseId: result.providerResponseId,
+      responseId,
       // Counted, not lowered: the covered prefix is never materialized
       // again, and the same count validates the continuation later.
       coveredItems: coveredItemCount(prefix),
@@ -257,7 +245,10 @@ export const responseInput = Effect.fn('llm.responses.input')(function* (
   config: OpenAIResponsesConfiguration,
   uploads: UploadCache | null,
 ) {
-  const documents = yield* documentAccess(config, uploads);
+  const documents: DocumentAccess = {
+    accepted: config.supportsDocumentInput,
+    fileIdFor: uploads === null ? () => null : yield* uploads.fileIds,
+  };
   const continuation = turn.continuation;
   if (!continuation)
     return {

@@ -489,7 +489,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       mediaFiles: media.map(({ file }) => file),
       // The arguments, shown as the proposal's options.
       ...(program !== null && { options: program.args }),
-      ...(program === null && { rootUserInstruction: call.instruction }),
     },
   );
 
