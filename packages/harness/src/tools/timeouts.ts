@@ -30,9 +30,10 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * Whether an HTTP status is worth retrying: 408 request timeout, 429 rate
  * limit, or a 5xx server error. Any other 4xx will not change on a retry.
  *
- * This is the policy for a tool's own requests. The llm package's retry of
- * provider errors is deliberately different: it also retries 409, which a
- * provider API uses for a session or resource race.
+ * This is the policy for a plain HTTP fetch: a tool's own requests, and a
+ * plugin's or the app's through the plugins entry. The llm package's retry
+ * of provider errors is deliberately different: it also retries 409, which
+ * a provider API uses for a session or resource race.
  */
 export function isTransientHttpStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
