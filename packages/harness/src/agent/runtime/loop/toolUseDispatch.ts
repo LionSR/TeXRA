@@ -96,7 +96,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { captureAttachments, storedMediaPart } from '../run/mediaInput';
 import type { InputPart } from '@texra-ai/llm';
-import { stored } from '../run/recordedRequest';
 import {
   localCallsOf,
   parseCallArguments,
@@ -127,8 +126,6 @@ interface Dispatch {
   readonly cell: RunCell;
   readonly step: StepTools;
   readonly responseId: string;
-  /** The user instruction the response answers. */
-  readonly instruction: string | undefined;
   /** The response was pending when the cell opened and has a model to
    *  report to: a call nothing of which ran is reported, not run. */
   readonly recovered: boolean;
@@ -441,7 +438,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     const runCall: RunCallShape = {
       run,
       responseId,
-      instruction: dispatch.instruction,
       attempt,
       logId: fact.logId,
       state: cell.current,
@@ -916,16 +912,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const pending = initial.pendingResponse;
   if (pending === null) return initial;
   const { responseId } = pending;
-  // The calls answer the instruction the committed state records.
-  const at = initial.input.instruction;
   const dispatch: Dispatch = {
     run,
     cell,
     step,
     responseId,
-    instruction:
-      run.config.rootUserInstruction ??
-      (at ? stored(initial, at, Schema.String) : run.config.instruction),
     recovered:
       cell.opened.pendingResponse?.responseId === responseId &&
       pending.assistant.origin !== null,

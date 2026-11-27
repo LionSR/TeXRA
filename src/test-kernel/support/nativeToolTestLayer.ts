@@ -63,10 +63,7 @@ export function nativeToolTestLayer(
     Partial<Pick<ToolContextShape, 'callId' | 'emit'>> & {
       run?: TestCallRun;
       origin?: Partial<
-        Pick<
-          RunCallShape,
-          'responseId' | 'instruction' | 'attempt' | 'logId' | 'script'
-        >
+        Pick<RunCallShape, 'responseId' | 'attempt' | 'logId' | 'script'>
       >;
     } = {},
 ) {
@@ -118,7 +115,6 @@ export function nativeToolTestLayer(
       const runCall: RunCallShape = {
         run: toolRun,
         responseId: 'test-response',
-        instruction: undefined,
         attempt: 1,
         logId: `log-${callId}`,
         // The run's rows as the store holds them: what a case seeds

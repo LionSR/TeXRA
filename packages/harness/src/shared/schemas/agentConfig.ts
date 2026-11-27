@@ -31,9 +31,6 @@ export const AgentConfigSchema = FileFieldsSchema.mapFields(
     toolScope: Schema.optional(Schema.Literals(['declared', 'topLevel'])),
     model: Schema.String,
     instruction: decodingDefault(Schema.String, ''),
-    /** Original user instruction preserved across nested tool-use delegation.
-     *  Set or absent, never null: no producer writes one. */
-    rootUserInstruction: Schema.optional(Schema.String),
     /** Optional user-facing text for logs when instruction contains hidden context. */
     displayInstruction: Schema.optional(Schema.String),
     /**
