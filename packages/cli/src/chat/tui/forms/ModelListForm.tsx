@@ -46,7 +46,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           ? 'Choose the model for future turns.'
           : 'Available models. Finish the active response before switching models.'
       }
-      compactDetail={<Text dimColor>Available models</Text>}
+      compactDetailFor={() => <Text dimColor>Available models</Text>}
       emptyClosesOnEnter
       emptyMessage={formatCliNoRunnableModelsMessage(CHAT_KEY_RECOVERY)}
       action={props.selectable ? 'select' : 'close'}
