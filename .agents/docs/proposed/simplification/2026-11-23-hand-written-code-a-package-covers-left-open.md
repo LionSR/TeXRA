@@ -289,6 +289,7 @@ Landed:
    `Content-Disposition` would be saved as `.tex`. Compare the media type
    (the text before `;`) instead. Both open PRs edit the file; take it
    after them.
+   - Taken on 2026-11-27, by removing the question: see that run below.
 
 ### Checked and declined on 2026-11-26
 
@@ -321,3 +322,91 @@ Landed:
   dependency for under forty lines.
 - **One `Retry-After` reader for llm and the GitHub client.** The GitHub
   client reads seconds only; #15229 deletes it.
+
+## The 2026-11-27 run
+
+Two read-only sweeps (the harness, llm, the app and `supabase/functions/`;
+the hosts, scripts and test support) over the code added since 2026-11-24
+and the families again. No new family turned up hand-written; what landed
+is one problem met twice, a scanner that disagreed with the app's own, and
+the validation scripts #15229 had held.
+
+Landed:
+
+- **What a response body is, decided by substrings of its headers.**
+  - The arXiv download (item 6) named its file from `Content-Disposition`,
+    or from `includes('tar')` / `includes('gz')` / `includes('tex')` on the
+    content type, and placement branched on that name's extension, while
+    the tar extraction read the gzip magic number anyway.
+    `placeSourceFiles` now reads the bytes: `%PDF`, the gzip magic, and
+    `ustar` at offset 257 of the (decompressed) first block. The
+    header-to-extension table, the `Content-Disposition` parse and the
+    **content-disposition** dependency are gone: here the simpler design
+    removes a package.
+  - `web_fetch` tested `includes('html') || includes('xml')`, which is true
+    of every Office type (`application/vnd.openxmlformats-…`), so a `.docx`
+    went through the HTML-to-Markdown converter, and read the charset with
+    a regular expression. Both come from `parseMIMEType` of **undici**
+    ([npm](https://www.npmjs.com/package/undici), 8.13.1, published
+    2026-11-20, already a harness dependency and the client the tool
+    fetches with): the parser of the Fetch standard, which lower-cases the
+    type, drops the parameters and unquotes the charset. Node's
+    `util.MIMEType` stays declined (experimental on Node 22, and it throws
+    on a malformed header where this returns `'failure'`).
+- **The `annotate` program's `\criticize` scanner** removed every brace
+  group after the macro and allowed no whitespace between groups, unlike
+  `findBraceBalancedMacroCalls`, which the editor reads annotations with.
+  It reads three groups. The program runs in the script sandbox, so it
+  cannot import the app's scanner.
+- **The validation scripts** (item 1 of the 2026-11-26 consolidation note).
+  `validate-run.mjs` found a project store by listing `workspace-storage`
+  in eight scenarios, polled with three deadline loops beside `waitFor`,
+  and spawned `find` twice (`FIND.EXE` on Windows): `projectStore`,
+  a `waitFor` that returns what its check found, and `fs.globSync`. The
+  provider key list, the fake key and the validation build were written in
+  it and in `generate-golden-store.mjs`, and the node-pty loader in three
+  scripts; `validationAgent.mjs` and `nodePtySpawnHelper.mjs` own them.
+- **`glob` left `packages/cli/package.json`**: nothing in the CLI imports
+  it (the harness and the app declare their own).
+
+### Open after 2026-11-27
+
+7. **The setup terminal's output is cut before its control sequences are
+   stripped** (`packages/extension/src/frontend/setupTerminalRunner.ts`):
+   `(read + chunk).slice(-N)` can cut inside a CSI sequence, and
+   `stripVTControlCharacters` then leaves `[0m` at the head of the tail.
+   Stripping each chunk first has the same fault at a chunk boundary, so
+   the fix is a streaming stripper: the CLI has one
+   (`packages/cli/src/tui/noColorOutput.ts`) that the extension cannot
+   import. Needs an owner for that stripper below both hosts.
+8. **`onDiskSize` in `scripts/verify-desktop.mjs`** recurses with
+   `statSync`, which follows pnpm's sibling links: sizes are counted
+   twice and a dependency cycle would not end. `scripts/walkFiles.mjs`
+   with `lstatSync` is the replacement; the number the failure message
+   prints changes.
+9. **`derive` in `generate-golden-store.mjs`** restates the harness's
+   `callChildRunId` with `createHash`; the harness does not export it.
+10. **The validation-model child environment** is still assembled at four
+    sites in the two scripts (the fake keys, the switch, the flag path,
+    `HARNESS_INTERNAL_VALIDATE_REQUEST_CONTEXT`); they differ in which
+    keys are fake, so one owner needs that difference named first. The
+    chat scenario's reply wait in `validate-run.mjs` keeps its own loop
+    for the output tail in its failure message.
+
+### Checked and declined on 2026-11-27
+
+- **`URLPattern` or a router for the `executions` path table**
+  (`packages/harness/src/tools/ExecutionsTool.ts`, about 15 lines).
+  `URLPattern` is not a Node 22 global.
+- **`readDirectory({ recursive: true })` and `fs.cp` for the plugin digest
+  walk and `copyPlugin`.** The walk skips `.git`, and the copy re-points a
+  link inside the plugin, which `fs.cp` does not.
+- **`pathToFileURL` for the SQLite URI filename** (`databaseLayer.ts`). It
+  writes `file:///C:/…` and encodes more than the three characters SQLite
+  reads.
+- **`HttpClientResponse.filterStatusOk` in the trace viewer's bridge** and
+  **`Effect.repeat` for two poll loops in test support**: four lines each,
+  and the first changes the error text.
+- **file-type for the arXiv sniff.** A new dependency for three magic
+  numbers, and it cannot tell a gzipped tar from a gzipped file without the
+  same decompress-and-look.
