@@ -318,9 +318,13 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
    *  launch recorded one, or Start over cleared it): the agent the window
    *  read at its open no longer applies. */
   let decidedHere = false;
+  /** How many times this window has started over: a launch that was still
+   *  starting when the person started over records nothing. */
+  let startOvers = 0;
   /** Start over: the project has no agent until the next launch. */
   const startOverHere = Effect.suspend(() => {
     decidedHere = true;
+    startOvers += 1;
     return startOver(roots).pipe(Effect.andThen(snapshot.setAgent(null)));
   });
 
@@ -609,6 +613,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
                 'Choose one of the open project folders as the working directory.',
             });
           const config = yield* prepareSurfaceLaunch(request, roots);
+          const startOversBefore = startOvers;
           // The launcher has told, in this window, why a run did not start:
           // `Cancelled` is the answer the form shows nothing for, and it keeps
           // the instruction to send again.
@@ -616,8 +621,12 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             .runValidated(config, launchApprovalOptions(request))
             .pipe(Effect.mapError(() => new Cancelled()));
           // The launcher's Send is the first message of a conversation the
-          // person started: its run is the project's agent.
-          if (yield* recordProjectAgent(roots, run.runId, config)) {
+          // person started: its run is the project's agent, unless the
+          // person started over while it was starting.
+          if (
+            startOvers === startOversBefore &&
+            (yield* recordProjectAgent(roots, run.runId, config))
+          ) {
             decidedHere = true;
             yield* snapshot.setAgent(run.runId);
           }
