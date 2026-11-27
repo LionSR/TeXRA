@@ -13,10 +13,7 @@ import { Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import type { ScopedFork } from '@texra-ai/worldline/host';
-import {
-  VscodeDiffViewHost,
-  type DiffSession,
-} from '@frontend/approval/VscodeDiffViewHost';
+import { VscodeDiffViewHost } from '@frontend/approval/VscodeDiffViewHost';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { ShowBuilt } from '@frontend/latex/openBuild';
 import {
@@ -48,8 +45,9 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   ) {
     this.storageDirectory = storageDirectory;
     this.fork = fork;
-    this.openBuildDisplay = (location, options) =>
-      showBuilt([location], options);
+    // A preview's build shows beside the request the user is answering.
+    this.openBuildDisplay = (location) =>
+      showBuilt([location], { preserveFocus: true });
   }
 
   focused(): boolean {
@@ -87,8 +85,6 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
 }
 
 class VscodeToolEditPreview implements ToolEditPreview {
-  private readonly diffSession: DiffSession;
-
   private readonly diffViewHost: VscodeDiffViewHost;
   private readonly request: ToolEditPreviewRequest;
   private readonly staged: ApprovalTempFiles;
@@ -103,11 +99,6 @@ class VscodeToolEditPreview implements ToolEditPreview {
     this.request = request;
     this.staged = staged;
     this.warn = warn;
-    this.diffSession = {
-      original: { filePath: staged.originalPath },
-      proposed: { filePath: staged.proposedPath },
-      label: toolEditDiffLabel(request),
-    };
   }
 
   get originalPath(): string {
@@ -136,7 +127,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
     HostCommandFailure,
     FileSystem.FileSystem
   > {
-    return this.diffViewHost.readProposedContent(this.diffSession);
+    return this.diffViewHost.readProposedContent(this.staged.proposedPath);
   }
 
   /** `unapplied` moves to an untitled editor before the diff closes, where
@@ -148,7 +139,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
       unapplied === undefined
         ? Effect.void
         : this.diffViewHost
-            .keepProposedText(this.diffSession, unapplied)
+            .keepProposedText(this.staged.proposedPath, unapplied)
             .pipe(
               Effect.andThen(
                 this.warn(
@@ -158,7 +149,9 @@ class VscodeToolEditPreview implements ToolEditPreview {
             );
     return keep.pipe(
       Effect.andThen(
-        this.diffViewHost.closeDiff(this.diffSession).pipe(
+        this.diffViewHost
+          .closeDiff(this.staged.originalPath, this.staged.proposedPath)
+          .pipe(
           // The files go whether the tab close succeeds, fails, or is cut
           // off: at window teardown that RPC can reject or outlive the
           // shutdown phase's deadline, and the files would otherwise stay.
@@ -170,9 +163,9 @@ class VscodeToolEditPreview implements ToolEditPreview {
 
   private openDiff(): Effect.Effect<void, HostCommandFailure> {
     return this.diffViewHost.openDiff(
-      this.diffSession.original,
-      this.diffSession.proposed,
-      this.diffSession.label,
+      this.staged.originalPath,
+      this.staged.proposedPath,
+      toolEditDiffLabel(this.request).title,
     );
   }
 
@@ -180,6 +173,6 @@ class VscodeToolEditPreview implements ToolEditPreview {
     const line = this.request.firstChangedLine;
     return line === null
       ? Effect.void
-      : this.diffViewHost.revealFirstChange(this.diffSession, line);
+      : this.diffViewHost.revealFirstChange(this.staged.proposedPath, line);
   }
 }

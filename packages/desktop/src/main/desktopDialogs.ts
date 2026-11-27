@@ -125,15 +125,11 @@ export function createDesktopDialogs(
     );
   return {
     notify,
-    confirm: (
-      question: ConfirmQuestion,
-      project?: string,
-    ): Effect.Effect<boolean, HostFailed> =>
+    confirm: (question: ConfirmQuestion): Effect.Effect<boolean, HostFailed> =>
       choose(window, {
         type: 'warning',
         message: question.message,
         detail: question.detail,
-        project,
         choices: [{ label: question.action, value: true, default: true }],
         close: 'Cancel',
       }).pipe(Effect.map((confirmed) => confirmed ?? false)),
