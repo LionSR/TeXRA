@@ -105,13 +105,9 @@ export function delegationSection(targets: DelegationTargets): string {
           ),
         ];
   if (targets.models === null)
-    lines.push(
-      'Available models: unavailable to load; omit model unless the user explicitly requested one.',
-    );
+    lines.push('Available models: the list could not be loaded.');
   else if (targets.models.length === 0)
-    lines.push(
-      'Available models: none currently available. Ask the user to configure model access before delegating.',
-    );
+    lines.push('Available models: none; no model access is configured.');
   else lines.push(`Available models: ${targets.models.join(', ')}`);
   return `<delegation_targets>\n${lines.join('\n')}\n</delegation_targets>`;
 }
@@ -150,9 +146,7 @@ export function delegationUpdate(
   if (change !== null) lines.push(`Agents ${change}.`);
   if (now.models === null) {
     if (told?.models !== null)
-      lines.push(
-        'The models available for delegation could not be loaded; omit model unless the user explicitly requested one.',
-      );
+      lines.push('The models available for delegation could not be loaded.');
   } else {
     const change = namesChange(told?.models ?? [], now.models);
     if (change !== null) lines.push(`Models for delegation ${change}.`);
