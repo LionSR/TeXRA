@@ -10,7 +10,6 @@ import { Rejected } from '@texra-ai/worldline/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
 import {
-  hostFailed,
   hostFailure,
   openLink,
 } from '@texra/controllers/session/hostCallFailure';
@@ -51,23 +50,6 @@ export const createDesktopHostRequests = (
     const bindings: SharedHostCommandBindings = {
       openPath: (file, line) => host.openPath(file, line),
       openFiles: options.openFiles,
-      latexdiff: {
-        // Each diff opens in the PDF tab through the build display, as a
-        // run's outputs do.
-        openDiffs: (diffPaths) =>
-          Effect.forEach(
-            diffPaths,
-            (absolutePath) =>
-              host.openBuildDisplay({ kind: 'external', absolutePath }),
-            { discard: true },
-          ).pipe(
-            Effect.mapError((cause) =>
-              hostFailure('host.openBuildDisplay', cause),
-            ),
-          ),
-        // The window has no progress chrome for a diff run.
-        withProgress: (_title, task) => task({ report: () => undefined }),
-      },
       openSettings: (target) =>
         Effect.sync(() =>
           postDesktopSettingsView(options.postToRenderer, target),
@@ -120,29 +102,11 @@ export const createDesktopHostRequests = (
       notify: host.notify,
       ask: host.ask,
       runs: {
-        // Desktop has no editor integration to preview through, so the
-        // output goes to the preview-with-fallback host directly.
-        openFinalOutput: (absolutePath: string) => host.openPath(absolutePath),
         // The progress surface is always on screen in the desktop window.
         revealProgress: () => Effect.void,
         showRunView: () => Effect.void,
       },
-      files: {
-        openDiff: (baseFile: string, editedFile: string, title: string) =>
-          host
-            .openDiff(
-              { filePath: baseFile },
-              { filePath: editedFile },
-              {
-                title,
-                // Each compared pair is a review of its own.
-                displayPath: `${editedFile} <-> ${baseFile}`,
-              },
-            )
-            .pipe(Effect.mapError((cause) => hostFailed('openDiff', cause))),
-        confirm: host.confirm,
-        openDirectory: (directory: string) => host.openPath(directory),
-      },
+      openDirectory: (directory: string) => host.openPath(directory),
       export: {
         pickFormat: host.pickTranscriptExportFormat(),
         // The window has already shown the failure (the run host's

@@ -9,11 +9,11 @@
  * does not perform is `Rejected` with its reason, never dropped.
  */
 import * as vscode from 'vscode';
-import { Effect, FiberHandle } from 'effect';
+import { Effect } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/worldline';
 import { type ProcessServices } from '@texra-ai/worldline/host';
-import { withLogChannel, pathToLocationIn } from '@texra-ai/worldline/plugins';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { cloneOverleafProject } from '@commands/git/gitCommands';
@@ -22,20 +22,14 @@ import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
-import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { askNotice, vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openFilesDialog, quickPick } from '@frontend/ui/dialogs';
-import { withVSCodeProgress } from '@frontend/ui/progress';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import type {
-  ConfirmQuestion,
-  HostFailed,
-  NoticeLevel,
-} from '@texra/hosts/uiHosts';
+import type { HostFailed, NoticeLevel } from '@texra/hosts/uiHosts';
 
 import {
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
@@ -56,17 +50,12 @@ import {
 } from '@texra/controllers/session/hostCallFailure';
 
 // Local file imports
-import { handleCompare } from './compareFiles';
 import { openFile } from './openFile';
 
 const CHANNEL = 'ExtensionHostRequests';
 
 export interface ExtensionHostRequestsOptions {
   readonly roots: WorkspaceRoots;
-  /** "Show a built file", bound to this window's roots and the view's
-   *  scope, so a close of the view cancels a PDF viewer open still
-   *  waiting. */
-  readonly showBuilt: ShowBuilt;
   readonly extensionPath: string;
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
@@ -165,15 +154,10 @@ const openExportPath = (
 };
 
 /** This window's half of its `openGuiWindow`, for the view's scope. */
-export const createExtensionHostRequests = Effect.fn(
-  'createExtensionHostRequests',
-)(function* (options: ExtensionHostRequestsOptions) {
+export function createExtensionHostRequests(
+  options: ExtensionHostRequestsOptions,
+) {
   const { roots } = options;
-
-  // The window's one comparison refresh: a newer comparison replaces it,
-  // and the view's scope ends it.
-  const diffRefresh = yield* FiberHandle.make();
-  const at = (file: string) => pathToLocationIn(roots.workspace, file);
 
   /** What each getting-started action runs. */
   const gettingStarted = (action: GettingStartedAction) => {
@@ -192,26 +176,6 @@ export const createExtensionHostRequests = Effect.fn(
   const bindings: SharedHostCommandBindings = {
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
     openFiles: openFilesDialog,
-    latexdiff: {
-      openDiffs: ([first, ...rest]) =>
-        first === undefined
-          ? Effect.void
-          : runHandler(
-              'openLatexdiffs',
-              options.showBuilt([at(first), ...rest.map(at)], {
-                preserveFocus: true,
-              }),
-            ),
-      withProgress: (title, task) =>
-        withVSCodeProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title,
-            cancellable: false,
-          },
-          task,
-        ),
-    },
     openSettings: (target) =>
       runHandler('openSettings', options.openSettings(target)),
     // The key store announces the write (`credentialChanged`), which the
@@ -262,16 +226,7 @@ export const createExtensionHostRequests = Effect.fn(
       vscodeUi.notify(level, message),
     ask: askNotice,
     // Each command is named, so a failure carries a tag, never a rejection.
-    files: {
-      openDiff: (base: string, edited: string, title: string) =>
-        runHandler(
-          'compare',
-          handleCompare(at(base), at(edited), title, diffRefresh),
-        ),
-      // The host's members read `this`, so they cross the boundary bound.
-      confirm: (question: ConfirmQuestion) => vscodeUi.confirm(question),
-      openDirectory: revealFileInOS,
-    },
+    openDirectory: revealFileInOS,
     export: {
       pickFormat: quickPick(TRANSCRIPT_EXPORT_FORMAT_CHOICES, {
         title: TRANSCRIPT_EXPORT_PICK.title,
@@ -281,4 +236,4 @@ export const createExtensionHostRequests = Effect.fn(
       openPath: openExportPath,
     },
   };
-});
+}

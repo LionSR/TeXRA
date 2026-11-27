@@ -60,7 +60,6 @@ function collectFiles(
   addFiles('Input files', config.inputFiles);
   addFiles('Media files', config.mediaFiles);
   addFiles('Context files', config.contextFiles);
-  addFiles('Output files', config.outputFiles);
 
   return files;
 }

@@ -24,8 +24,6 @@ function createStubSettingsBindings(): DesktopSettingsIpcOptions['bindings'] {
     externalOpener: { openExternal: noOpEffect },
     openPath: noOpEffect,
     revealPath: noOpEffect,
-    revealRun: () => Effect.succeed('revealed'),
-    runLabel: () => undefined,
     runInTerminal: noOpEffect,
   };
 }

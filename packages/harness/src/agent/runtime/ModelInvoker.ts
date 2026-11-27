@@ -70,7 +70,7 @@ import {
 } from '@shared/session/runHistory';
 import type { StateReadFailed } from '@shared/config/settings';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import { UsageLog, usageAgentName } from '@shared/usageLog';
+import { UsageLog } from '@shared/usageLog';
 
 import { resendDelayMs, RouteAnswered, RouteRetries } from './ModelRetryGate';
 import { decisionOf, openRequest } from './requests';
@@ -78,7 +78,7 @@ import { AgentRun } from './run/AgentRun';
 import { callModel, type ModelCallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
 import { contextTokens, outputBudget } from './run/contextTokens';
-import { priceTurnUsage, reportUsage } from './run/pricing';
+import { priceTurnUsage, reportUsage, usageAgentName } from './run/pricing';
 import {
   acceptedTurn,
   attemptRows,

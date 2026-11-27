@@ -127,7 +127,6 @@ function registerTexLanguages(monaco: MonacoModule): void {
 
   monaco.languages.register({
     id: 'latex',
-    extensions: ['.tex', '.sty', '.cls', '.bbl'],
     aliases: ['LaTeX', 'latex', 'TeX'],
   });
   monaco.languages.setMonarchTokensProvider('latex', {
@@ -184,7 +183,6 @@ function registerTexLanguages(monaco: MonacoModule): void {
 
   monaco.languages.register({
     id: 'bibtex',
-    extensions: ['.bib'],
     aliases: ['BibTeX', 'bibtex'],
   });
   monaco.languages.setMonarchTokensProvider('bibtex', {

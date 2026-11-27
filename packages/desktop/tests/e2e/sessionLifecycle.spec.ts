@@ -270,8 +270,7 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
   ).toBeVisible();
   await currentLaunch.page.keyboard.press('Escape');
 
-  // The project and task menus occupy the same action column. Task names
-  // and selected backgrounds use the project label's content column.
+  // The project and task menus occupy the same action column.
   await row.hover();
   const rowMenu = row.locator('#run-tab-actions');
   const centers = await Promise.all([
@@ -285,22 +284,10 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
   ]);
   const centerX = centers.map((found) => found.x + found.width / 2);
   expect(Math.max(...centerX) - Math.min(...centerX)).toBeLessThan(1);
-  const rowBox = await box(row);
+  // A task's title starts where its project's name does.
   const titleBox = await box(row.locator('.tab-title'));
-  expect(Math.abs(titleBox.x - rowBox.x - 8)).toBeLessThan(1);
-  const projectStatus = await box(page.locator('.shell-project-status'));
-  // An idle row shows no status: the interrupted run's row has one.
-  const taskStatus = await box(
-    railRow(currentLaunch, ORPHAN_RUN).locator('.tab-status'),
-  );
-  expect(
-    Math.abs(
-      projectStatus.x +
-        projectStatus.width / 2 -
-        taskStatus.x -
-        taskStatus.width / 2,
-    ),
-  ).toBeLessThan(1);
+  const nameBox = await box(page.locator('.shell-project-name').first());
+  expect(Math.abs(titleBox.x - nameBox.x)).toBeLessThan(1);
   await currentLaunch.page.screenshot({
     path: test.info().outputPath('rail-row-hover.png'),
     animations: 'disabled',

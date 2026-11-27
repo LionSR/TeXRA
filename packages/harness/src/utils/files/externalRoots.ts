@@ -7,39 +7,6 @@ import { Predicate } from 'effect';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 
 /**
- * The external filesystem roots a tool call may reach: the directories its
- * run's step accepts for its own calls (`StepRoot`: a skill the step lists or
- * its user activated, read-only, or a memory folder, which its calls also
- * write). Tools like read_file, write_file, edit_file, glob and grep normally
- * refuse any path outside the workspace; a path inside one of these roots is
- * accepted according to its `writable` flag. Nothing is registered
- * process-wide: a root is gone once no step holds it.
- *
- * Security notes
- * --------------
- * - Lookup (`findExternalRoot`, `tools/pathResolution.ts`) canonicalises its
- *   input (resolve, then realpath), as the step canonicalised its roots, so
- *   symlinks in a root component do not cause silent matching failures.
- *   Canonicalisation is tolerant of non-existent trailing segments and fails
- *   closed on permission errors (on any EACCES/EPERM the lookup returns null
- *   rather than accept an un-verifiable path).
- * - A symlink inside a root that resolves outside it (e.g. at `/etc/passwd`)
- *   is NOT matched and tools reject it.
- * - Containment is tested via `path.relative`, which works correctly even
- *   for filesystem roots like `/` or `C:\`; when several roots contain a
- *   path, the most specific (longest) wins.
- */
-
-/** A directory one step accepts for its own calls, canonical
- *  (`canonicalizePath`): a skill it lists or its user activated, read-only,
- *  or a memory folder, which its calls also write. */
-export interface StepRoot {
-  readonly absolutePath: string;
-  readonly label: string;
-  readonly writable?: boolean;
-}
-
-/**
  * Canonicalise a path: resolve `.`/`..` segments, then walk symlinks via
  * realpath. When the final segment does not exist yet (ENOENT / ENOTDIR) we
  * recursively canonicalise the longest existing prefix and re-append the
@@ -47,9 +14,8 @@ export interface StepRoot {
  * symlink on the way is followed to where it points, since that is where a
  * write through it lands.
  *
- * Throws on permission errors (EACCES/EPERM) or any unexpected error so
- * callers can fail closed: a path we cannot verify must never be accepted
- * to the allowlist. `canonicalizeWorkspaceRoot` is the one tolerant caller.
+ * Throws on permission errors (EACCES/EPERM) or any unexpected error.
+ * `canonicalizeWorkspaceRoot` is the one tolerant caller.
  *
  * Uses the JS `realpathSync`, not `.native`: on Windows the native call
  * rewrites a mapped drive to its UNC target, and the workspace identity built

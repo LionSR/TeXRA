@@ -102,7 +102,7 @@ const pickApiProvider = Effect.fn('pickApiProvider')(function* (
     (provider) =>
       Effect.map(getProviderDisplayName(stores, provider), (label) => ({
         label,
-        description: credentialOriginLabel(origins[provider], 'key'),
+        description: credentialOriginLabel(origins[provider]),
         provider,
       })),
   );

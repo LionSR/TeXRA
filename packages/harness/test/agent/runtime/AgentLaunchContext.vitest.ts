@@ -51,6 +51,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             });
             yield* registerRun(EXECUTION_ID, config, {
               identity: { kind: 'agent', agent: 'chat' },
+              takesFollowUps: false,
             }).pipe(Effect.provide(session));
             // A human approves edits for the session; the run's goal then
             // auto-approves its commands.
@@ -102,6 +103,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             });
             yield* registerRun(EXECUTION_ID, config, {
               identity: { kind: 'agent', agent: 'chat' },
+              takesFollowUps: false,
             }).pipe(Effect.provide(session));
             const approvals = Context.get(session, Approvals);
             yield* approvals.change(EXECUTION_ID, () => ({

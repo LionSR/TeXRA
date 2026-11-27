@@ -13,13 +13,13 @@ const started = Effect.promise(
 );
 
 /**
- * `callZoteroConnector` runs its non-idempotent `saveItems`/`saveSnapshot`
- * write under `Effect.uninterruptible` so cancelling a run cannot tear it
- * mid-request. That rests on one non-obvious property of
+ * A non-idempotent write to a local service may run under
+ * `Effect.uninterruptible` with a request deadline, so cancelling a run
+ * cannot tear it mid-request. That rests on one non-obvious property of
  * the effect runtime: the region defers the *caller's* interrupt but not the
  * deadline, because `timeoutOrElse` races through `raceAllFirst`, which forks
  * both racers interruptible regardless of the enclosing region. An effect
- * upgrade that changed either half would turn an unresponsive Zotero into a
+ * upgrade that changed either half would turn an unresponsive service into a
  * hang, or bring the torn write back — silently in both directions.
  */
 describe('withRequestTimeout under Effect.uninterruptible', () => {

@@ -10,9 +10,7 @@
  *
  * - **Every built-in**: [`harnessBuiltins`](#harnessbuiltins), each with no
  *   app options.
- * - **One by one**: [`codemode`](#codemode), [`fileOps`](#fileops) (with the
- *   [`WriteFilter`](#writefilter) an app applies to what `write_file`
- *   writes), [`goal`](#goal), [`memoryWorkflow`](#memoryworkflow),
+ * - **One by one**: [`codemode`](#codemode), [`fileOps`](#fileops), [`goal`](#goal), [`memoryWorkflow`](#memoryworkflow),
  *   [`multiAgent`](#multiagent) (the `agent` tool,
  *   [`AGENT_TOOL_NAME`](#agent_tool_name), and the `program` tool), and
  *   [`web`](#web).
@@ -33,4 +31,3 @@ export {
  *  calling run on the system text and tools the call gives it, or on an
  *  installed plugin's agent: a run whose tools name it can delegate. */
 export { AGENT_TOOL_NAME } from '@shared/schemas';
-export type { WriteFilter } from '@tools/WriteTool';

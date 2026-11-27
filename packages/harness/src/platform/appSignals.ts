@@ -42,20 +42,9 @@ import { Context, Effect, Layer, PubSub, type Scope, Stream } from 'effect';
  */
 export interface AppSignalPayloads {
   /**
-   * GitHub rejected the configured token. Frontends can surface the failure
-   * and direct the user to token settings.
-   *
-   * Consumed by: extension (modal error + jump to Git settings), desktop
-   * (an error dialog). Not the CLI: a
-   * poller rejection arrives with no chat turn to attach it to, and the TUI
-   * has no out-of-band notice surface — the rejection is logged instead.
-   */
-  githubTokenInvalid: { message: string };
-
-  /**
    * A write or removal of one secret-store entry finished. Emitted by the
    * store itself, so every writer is covered — the settings controllers, the
-   * setup agent's `unset_api_key`, the GitHub token forms — without any of
+   * setup agent's `unset_api_key` — without any of
    * them remembering to. The one file store emits from its own commit
    * finalizer, and the process's watch of the directory (`FileSecrets.watch`,
    * started once by the app's process layer) emits for writes from other
@@ -93,18 +82,6 @@ export interface AppSignalPayloads {
    * catalog.
    */
   modelAccessChanged: undefined;
-
-  /**
-   * The active GitHub subscriptions (PR, repo, or issue) or their stream owners
-   * changed. Keyless on purpose: every listener re-reads the full subscription
-   * list, so which kind changed carries no information.
-   *
-   * Consumed by: extension and desktop settings views, both re-reading the
-   * full subscription list for their Git tab. Not the CLI: it lists
-   * subscriptions on demand from a slash command and has no persistent panel
-   * that could go stale.
-   */
-  githubSubscriptionsChanged: undefined;
 
   /**
    * The approval policy was written from a settings view or the terminal's

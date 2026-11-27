@@ -39,7 +39,6 @@ import {
   MINIMAX_REGION_SETTING,
   MOONSHOT_REGION_SETTING,
   OPENAI_FAST_TIER_SETTING,
-  TOOL_PATH_PROTECTION_SETTING,
   WEBSOCKET_OPENAI_SETTING,
   CHATGPT_PREFER_SUBSCRIPTION_SETTING,
   DEBUG_MODE_SETTING,
@@ -97,7 +96,6 @@ export const SettingCategorySchema = Schema.Literals([
   'git',
   'agents',
   'ai-agents',
-  'documents',
   'model',
   'latex',
   'latexdiff',
@@ -316,9 +314,5 @@ export const HARNESS_ROW_SURFACES: Readonly<
   [DISABLED_SKILL_SOURCES_SETTING.key]: Object.freeze({
     category: 'tools',
     ...SKILLS_FORM,
-  }),
-  [TOOL_PATH_PROTECTION_SETTING.key]: Object.freeze({
-    category: 'tools',
-    ...APPROVAL_AND_CLI,
   }),
 });

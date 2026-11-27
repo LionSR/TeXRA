@@ -76,7 +76,7 @@ texra run blueprint --input blueprint/src/content.tex
 texra run lean-search --input Proofs/Basic.lean --instruction "Does Mathlib have the sum of the first n odd numbers?"
 ```
 
-All four are always registered: `texra run` lists them beside the document programs, with or without Lean installed. `prove` and `lean-simplify` need `lake` on your `PATH`, since their check is Lean's own diagnostics. Like every program, `lean-search` needs an `--input` file; pass the file the question is about. In the app, ask the assistant for the job (for example "finish the proofs in Proofs/Basic.lean") and it proposes the program.
+All four are always registered: `texra run` lists them beside the LaTeX programs, with or without Lean installed. `prove` and `lean-simplify` need `lake` on your `PATH`, since their check is Lean's own diagnostics. Like every program, `lean-search` needs an `--input` file; pass the file the question is about. In the app, ask the assistant for the job (for example "finish the proofs in Proofs/Basic.lean") and it proposes the program.
 
 ## What you can do
 

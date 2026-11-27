@@ -10,24 +10,19 @@
  *   commit but whose view never shows them reports success to its caller,
  *   or leaves it waiting; the rows it committed are rolled back, or read as
  *   absent, by a later session over the same store;
- * - a plugin fact kind's `writes` callback that throws stops that reader:
- *   the result of the run that committed the fact, and of every later run
- *   in the session, fails instead of arriving, and no later run's files are
- *   announced.
+ * - a file a run wrote from its own working directory is announced
+ *   (`workspaceFilesWritten`) under the project root, a path that names no
+ *   file, so no window lists or marks what the run wrote.
  */
 import { join } from 'node:path';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 import { layer } from '@effect/vitest';
-import { Context, Effect, Exit, Layer, PubSub, Schema, Stream } from 'effect';
+import { Context, Effect, Exit, PubSub, Schema, Stream } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/worldline';
-import {
-  definePlugin,
-  defineTool,
-  AppSignals,
-} from '@texra-ai/worldline/plugins';
+import { AppSignals } from '@texra-ai/worldline/plugins';
 import { AgentConfigSchema, generateRunId } from '@texra-ai/worldline/schemas';
 import { SessionRequests } from '@agent/runtime/requests';
 import { rootRun } from '@agent/runtime/rootLaunch';
@@ -40,7 +35,7 @@ import {
   untilStored,
   validationHost,
 } from '@test/support/storeFaults';
-import { FakeHost, SessionGraph, TestSession } from '@test/support/testKernel';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 
 /** The titles the store holds for `runId`, oldest first. */
 const titlesOf = (storage: string, runId: string) =>
@@ -52,52 +47,6 @@ const titlesOf = (storage: string, runId: string) =>
           JSON.parse(row.data),
         ).description,
     );
-
-/** The file every notes fact names. */
-const NOTED_FILE = '/workspace/notes.tex';
-
-/**
- * A plugin with one tool per fact kind, each call committing a fact that
- * names {@link NOTED_FILE}: `note_broken` a `notes/broken` one, whose
- * `writes` callback throws, and `note_written` a `notes/written` one, whose
- * callback returns the file.
- */
-const notesPlugin = definePlugin({
-  id: 'notes',
-  tools: (['broken', 'written'] as const).map((kind) =>
-    defineTool({
-      name: `note_${kind}`,
-      description: `Record a ${kind} note.`,
-      schema: Schema.Struct({}),
-      execute: () =>
-        Effect.succeed({
-          status: 'executed' as const,
-          output: 'Noted.',
-          facts: [{ plugin: 'notes', kind, version: 1, value: NOTED_FILE }],
-        }),
-    }),
-  ),
-  factKinds: [
-    {
-      plugin: 'notes',
-      kind: 'broken',
-      version: 1,
-      schema: Schema.String,
-      fork: 'drop',
-      writes: () => {
-        throw new Error('The notes plugin lost track of its files.');
-      },
-    },
-    {
-      plugin: 'notes',
-      kind: 'written',
-      version: 1,
-      schema: Schema.String,
-      fork: 'drop',
-      writes: (value) => [Schema.decodeUnknownSync(Schema.String)(value)],
-    },
-  ],
-});
 
 describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
   layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
@@ -173,47 +122,36 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
             });
           }),
       );
-    });
-  });
 
-  // The harness's process, with the notes plugin beside its built-ins.
-  layer(
-    Layer.provideMerge(
-      SessionGraph.with({ plugins: [notesPlugin] }),
-      FakeHost.layer(),
-    ),
-    { excludeTestServices: true },
-  )('over a plugin whose write callback throws', (it) => {
-    it.layer(validationHost('texra-notes-'), { buildPerTest: true })((it) => {
       it.effect(
-        "a fact whose write callback throws fails neither its run's result nor a later run's, and the later run's file is announced",
+        'a file a run wrote from its working directory is announced where it is',
         () =>
           Effect.gen(function* () {
-            // Subscribed before the runs start, so it holds every signal
-            // they publish.
+            const { roots } = yield* FakeHost;
+            assert(roots.workspace !== undefined, 'no test workspace');
+            const chapters = join(roots.workspace, 'chapters');
+            mkdirSync(chapters);
+            // Subscribed before the run starts, so it holds every signal.
             const signals = yield* (yield* AppSignals).subscribe;
-            const session = yield* TestSession.open(undefined, {
-              persistent: true,
-            });
-            // The validation model's approval script, for a tool that asks
-            // for no approval: the run's turn calls the tool named after
-            // the marker, then answers.
-            const note = (kind: 'broken' | 'written') =>
-              session
-                .start({
-                  label: `${kind}_noter`,
-                  system: `GOLDEN-APPROVAL note_${kind}`,
-                  tools: [`note_${kind}`],
-                  instruction: 'Record the note.',
-                  model: 'openai/gpt-5.6-sol',
-                })
-                .pipe(Effect.flatMap((run) => run.result));
-
-            expect((yield* note('broken')).outcome).toBe('completed');
-            expect((yield* note('written')).outcome).toBe('completed');
-            // Each result arrives once the session's reader has run over its
-            // run's rows, so the reader has seen both facts by now: only the
-            // written one's callback returned a file.
+            const session = yield* persistentTestSession(roots);
+            const runId = generateRunId();
+            yield* rootRun({
+              config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                label: 'chapter_writer',
+                system: `GOLDEN-APPROVAL write_file ${JSON.stringify({ path: 'nested.tex', content: 'Nested.\n' })}`,
+                tools: ['write_file'],
+                model: 'openai/gpt-5.6-sol',
+                instruction: 'Write the chapter.',
+                workingDirectory: chapters,
+              }),
+              runId,
+              approval: 'autoApprove',
+            }).pipe(Effect.provide(session));
+            yield* untilStored(roots.storage, (rows) =>
+              rows.some((row) => row.run === runId && row.type === 'run.end'),
+            );
+            // The close waits for the session's reader of committed rows.
+            yield* Sessions.use((sessions) => sessions.close(roots));
             const published = yield* PubSub.takeUpTo(
               signals,
               Number.POSITIVE_INFINITY,
@@ -222,7 +160,7 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
               published.flatMap(({ signal, payload }) =>
                 signal === 'workspaceFilesWritten' ? [payload] : [],
               ),
-            ).toEqual([{ absolutePaths: [NOTED_FILE] }]);
+            ).toEqual([{ absolutePaths: [join(chapters, 'nested.tex')] }]);
           }),
       );
     });

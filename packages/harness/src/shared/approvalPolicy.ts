@@ -2,11 +2,7 @@ import { Result, Schema, SchemaGetter } from 'effect';
 
 import type { HookAnswer } from './session/sessionApprovals';
 
-export const APPROVAL_POLICIES = Object.freeze([
-  'never',
-  'ask',
-  'yolo',
-] as const);
+export const APPROVAL_POLICIES = Object.freeze(['ask', 'yolo'] as const);
 export const ApprovalPolicySchema = Schema.Literals(APPROVAL_POLICIES);
 export type ApprovalPolicy = typeof ApprovalPolicySchema.Type;
 /**
@@ -16,7 +12,7 @@ export type ApprovalPolicy = typeof ApprovalPolicySchema.Type;
  * reader of typed-in text — the app's `<NAMESPACE>_APPROVAL_POLICY`, `--approval-policy`,
  * `/approval`, the settings dropdown — calls. Persisted config values keep the
  * strict enum: the `approvalPolicy` catalog row validates the stored
- * value for all three hosts and warns when it no longer parses, and the
+ * value for every host and warns when it no longer parses, and the
  * dropdown's options are derived from that same literal list.
  */
 const ApprovalPolicyInputSchema = Schema.String.pipe(
@@ -27,7 +23,7 @@ const ApprovalPolicyInputSchema = Schema.String.pipe(
   Schema.decodeTo(ApprovalPolicySchema),
 );
 /** What a project that set no policy runs under: its agents' commands and
- *  edits run without asking. A person narrows it to `ask` or `never`. */
+ *  edits run without asking. A person narrows it to `ask`. */
 export const APPROVAL_POLICY_DEFAULT: ApprovalPolicy = 'yolo';
 export function parseApprovalPolicy(input: string): ApprovalPolicy | undefined {
   const parsed = Schema.decodeUnknownResult(ApprovalPolicyInputSchema)(input);
@@ -64,8 +60,8 @@ const deny = (reason: string): ApprovalDecision => ({
 /**
  * The one reading of the policy for a request, from what holds at request
  * time. A credential failure's retry can still be shown only by an `ask`
- * session with a prompt. Otherwise `never` denies everything, whatever a hook
- * said. `yolo` or a grant allows an operation no hook routed to a person;
+ * session with a prompt. `yolo` or a grant allows an operation no hook
+ * routed to a person;
  * `yolo` answers no question or retry on a person's behalf. What is left
  * needs a prompt, which a hook's `allow` answers.
  */
@@ -79,7 +75,6 @@ export function decideApproval(input: {
     return policy === 'ask' && canPresent
       ? 'present'
       : deny('Retry skipped: credential exhausted or unauthorized.');
-  if (policy === 'never') return deny('Denied by the approval policy.');
   if (policy === 'yolo' || (ask.kind === 'operation' && ask.granted)) {
     if (ask.kind === 'question')
       return deny(

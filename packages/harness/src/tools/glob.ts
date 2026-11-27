@@ -117,9 +117,6 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
       return null;
     }
 
-    // The match was resolved inside the call's workspace frame, so its
-    // absolute form is what the process filesystem stats — a match under a
-    // registered external root included, as through the workspace facade.
     return yield* fs.stat(resolved.absolute).pipe(
       Effect.map((stat): GlobMatchInfo | null => ({
         relativePath,

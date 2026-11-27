@@ -88,11 +88,6 @@
         "./packages/extension/src/progressView/*.ts",
         "./packages/extension/src/progressView/*/index.ts"
       ],
-      "@replacement/*": [
-        "./packages/texra/src/replacement/*",
-        "./packages/texra/src/replacement/*.ts",
-        "./packages/texra/src/replacement/*/index.ts"
-      ],
       "@tools/*": [
         "./packages/harness/src/tools/*",
         "./packages/harness/src/tools/*.ts",

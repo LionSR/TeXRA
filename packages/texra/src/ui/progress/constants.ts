@@ -1,4 +1,3 @@
-import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { IconName } from '@ui/wa/iconNames';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
@@ -30,7 +29,6 @@ export const ELEMENT_IDS = Object.freeze({
   LOG_CONTENT: 'logContent',
   ACTIVE_RUN_NAME: 'activeRunName',
   STATUS_INDICATOR: 'statusIndicator',
-  PROGRESS_BADGE: 'progressBadge',
   HEADER_MORE_BTN: 'headerMoreButton',
   STOP_STREAM_BTN: 'stopStreamBtn',
 });
@@ -40,12 +38,7 @@ const hostAction =
   (
     kind: Extract<
       HostCommand['kind'],
-      | 'runAgain'
-      | 'openRunStorage'
-      | 'exportTranscript'
-      | 'latexdiff'
-      | 'pack'
-      | 'clean'
+      'runAgain' | 'openRunStorage' | 'exportTranscript'
     >,
   ) =>
   (run: RunView, target: RunMenuTarget) =>
@@ -74,30 +67,6 @@ const COPY_DIAGNOSTICS_ACTION: RunMenuAction = Object.freeze<RunMenuAction>({
   activate: (run, target) => target.copy(formatTaskDiagnostics(run)),
 });
 
-const TASK_RUN_ACTIONS: readonly RunMenuAction[] = [
-  OPEN_RUN_STORAGE_ACTION,
-  EXPORT_TRANSCRIPT_ACTION,
-  COPY_DIAGNOSTICS_ACTION,
-  {
-    action: 'files',
-    icon: 'code-compare',
-    label: 'Run latexdiff on the outputs',
-    activate: hostAction('latexdiff'),
-  },
-  {
-    action: 'files',
-    icon: 'box-archive',
-    label: 'Archive outputs to History',
-    activate: hostAction('pack'),
-  },
-  {
-    action: 'files',
-    icon: 'trash',
-    label: 'Delete output files',
-    activate: hostAction('clean'),
-  },
-];
-
 const CONVERSATION_RUN_ACTIONS: readonly RunMenuAction[] = [
   {
     action: 'compact',
@@ -119,15 +88,11 @@ const CONVERSATION_RUN_ACTIONS: readonly RunMenuAction[] = [
   COPY_DIAGNOSTICS_ACTION,
 ];
 
-/** An agent run's menu: a task's, or a conversation's. The output-file
- *  entries are the theory plugin's, for its own tasks only. */
+/** An agent run's menu: a program's, or a conversation's. */
 export function runMenuActions(
-  run: Pick<RunView, 'program' | 'facts'>,
+  run: Pick<RunView, 'program'>,
 ): readonly RunMenuAction[] {
-  if (!run.program) return CONVERSATION_RUN_ACTIONS;
-  return isDocumentTaskRun(run)
-    ? TASK_RUN_ACTIONS
-    : TASK_RUN_ACTIONS.filter((entry) => entry.action !== 'files');
+  return run.program ? NEUTRAL_RUN_ACTIONS : CONVERSATION_RUN_ACTIONS;
 }
 
 /**

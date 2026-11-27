@@ -107,31 +107,31 @@ const GOLDEN = readFileSync(
 
 /** The runs, by the ids the generator normalizes them to, in start order. */
 const PARENT = Schema.decodeUnknownSync(RunIdSchema)('a00000000001');
-const CHAT = Schema.decodeUnknownSync(RunIdSchema)('a00000000008');
+const CHAT = Schema.decodeUnknownSync(RunIdSchema)('a00000000007');
 /** The goal script the chat's plan launched, named by the plan call, its
  *  one round, named by the script's `self()` call, and the judge the round's
  *  `done` started, named by the judge's `self()` call. */
-const GOAL = Schema.decodeUnknownSync(RunIdSchema)('115a23989b868e9aa72ef6c6');
-const ROUND = '92c152d3454ebdcaf668be83';
-const JUDGE = 'af2b42e263afafa73834e36b';
+const GOAL = Schema.decodeUnknownSync(RunIdSchema)('2f1c7ab8ece343b7f73b2121');
+const ROUND = 'ec36ccfeffe5cb0c0fba912b';
+const JUDGE = '878f77f06a7a5e7a0554dbe9';
 /** The chat's Codex child, which ended on its own before the user's stop. */
-const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
-const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000d');
+const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000b');
+const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
 /** The child the script wrote (`system`, `tools`), named by its `agent()` call. */
-const DEFINED = '23fd96e0ed29f5316b23ba6a';
+const DEFINED = '0481c225c510b3a82209e466';
 /** A headless run, and the fork `texra resume --fork` made of it. */
-const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
-const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
+const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
+const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
 /** Killed after its command's effect, before the command's result. */
-const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000011');
+const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
 /** The service's task, and the background command it sent, a finished
  *  shell whose input the service's resume closed. */
-const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000013');
-const SERVICE_COMMAND = 'a00000000014';
-/** The `texra run --output` document task and the revisions its program
- *  ran, named by the calls that launched them. */
-const DOCUMENT_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
-const REVISIONS = ['8aaceaf46fb196456799b9ea', '6415cf1b6ba5a5918e20c782'];
+const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
+const SERVICE_COMMAND = 'a00000000013';
+/** The `texra run annotate` program run and the round its program ran,
+ *  named by the call that launched it. */
+const PROGRAM_RUN = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
+const ROUND_ONE = 'f67ab3ad610d33f7b85cbf1c';
 
 const roots: string[] = [];
 afterAll(() => {
@@ -235,11 +235,10 @@ describe('the golden 1.0 store', () => {
         ).read(rows, true);
         expect(events).toHaveLength(rows.length);
         const types = new Set<string>(events.map((event) => event.type));
-        // Every row kind is in the fixture, the decode test of a released store.
+        // Every row kind is in the fixture, the decode test of a released
+        // store.
         expect(
-          Object.keys(ROW_KINDS)
-            .filter((kind) => !types.has(kind))
-            .toSorted(),
+          Object.keys(ROW_KINDS).filter((kind) => !types.has(kind)),
         ).toEqual([]);
         for (const type of [
           'tool.result',
@@ -256,7 +255,11 @@ describe('the golden 1.0 store', () => {
         expect(
           events.flatMap((event) =>
             event.type === 'context.edit' && event.aggregateId === chat
-              ? [event.payload.trigger]
+              ? [
+                  event.payload.cause === 'compaction'
+                    ? event.payload.trigger
+                    : event.payload.cause,
+                ]
               : [],
           ),
         ).toEqual(['user']);
@@ -324,9 +327,9 @@ describe('the golden 1.0 store', () => {
           ),
         ).toEqual([
           [PARENT, 'validation-agent-3'],
-          // Each revision is an `agent` call in the program's script.
-          [DOCUMENT_TASK, 'script/1'],
-          [DOCUMENT_TASK, 'script/6'],
+          // The round is an `agent` call in the program's script, after
+          // its read of the file.
+          [PROGRAM_RUN, 'script/1'],
           // The goal is the plan call's child; its round and the judge of
           // the round's `done`, its program's.
           [CHAT, 'validation-plan-1'],
@@ -428,12 +431,9 @@ describe('the golden 1.0 store', () => {
         run(DELEGATED, 'golden_child', { parent: PARENT }),
         run('a00000000003', 'assistant'),
         run('a00000000004', 'assistant'),
-        // The document task and the two revisions its program ran.
-        run(DOCUMENT_TASK, 'edit', { children: REVISIONS }),
-        // Listed in start order, while the parent names them sorted.
-        ...REVISIONS.toReversed().map((id, index) =>
-          run(id, `Revision ${index + 1}`, { parent: DOCUMENT_TASK }),
-        ),
+        // The program's run and the one round it ran.
+        run(PROGRAM_RUN, 'annotate', { children: [ROUND_ONE] }),
+        run(ROUND_ONE, 'Round 1', { parent: PROGRAM_RUN }),
         // The user stopped its held turn with Ctrl-C, after its Codex
         // child's turn had ended.
         run(CHAT, 'golden_chat', {

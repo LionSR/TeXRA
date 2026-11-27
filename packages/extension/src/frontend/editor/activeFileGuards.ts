@@ -13,7 +13,7 @@ import {
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { fromHost } from '@texra/controllers/session/hostCallFailure';
-import { LATEX_EXTENSIONS, isLatexFile } from '@texra/shared/latexFileTypes';
+import { isLatexFile, LATEX_EXTENSIONS } from '@texra/shared/latexFileTypes';
 import type { WorkspaceRoots } from '@texra-ai/worldline';
 
 const CHANNEL = 'ActiveFileGuards';

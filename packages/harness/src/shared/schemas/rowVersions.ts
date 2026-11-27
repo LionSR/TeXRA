@@ -61,6 +61,9 @@ export const RETIRED_ROW_KINDS: ReadonlyMap<string, 'display' | 'execution'> =
     ['conversation.progress', 'display'],
     // A run's model switch, projected from the `run.config` that carries it.
     ['run.model', 'display'],
+    // A plugin's labelled section, which only the view showed.
+    ['stage.start', 'display'],
+    ['stage.end', 'display'],
     // An external inquiry thread's state: an open request.
     ['inquiryThreadUpdated', 'execution'],
     // A compaction of the model context.
@@ -98,6 +101,8 @@ export const RETIRED_ROW_KINDS: ReadonlyMap<string, 'display' | 'execution'> =
  *  unavailable, since its plugin is loaded. */
 export const RETIRED_PLUGIN_FACTS: ReadonlySet<string> = new Set([
   'goal/state',
+  'theory/output',
+  'theory/accepted',
 ]);
 
 /** Why a plugin fact is read uninterpreted: no plugin of this process
@@ -118,26 +123,29 @@ export const CURRENT_VALUE_VERSION = 1;
  *  version and its listing class, does not compile. */
 export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
   Object.freeze({
-    'run.start': Object.freeze({ ...V1, listing: 'lifecycle' }),
+    // v2: a run's grants carry no `never` limit.
+    'run.start': Object.freeze({ version: 2, listing: 'lifecycle' }),
     'run.activate': Object.freeze({ ...V1, listing: 'own' }),
     // v2: run config no longer carries attached memory paths.
-    'run.config': Object.freeze({ version: 2, listing: 'own' }),
+    // v3: nor output files or the launching app's own record.
+    'run.config': Object.freeze({ version: 3, listing: 'own' }),
     'run.stop': Object.freeze({ ...V1, listing: 'own' }),
     'run.end': Object.freeze({ ...V1, listing: 'own' }),
     'run.removed': Object.freeze({ ...V1, listing: 'lifecycle' }),
     'run.description': Object.freeze({ ...V1, listing: 'own' }),
     'plugin.fact': Object.freeze({ ...V1, listing: 'own' }),
-    'followup.queued': Object.freeze({ ...V1, listing: 'followup' }),
+    // v2: a script delivery's files are paths, with no line counts.
+    'followup.queued': Object.freeze({ version: 2, listing: 'followup' }),
     'followup.consumed': Object.freeze({ ...V1, listing: 'followup' }),
     // v2: proposals no longer carry attached memory paths.
     // v3: a user question stores no nulls and states both of its switches.
     'request.opened': Object.freeze({ version: 3, listing: 'request' }),
     'request.decided': Object.freeze({ ...V1, listing: 'request' }),
-    'approval.policy': Object.freeze({ ...V1, listing: 'own' }),
+    // v2: a run's grants carry no `never` limit.
+    'approval.policy': Object.freeze({ version: 2, listing: 'own' }),
     'run.position': Object.freeze({ ...V1, listing: 'own' }),
-    log: Object.freeze({ ...V1, listing: 'none' }),
-    'stage.start': Object.freeze({ ...V1, listing: 'none' }),
-    'stage.end': Object.freeze({ ...V1, listing: 'none' }),
+    // v2: no `fileList` message; a script delivery's files are paths.
+    log: Object.freeze({ version: 2, listing: 'none' }),
     'tool.start': Object.freeze({ ...V1, listing: 'none' }),
     'tool.end': Object.freeze({ ...V1, listing: 'none' }),
     usage: Object.freeze({ ...V1, listing: 'none' }),
@@ -150,7 +158,7 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     'process.exit': Object.freeze({ ...V1, listing: 'own' }),
     'followup.closed': Object.freeze({ ...V1, listing: 'own' }),
     'model.message': Object.freeze({ ...V1, listing: 'none' }),
-    'context.edit': Object.freeze({ ...V1, listing: 'none' }),
+    'context.edit': Object.freeze({ version: 2, listing: 'none' }),
     'tool.intent': Object.freeze({ ...V1, listing: 'none' }),
     'script.call': Object.freeze({ ...V1, listing: 'none' }),
     // v2: no `duplicateOf`; the response's dispatch fact names the primary.

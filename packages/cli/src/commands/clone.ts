@@ -11,14 +11,9 @@ import {
   type OverleafCloneOutcome,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
-import {
-  OVERLEAF_GIT_TOKEN_URL,
-  OVERLEAF_TOKEN_DOCS_URL,
-  parseLatexGitUrl,
-  type OverleafRemote,
-} from '@latex/overleafProject';
+import { parseLatexGitUrl, type OverleafRemote } from '@latex/overleafProject';
 import { osPlatformOf } from '@texra/shared/osPlatform';
-import { overleafCloneNotice } from '@ui/copy/clone';
+import { CLONE_COPY, overleafCloneNotice } from '@ui/copy/clone';
 
 // Local imports - runtime
 import {
@@ -44,17 +39,16 @@ function buildOverleafClonePorts(
     // A credential store this host cannot reach fails the clone with its
     // `SecretsFailed`, which the workflow's `Error` channel carries.
     secrets,
-    promptToken: Effect.fn('clone.promptToken')(function* (spec) {
-      const tokenGuidance = remote.isOverleaf
-        ? `${spec.tokenHint ?? ''} Create or copy a token at ${OVERLEAF_GIT_TOKEN_URL}. Instructions: ${OVERLEAF_TOKEN_DOCS_URL}`.trim()
-        : spec.tokenHint;
+    promptToken: Effect.fn('clone.promptToken')(function* () {
+      const tokenTitle = CLONE_COPY.tokenTitle(remote);
+      const tokenGuidance = CLONE_COPY.tokenGuidance(remote);
       if (context.mode !== 'interactive' || context.outputFormat !== 'text') {
         return yield* new CliUsageError({
-          message: `No saved ${spec.tokenTitle} is available. ${tokenGuidance ? `${tokenGuidance} ` : ''}Run this command in an interactive terminal to enter and save one.`,
+          message: `No saved ${tokenTitle} is available. ${tokenGuidance ? `${tokenGuidance} ` : ''}Run this command in an interactive terminal to enter and save one.`,
         });
       }
       if (tokenGuidance) writeTextStderr(tokenGuidance);
-      const token = yield* askCliQuestion(`${spec.tokenTitle}: `, {
+      const token = yield* askCliQuestion(`${tokenTitle}: `, {
         hidden: true,
       });
       return token.trim() || null;
@@ -146,10 +140,7 @@ export const cloneCommand = cliCommand('clone', {
   run: (context, input) => {
     const remote = parseLatexGitUrl(input.project);
     if (!remote) {
-      throw new CliUsageError({
-        message:
-          'Invalid Overleaf/ShareLaTeX project. Pass a project URL, git URL, or 24-character project ID.',
-      });
+      throw new CliUsageError({ message: CLONE_COPY.invalidProject });
     }
 
     const destination = Option.getOrUndefined(input.destination);

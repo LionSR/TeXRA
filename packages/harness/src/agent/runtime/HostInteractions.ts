@@ -350,10 +350,13 @@ export const presentTerminalResult = Effect.fn('presentTerminalResult')(
 );
 
 /** The failure a run's raw error stands for: a `Session` start's
- *  `RunFailure` by the failure it carries, an aggregate by its first. */
+ *  `RunFailure` by the failure it carries (itself when it carries none),
+ *  an aggregate by its first. */
 const primaryFailure = (error: unknown): unknown =>
   primaryAgentError(
-    Predicate.isTagged(error, 'RunFailure') && 'cause' in error
+    Predicate.isTagged(error, 'RunFailure') &&
+      'cause' in error &&
+      error.cause !== undefined
       ? error.cause
       : error,
   );

@@ -1,19 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { Context, Effect, Layer } from 'effect';
-import { it, layer } from '@effect/vitest';
+import { Effect } from 'effect';
+import { it } from '@effect/vitest';
 
 import { describe, expect } from 'vitest';
 
 import {
   assertNoParentTraversal,
-  resolveToolPath,
   ToolError,
 } from '@texra-ai/worldline/plugins';
-import { FakeHost } from '@test/support/testKernel';
-import { assertWritable } from '@tools/pathResolution';
-import { canonicalizePath } from '@utils/files/externalRoots';
 
 describe('assertNoParentTraversal', () => {
   it.effect.each(['../x', 'a/../../x'])('rejects %s', (targetPath) =>
@@ -25,85 +18,3 @@ describe('assertNoParentTraversal', () => {
     }),
   );
 });
-
-const workspaceRoot = path.resolve(path.sep, 'workspace');
-
-layer(FakeHost.layer({ workspaceRoot }), { buildPerTest: true })(
-  'resolveToolPath path protection',
-  (it) => {
-    const outsidePath = path.resolve(path.sep, 'outside', 'file.tex');
-
-    it.effect('rejects paths outside the working directory by default', () =>
-      Effect.gen(function* () {
-        const { roots } = yield* FakeHost;
-
-        expect(
-          yield* Effect.flip(
-            resolveToolPath(
-              { roots, workingDirectory: workspaceRoot },
-              outsidePath,
-            ),
-          ),
-        ).toMatchObject({
-          message: 'Path must stay within the working directory.',
-        });
-      }),
-    );
-
-    it.effect.skipIf(process.platform === 'win32')(
-      'rejects a path that leaves the workspace through a symlink inside it',
-      () =>
-        Effect.gen(function* () {
-          // os.tmpdir() is itself a symlinked spelling on macOS (/var ->
-          // /private/var), so this also pins that a non-canonical root spelling
-          // does not make its own contents read as outside.
-          const parent = mkdtempSync(path.join(os.tmpdir(), 'texra-escape-'));
-          const workspace = path.join(parent, 'ws');
-          mkdirSync(workspace);
-          symlinkSync('..', path.join(workspace, 'up'));
-          const { roots } = Context.get(
-            yield* Layer.build(FakeHost.layer({ workspaceRoot: workspace })),
-            FakeHost,
-          );
-          const call = { roots: { ...roots, workspace } };
-
-          const inside = yield* resolveToolPath(call, 'inside.tex');
-          expect(inside.relative).toBe('inside.tex');
-          const error = yield* Effect.flip(
-            resolveToolPath(call, 'up/escaped.txt'),
-          );
-          expect(error.message).toMatch(
-            /^Path must stay within the workspace\. up\/escaped\.txt resolves through a symlink to .*\/escaped\.txt\.$/,
-          );
-          rmSync(parent, { recursive: true, force: true });
-        }),
-    );
-
-    it.effect(
-      'keeps a read-only step root that sits inside the workspace non-writable',
-      () =>
-        Effect.gen(function* () {
-          const { roots } = yield* FakeHost;
-          const skill = path.join(workspaceRoot, '.texra', 'skills', 'proof');
-          const stepRoots = [
-            { absolutePath: canonicalizePath(skill), label: 'Skill proof' },
-          ];
-
-          const targetPath = '.texra/skills/proof/SKILL.md';
-          const resolved = yield* resolveToolPath(
-            { roots, stepRoots },
-            targetPath,
-          );
-
-          expect(resolved.external?.writable).toBe(false);
-          expect(
-            yield* Effect.flip(assertWritable(resolved, targetPath)),
-          ).toEqual(
-            new ToolError(
-              `Cannot write ${targetPath}: Skill proof is read-only.`,
-            ),
-          );
-        }),
-    );
-  },
-);

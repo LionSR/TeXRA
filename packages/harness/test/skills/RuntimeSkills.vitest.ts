@@ -1,14 +1,7 @@
-import * as path from 'node:path';
-
 import { layer } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { expect } from 'vitest';
 
-import {
-  resolveToolPath,
-  type StepRoot,
-  ToolError,
-} from '@texra-ai/worldline/plugins';
 import {
   HostSkillSources,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
@@ -84,62 +77,5 @@ layer(FakeHost.layer({ workspaceRoot: WORKSPACE_ROOT }), {
         'user-skill',
       ]);
     }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  // Fails if a skill root one step admits reaches a call without it (another
-  // run of the same project, or a later step that no longer lists it), or if
-  // the step holding it cannot read it. The skill sits outside the project,
-  // so only the step's roots can admit it.
-  it.effect(
-    "admits a step's listed or activated skill directory to its calls only",
-    () =>
-      Effect.gen(function* () {
-        const { roots } = yield* FakeHost;
-        const skillsRoot = yield* Effect.promise(createTempRoot);
-        const skillPath = yield* Effect.promise(() =>
-          writeSkill(
-            skillsRoot,
-            'shared-notes',
-            { name: 'shared-notes', description: 'Shared notes.' },
-            'Read the notes.',
-          ),
-        );
-        const projectA = path.resolve(path.sep, 'project-a');
-        const { catalog } = yield* loadRuntimeSkillCatalogEffect(
-          runCatalog(roots, projectA),
-        ).pipe(
-          Effect.provide(
-            testSkillRoots(
-              [skillsRoot],
-              yield* Effect.promise(createTempRoot),
-            ).pipe(Layer.provideMerge(nodePlatformLayer)),
-          ),
-        );
-        const rootsOf = (listed: typeof catalog) =>
-          listed.flatMap(({ name, directory }) =>
-            directory === null
-              ? []
-              : [{ absolutePath: directory, label: `Skill ${name}` }],
-          );
-        const resolveFrom = (stepRoots: readonly StepRoot[]) =>
-          resolveToolPath(
-            {
-              roots: { ...roots, workspace: projectA },
-              stepRoots,
-            },
-            skillPath,
-          );
-
-        expect((yield* resolveFrom(rootsOf(catalog))).external?.writable).toBe(
-          false,
-        );
-        // Another run's call, or a step that no longer lists the skill.
-        expect(yield* Effect.flip(resolveFrom([]))).toBeInstanceOf(ToolError);
-        // A skill the user activated by name is granted again, even unlisted.
-        const activated = catalog.filter(({ name }) => name === 'shared-notes');
-        expect(
-          (yield* resolveFrom(rootsOf(activated))).external?.writable,
-        ).toBe(false);
-      }),
   );
 });

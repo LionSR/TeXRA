@@ -1,25 +1,22 @@
 // Node imports
 import * as path from 'node:path';
-import { Array as Arr, Effect, Order, Result } from 'effect';
+import { Effect, Result } from 'effect';
 
 // Local imports
 import { asToolError, ToolError } from '@shared/schemas';
-import { Settings } from '@shared/config/settings';
-import type { SettingsStores, StateReadFailed } from '@shared/config/settings';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { canonicalizePath, type StepRoot } from '@utils/files/externalRoots';
+import { canonicalizePath } from '@utils/files/externalRoots';
 import {
   getPathSegments,
   isPathWithin,
   toPosixPath,
 } from '@utils/core/pathCore';
-import { TOOL_PATH_PROTECTION_SETTING } from '@shared/state/stateSettings';
 
-/** A tool path resolved against the call's roots: its root-relative and
- *  absolute spellings, the path filesystem calls take, and the external root
- *  it falls in, if any. */
-export interface WorkspacePathResolution {
+/** A tool path resolved against the call's root: its root-relative and
+ *  absolute spellings, the path filesystem calls take, and the POSIX form
+ *  a tool shows for it. */
+export interface ToolPathResolution {
   readonly relative: string;
   readonly absolute: string;
   /**
@@ -28,64 +25,7 @@ export interface WorkspacePathResolution {
    * workspace-relative otherwise.
    */
   readonly fsPath: string;
-  /**
-   * When the resolved path falls inside a step root, this
-   * describes that root (label, writable flag). Undefined for workspace paths
-   * and for any external path outside the allowlist.
-   */
-  readonly external?: {
-    readonly root: string;
-    readonly writable: boolean;
-    readonly label: string;
-  };
-}
-
-/** The root a path falls in, as a tool's permission check reads it. */
-interface MatchedExternalRoot extends StepRoot {
-  readonly writable: boolean;
-}
-
-/**
- * Return the step root that contains `absolutePath`, or null when none
- * matches or the path cannot be canonicalised (fail closed). `stepRoots` are
- * the read-only roots the asking call's step accepts; a call outside a run
- * has none. The most specific root wins.
- */
-function findExternalRoot(
-  absolutePath: string,
-  stepRoots: readonly StepRoot[] = [],
-): MatchedExternalRoot | null {
-  if (!path.isAbsolute(absolutePath)) return null;
-  // Checked before canonicalisation so a lookup with nothing to match pays
-  // no realpath syscall.
-  if (stepRoots.length === 0) return null;
-
-  let resolved: string;
-  try {
-    resolved = canonicalizePath(absolutePath);
-  } catch {
-    // Permission error or unexpected failure — refuse to accept the path
-    // rather than approve something we cannot verify.
-    return null;
-  }
-
-  const within = stepRoots.filter((root) =>
-    isPathWithin(root.absolutePath, resolved),
-  );
-  if (!Arr.isReadonlyArrayNonEmpty(within)) return null;
-  // The deepest root that holds the path, the first of several as deep.
-  const best = Arr.max(
-    within,
-    Order.mapInput(Order.Number, (root: StepRoot) => root.absolutePath.length),
-  );
-  return { ...best, writable: best.writable ?? false };
-}
-
-interface OutsideRootCandidate {
-  readonly kind: 'outside-root';
-  readonly absolutePath: string;
-  readonly match: MatchedExternalRoot | null;
-  readonly outsideMessage: string;
+  readonly display: string;
 }
 
 /** Trim and validate a working_directory value. Must be absolute if provided. */
@@ -104,23 +44,15 @@ export function parseWorkingDirectory(
 }
 
 /**
- * The call fields a tool path resolves against: the session's roots (its
- * workspace folder and the setting slots containment policy is read from),
- * the run's working directory, and the read-only roots the call's step
- * accepts (the skills it lists or its user activated; none outside a run).
- * A tool's `ToolContext.env` satisfies it structurally.
- * `workingDirectory` is already absolute or absent: the run decides it once
- * where it is launched (`buildAgentLaunchContext`).
+ * The call fields a tool path resolves against: the session's workspace
+ * folder and the run's working directory. A tool's `ToolContext.env`
+ * satisfies it structurally. `workingDirectory` is already absolute or
+ * absent: the run decides it once where it is launched
+ * (`buildAgentLaunchContext`).
  */
 export interface ToolPathCall {
-  readonly roots: { readonly workspace: string | undefined } & SettingsStores;
+  readonly roots: { readonly workspace: string | undefined };
   readonly workingDirectory?: string;
-  readonly stepRoots?: readonly StepRoot[];
-}
-
-/** A resolved tool path plus the POSIX form a tool shows for it. */
-export interface ToolPathResolution extends WorkspacePathResolution {
-  readonly display: string;
 }
 
 /** Fail when a raw tool path contains a parent-directory segment. */
@@ -133,12 +65,10 @@ export const assertNoParentTraversal = (
 
 /**
  * Resolve a tool path, relative or absolute, against the call's working
- * directory when the run has one and its workspace folder otherwise.
- *
- * A path that escapes that root is accepted only inside a root the call's
- * step accepts (`stepRoots`) or with path protection switched off; otherwise
- * it fails with a `ToolError` the tool runner reports to the model. With no
- * folder open and no working directory, only an absolute path can resolve.
+ * directory when the run has one and its workspace folder otherwise. A path
+ * outside that root resolves to itself: a call reaches any file the process
+ * can. With no folder open and no working directory, only an absolute path
+ * can resolve.
  *
  * `fsPath` is workspace-relative for a workspace path, so the confined
  * `WorkspaceFs` view answers it, and absolute for a working-directory or
@@ -147,140 +77,39 @@ export const assertNoParentTraversal = (
 export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
   call: ToolPathCall,
   targetPath?: string,
-): Effect.fn.Return<ToolPathResolution, ToolError | StateReadFailed> {
-  const settings = call.roots;
+): Effect.fn.Return<ToolPathResolution, ToolError> {
   const root = call.workingDirectory ?? call.roots.workspace;
-  const scope = call.workingDirectory ? 'working directory' : 'workspace';
-  const resolution = yield* Effect.try({
-    try: (): WorkspacePathResolution | OutsideRootCandidate => {
+  return yield* Effect.try({
+    try: (): ToolPathResolution => {
       const trimmed = targetPath?.trim();
       const input = !trimmed || trimmed === '.' ? '' : trimmed;
-
+      // `relative` of an outside path is the full absolute path, so it never
+      // reads as a workspace one, even when basenames collide. Already
+      // forward-slashed; `toPosixPath` would drop the leading `/`.
+      const outside = (absolute: string): ToolPathResolution => {
+        const relative = normalizeFilePath(absolute);
+        return { relative, absolute, fsPath: absolute, display: relative };
+      };
       if (!root) {
-        // No workspace: only a step root accepts a path.
-        if (input && path.isAbsolute(input)) {
-          return {
-            kind: 'outside-root',
-            absolutePath: input,
-            match: findExternalRoot(input, call.stepRoots),
-            outsideMessage: 'Workspace path is not available.',
-          };
-        }
+        if (input && path.isAbsolute(input)) return outside(input);
         throw new ToolError('Workspace path is not available.');
       }
-
       const resolved = locateInWorkspace(root, input);
-      if (resolved.kind === 'external') {
-        return {
-          kind: 'outside-root',
-          absolutePath: resolved.absolutePath,
-          match: findExternalRoot(resolved.absolutePath, call.stepRoots),
-          outsideMessage: `Path must stay within the ${scope}.`,
-        };
-      }
-      const relative = resolved.relativePath || '.';
-      // Lexical containment is not physical containment: a symlink inside
-      // the root (`ln -s .. up`) makes `up/x` name a file outside it. The
-      // realpath of the path's deepest existing ancestor must stay inside
-      // the root's; one that leaves is an outside-root path at its real
-      // location, so the allowlist, the protection setting and the
-      // approval UI all see where the read or write actually lands.
+      if (resolved.kind === 'external') return outside(resolved.absolutePath);
+      // A symlink inside the root (`ln -s .. up`) makes `up/x` name a file
+      // outside it, which the confined workspace view would refuse: such a
+      // path is an outside one at its real location.
       const physical = canonicalizePath(resolved.absolutePath);
-      if (!isPathWithin(canonicalizePath(root), physical)) {
-        return {
-          kind: 'outside-root',
-          absolutePath: physical,
-          match: findExternalRoot(physical, call.stepRoots),
-          outsideMessage: `Path must stay within the ${scope}. ${toPosixPath(relative)} resolves through a symlink to ${normalizeFilePath(physical)}.`,
-        };
-      }
-      return annotateExternalPermission(
-        {
-          relative,
-          absolute: resolved.absolutePath,
-          fsPath: call.workingDirectory ? resolved.absolutePath : relative,
-        },
-        call.stepRoots,
-      );
+      if (!isPathWithin(canonicalizePath(root), physical))
+        return outside(physical);
+      const relative = resolved.relativePath || '.';
+      return {
+        relative,
+        absolute: resolved.absolutePath,
+        fsPath: call.workingDirectory ? resolved.absolutePath : relative,
+        display: toPosixPath(relative),
+      };
     },
     catch: asToolError,
   });
-
-  if (!('kind' in resolution)) {
-    return { ...resolution, display: toPosixPath(resolution.relative) };
-  }
-  // This setting deliberately uses the same workspaceState slot in every
-  // host. Do not add a CLI-specific store without also making host identity
-  // explicit at this enforcement boundary. Step roots need no
-  // containment override, so keep their resolution independent of the store.
-  if (
-    !resolution.match &&
-    (yield* Settings.get(settings, TOOL_PATH_PROTECTION_SETTING))
-  ) {
-    return yield* new ToolError(resolution.outsideMessage);
-  }
-  // `relative` is the full absolute path so an external operation never
-  // reads as a workspace one, even when basenames collide.
-  const relative = normalizeFilePath(resolution.absolutePath);
-  return {
-    relative,
-    absolute: resolution.absolutePath,
-    fsPath: resolution.absolutePath,
-    // Already forward-slashed; `toPosixPath` would drop the leading `/`.
-    display: relative,
-    ...(resolution.match ? { external: externalInfo(resolution.match) } : {}),
-  };
 });
-
-/** Permission metadata carried for a path inside an external root. */
-function externalInfo(
-  match: MatchedExternalRoot,
-): NonNullable<WorkspacePathResolution['external']> {
-  return {
-    root: match.absolutePath,
-    writable: match.writable,
-    label: match.label,
-  };
-}
-
-/**
- * Attach external-root permission metadata when a resolution that stayed
- * inside its containing root (the `working_directory` branch or the
- * workspace branch) happens to land inside a step root.
- *
- * Containment inside a root does not imply writability: a read-only step
- * root (a skill directory) may itself sit inside the workspace or the
- * working directory. Without this the in-root branches return without
- * touching the step roots, and `assertWritable` would let
- * `write_file`/`edit_file` overwrite them.
- *
- * Preserves `relative`/`absolute`/`fsPath` as the caller already built
- * them so display and I/O remain unchanged; only `external` is added.
- */
-function annotateExternalPermission(
-  resolution: WorkspacePathResolution,
-  stepRoots: readonly StepRoot[] | undefined,
-): WorkspacePathResolution {
-  if (resolution.external) return resolution;
-  const match = findExternalRoot(resolution.absolute, stepRoots);
-  if (!match) return resolution;
-  return { ...resolution, external: externalInfo(match) };
-}
-
-/**
- * Fail with a ToolError when the resolved path points into a read-only external
- * root. Workspace paths and writable externals pass through. The run loop
- * calls this for the paths a tool declares in `ToolGuard.writes`, before the
- * body runs; a tool does not call it itself.
- */
-export const assertWritable = (
-  resolved: WorkspacePathResolution,
-  displayPath: string,
-): Effect.Effect<void, ToolError> =>
-  resolved.external && !resolved.external.writable
-    ? Effect.fail(
-        new ToolError(
-          `Cannot write ${displayPath}: ${resolved.external.label} is read-only.`,
-        ),
-      )
-    : Effect.void;

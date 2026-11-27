@@ -19,8 +19,6 @@ const roundBrief = [
   '<goal_round>',
   "You are one round of a goal the user approved: work on the objective below yourself, now. What earlier rounds did is in the project and in the previous round's report below.",
   'Make as much verified progress as you can, then submit your verdict.',
-  '- Do not redefine success around a smaller or easier task, and do not substitute a narrower, safer, or merely test-passing solution for the behavior the objective asks for.',
-  '- Treat completion as unproven until evidence you inspected shows every requirement holds.',
   '- Your `done` is a claim: a judge that did not do the work checks it, and what it finds not met comes back to the next round.',
   '</goal_round>',
 ].join('\n');

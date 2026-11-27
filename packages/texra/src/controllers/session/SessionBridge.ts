@@ -104,7 +104,7 @@ export interface AttachedPort {
   /** One message from the port, unparsed. */
   readonly receive: (message: unknown) => Effect.Effect<void>;
   /** One host action for this port alone (the composer's Send, the
-   *  drawer, the chime), held until the port's surface takes it. */
+   *  drawer), held until the port's surface takes it. */
   readonly surfaceAction: (action: HostSurfaceAction) => void;
   /** The port went away: its transcript set leaves the union, the host
    *  hears it, and its calls are interrupted. A second close is a no-op. */

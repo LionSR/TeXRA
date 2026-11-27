@@ -33,6 +33,12 @@ import { TranscriptExportFailed } from './exportTranscript';
 import type { Session } from '@texra-ai/worldline';
 import type { RunId } from '@texra-ai/worldline/schemas';
 
+/** Why a run has nothing to export, in every format. */
+const EXPORT_UNAVAILABLE = {
+  no_record: 'This task has no saved data to export.',
+  no_rows: 'No conversation was saved for this task.',
+} as const;
+
 /** Write one export beneath its run's storage directory. */
 const writeExport = Effect.fn('writeTranscript.writeExport')(function* (
   runId: RunId,
@@ -85,10 +91,7 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
           if (error instanceof TraceUnavailable)
             return Effect.fail(
               new Rejected({
-                reason: {
-                  no_record: 'This task has no saved data to export.',
-                  no_rows: 'No conversation was saved for this task.',
-                }[error.status],
+                reason: EXPORT_UNAVAILABLE[error.status],
               }),
             );
           if (error instanceof TraceViewerMissing)
@@ -126,13 +129,9 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
 
   const loaded = yield* loadChatExportInput(runId, options.session);
   if (loaded._tag === 'noConfig')
-    return yield* new Rejected({
-      reason: 'This task has no saved data to export.',
-    });
+    return yield* new Rejected({ reason: EXPORT_UNAVAILABLE.no_record });
   if (loaded._tag === 'noConversation')
-    return yield* new Rejected({
-      reason: 'No conversation was saved for this task.',
-    });
+    return yield* new Rejected({ reason: EXPORT_UNAVAILABLE.no_rows });
   const exportInput = loaded.input;
 
   const result = yield* writeExport(

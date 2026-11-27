@@ -113,7 +113,7 @@ export function runView(
 ): Run {
   const log = Context.get(session, SessionLog);
   const view = Context.get(session, SessionViewAccess);
-  const failure = (message: string, cause: unknown = new Error(message)) =>
+  const failure = (message: string, cause?: unknown) =>
     new RunFailure({ cause, message });
   // The activation is over once its end or the next activation commits, or
   // once nothing here holds the run any more: an end that did not save, a

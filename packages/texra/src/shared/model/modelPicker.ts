@@ -3,11 +3,11 @@
  * carry, and the reasoning-level labels. Plain data and pure predicates, so
  * the settings webview renders the same words the hosts build rows with.
  */
-import { EFFORT_SCALE, ReasoningEffort } from '@texra-ai/llm';
+import { ReasoningEffort, selectModel } from '@texra-ai/llm';
+import { getModelLabel } from '@texra-ai/worldline/schemas';
 
 /**
- * Display labels for llm-zoo's reasoning efforts, written low → high because
- * the picker offers them in that order. The key type keeps the record
+ * Display labels for llm-zoo's reasoning efforts, written low → high. The key type keeps the record
  * exhaustive against the registry vocabulary.
  */
 export const REASONING_LEVEL_LABELS: Record<ReasoningEffort, string> =
@@ -20,19 +20,6 @@ export const REASONING_LEVEL_LABELS: Record<ReasoningEffort, string> =
     [ReasoningEffort.XHIGH]: 'Extra High',
     [ReasoningEffort.MAX]: 'Max',
   });
-/** The reasoning levels a picker offers, low to high, with their labels. */
-export const REASONING_LEVEL_OPTIONS: readonly {
-  readonly value: ReasoningEffort;
-  readonly label: string;
-}[] = Object.freeze(
-  EFFORT_SCALE.map((value) =>
-    Object.freeze({
-      value,
-      label: REASONING_LEVEL_LABELS[value],
-    }),
-  ),
-);
-
 /**
  * Price-based "fast first response" hint: models strictly under $1/M input
  * are small, fast, cheap variants that make a reasonable first try. Pricing
@@ -79,4 +66,22 @@ export function isExpensiveModel(outputPrice: number | undefined): boolean {
   return (
     outputPrice !== undefined && outputPrice >= EXPENSIVE_OUTPUT_PRICE_FLOOR
   );
+}
+
+/**
+ * A model selection as a person reads it, the effort and mode it names
+ * included: `GPT 6.1 Sol · High · Pro` for `openai/gpt-6.1-sol@high+pro`.
+ * Two selections that run differently never read the same.
+ */
+export function modelSelectionLabel(model: string): string {
+  const request = selectModel(model)?.request;
+  return [
+    getModelLabel(model),
+    request?.effort === undefined
+      ? undefined
+      : REASONING_LEVEL_LABELS[request.effort],
+    request?.mode === 'pro' ? 'Pro' : request?.mode,
+  ]
+    .filter((part) => part !== undefined)
+    .join(' · ');
 }

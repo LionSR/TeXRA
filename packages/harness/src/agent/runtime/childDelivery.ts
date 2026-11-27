@@ -17,6 +17,7 @@ import { SessionRoots } from '@platform/rootedFs';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import {
   backgroundScriptOf,
+  programOf,
   RUN_OUTCOME,
   runEndErrorMessage,
   type ChildRunDelivery,
@@ -26,7 +27,6 @@ import type { ToolRegistry } from '@tools/toolTable';
 import { SessionViewAccess, type SessionLog } from '@shared/session/runHistory';
 import type { RunRows } from '@shared/session/runRowsShape';
 
-import { readProgramResult } from './programRun';
 import { capReached } from './spendCap';
 import type { RunLaunch } from './run/AgentRun';
 import type { RunReport } from './runReport';
@@ -104,20 +104,15 @@ export const childEndReport = Effect.fn('childEndReport')(
               : runEndErrorMessage(report.failure),
         };
       case RUN_OUTCOME.COMPLETED: {
-        // A completed program's value reads as its registration says
-        // (`Program.result`); any other run's is its reply and the files
-        // its tool calls touched.
-        const program = yield* readProgramResult(
-          config,
-          runId,
-          yield* SessionRoots,
-        );
+        // A completed run's value is its reply and the files its tool
+        // calls touched; a program's names the program.
+        const program = config === null ? null : programOf(config);
         const { output } = report;
         return {
           ...delivery,
           attributes: [
             agent,
-            ...(program === undefined
+            ...(program === null
               ? []
               : [{ name: 'kind', value: program.name }]),
             { name: 'status', value: report.outcome },
@@ -128,9 +123,7 @@ export const childEndReport = Effect.fn('childEndReport')(
               ? []
               : [{ name: 'continued', value: 'true' }]),
           ],
-          ...(program !== undefined && program.delivery.length > 0
-            ? { lines: [...delivery.lines, ...program.delivery] }
-            : { output: { response: output.response, files: output.files } }),
+          output: { response: output.response, files: output.files },
         };
       }
     }

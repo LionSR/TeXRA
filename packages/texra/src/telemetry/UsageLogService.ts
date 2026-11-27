@@ -485,11 +485,10 @@ export const usageLogLayer = (
 
       // Randomized, so installs that failed together during an outage do
       // not all retry at the same instants.
-      const backoff = randomizedExponentialBackoff(FLUSH_INTERVAL).pipe(
-        Schedule.modifyDelay(({ duration }) =>
-          Effect.succeed(Duration.min(duration, MAX_RETRY_DELAY)),
-        ),
-      );
+      const backoff = Schedule.min([
+        randomizedExponentialBackoff(FLUSH_INTERVAL),
+        Schedule.spaced(MAX_RETRY_DELAY),
+      ]);
 
       /**
        * A flush nobody awaits: the periodic one and the batch-size trigger. An

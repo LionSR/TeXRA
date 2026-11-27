@@ -161,7 +161,6 @@ const storeProviderKey = Effect.fn('providerKeyActions.storeProviderKey')(
     yield* storeCredential(yield* Secrets, {
       secretName: yield* secretNameFor(provider),
       value: apiKey,
-      kind: 'provider',
       label: displayName,
     });
     yield* dialogs.notify('info', `${displayName} API key has been set`);

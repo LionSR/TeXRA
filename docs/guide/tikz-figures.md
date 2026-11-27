@@ -6,7 +6,7 @@ import TikzTroubleshootCards from '../.vitepress/components/TikzTroubleshootCard
 
 [TikZ](https://github.com/pgf-tikz/pgf) is a LaTeX package for creating vector graphics programmatically. It is widely used in academia for diagrams, plots, and technical illustrations because of its output quality and its integration with LaTeX. Learning TikZ can feel like learning a new language. TeXRA helps with that, so the figures that illustrate a derivation or a result take less of your time than the theory itself.
 
-TeXRA offers features built for TikZ, centered on the assistant, which writes TikZ, compiles it, and visually verifies the result, together with automatic extraction for document programs and a compile command. This guide covers the TikZ-specific workflows.
+TeXRA offers features built for TikZ, centered on the assistant, which writes TikZ, compiles it, and visually verifies the result together with a compile command. This guide covers the TikZ-specific workflows.
 
 ::: tip General media handling
 For other figure types (standard images, PDFs) and media selection in the UI, read the [Working with figures](./working-with-figures.md) guide.
@@ -35,7 +35,7 @@ The assistant can create new TikZ figures from a description, refine existing di
 ### Creating new figures
 
 1. Open a new task in the TeXRA panel.
-2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>). `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`, and `google/gemini-4-argon` are good choices for complex drawings.
+2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>). `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5`, `openai/gpt-6.2-sol`, and `google/gemini-4-neon` are good choices for complex drawings.
 3. Describe the figure you want in detail.
 4. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 

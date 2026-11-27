@@ -70,17 +70,6 @@ Absent, none.
 const CommandDirs: Reference<() => readonly string[]>
 ```
 
-## commitExists
-
-Whether `hash` names a commit in the history of the repository at `cwd`.
-
-```ts
-function commitExists(
-  cwd: string,
-  hash: string,
-): Effect.Effect<boolean, never, ChildProcessSpawner>
-```
-
 ## ConfigStore
 
 The store surface one config target needs. `JsonStore` satisfies it; so does
@@ -97,17 +86,6 @@ interface ConfigStore {
   get(key: string): unknown;
   set(key: string, value: unknown): Effect.Effect<void, Error>;
 }
-```
-
-## createSymlink
-
-Link `destination` to `sourceAbsolute`, parent directories included. An
-existing link there is replaced; any other entry fails `AlreadyExists` and
-stays. A host that cannot make links (`EPERM`, `EACCES`, `EINVAL`,
-`ENOTSUP`) gets a copy of the source instead.
-
-```ts
-const createSymlink: (sourceAbsolute: string, destination: string) => Effect<void, PlatformError, FileSystem>
 ```
 
 ## currentBranch
@@ -517,19 +495,6 @@ the process could not run; a non-zero exit is the caller's to word.
 const machineGit: (args: readonly string[], options?: { readonly cwd?: string | undefined; readonly env?: Readonly<Record<string, string>> | undefined; readonly input?: string | undefined; } | undefined) => Effect<{ stdout: string; stderr: string; code: ExitCode; }, PlatformError, ChildProcessSpawner>
 ```
 
-## MachineGitResult
-
-How a {@link machineGit} command ended.
-
-```ts
-interface MachineGitResult {
-  readonly stdout: string;
-  /** Trimmed. */
-  readonly stderr: string;
-  readonly code: number;
-}
-```
-
 ## meansAbsent
 
 Whether a failure means nothing is at the path: it is not there
@@ -738,17 +703,6 @@ the paths inside its root and the process filesystem answers for the rest.
 const readNormalizedFile: (fs: FileSystem, target: string) => Effect<string, PlatformError, never>
 ```
 
-## recentCommitLabels
-
-Up to `limit` recent commits, each labelled `<shortHash>: <subject>
-(<relativeDate>)`, or null when `cwd` is not a work tree. A repository
-with no commit has none; a `git log` that fails on one that has commits
-(unreadable objects, a timeout) is logged at warn and reads as none.
-
-```ts
-const recentCommitLabels: (cwd: string, limit: number) => Effect<readonly string[] | null, never, ChildProcessSpawner>
-```
-
 ## relativeToRoot
 
 The path of `filePath` relative to `root`, following symlinks on either
@@ -822,14 +776,6 @@ function setLogSink(
   next: LogSink | null,
   options: { readonly trusted?: boolean } = {},
 ): void
-```
-
-## toPosixPath
-
-Convert a path to POSIX style (forward slashes, collapsed separators, resolved `.` and `..`).
-
-```ts
-function toPosixPath(relativePath: string): string
 ```
 
 ## whichOnExtendedPath

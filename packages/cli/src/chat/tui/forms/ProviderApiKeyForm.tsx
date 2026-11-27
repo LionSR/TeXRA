@@ -29,7 +29,7 @@ function providerApiKeyStatusLabel(
   status: CredentialOrigin | undefined,
   view: ResourceStatus<ProviderApiKeyStatuses>,
 ): string {
-  if (status !== undefined) return credentialOriginLabel(status, 'key');
+  if (status !== undefined) return credentialOriginLabel(status);
   if (view.loading && view.error === undefined) return 'Checking status';
   return 'Status unavailable';
 }

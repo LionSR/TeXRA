@@ -155,14 +155,14 @@ function renderAnnotations(entry: LogEntry): LogEntry {
 /** Bound the already-redacted annotations so truncation cannot split a
  * secret field before the redactor has seen its closing quote. */
 function truncateAnnotations(entry: LogEntry): LogEntry {
-  const annotations: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(entry.annotations)) {
-    annotations[key] =
+  return {
+    ...entry,
+    annotations: Record.map(entry.annotations, (value) =>
       typeof value === 'string' && value.length > MAX_ANNOTATION_LENGTH
         ? `${value.slice(0, MAX_ANNOTATION_LENGTH)}… [truncated]`
-        : value;
-  }
-  return { ...entry, annotations };
+        : value,
+    ),
+  };
 }
 
 /**

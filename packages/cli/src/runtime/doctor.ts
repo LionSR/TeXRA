@@ -36,7 +36,7 @@ import {
 } from '@texra/shared/settings/texraSettings';
 
 // Local file imports
-import { NO_RUNNABLE_MODELS } from './models/modelAccess';
+import { NO_RUNNABLE_MODEL_COPY } from './models/modelAccess';
 import { CliExitCode } from './platform/exitCodes';
 import { writeCliResult } from './platform/output';
 import { cliErrorMessage, writeTextStderr } from './platform/logSinks';
@@ -201,7 +201,7 @@ function checkModels(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
       return fail(
         'models',
         'Models',
-        NO_RUNNABLE_MODELS,
+        NO_RUNNABLE_MODEL_COPY,
         'Run `texra models list --all` to inspect access, sign in with `texra auth chatgpt login`, or add a provider API key with `texra setup`.',
       );
     }),

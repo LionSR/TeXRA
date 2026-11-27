@@ -22,16 +22,11 @@ The items below each need a decision or were judged not worth a change.
 
 ## Open
 
-1. **Which finished run each GUI host announces.** The extension chimes
-   only for a completed document task
-   (`packages/extension/src/progressView/ProgressViewProvider.ts`, the
-   `isDocumentTaskRun(run) && run.outcome === 'completed'` filter). The
+1. **Which finished run each GUI host announces.** Decided 2026-11-24: the
+   extension's chime, which played only for a completed document task, went
+   with the document pipeline. The extension keeps its badge and reveal; the
    desktop notifies for every top-level run on any outcome
-   (`packages/desktop/src/main/desktopAttention.ts`). The refuted entry
-   `CLI-tui-bell-from-attention` describes one rule for both, which the
-   extension's filter contradicts. A chime and an OS notification may
-   differ on purpose. Decision: one rule (the attention table's) or a
-   documented difference.
+   (`packages/desktop/src/main/desktopAttention.ts`).
 2. **Where a relative plugin source resolves.** The settings page
    resolves it against `roots.workspace ?? os.homedir()`
    (`packages/texra/src/controllers/settingsView/settingsPluginCommands.ts`).

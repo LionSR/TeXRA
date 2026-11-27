@@ -51,8 +51,6 @@ import {
   CliUsageError,
   isQuiet,
   launchApproval,
-  launchApprovalNotice,
-  projectApprovalPolicy,
   type CliContext,
   type CliInvocation,
 } from '../platform/cliContext';
@@ -78,11 +76,6 @@ export interface CliExecuteOptions {
    *  a shutdown that leaves the run resumable then prints no resume
    *  command, as nothing could resume it. */
   readonly recoveryInputIsDurable: boolean;
-  /** What the command does with the run once its end is committed (a
-   *  document task's output copy and result record), with its committed
-   *  outcome: part of the finalization a shutdown waits for, so a signal
-   *  never cuts it short. Its failure fails the finalization. */
-  readonly afterRun?: (result: CliRunResult) => Effect.Effect<void, Error>;
   /** The persisted run `texra resume` continues through the session's
    *  resume; unset, the run starts fresh under a minted id. */
   readonly runId?: RunId;
@@ -129,7 +122,7 @@ function launchOn(
  * Validate a headless CLI run's configuration and run it: stand up a runtime
  * host, run the request, always close the host, and resolve the terminal
  * outcome. Command handlers own command-specific config construction; this
- * owns the common request lifecycle, so document task and chat runs
+ * owns the common request lifecycle, so program and chat runs
  * cannot drift on validation, run ids, host lifecycle or outcome handling.
  *
  * A run that opened never fails its launch: its end is its `run.end` row's,
@@ -171,11 +164,6 @@ export const executeCliConfig: (
     const plugins = yield* readCliPluginPins(session.roots);
     // The run follows the project's setting, read at each decision, with
     // what this invocation asked for riding its launch (`launchApproval`).
-    const refused = launchApprovalNotice(
-      runContext.requestedApprovalPolicy,
-      projectApprovalPolicy(session.roots.config),
-    );
-    if (refused !== undefined) writeTextStderr(refused);
     // Everything the run attaches to the session for its output: closed once,
     // after the last result read, so the last line is on the wire before the
     // result record. The caller's scope also closes it on partial startup.
@@ -255,8 +243,7 @@ export const executeCliConfig: (
         launchOn(session, request, runContext, options),
       ).pipe(
         Effect.flatMap((run) =>
-          // The run's whole result, built once: what the command emits and
-          // what its `afterRun` finalizes.
+          // The run's whole result, built once: what the command emits.
           Effect.map(run.result, (end) => ({
             ...end,
             runId: run.runId,
@@ -324,8 +311,10 @@ export const executeCliConfig: (
     } else if (!interrupted) {
       const failure = Cause.squash(exit.cause);
       // The session words a launch's failure as a `RunFailure` (what it
-      // failed with is its cause), or a refused one as `LaunchRefused`.
-      const err = failure instanceof RunFailure ? failure.cause : failure;
+      // failed with is its cause, when it has one), or a refused one as
+      // `LaunchRefused`.
+      const err =
+        failure instanceof RunFailure ? (failure.cause ?? failure) : failure;
       // Only a refused resume, a refused launch or a classified AgentError
       // resolves to a non-zero exit code here; anything else is unexpected
       // and keeps propagating to the crash handler.
@@ -373,8 +362,6 @@ export const executeCliConfig: (
         // presenter, which `settled` waits for: the presentation host stays
         // attached until it has.
         yield* session.drained;
-        if (runResult.ok && options.afterRun)
-          yield* options.afterRun(runResult.result);
       }),
     );
     // Done only now: a signal during the finalization waits for it, and the
@@ -387,7 +374,7 @@ export const executeCliConfig: (
         primaryRunFailure
           ? new AggregateError(
               [primaryRunFailure.error, finalization.failure],
-              'CLI run failed and its final artifacts could not be persisted',
+              'CLI run failed and its finalization failed',
             )
           : finalization.failure,
       );

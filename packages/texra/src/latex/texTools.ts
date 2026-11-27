@@ -24,7 +24,7 @@ import {
   TIKZ_INPUT_DIRECTORY_SETTING,
 } from '@texra/shared/settings/texraSettings';
 
-// Raw tail, no TeX-log parsing -- a deliberate choice (see compileCheck.ts):
+// Raw tail, no TeX-log parsing -- a deliberate choice:
 // tex compile logs are noisy and heuristic parsing is a losing game, so every
 // caller gets the same last-N-lines excerpt an LLM or a human can read as-is.
 const LOG_TAIL_LINES = 200;
@@ -35,17 +35,6 @@ interface LaTeXCompileOptions {
   readonly outputDirectory?: string;
   /** The engine to drive: latexmk unless named. */
   readonly compiler?: (typeof SUPPORTED_LATEX_COMPILERS)[number];
-  /** Millisecond timeout per compiler invocation. Kills the child on expiry. */
-  readonly timeout?: number;
-  /**
-   * Extra directories to prepend onto the kpathsea search path (TEXINPUTS /
-   * BIBINPUTS / BSTINPUTS), after the main file's own directory and before the
-   * workspace root. Used when a run-storage document compiles outside its
-   * original location so relative `\input{…}` / `\bibliography{…}` targets
-   * (e.g. `figures/fig.tex`, `library.bib`) still resolve against the original
-   * source directory.
-   */
-  readonly extraInputDirs?: readonly string[];
 }
 
 /**
@@ -115,30 +104,25 @@ const latexInputEnv = Effect.fn('texTools.latexInputEnv')(function* (
 
 /**
  * Compose the kpathsea search-path parts for a compile. The document's own
- * directory and any caller-supplied source directories come first — ahead of
- * `.` (the compiler's cwd, which is the workspace root, not the document's
- * folder) so a subfolder document's relative `\input{…}` resolves against its
- * own tree rather than a same-named file at the workspace root; the document
- * dir also precedes the extra source dirs so a revised sibling in run storage
- * beats the original-source fallback. The workspace root and TikZ dir follow.
+ * directory comes first — ahead of `.` (the compiler's cwd, which is the
+ * workspace root, not the document's folder) so a subfolder document's
+ * relative `\input{…}` resolves against its own tree rather than a same-named
+ * file at the workspace root. The workspace root and TikZ dir follow.
  * Bibliography search omits `.` and TikZ — only directories that can hold
  * `.bib`/`.bst` matter there.
  */
 function buildLatexSearchParts(input: {
   documentDir: string;
-  extraInputDirs: readonly string[];
   /** The workspace root, when the settings put it on the search path. */
   workspaceRoot: string | undefined;
   tikzInputDirectory: string | undefined;
 }): { texInputParts: string[]; bibSearchParts: string[] } {
-  const { documentDir, extraInputDirs, workspaceRoot, tikzInputDirectory } =
-    input;
-  const sourceDirs = [documentDir, ...extraInputDirs];
+  const { documentDir, workspaceRoot, tikzInputDirectory } = input;
   const workspaceParts = workspaceRoot ? [workspaceRoot] : [];
   const tikzParts = tikzInputDirectory?.trim() ? [tikzInputDirectory] : [];
   return {
-    texInputParts: [...sourceDirs, '.', ...workspaceParts, ...tikzParts],
-    bibSearchParts: [...sourceDirs, ...workspaceParts],
+    texInputParts: [documentDir, '.', ...workspaceParts, ...tikzParts],
+    bibSearchParts: [documentDir, ...workspaceParts],
   };
 }
 
@@ -199,12 +183,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   ToolMissing,
   FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner
 > {
-  const {
-    outputDirectory,
-    compiler = 'latexmk',
-    timeout,
-    extraInputDirs = [],
-  } = options;
+  const { outputDirectory, compiler = 'latexmk' } = options;
   const fs = yield* FileSystem.FileSystem;
   const workspaceRoot = (yield* WorkspaceFs).root;
   const latexFile = latexLocation.absolutePath;
@@ -230,12 +209,10 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     yield* fs.makeDirectory(outDir, { recursive: true });
 
     // TeX resolves relative `\input{…}` / `\bibliography{…}` against the
-    // compiler's cwd and TEXINPUTS, not the main file's location. When a
-    // run-storage document (round output or latexdiff) compiles from a build
-    // directory, its own folder and any caller-supplied source directories must
-    // be on the search path or `\input{preamble}`, `\input{figures/…}`, and the
-    // bibliography fail to resolve. The file's own directory comes first so a
-    // revised sibling wins over the original source fallback.
+    // compiler's cwd and TEXINPUTS, not the main file's location, so the
+    // file's own folder goes on the search path: a document compiled into
+    // another build directory still resolves `\input{preamble}`,
+    // `\input{figures/…}` and its bibliography.
     const documentDir = path.dirname(latexFile);
 
     const tikzInputDirectory = yield* Settings.get(
@@ -248,7 +225,6 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     );
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({
       documentDir,
-      extraInputDirs,
       workspaceRoot: includeWorkspace ? workspaceRoot : undefined,
       tikzInputDirectory,
     });
@@ -276,8 +252,8 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
 
     // Interrupting the compile stops the engine: the fiber's interruption is
     // what aborts the spawn, so nothing threads a signal through. latexmk
-    // hands each pass to a pdflatex/bibtex/biber child, so its stop (and
-    // timeout) signals the whole tree: a tracked-pid kill would stop latexmk
+    // hands each pass to a pdflatex/bibtex/biber child, so its stop
+    // signals the whole tree: a tracked-pid kill would stop latexmk
     // and leave its engine writing into the build directory. A lone pdflatex
     // has no children to reach, and the tree kill's detached spawn would move
     // it out of our process group, where a hard host kill no longer reaches
@@ -286,7 +262,6 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
       runTool(tool, args, {
         cwd: workspaceRoot,
         env,
-        timeout,
         killProcessTree: tool === 'latexmk',
       });
     const pdflatex = runEngine('pdflatex', pdflatexArgs);

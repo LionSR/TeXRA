@@ -28,6 +28,9 @@ delete the filter but keep the nulls, which is not the shape proposed.
 `RegisterRunOptions.takesFollowUps` (5) waits too: two of its producers
 (`executeAgent.ts`, `processRun.ts`) are in an open PR.
 
+Landed on the evening of 2026-11-26, after #15229 merged: 2 and the
+`takesFollowUps` entry of 5 (each below).
+
 ## 1. Request payloads restate the `requestId` and `runId` their row carries
 
 Every schema in `packages/harness/src/shared/schemas/requestPayloads.ts`
@@ -69,6 +72,15 @@ each gains a narrowing where the producers lose four `null`s: about the same
 line count. Worth it for the deleted filter and range check, with the crash
 conformance replays (`src/test-kernel/support/crashConformance.ts`, which
 prints `cause/trigger`) run in full.
+
+Landed (2026-11-26 evening): a union on `cause` (a compaction's `trigger`,
+`range` and `usage`; an edit's `range`; a fork's `input`, and no range),
+with the `from <= to` check on the range itself. `context.edit` is at
+version 2; the golden store's three rows and its `stored_kind` entry were
+rewritten by hand to the new encoding (the fork seeds lose their null
+`trigger`, `0..0` range and null `usage`), not regenerated. The crash
+replays print a compaction as `compaction/<trigger>` and the other causes
+by name.
 
 ## 3. An installed plugin spells git-or-local as optionals
 
@@ -116,16 +128,23 @@ calls it too.
   (`packages/cli/src/runtime/terminal/terminalRequirements.ts`) is the last
   optional copy of the command name, with a `'texra'` fallback
   `texra-local chat` reaches; its callers are in the open PRs.
+  **Landed 2026-11-26 evening:** `interactiveTerminalRejection` takes the
+  command name from the invocation's `CliContext`.
 - `attachDroppedFiles`
   (`packages/texra/src/controllers/mainView/MainViewDroppedFilesController.ts`)
   returns `attachedCount` beside the `paths` it counts. (2026-11-25
   evening: its single-caller helper `attachDroppedPaths` is inlined; the
-  field waits on its reader, `openGuiWindow.ts`.)
+  field waits on its reader, `openGuiWindow.ts`.) **Landed 2026-11-26
+  evening:** the field is gone; the window counts `paths`.
 - `allocateConversationPanelRows` (`packages/cli/src/chat/tui/appLayout.ts`)
   returns four row counts where a panel kind and its rows would do.
 - `RegisterRunOptions.takesFollowUps`
   (`packages/harness/src/shared/session/runFacts.ts`) is optional though
-  both callers set it.
+  both callers set it. Landed (2026-11-26 evening), corrected: the
+  registrations launch sites hand `executeAgent` (`rootLaunch.ts`,
+  `startChildRun`) never set it and `executeAgent` overrode it, so the
+  field is required, `registrationRows` drops its `?? false`, and the
+  fresh registration's type leaves the field out.
 
 - A retry decision's `credentials`
   (`packages/harness/src/shared/schemas/request.ts`) still accepts

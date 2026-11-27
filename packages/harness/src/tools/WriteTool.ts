@@ -5,7 +5,6 @@ import { ToolContext } from '@tools/core/ToolTypes';
 // Local imports - tools
 import type { AppSignals } from '@platform/appSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
-import type { ConfigProvider } from '@shared/config/settings';
 import type { ToolResult } from '@shared/schemas';
 import {
   applyApprovedFileEdit,
@@ -27,44 +26,24 @@ const WriteInputSchema = Schema.Struct({
 
 type WriteInput = typeof WriteInputSchema.Type;
 
-/**
- * What an app does to the content `write_file` is given before it proposes
- * it, by path, under the call's workspace configuration (text replacements
- * for a file type, say). The harness's `write_file` writes what it is given.
- */
-export type WriteFilter = (
-  path: string,
-  content: string,
-  config: ConfigProvider,
-) => Effect.Effect<string>;
-
 const write = Effect.fn('WriteFileTool.execute')(function* (
   input: WriteInput,
-  writeFilter: WriteFilter | undefined,
 ): Effect.fn.Return<
   ToolResult,
   Error,
   ToolContext | FileSystem.FileSystem | WorkspaceFs | AppSignals
 > {
-  const call = yield* ToolContext;
   const prepared = yield* resolveWritableTarget(input.path, {
     allowMissing: true,
   });
-  if ('blocked' in prepared) {
-    return prepared.blocked;
-  }
-  const { path, displayPath, exists, originalContent } = prepared.target;
-  const proposedContent =
-    writeFilter === undefined
-      ? input.content
-      : yield* writeFilter(path, input.content, call.env.roots.config);
+  const { path, displayPath, exists, originalContent } = prepared;
 
   return yield* applyApprovedFileEdit({
     path,
     displayPath,
     exists,
     originalContent,
-    proposedContent,
+    proposedContent: input.content,
     sourceTool: 'write_file',
     present: ({ appliedContent }) => {
       const originalLineCount = countLines(originalContent);
@@ -82,16 +61,11 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   });
 });
 
-/** The `write_file` tool, with the app's filter on what it writes. */
-export const writeFileTool = (writeFilter?: WriteFilter) =>
-  defineTool({
-    name: 'write_file',
-    requiresApproval: 'inBody',
-    description:
-      'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
-    schema: WriteInputSchema,
-    // The file this call overwrites: the loop refuses it before the body runs
-    // when it escapes the call's roots or lands in a read-only external root.
-    guard: { writes: (input: WriteInput) => [input.path] },
-    execute: (input) => write(input, writeFilter),
-  });
+export const WriteFileTool = defineTool({
+  name: 'write_file',
+  requiresApproval: 'inBody',
+  description:
+    'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
+  schema: WriteInputSchema,
+  execute: write,
+});
