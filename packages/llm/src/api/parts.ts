@@ -21,20 +21,6 @@ export type InputPart = Extract<
 >['content'][number];
 
 /**
- * The image MIME types Anthropic and Responses take, matched exactly. The
- * pinned `openai` typings name no input-image formats (only image
- * generation's output formats), so this is the conservative raster set; an
- * exact match also keeps a value carrying data-URL delimiters out of a URL
- * built from it.
- */
-export const ImageMimeTypeSchema = Schema.Literals([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-]);
-
-/**
  * What every codec reports a response as. A part opens at its position in
  * canonical shape, grows by appends and evidence, and closes. A `close` with
  * content replaces what streamed by the provider's own item; a `null` one

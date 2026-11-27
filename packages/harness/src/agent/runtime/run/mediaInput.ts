@@ -39,13 +39,25 @@ import {
   rasterizePdfPages,
 } from './img';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { IMAGE_LIMITS, type InputPart } from '@texra-ai/llm';
+import {
+  IMAGE_LIMITS,
+  takesImageInput,
+  TurnProtocolSchema,
+  type InputPart,
+} from '@texra-ai/llm';
 import type { BoundModel } from '../modelAccess/ModelAccess';
 
-interface MediaCapabilities {
-  readonly supportsVision: boolean;
-  readonly supportsNativePdf: boolean;
-  readonly supportsNativeAudio: boolean;
+/** What decides which media a model is sent: the media its configuration
+ *  takes, and the image types its wire protocol does. */
+interface MediaModel {
+  readonly config: {
+    readonly capabilities: {
+      readonly supportsVision: boolean;
+      readonly supportsNativePdf: boolean;
+      readonly supportsNativeAudio: boolean;
+    };
+  };
+  readonly origin: { readonly protocol: typeof TurnProtocolSchema.Type };
 }
 
 interface MediaInputParts {
@@ -116,7 +128,7 @@ export const storedPdfPages = Effect.fn('mediaInput.storedPdfPages')(function* (
  */
 const partsForFile = Effect.fn('mediaInput.file')(function* (
   location: FileLocation,
-  capabilities: MediaCapabilities,
+  { config: { capabilities }, origin }: MediaModel,
   maxImageDimension: number,
 ): Effect.fn.Return<
   MediaInputParts,
@@ -157,6 +169,8 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
     });
   }
   if (!capabilities.supportsVision) return skipped('images');
+  if (!takesImageInput(origin.protocol, mimeType))
+    return skipped(`${mimeType} images`);
   const base64 = yield* getBase64EncodedMedia(path, maxImageDimension);
   return { parts: [{ kind: 'image', mimeType, base64 }], kinds: ['image'] };
 });
@@ -184,8 +198,7 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
   // Files load at once; the parts keep the attachment order.
   const loaded = yield* Effect.forEach(
     locations,
-    (location) =>
-      partsForFile(location, bound.config.capabilities, maxImageDimension),
+    (location) => partsForFile(location, bound, maxImageDimension),
     { concurrency: 4 },
   );
   return {
@@ -225,7 +238,15 @@ export const attachedMedia = Effect.fn('mediaInput.attached')(
           return { media: entry, blob: { digest: entry.digest } };
         const path = pathToLocationIn(roots.workspace, entry).absolutePath;
         const mimeType = getMimeType(path);
-        if (mimeType === null || !storedMediaPart(mimeType, '', ANY_MODEL))
+        if (
+          mimeType === null ||
+          !TurnProtocolSchema.literals.some((protocol) =>
+            storedMediaPart(mimeType, '', {
+              config: { capabilities: EVERY_MEDIUM },
+              origin: { protocol },
+            }),
+          )
+        )
           return yield* new MediaConversionFailed({
             message: `Unsupported media file: ${entry}`,
           });
@@ -245,8 +266,9 @@ export const attachedMedia = Effect.fn('mediaInput.attached')(
   },
   Effect.mapError((error) => new Rejected({ reason: error.message })),
 );
-/** A model taking every medium: what a stored attachment may be. */
-const ANY_MODEL: MediaCapabilities = {
+/** Every medium taken: with each protocol in turn, what a stored attachment
+ *  may be. */
+const EVERY_MEDIUM: MediaModel['config']['capabilities'] = {
   supportsVision: true,
   supportsNativePdf: true,
   supportsNativeAudio: true,
@@ -262,7 +284,7 @@ const ANY_MODEL: MediaCapabilities = {
 export function storedMediaPart(
   mimeType: string,
   digest: string,
-  capabilities: MediaCapabilities,
+  { config: { capabilities }, origin }: MediaModel,
 ): StoredMediaPart | null {
   if (mimeType === 'application/pdf') {
     return capabilities.supportsVision && capabilities.supportsNativePdf
@@ -270,7 +292,8 @@ export function storedMediaPart(
       : null;
   }
   if (isImageMimeType(mimeType)) {
-    return capabilities.supportsVision
+    return capabilities.supportsVision &&
+      takesImageInput(origin.protocol, mimeType)
       ? { kind: 'image', mimeType, digest }
       : null;
   }

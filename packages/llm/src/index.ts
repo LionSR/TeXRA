@@ -48,6 +48,7 @@ export {
   ModelOriginSchema,
   originOf,
   sameModelOrigin,
+  takesImageInput,
   TurnProtocolSchema,
 } from './protocol.js';
 export type { ModelOrigin, TurnUsage } from './protocol.js';
