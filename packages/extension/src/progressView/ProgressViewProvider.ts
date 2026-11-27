@@ -35,10 +35,8 @@ import {
   hostFailed,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
-import {
-  EXTENSION_CATEGORIES,
-  getFilterExtensions,
-} from '@texra/common/files/fileTypeUtils';
+import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
+import { DocumentFileTypeSchema } from '@texra/shared/launcher/fileTypes';
 import {
   PdfOpenFailed,
   type EditorCapabilities,
@@ -336,11 +334,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly followWorkspace = Effect.fn(
     'ProgressViewProvider.followWorkspace',
   )({ self: this }, function* () {
-    // Watch exactly the categories the launcher file lists are built from
-    // (fileListingRules), including user-configured extension overrides, so
-    // the watched set cannot drift from what the lists display.
+    // Watch exactly the file types the launcher file lists are built from
+    // (fileListingRules), so the watched set cannot drift from what the
+    // lists display.
     const extensions = new Set(
-      EXTENSION_CATEGORIES.flatMap(getFilterExtensions),
+      DocumentFileTypeSchema.literals.flatMap(getFilterExtensions),
     );
     const filePattern =
       extensions.size === 0 ? '**/*' : `**/*.{${[...extensions].join(',')}}`;

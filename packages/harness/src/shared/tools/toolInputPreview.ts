@@ -7,7 +7,9 @@
  */
 
 import { Predicate } from 'effect';
+
 import { EXECUTIONS_TOOL_NAME } from '@shared/schemas';
+
 import { executionsAction } from './executionsDisplay';
 import { normalizeToolName } from './toolDisplayName';
 import { toolDisplayKind } from './toolKind';

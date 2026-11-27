@@ -70,7 +70,10 @@ import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { HostTelemetrySwitch } from '@telemetry/UsageLogService';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
-import type { CommandId } from '@texra/shared/commands/catalog';
+import {
+  commandCatalogById,
+  type CommandId,
+} from '@texra/shared/commands/catalog';
 import {
   openGlobalConfig,
   openProjectRoots,
@@ -119,18 +122,23 @@ let activationScope: Scope.Closeable | undefined;
  */
 const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   context: vscode.ExtensionContext,
-  workspaceRoot: string | undefined,
-  extras: {
-    /** The background service this window is a client of: reached once
-     *  the runtime that serves its record exists. A window that reaches it
-     *  reads the project's state there and opens no project store. */
-    readonly service?: Effect.Effect<
-      ServiceLink,
-      Error,
-      Scope.Scope | GlobalValues
-    >;
-  } = {},
+  /** The folder this window opened, or `undefined` for a window with none,
+   *  which uses no service. */
+  project:
+    | {
+        readonly workspaceRoot: string;
+        /** The background service this window is a client of: reached once
+         *  the runtime that serves its record exists. A window that reaches
+         *  it reads the project's state there and opens no project store. */
+        readonly service: Effect.Effect<
+          ServiceLink,
+          Error,
+          Scope.Scope | GlobalValues
+        >;
+      }
+    | undefined,
 ) {
+  const workspaceRoot = project?.workspaceRoot;
   // Usage logging is anonymous: a runtime service with no account behind it.
   const extensionVersion =
     typeof context.extension.packageJSON?.version === 'string'
@@ -203,7 +211,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     managed,
     Effect.gen(function* () {
       const reached: Result.Result<ServiceLink, Error> =
-        extras.service === undefined || workspaceRoot === undefined
+        project === undefined
           ? Result.fail(
               new ServiceUnavailable({
                 reason: 'a window with no folder uses no service',
@@ -212,7 +220,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           : // Held with the project state it serves: after the sessions
             // that read it close, before the runtime its reconnects use.
             yield* Effect.result(
-              extras.service.pipe(Scope.provide(projectScope)),
+              project.service.pipe(Scope.provide(projectScope)),
             );
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
@@ -289,7 +297,7 @@ const WALKTHROUGH_WORKSPACE_ACTION_COMMAND = 'texra.walkthroughWorkspaceAction';
 const explainWorkspaceRequired = Effect.fn('explainWorkspaceRequired')(
   function* (extensionPath: string) {
     const openFolder = 'Open Folder';
-    const createSample = 'Create Sample Project';
+    const createSample = commandCatalogById['texra.createSampleProject'].title;
     const choice = yield* vscodeUi.ask(
       'info',
       'Open a single project folder or create the sample project first.',
@@ -385,8 +393,8 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // them. Decided once: a reconnect never re-enters it.
   const { runtime, fork, roots, hosts, reached } = yield* initVscodePlatform(
     context,
-    workspaceRoot,
     {
+      workspaceRoot,
       // Started, when none answers, from the bundle the extension ships,
       // with VS Code's own runtime as Node.
       service: reachBundledService(

@@ -39,7 +39,7 @@ function taskStatus(view: SessionView): TaskStatus {
   const runs = [...view.runs.values()];
   const liveTreeRoots = runs.filter(
     (run) =>
-      (run.parentId === null || !view.runs.has(run.parentId)) &&
+      run.parentId === null &&
       descendantRuns(view, run.id, { includeRoot: true }).some((id) => {
         const member = view.runs.get(id);
         return member !== undefined && member.holder === 'here';

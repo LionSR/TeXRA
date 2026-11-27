@@ -20,11 +20,9 @@ const WebSearchInputSchema = Schema.Struct({
     description: 'Search query to send to the web search provider.',
   }),
   max_results: nullishWithDefault(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(
-      Schema.isLessThanOrEqualTo(5),
-    ),
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 5 })),
     3,
-    'Maximum number of search results to return, up to 5.',
+    'Maximum number of search results to return.',
   ),
 });
 

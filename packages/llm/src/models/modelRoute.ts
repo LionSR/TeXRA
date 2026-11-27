@@ -114,8 +114,9 @@ export type ModelRoute =
     }
   /** No provider key can serve the model directly. */
   | { readonly kind: 'no-api-key' }
-  /** No route TeXRA reaches serves the model (see {@link isUnservedModel}). */
-  | { readonly kind: 'unserved' };
+  /** No route TeXRA reaches serves the model: `reason`, the clause after
+   *  its name, says why ({@link isUnservedModel}). */
+  | { readonly kind: 'unserved'; readonly reason: string };
 
 /** The routes that bill a credential: a key, or a session plan's sign-in. */
 export type CredentialRoute = Exclude<
@@ -138,6 +139,20 @@ function codexSubscriptionOf(
     : undefined;
 }
 
+/** Why TeXRA serves no run on `config` ({@link isUnservedModel}), as the
+ *  clause after the model's name, or undefined when it serves one. */
+function unservedReason(
+  config: Pick<ModelConfig, 'retired' | 'openRouterOnly' | 'capabilities'>,
+): string | undefined {
+  if (config.retired === true)
+    return 'is retired and no longer available from its provider';
+  if (config.openRouterOnly === true)
+    return 'is served only through OpenRouter or GitHub Copilot, which this build no longer supports';
+  if (!config.capabilities.supportsFunctionCalling)
+    return 'cannot call tools, which every run needs';
+  return undefined;
+}
+
 /**
  * Whether TeXRA serves no run on `config`: llm-zoo retired the model, only
  * OpenRouter serves it, which TeXRA does not call, or it cannot call
@@ -146,11 +161,7 @@ function codexSubscriptionOf(
 export function isUnservedModel(
   config: Pick<ModelConfig, 'retired' | 'openRouterOnly' | 'capabilities'>,
 ): boolean {
-  return (
-    config.retired === true ||
-    config.openRouterOnly === true ||
-    !config.capabilities.supportsFunctionCalling
-  );
+  return unservedReason(config) !== undefined;
 }
 
 /** The largest input window, in tokens, the Codex backend grants any model on
@@ -337,7 +348,8 @@ export function decideModelRoute(
   config: ModelConfig,
   facts: RouteFacts,
 ): ModelRoute {
-  if (isUnservedModel(config)) return { kind: 'unserved' };
+  const reason = unservedReason(config);
+  if (reason !== undefined) return { kind: 'unserved', reason };
   const route = Arr.findFirst(Object.values(PLAN_DECISIONS), (decide) =>
     Option.fromNullishOr(decide(config, facts)),
   );

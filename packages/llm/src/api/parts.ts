@@ -7,7 +7,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Predicate, Schema } from 'effect';
+import { Predicate } from 'effect';
 
 // Local imports - canonical model contract
 import type { ResolvedTurn, TurnResult } from '../turn.js';
@@ -19,20 +19,6 @@ export type InputPart = Extract<
   ResolvedTurn['messages'][number],
   { role: 'user' }
 >['content'][number];
-
-/**
- * The image MIME types Anthropic and Responses take, matched exactly. The
- * pinned `openai` typings name no input-image formats (only image
- * generation's output formats), so this is the conservative raster set; an
- * exact match also keeps a value carrying data-URL delimiters out of a URL
- * built from it.
- */
-export const ImageMimeTypeSchema = Schema.Literals([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-]);
 
 /**
  * What every codec reports a response as. A part opens at its position in
@@ -74,9 +60,7 @@ export type PartEvent =
       readonly kind: 'finish';
       /** A `null` reason leaves it to the final content: a tool-call
        *  finish when it holds calls, else a plain stop. */
-      readonly finish: {
-        readonly finishReason: TurnResult['finishReason'] | null;
-      };
+      readonly finishReason: TurnResult['finishReason'] | null;
       /** The terminal item list. It supplies content only for a turn with
        *  no item events, or the items a resumed observation joined too late
        *  to see close (see `finishedContent`). */

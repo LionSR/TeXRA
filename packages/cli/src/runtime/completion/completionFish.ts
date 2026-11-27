@@ -86,9 +86,9 @@ export function fishCompletion(commands: readonly CompletionCommand[]): string {
         for (const alias of variant.aliases) {
           base.push(`-s '${fishEscape(alias)}'`);
         }
-        if (variant.takesValue) base.push('-r');
-        if (variant.values.length > 0) {
-          base.push(`-a '${fishEscape(variant.values.join(' '))}'`);
+        if (variant.value.kind !== 'none') base.push('-r');
+        if (variant.value.kind === 'choice') {
+          base.push(`-a '${fishEscape(variant.value.values.join(' '))}'`);
         }
         base.push(...fishDescription(variant.description));
         lines.push(fishCompleteLine(base));

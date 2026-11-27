@@ -1,6 +1,10 @@
 import { Effect } from 'effect';
 
-import { type RunId, parseApprovalPolicy } from '@texra-ai/worldline/schemas';
+import {
+  APPROVAL_POLICIES,
+  type RunId,
+  parseApprovalPolicy,
+} from '@texra-ai/worldline/schemas';
 import {
   appendLocalNotice,
   appendLocalRequestRefusal,
@@ -12,7 +16,7 @@ import { RUN_GRANT_NOUN } from '@ui/copy/delegationApproval';
 import { type SlashCommandContext } from './slashContext';
 import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
 
-const APPROVAL_USAGE = 'Usage: /approval [ask | yolo]';
+const APPROVAL_USAGE = `Usage: /approval [${APPROVAL_POLICIES.join(' | ')}]`;
 
 /**
  * `/approval` sets this chat's launch policy, like `--approval-policy`, here

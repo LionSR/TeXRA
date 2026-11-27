@@ -82,10 +82,6 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
       availableRows={props.availableRows}
       description="Select a skill to activate it."
       detailFor={skillIssueSummaryDetail}
-      detailRowsFor={(result) =>
-        (result.issues.length > 0 ? 1 : 0) +
-        (result.offHint === undefined ? 0 : 1)
-      }
       compactDetailFor={(result) => (
         <>
           <Text dimColor wrap="truncate-end">

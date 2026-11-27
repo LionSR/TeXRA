@@ -12,7 +12,7 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports - types
 import { toErrorMessage } from '@texra-ai/worldline/schemas';
-import type { DiffLabel, DiffSource } from '@texra/hosts/uiHosts';
+import type { DiffLabel } from '@texra/hosts/uiHosts';
 import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import type {
   ToolEditApprovalHost,
@@ -30,16 +30,17 @@ import { type HostCommandFailure } from '@texra/controllers/session/hostCallFail
 
 type DesktopToolEditApprovalUi = Pick<
   DesktopAgentRunHost,
-  'openPath' | 'openBuildDisplay' | 'notify'
+  'openPath' | 'notify'
 > & {
+  openBuildDisplay: BuildDisplayFn;
   /**
    * Show the staged diff under `previewId`, the key `closeDiff` below closes
    * it by. Each request names its own preview, so the Review workbench can
    * tell one request's diff from another's.
    */
   openDiff(
-    original: DiffSource,
-    proposed: DiffSource,
+    originalPath: string,
+    proposedPath: string,
     label: DiffLabel,
     previewId: string,
   ): Effect.Effect<void, Error>;
@@ -157,8 +158,8 @@ class DesktopToolEditPreview implements ToolEditPreview {
   showDiff(): Effect.Effect<void, HostCommandFailure> {
     return this.ui
       .openDiff(
-        { filePath: this.staged.originalPath },
-        { filePath: this.staged.proposedPath },
+        this.staged.originalPath,
+        this.staged.proposedPath,
         toolEditDiffLabel(this.request),
         this.request.requestId,
       )

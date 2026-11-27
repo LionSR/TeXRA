@@ -23,21 +23,21 @@ export function allocateMiddleRows({
   footerRows,
   foregroundMaxRows,
   foregroundOpen,
-  queuedFollowUpPanelRows = 0,
+  queuedFollowUpPanelRows,
   reverseSearchOpen,
   rows,
   slashPaletteOpen,
-  staticTranscriptRows = 0,
+  staticTranscriptRows,
 }: {
   /** The status bar plus the input bar's measured height when it shows. */
   readonly footerRows: number;
   readonly foregroundMaxRows?: number;
   readonly foregroundOpen: boolean;
-  readonly queuedFollowUpPanelRows?: number;
+  readonly queuedFollowUpPanelRows: number;
   readonly reverseSearchOpen: boolean;
   readonly rows: number;
   readonly slashPaletteOpen: boolean;
-  readonly staticTranscriptRows?: number;
+  readonly staticTranscriptRows: number;
 }): {
   readonly foregroundRows: number;
   readonly transcriptRows: number;
@@ -93,7 +93,6 @@ export function allocateConversationPanelRows({
   readonly planContentRows: number;
   readonly transcriptRows: number;
 }): {
-  readonly bottomPanelRows: number;
   readonly conversationRows: number;
   readonly sessionPanelRows: number;
   readonly planRows: number;
@@ -102,7 +101,6 @@ export function allocateConversationPanelRows({
   // A bottom panel may never consume the last transcript row.
   const panelBudget = Math.max(0, availableTranscriptRows - 1);
   const none = {
-    bottomPanelRows: 0,
     conversationRows: availableTranscriptRows,
     sessionPanelRows: 0,
     planRows: 0,
@@ -117,7 +115,6 @@ export function allocateConversationPanelRows({
     const rows = Math.min(maxRows, sessionCount + 1, panelBudget);
     if (rows < BOTTOM_PANEL_MIN_ROWS) return none;
     return {
-      bottomPanelRows: rows,
       conversationRows: availableTranscriptRows - rows,
       sessionPanelRows: rows,
       planRows: 0,
@@ -131,7 +128,6 @@ export function allocateConversationPanelRows({
   );
   if (rows < BOTTOM_PANEL_MIN_ROWS) return none;
   return {
-    bottomPanelRows: rows,
     conversationRows: availableTranscriptRows - rows,
     sessionPanelRows: 0,
     planRows: rows,
@@ -141,12 +137,12 @@ export function allocateConversationPanelRows({
 export function staticTranscriptRowBudget({
   footerRows,
   foregroundOpen,
-  queuedFollowUpPanelRows = 0,
+  queuedFollowUpPanelRows,
   rows,
 }: {
   readonly footerRows: number;
   readonly foregroundOpen: boolean;
-  readonly queuedFollowUpPanelRows?: number;
+  readonly queuedFollowUpPanelRows: number;
   readonly rows: number;
 }): number | undefined {
   if (foregroundOpen || rows > COMPACT_STATIC_TRANSCRIPT_MAX_ROWS) {
@@ -168,17 +164,15 @@ interface StaticScrollbackTarget {
 export function staticScrollbackTarget({
   activeRunId,
   rootRunId,
-  scopedTranscript = false,
+  scopedRunId,
 }: {
   readonly activeRunId: RunId | undefined;
   readonly rootRunId: RunId | undefined;
-  readonly scopedTranscript?: boolean;
+  /** The focused child that owns the scrollback, when one does. */
+  readonly scopedRunId: RunId | undefined;
 }): StaticScrollbackTarget {
-  if (scopedTranscript) {
-    return {
-      ownerKey: activeRunId ? `run:${activeRunId}` : 'scoped:none',
-      runId: activeRunId,
-    };
+  if (scopedRunId !== undefined) {
+    return { ownerKey: `run:${scopedRunId}`, runId: scopedRunId };
   }
   // Before a root run resolves, local helper output and harness-built root
   // runs still need static scrollback. The root owner key is deliberately

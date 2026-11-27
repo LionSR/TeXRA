@@ -116,6 +116,9 @@ view does not hold.
 Held back for size: the design harness (`packages/cli/scripts/tui-harness.tsx`)
 calls it too.
 
+Landed 2026-11-26: `formatCliSessionStatus(view, run, { ... })`; the
+harness passes the same three arguments.
+
 ## 5. Waiting on the open PRs
 
 - `StateSettingUpdateResult`
@@ -124,6 +127,8 @@ calls it too.
   `entry` its caller passed into five of them. Its readers
   (`packages/texra/src/controllers/settingsView/settingsViewBody.ts`,
   `packages/cli/src/chat/tui/forms/CliConfigForm.tsx`) are being rewritten.
+  **Landed 2026-11-27:** three kinds; the failed one carries its sentence
+  and whether it is a notice or an alert.
 - `dumbTerminalOptions.commandName`
   (`packages/cli/src/runtime/terminal/terminalRequirements.ts`) is the last
   optional copy of the command name, with a `'texra'` fallback
@@ -138,6 +143,8 @@ calls it too.
   evening:** the field is gone; the window counts `paths`.
 - `allocateConversationPanelRows` (`packages/cli/src/chat/tui/appLayout.ts`)
   returns four row counts where a panel kind and its rows would do.
+  **Landed 2026-11-27:** the derived `bottomPanelRows` is gone; the caller
+  adds the two panels it shows.
 - `RegisterRunOptions.takesFollowUps`
   (`packages/harness/src/shared/session/runFacts.ts`) is optional though
   both callers set it. Landed (2026-11-26 evening), corrected: the

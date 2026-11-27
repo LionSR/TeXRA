@@ -30,7 +30,7 @@ function flagValueTokenEntries(
   const entries: FlagValueTokenEntry[] = [];
   for (const command of commands) {
     for (const flag of command.flags) {
-      if (!flag.takesValue) continue;
+      if (flag.value.kind === 'none') continue;
       for (const token of completionFlagTokens(flag)) {
         if (seen.has(token)) continue;
         seen.add(token);
@@ -46,10 +46,11 @@ function fixedFlagValueCases(commands: readonly CompletionCommand[]): string {
   for (const command of commands) {
     for (const flag of command.flags) {
       for (const variant of completionFlagVariants(flag)) {
-        if (variant.values.length === 0) continue;
-        cases.set(`--${variant.name}`, [...variant.values]);
+        if (variant.value.kind !== 'choice') continue;
+        const { values } = variant.value;
+        cases.set(`--${variant.name}`, [...values]);
         for (const alias of variant.aliases) {
-          cases.set(`-${alias}`, [...variant.values]);
+          cases.set(`-${alias}`, [...values]);
         }
       }
     }
@@ -75,7 +76,7 @@ function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
   const fixedValueFlags = new Set(
     commands.flatMap((command) =>
       command.flags
-        .filter((flag) => flag.values.length > 0)
+        .filter((flag) => flag.value.kind === 'choice')
         .flatMap(completionFlagTokens),
     ),
   );
@@ -90,9 +91,9 @@ function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
 
   for (const { flag, token } of flagValueTokenEntries(commands)) {
     if (fixedValueFlags.has(token) || dynamicTokens.has(token)) continue;
-    if (flag.valueKind === 'directory' || flag.valueKind === 'dir') {
+    if (flag.value.kind === 'directory') {
       directoryFlags.push(token);
-    } else if (flag.valueKind === 'file' || flag.valueKind === 'path') {
+    } else if (flag.value.kind === 'file') {
       fileFlags.push(token);
     } else {
       genericFlags.push(token);

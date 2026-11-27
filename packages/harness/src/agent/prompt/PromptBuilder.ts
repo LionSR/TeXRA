@@ -2,7 +2,6 @@
 import { Array as Arr, Effect, FileSystem } from 'effect';
 
 // Local imports - agent
-import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import { delegationUpdate } from '@agent/runtime/delegation/delegationAvailability';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { PromptSections } from '@shared/schemas';
@@ -87,8 +86,10 @@ export function contextUpdate(
 export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
   function* (
     system: string,
-    { inputs }: TemplateOpening,
     options: {
+      /** The run's working directory (else its workspace, else `.`): the
+       *  one variable its system text may read, `{{ CWD }}`. */
+      cwd: string;
       /** The run's session roots: the workspace whose `AGENTS.md` and
        *  `<workspace_info>` it reads, the storage root whose `AGENTS.md`
        *  is the person's own, and the setting slots the `<workspace_info>`
@@ -107,7 +108,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const rendered = yield* renderPrompt(system, inputs);
+    const rendered = yield* renderPrompt(system, { CWD: options.cwd });
     const { roots } = options;
     // The two workspace reads are independent; run them together.
     const [agentsMd, workspaceInfo] = yield* Effect.all(
@@ -117,7 +118,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
           ? Effect.succeed('')
           : buildWorkspaceInfoBlock(
               roots.workspace,
-              inputs.CWD,
+              options.cwd,
               options.offered,
               options.memory,
             ),

@@ -6,8 +6,8 @@
  */
 
 // Local imports
-import { agentTool } from '@agent/runtime/delegation/AgentTool';
-import { programTool } from '@agent/runtime/delegation/ProgramTool';
+import { AgentTool } from '@agent/runtime/delegation/AgentTool';
+import { ProgramTool } from '@agent/runtime/delegation/ProgramTool';
 import { GOAL_PLAN_KIND } from '@shared/schemas';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import { BashTool } from '@tools/bash';
@@ -105,7 +105,7 @@ export const goal: Plugin = definePlugin({
 /** Child runs: the `agent` tool, and `program` for a registered program. */
 export const multiAgent: Plugin = definePlugin({
   id: 'multi-agent',
-  tools: [agentTool(), programTool()],
+  tools: [AgentTool, ProgramTool],
   toggle: 'on',
 });
 

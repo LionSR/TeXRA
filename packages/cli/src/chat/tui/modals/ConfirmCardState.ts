@@ -67,9 +67,9 @@ interface ConfirmCardCompactHintLayoutOptions extends ConfirmCardHintOptions {
 }
 
 interface ConfirmCardCompactHintLayout {
-  readonly inlineHints: readonly KeyHint[];
-  readonly stackedHints: readonly KeyHint[];
-  readonly stack: boolean;
+  /** Whether the hints take their own row under the title. */
+  readonly stacked: boolean;
+  readonly hints: readonly KeyHint[];
 }
 
 /**
@@ -207,17 +207,14 @@ export function confirmCardCompactHintLayout({
     ...options,
     maxColumns: columns,
   });
-  return {
-    inlineHints,
-    stackedHints,
-    stack:
-      inlineHints.some((hint) => hint.key === 'Esc') &&
-      stackedHints.length > inlineHints.length,
-  };
+  const stacked =
+    inlineHints.some((hint) => hint.key === 'Esc') &&
+    stackedHints.length > inlineHints.length;
+  return { stacked, hints: stacked ? stackedHints : inlineHints };
 }
 
 export function confirmCardCompactChromeRows(
   options: ConfirmCardCompactHintLayoutOptions,
 ): number {
-  return confirmCardCompactHintLayout(options).stack ? 2 : 1;
+  return confirmCardCompactHintLayout(options).stacked ? 2 : 1;
 }

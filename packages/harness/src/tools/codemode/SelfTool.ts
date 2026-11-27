@@ -42,8 +42,8 @@ import {
   AgentConfigSchema,
   backgroundScriptOf,
   runsScript,
-  ToolError,
   SELF_TOOL_NAME,
+  ToolError,
 } from '@shared/schemas';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { defineTool } from '@tools/core/definition';

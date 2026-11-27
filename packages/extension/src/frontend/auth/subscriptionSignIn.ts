@@ -5,13 +5,12 @@ import * as vscode from 'vscode';
 // Local imports
 import { Cancelled } from '@texra-ai/worldline/schemas';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
-import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { copyText, vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
-import { fromHost } from '@texra/controllers/session/hostCallFailure';
 import {
   subscriptionProvider,
   type SubscriptionAccount,
@@ -34,9 +33,7 @@ function vscodePresenter(
   return {
     presentDeviceCode: Effect.fn('presentDeviceCode')(
       function* (prompt, reason) {
-        const copied = yield* fromHost('clipboard.writeText', () =>
-          vscode.env.clipboard.writeText(prompt.userCode),
-        ).pipe(
+        const copied = yield* copyText(prompt.userCode).pipe(
           Effect.as(true),
           Effect.catch((error) =>
             Effect.logWarning(
@@ -66,7 +63,6 @@ function vscodePresenter(
           error,
         ),
       ),
-      Effect.asVoid,
     ),
     presentSignInUrl: Effect.fn('subscriptionSignIn.presentSignInUrl')(
       function* (url) {
@@ -85,9 +81,7 @@ function vscodePresenter(
           },
         );
         if (choice === SIGN_IN_PROMPT.copyLinkLabel) {
-          yield* fromHost('clipboard.writeText', () =>
-            vscode.env.clipboard.writeText(url),
-          );
+          yield* copyText(url);
           yield* showLoggedInfoMessage(SIGN_IN_PROMPT.linkCopied(copyTarget));
           return;
         }

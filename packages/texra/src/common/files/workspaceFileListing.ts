@@ -2,6 +2,7 @@
 import { join } from 'node:path';
 import { normalizeFilePath } from '@texra-ai/worldline/schemas';
 import {
+  listedEntryGone,
   meansAbsent,
   readDirectoryTypedTolerant,
 } from '@texra-ai/worldline/node';
@@ -60,9 +61,8 @@ export const listWorkspaceFiles = Effect.fn(
   }));
 
   // A link's target type, or undefined when links are skipped or this one
-  // does not resolve. Absent (`meansAbsent`: NotFound / ENOTDIR), the rest
-  // of BadResource (`ELOOP`), and PermissionDenied skip the entry; any other
-  // failure is real. glob.ts drops NotFound and BadResource the same way.
+  // does not resolve. A target that went away (`listedEntryGone`) or may
+  // not be read skips the entry; any other failure is real.
   const followLink = (absolutePath: string) =>
     options.links === 'skip'
       ? Effect.undefined
@@ -70,8 +70,7 @@ export const listWorkspaceFiles = Effect.fn(
           Effect.map((info) => info.type),
           Effect.catchIf(
             (error) =>
-              meansAbsent(error) ||
-              error.reason._tag === 'BadResource' ||
+              listedEntryGone(error) ||
               error.reason._tag === 'PermissionDenied',
             () => Effect.undefined,
           ),

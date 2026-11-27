@@ -21,7 +21,6 @@ interface DesktopPromptOverlay {
 
 /** One prompt as main asks it, and what answers it. */
 interface Prompt {
-  readonly title: string;
   readonly prompt: string;
   readonly password: boolean;
   readonly answer: (value: string | null) => void;
@@ -73,7 +72,6 @@ export function createDesktopPromptOverlay(
   const shell = createOverlayDialog({
     appRoot,
     prefix: 'desktop-prompt',
-    ariaLabel: 'Input',
     closeLabel: 'Cancel',
     title: 'Input',
     content: form,
@@ -104,12 +102,13 @@ export function createDesktopPromptOverlay(
   function open(message: Prompt): void {
     current?.answer(null);
     current = message;
-    shell.titleEl.textContent = message.title;
+    // The prompt is the dialog's title, so the input carries no second
+    // visible label.
+    shell.titleEl.textContent = message.prompt;
     input.type = message.password ? 'password' : 'text';
-    input.label = message.prompt === message.title ? '' : message.prompt;
     input.setAttribute('aria-label', message.prompt);
     input.value = '';
-    dialog.setAttribute('aria-label', message.title);
+    dialog.setAttribute('aria-label', message.prompt);
     dialog.open = true;
     void input.updateComplete.then(() => {
       if (current === message) input.focus();

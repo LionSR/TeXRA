@@ -30,7 +30,6 @@ interface OverlayDialogOptions {
   appRoot: HTMLElement;
   /** Derives the dialog's `${prefix}-overlay` and its `${prefix}-close`. */
   prefix: string;
-  ariaLabel: string;
   closeLabel: string;
   /** The overlay's content element (settings view, prompt form). */
   content: HTMLElement;
@@ -52,7 +51,7 @@ export function createOverlayDialog(
   dialog.classList.add('desktop-overlay', `${prefix}-overlay`);
   dialog.withoutHeader = true;
   dialog.lightDismiss = false;
-  dialog.setAttribute('aria-label', options.ariaLabel);
+  dialog.setAttribute('aria-label', options.title);
 
   const body = document.createElement('section');
   body.classList.add('desktop-overlay-body');

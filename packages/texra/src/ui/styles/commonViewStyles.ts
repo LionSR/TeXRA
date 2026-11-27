@@ -406,11 +406,6 @@ export const commonViewStyles: CSSResult = css`
     padding: 0;
   }
 
-  .text-secondary {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-  }
-
   [hidden] {
     display: none !important;
   }

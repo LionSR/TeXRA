@@ -205,7 +205,7 @@ const UPLOAD_DEADLINE = '5 seconds';
  *  model as its mention, which says why. */
 function resultContent(
   recorded: Pick<ToolCallResult, 'result' | 'attachments'>,
-  capabilities: Parameters<typeof storedMediaPart>[2],
+  bound: Parameters<typeof storedMediaPart>[2],
 ): {
   readonly text: InputPart;
   readonly media: readonly {
@@ -221,7 +221,7 @@ function resultContent(
         mimeType,
         note: `its bytes were not captured (${content.reason})`,
       };
-    const part = storedMediaPart(mimeType, content.digest, capabilities);
+    const part = storedMediaPart(mimeType, content.digest, bound);
     if (part === null)
       return { path, mimeType, note: `the model takes no ${mimeType} inline` };
     media.push({ path, part });
@@ -852,7 +852,7 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
     if (recorded === null) {
       throw new Error(`Call ${fact.callId} has no result at delivery.`);
     }
-    const content = resultContent(recorded, bound.config.capabilities);
+    const content = resultContent(recorded, bound);
     media.push(...content.media);
     return {
       callOrdinal: ordinal,

@@ -91,7 +91,6 @@ export function createDesktopSettingsDialog(
   const { dialog } = createOverlayDialog({
     appRoot,
     prefix: 'desktop-settings',
-    ariaLabel: 'Settings',
     closeLabel: 'Close settings',
     title: 'Settings',
     content,

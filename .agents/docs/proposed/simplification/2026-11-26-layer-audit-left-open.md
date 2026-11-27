@@ -80,7 +80,9 @@ chat-only modules out of `packages/cli/src/runtime/` (item 5 of the
   and `shared/transcript/toolRowModel.ts` (one site compares the name
   without normalizing it). `shared/toolUse.ts` already holds the tool's wait
   limits; the fourth site, `toolRowSections.ts`, is held, so the constant
-  goes in with it.
+  goes in with it. Landed 2026-11-27: `EXECUTIONS_TOOL_NAME` (beside
+  `SELF_TOOL_NAME`, which `scriptStage.ts` spelled too) and
+  `EXECUTIONS_DEFAULT_ACTION`.
 - **The CLI words a plan switched on inline**
   (`packages/cli/src/runtime/models/modelAccessSelection.ts`) beside
   `ACCOUNT_OUTCOME.planDisabled`, and `/logout` composes the sign-out lines

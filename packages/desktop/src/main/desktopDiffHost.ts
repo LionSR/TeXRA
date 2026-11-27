@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import { Effect, FileSystem } from 'effect';
 
 import {
@@ -12,7 +10,7 @@ import {
   reportDiffTimeout,
 } from '@texra-ai/worldline/plugins';
 import { readNormalizedFile } from '@texra-ai/worldline/node';
-import type { DiffLabel, DiffSource, DiffViewHost } from '@texra/hosts/uiHosts';
+import type { DiffLabel } from '@texra/hosts/uiHosts';
 import { monacoLanguageForPath } from '@ui/highlighting/languageForPath';
 
 import { DESKTOP_DIFF_COMMANDS } from '../shared/desktopDiffMessages.js';
@@ -28,20 +26,17 @@ interface DesktopDiffHostOptions {
 }
 
 /** The pair of Review-tab verbs one open project's diffs are shown under. */
-interface ProjectDiffHost extends DiffViewHost {
+interface ProjectDiffHost {
   /**
-   * Show a diff in the Review workbench under `previewId`, the key
-   * {@link ProjectDiffHost.closeDiff} closes it by. A caller with nothing to
-   * close later (the progress view's compare) omits it and the host mints
-   * one, so every diff the renderer holds is named and no close can dismiss
-   * a diff its sender did not open. Omitting it also keeps this assignable
-   * to `DiffViewHost['openDiff']`, which is how the window wires it.
+   * Show the diff of two absolute paths in the Review workbench under
+   * `previewId`, the key {@link ProjectDiffHost.closeDiff} closes it by, so
+   * no close can dismiss a diff its sender did not open.
    */
   openDiff(
-    original: DiffSource,
-    proposed: DiffSource,
+    originalPath: string,
+    proposedPath: string,
     label: DiffLabel,
-    previewId?: string,
+    previewId: string,
   ): Effect.Effect<void, Error>;
   /**
    * Close the diff `previewId` names: the renderer's `desktop:closeDiff`,
@@ -74,10 +69,10 @@ export function createDesktopDiffHost(
 ): DesktopDiffHost {
   function openDiff(
     reviewSession: string,
-    original: DiffSource,
-    proposed: DiffSource,
+    originalPath: string,
+    proposedPath: string,
     { title, displayPath }: DiffLabel,
-    previewId: string = randomUUID(),
+    previewId: string,
   ): Effect.Effect<void, Error> {
     return withProcessServices(
       options.runtime,
@@ -88,8 +83,8 @@ export function createDesktopDiffHost(
         // process filesystem rather than through either rooted view.
         const [originalContent, proposedContent] = yield* Effect.all(
           [
-            readNormalizedFile(fs, original.filePath),
-            readNormalizedFile(fs, proposed.filePath),
+            readNormalizedFile(fs, originalPath),
+            readNormalizedFile(fs, proposedPath),
           ],
           { concurrency: 2 },
         );
@@ -108,7 +103,7 @@ export function createDesktopDiffHost(
           proposedText: proposedContent,
           additions: added,
           deletions: removed,
-          language: monacoLanguageForPath(proposed.filePath),
+          language: monacoLanguageForPath(proposedPath),
         });
       }),
     );
@@ -130,8 +125,8 @@ export function createDesktopDiffHost(
 
   return {
     inProject: (roots) => ({
-      openDiff: (original, proposed, label, previewId) =>
-        openDiff(roots.storage, original, proposed, label, previewId),
+      openDiff: (originalPath, proposedPath, label, previewId) =>
+        openDiff(roots.storage, originalPath, proposedPath, label, previewId),
       closeDiff: (previewId) => closeDiff(roots.storage, previewId),
     }),
   };

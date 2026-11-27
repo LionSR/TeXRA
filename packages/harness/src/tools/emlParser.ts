@@ -9,7 +9,7 @@ import { createHtmlToMarkdown } from '@tools/web/htmlToMarkdown';
 import type { Address, Attachment, Email } from 'postal-mime';
 
 /** An image extracted from the email (inline or attached). */
-export interface EmlImageAttachment {
+interface EmlImageAttachment {
   /** Original filename, or a generated one like "image-1.png" */
   filename: string;
   /** MIME type (e.g. "image/png") */

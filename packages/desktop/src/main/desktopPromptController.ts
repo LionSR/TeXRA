@@ -2,6 +2,7 @@ import { Effect, Fiber, FiberSet, type Scope } from 'effect';
 import { RpcClient } from 'effect/rpc';
 
 import { withLogChannel } from '@texra-ai/worldline/plugins';
+import type { InputField } from '@texra/hosts/uiHosts';
 import { callOverMessages } from '@texra/shared/rpcOverMessages';
 import {
   DESKTOP_PROMPT_COMMANDS,
@@ -10,12 +11,6 @@ import {
 } from '../shared/desktopPromptMessages.js';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import { parsedRoute, type DesktopCommandRoutes } from './desktopIpcTypes.js';
-
-interface DesktopPromptInput {
-  title: string;
-  prompt: string;
-  password?: boolean;
-}
 
 /**
  * The window's prompts: main's client of the renderer's `DesktopPromptRpcs`,
@@ -28,9 +23,7 @@ export const makeDesktopPrompts = Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   {
     readonly routes: DesktopCommandRoutes;
-    readonly request: (
-      input: DesktopPromptInput,
-    ) => Effect.Effect<string | undefined>;
+    readonly request: (field: InputField) => Effect.Effect<string | undefined>;
     readonly reset: Effect.Effect<void>;
   },
   never,
@@ -52,11 +45,11 @@ export const makeDesktopPrompts = Effect.fnUntraced(function* (
         ({ message }) => receive(message),
       ),
     },
-    request: ({ title, prompt, password }) =>
+    request: ({ prompt, secret }) =>
       Effect.acquireUseRelease(
         FiberSet.run(
           asking,
-          client.prompt({ title, prompt, password: password ?? false }),
+          client.prompt({ prompt, password: secret ?? false }),
         ),
         Fiber.join,
         Fiber.interrupt,

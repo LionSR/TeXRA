@@ -250,6 +250,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         draftRequests: options.draftRequests,
         host: createDesktopHostRequests({
           host: hosts.run,
+          runtime,
           openFiles: host.openFileDialog,
           postToRenderer: host.post,
           settings: options.settings,
