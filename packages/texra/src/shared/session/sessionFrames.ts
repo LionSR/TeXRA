@@ -9,7 +9,7 @@
  *
  * - `session.frames`: the session's view inputs from a cursor, with the
  *   transcripts named, as the runtime's reader orders them
- *   (`Session.view.watch`): a replay whole, then each tail read, each batch
+ *   (`Session.view.watch`): a replay whole, then each tail read, each input
  *   one `EventsFrame`. A new transcript set is a new call; the frontend's
  *   view interrupts the old one.
  * - `session.host`: what the host renders but does not own, each time its
@@ -60,9 +60,9 @@ export const SubscribeSchema = Schema.Struct({
 });
 export type Subscribe = typeof SubscribeSchema.Type;
 
-/** One batch of a subscription's view inputs. */
+/** The view inputs a subscription delivers together. */
 export const EventsFrameSchema = Schema.Struct({
-  /** The commit the reader had drained when it cut this batch. */
+  /** The commit the reader had drained when it cut this frame. */
   cursor: CommitOrdinalSchema,
   inputs: Schema.Array(SessionViewInputSchema),
 });
