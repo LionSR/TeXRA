@@ -14,6 +14,32 @@ export function normalizeFilePath(filePath: string): string {
 }
 
 /**
+ * The file path a `file:` URL names, or `null` when `url` is not one or its
+ * percent-escapes are malformed. A Windows drive path follows one extra
+ * slash, and a network share's server is the host (`//server/share/x`);
+ * `localhost` names this machine, as an empty host does.
+ *
+ * @example
+ * filePathOfFileUrl('file:///home/a%20b.pdf')   // '/home/a b.pdf'
+ * filePathOfFileUrl('file:///C:/Users/a.pdf')   // 'C:/Users/a.pdf'
+ * filePathOfFileUrl('file://server/share/a')    // '//server/share/a'
+ */
+export function filePathOfFileUrl(url: string): string | null {
+  const parsed = URL.parse(url);
+  if (!parsed || parsed.protocol !== 'file:') return null;
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(parsed.pathname);
+  } catch {
+    // A malformed percent-escape names no file path.
+    return null;
+  }
+  if (parsed.hostname && parsed.hostname !== 'localhost')
+    return `//${parsed.hostname}${pathname}`;
+  return pathname.replace(/^\/([A-Za-z]:)/, '$1');
+}
+
+/**
  * Extract the base name (filename) from a file path.
  * Handles platform-specific separators (\ on Windows, / on Unix).
  *

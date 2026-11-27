@@ -50,6 +50,7 @@ and the log line of a notice that could not be shown.
    never gets those tools when a GUI window later continues it. Decision:
    delete the strip and rely on the capability, or derive the list from the
    declarations.
+   Landed on 2026-11-26: the strip is deleted.
 3. **Which image types a model takes.** The harness treats any `image/*`
    as an image part (`isImageMimeType`,
    `packages/harness/src/utils/files/mimeUtils.ts`); llm accepts PNG, JPEG,
@@ -72,6 +73,7 @@ and the log line of a notice that could not be shown.
    `packages/llm/src/api/openaiResponsesWebSocket.ts`): the same
    environment variable and sentence. Low value; state the pair beside
    `openaiClient`.
+   Already landed: `refuseAmbientOpenAiHeaders`.
 
 ## Checked and declined
 

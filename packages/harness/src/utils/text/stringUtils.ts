@@ -15,6 +15,11 @@ export const formatLocalTime = (millis: number): string =>
     DateTime.makeZonedUnsafe(millis, { timeZone: DateTime.zoneMakeLocal() }),
   );
 
+/** A time, in epoch milliseconds, in UTC to the second
+ *  (`2026-11-20 09:15:02`): what a listing or a log row shows. */
+export const formatUtcSecond = (millis: number): string =>
+  new Date(millis).toISOString().replace('T', ' ').slice(0, 19);
+
 /**
  * Compact duration capped at two units (`45s`, `3m 5s`, `1h 1m`).
  *

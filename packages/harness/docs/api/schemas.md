@@ -644,6 +644,21 @@ Discriminated union of all file location types
 const FileLocationSchema: Union<readonly [Struct<{ readonly kind: Literal<"workspace">; readonly absolutePath: String; readonly relativePath: String; }>, Struct<{ readonly kind: Literal<"runStorage">; readonly absolutePath: String; readonly relativePath: String; readonly runId: brand<String, "RunId">; }>, Struct<{ readonly kind: Literal<"external">; readonly absolutePath: String; }>]>
 ```
 
+## filePathOfFileUrl
+
+The file path a `file:` URL names, or `null` when `url` is not one or its
+percent-escapes are malformed. A Windows drive path follows one extra
+slash, and a network share's server is the host (`//server/share/x`);
+`localhost` names this machine, as an empty host does.
+
+- `@example` filePathOfFileUrl('file:///home/a%20b.pdf')   // '/home/a b.pdf'
+  filePathOfFileUrl('file:///C:/Users/a.pdf')   // 'C:/Users/a.pdf'
+  filePathOfFileUrl('file://server/share/a')    // '//server/share/a'
+
+```ts
+function filePathOfFileUrl(url: string): string | null
+```
+
 ## FinishedToolResult
 
 A call's result as its `tool.result` row stores it.
@@ -791,6 +806,15 @@ interface FormattedIssue {
   readonly path: string;
   readonly message: string;
 }
+```
+
+## formatUtcSecond
+
+A time, in epoch milliseconds, in UTC to the second
+(`2026-11-20 09:15:02`): what a listing or a log row shows.
+
+```ts
+const formatUtcSecond: (millis: number) => string
 ```
 
 ## formatWallTime
