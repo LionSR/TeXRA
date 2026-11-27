@@ -222,7 +222,7 @@ const START_TIMEOUT = '60 seconds';
 const HELLO_TIMEOUT = '10 seconds';
 
 /** Whether the service speaks this build's protocol ({@link PROTOCOL}). */
-export const compatible = (info: ServiceInfo): boolean =>
+const compatible = (info: ServiceInfo): boolean =>
   info.protocol === PROTOCOL.digest;
 
 /** Whether both builds are released ones, and `order` holds between the
@@ -612,11 +612,7 @@ const ensureService = Effect.fn('server.ensureService')(function* (
             'Stopping an incompatible TeXRA service after its active tasks finish, then starting this version.',
           ).pipe(
             Effect.andThen(
-              stopService(
-                failure.socket,
-                true,
-                'the older TeXRA service',
-              ),
+              stopService(failure.socket, true, 'the older TeXRA service'),
             ),
             Effect.as({ found: null, replaced: true }),
           );
@@ -773,20 +769,15 @@ export interface ServiceLink<Client = ServiceClient> {
   readonly refusalTold: Ref.Ref<boolean>;
 }
 
-/** `ref` as its readers follow it; only its holder sets it. */
-export const followed = <A>(
-  ref: SubscriptionRef.SubscriptionRef<A>,
-): Followed<A> => ({
-  get: SubscriptionRef.get(ref),
-  changes: SubscriptionRef.changes(ref),
-});
-
-/** A link over the one value its holder sets. */
+/** A link over the one value its holder sets; its readers only follow it. */
 export const linkOver = <Client>(
   state: SubscriptionRef.SubscriptionRef<Linked<Client>>,
   refusalTold: Ref.Ref<boolean>,
 ): ServiceLink<Client> => ({
-  state: followed(state),
+  state: {
+    get: SubscriptionRef.get(state),
+    changes: SubscriptionRef.changes(state),
+  },
   client: {
     get: Effect.map(SubscriptionRef.get(state), ({ client }) => client),
     changes: SubscriptionRef.changes(state).pipe(
