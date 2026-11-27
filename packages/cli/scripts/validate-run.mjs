@@ -23,8 +23,13 @@ import {
   stripVTControlCharacters,
 } from 'node:util';
 
-import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
-import { splitValidationAgent } from './validationAgent.mjs';
+import { loadPtySpawn } from './nodePtySpawnHelper.mjs';
+import {
+  buildValidationCli,
+  splitValidationAgent,
+  VALIDATION_FAKE_API_KEY,
+  VALIDATION_PROVIDER_KEYS,
+} from './validationAgent.mjs';
 import {
   VALIDATION_FLAG,
   VALIDATION_FLAG_CONTENT,
@@ -136,29 +141,15 @@ const validationFlagEnv = VALIDATION_FLAG;
 const validationFlagContent = `${VALIDATION_FLAG_CONTENT}\n`;
 const validationFlagName = '.texra-internal-validation-model';
 const validationBundleMarker = VALIDATION_FLAG_CONTENT;
-const VALIDATION_FAKE_API_KEY = 'texra-validation-fake-key';
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
-const validationProviderApiKeyEnv = [
-  'OPENAI_API_KEY',
-  'ANTHROPIC_API_KEY',
-  'GOOGLE_API_KEY',
-  'XAI_API_KEY',
-  'DEEPSEEK_API_KEY',
-  'MOONSHOT_API_KEY',
-  'DASHSCOPE_API_KEY',
-  'MINIMAX_API_KEY',
-  'GLM_API_KEY',
-];
 const validationModelProviderEnv = Object.fromEntries(
-  validationProviderApiKeyEnv.map((name) => [name, VALIDATION_FAKE_API_KEY]),
+  VALIDATION_PROVIDER_KEYS.map((name) => [name, VALIDATION_FAKE_API_KEY]),
 );
 
 function isolatedCliHomeEnv(home, overrides = {}) {
   return {
-    ...Object.fromEntries(
-      validationProviderApiKeyEnv.map((name) => [name, '']),
-    ),
+    ...Object.fromEntries(VALIDATION_PROVIDER_KEYS.map((name) => [name, ''])),
     ...testLaunchEnv(home),
     ...overrides,
   };
@@ -422,21 +413,10 @@ function createInteractivePtyEnv(overrides = {}) {
   return env;
 }
 
-async function loadPtySpawn(label) {
-  ensureNodePtySpawnHelperExecutable();
-  const ptyMod = await import('node-pty');
-  const ptySpawn = ptyMod.spawn ?? ptyMod.default?.spawn;
-  assert(
-    typeof ptySpawn === 'function',
-    `node-pty should expose spawn for ${label}`,
-  );
-  return ptySpawn;
-}
-
 async function runTexraPty(written, options = {}) {
   const { command: args, env: agentEnv } = splitValidationAgent(written);
   const label = options.label ?? `texra ${args.join(' ')}`;
-  const ptySpawn = await loadPtySpawn(label);
+  const ptySpawn = await loadPtySpawn();
   const env = { ...createInteractivePtyEnv(options.env), ...agentEnv };
 
   return await new Promise((resolve, reject) => {
@@ -3681,24 +3661,8 @@ async function validateCliRunArtifacts(options = {}) {
   console.log('CLI run validation passed');
 }
 
-function runCliPackageScript(script, options = {}) {
-  const result = run('pnpm', ['run', script], {
-    cwd: cliRoot,
-    env: options.env,
-  });
-  assertSuccess(result, `pnpm run ${script}`);
-}
-
 function buildValidationBundle() {
-  runCliPackageScript('bundle', {
-    env: {
-      TEXRA_CLI_BUNDLE_OUTFILE: binaryPath,
-      TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
-    },
-  });
-  runCliPackageScript('copy:resources', {
-    env: { TEXRA_CLI_RESOURCES_OUTDIR: validationResourcesPath },
-  });
+  buildValidationCli(binaryPath);
   assertSuccess(
     run(process.execPath, ['scripts/build-bundle.mjs'], {
       cwd: cliRoot,
