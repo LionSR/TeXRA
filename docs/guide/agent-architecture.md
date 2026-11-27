@@ -23,26 +23,25 @@ sequenceDiagram
     Assistant->>User: Proposes a program run (annotate, files, instruction)
     User->>Assistant: Approves
     Assistant->>Program: program('annotate', { prompt, inputFiles })
-    loop each round, until the check passes
-        Program->>Helper agent: The task, and what the last check reported
-        Helper agent-->>Program: Edits the files in place, then replies
-        Program->>Program: Checks the files in code
-    end
-    Program-->>Assistant: The verdict and the helper's reply
+    Program->>Helper agent: The task
+    Helper agent-->>Program: Edits the files in place, then replies
+    Program->>Program: Checks the files in code
+    Program-->>Assistant: What the check found and the helper's reply
 ```
 
-1.  **A fresh helper each round.** The program gives it a system prompt, the
+1.  **One helper.** The program gives it a system prompt, the
     tools the job needs (file tools and the shell, and for Lean the Lean
     tools), your instruction and the file names. The helper reads and edits
-    the files in your project directly. You can follow it in the
-    [Tasks view](./progress-board.md).
+    the files in your project directly and works until it calls the job
+    done. You can follow it in the [Tasks view](./progress-board.md).
 2.  **A coded check.** `annotate` compares each file with what it was when
-    the program started and accepts only added `\criticize{}` comments.
+    the program started and looks for anything but added `\criticize{}`
+    comments.
     `prove` and `lean-simplify` ask Lean for errors, `sorry` and new axioms.
     `blueprint` runs `leanblueprint web` and `leanblueprint checkdecls`.
-3.  **Another round, or the answer.** A failed check starts the next round
-    with the check's report. The number of rounds is bounded, and the answer
-    says plainly when the last round still failed.
+3.  **The answer.** The program reports what the check found beside the
+    helper's reply, so the answer says plainly when the work is not
+    finished, whatever the helper said of it.
 
 `transcribe` and `lean-search` run one helper and answer with its reply.
 

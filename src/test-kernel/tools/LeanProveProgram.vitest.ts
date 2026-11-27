@@ -2,7 +2,7 @@
 // modules in the script sandbox, over the real `lean_diagnostics` and a Lean
 // that elaborates whatever the file holds without complaint.
 //
-// The failure mode this suite guards, reproduced before the fix: a round
+// The failure mode this suite guards, reproduced before the fix: the child
 // "finishes" a proof by declaring an axiom. Lean then reports no error and
 // no `sorry`, and the check called the file clean.
 
@@ -42,10 +42,10 @@ layer(
   ),
   { excludeTestServices: true },
 )('the prove program', (it) => {
-  it.effect('a round that adds an axiom leaves the file unproved', () =>
+  it.effect('a child that adds an axiom leaves the file unproved', () =>
     Effect.gen(function* () {
       let source = STATED;
-      let rounds = 0;
+      let children = 0;
       // Lean reports nothing on either text: the first is asked before its
       // `sorry` matters, and the axiom makes the second elaborate.
       const lean = Layer.succeed(
@@ -81,7 +81,7 @@ return await prove({}, { instruction: '', inputFiles: ['Basic.lean'], contextFil
             if (op.name === 'lean_diagnostics')
               return { _tag: 'Value', value: yield* diagnostics(op.input) };
             if (op.name === 'agent()') {
-              rounds += 1;
+              children += 1;
               source = CHEATED;
               return { _tag: 'Value', value: { response: 'Proved.' } };
             }
@@ -89,8 +89,8 @@ return await prove({}, { instruction: '', inputFiles: ['Basic.lean'], contextFil
           }),
       });
 
-      expect(rounds).toBe(3);
-      expect(result.value).toContain('After 3 rounds the check still reports');
+      expect(children).toBe(1);
+      expect(result.value).toContain('The work is not finished');
       expect(result.value).toContain('cheat');
       expect(result.value).not.toContain('given');
     }),

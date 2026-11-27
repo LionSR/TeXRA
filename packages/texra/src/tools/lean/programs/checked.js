@@ -1,20 +1,21 @@
 /**
- * The module `builtIn:rounds`, which both Lean programs are built on.
+ * The module `builtIn:checked`, which the Lean programs that change files
+ * are built on.
  *
- * `rounds(task, launch)` runs a fresh child per round, told `task.system`
- * and given `task.tools`, over the files of `launch.inputFiles` that end in
- * `task.extension`. After each round `task.check(files)` answers
- * `{ clean, report }`: the round ends the program when `clean`, and
- * otherwise the next round reads the report. It answers with the last
- * report and the child's last reply.
+ * `checked(task, launch)` starts one child, told `task.system` and given
+ * `task.tools`, over the files of `launch.inputFiles` that end in
+ * `task.extension`. The child works until it calls its work done; then
+ * `task.check(files)` answers `{ clean, report }`, and the program answers
+ * with that report and the child's reply. The program runs the check, so
+ * what it reports does not depend on what the child says of its own work.
  *
  * `statedAxioms(files)` and `leanCheck(stated)` are the check of the
  * programs that change Lean files: Lean reports each file clean, and none
  * declares an axiom it did not declare when the program started.
  */
 
-export const rounds = async (
-  { name, system, tools, rounds, extension, describes, fallback, check },
+export const checked = async (
+  { name, system, tools, extension, describes, fallback, check },
   { instruction, inputFiles, contextFiles },
 ) => {
   const files = inputFiles.filter((file) => file.endsWith(extension));
@@ -28,62 +29,41 @@ export const rounds = async (
         describes +
         ' as inputFiles.',
     );
-  const task = [
-    instruction.trim()
-      ? '<instruction>\n' + instruction.trim() + '\n</instruction>'
-      : fallback,
-    'The files: ' + files.join(', ') + '.',
-    ...(contextFiles.length > 0
-      ? [
-          'Read these for context and do not change them: ' +
-            contextFiles.join(', ') +
-            '.',
-        ]
-      : []),
-  ].join('\n\n');
-  // A file the program does not work on is named, never dropped unsaid.
-  const answer = (verdict, reply) =>
+  const reply = await agent(
     [
-      verdict,
-      ...(skipped.length > 0
+      instruction.trim()
+        ? '<instruction>\n' + instruction.trim() + '\n</instruction>'
+        : fallback,
+      'The files: ' + files.join(', ') + '.',
+      ...(contextFiles.length > 0
         ? [
-            'Not ' +
-              extension +
-              ' files, so not worked on: ' +
-              skipped.join(', ') +
+            'Read these for context and do not change them: ' +
+              contextFiles.join(', ') +
               '.',
           ]
         : []),
-      reply,
-    ].join('\n\n');
-  let checked = null;
-  let reply = null;
-  for (let round = 1; round <= rounds; round += 1) {
-    const label = 'Round ' + round;
-    section(label);
-    const prompt =
-      checked === null
-        ? task
-        : task +
-          '\n\nAn earlier round left work to do. The check reports:\n' +
-          checked.report;
-    reply = await agent(prompt, {
-      system,
-      tools,
-      label,
-      id: 'round-' + round,
-    });
-    checked = await check(files);
-    if (checked.clean) return answer(checked.report, reply.response);
-  }
-  return answer(
-    'After ' + rounds + ' rounds the check still reports:\n' + checked.report,
-    reply.response,
+    ].join('\n\n'),
+    { system, tools, label: name, id: name },
   );
+  const { clean, report } = await check(files);
+  return [
+    clean ? report : 'The work is not finished. The check reports:\n' + report,
+    // A file the program does not work on is named, never dropped unsaid.
+    ...(skipped.length > 0
+      ? [
+          'Not ' +
+            extension +
+            ' files, so not worked on: ' +
+            skipped.join(', ') +
+            '.',
+        ]
+      : []),
+    reply.response,
+  ].join('\n\n');
 };
 
-/** Each `.lean` file's axioms as the program found it: only one a round
- *  adds is the round's doing. */
+/** Each `.lean` file's axioms as the program found it: only one the child
+ *  adds is its doing. */
 export const statedAxioms = async (inputFiles) => {
   const stated = {};
   for (const file of inputFiles.filter((name) => name.endsWith('.lean'))) {

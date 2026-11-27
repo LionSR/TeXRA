@@ -26,7 +26,7 @@ import {
 /**
  * Lean 4 over the `lake env lean --server` pool, in every host; its probe
  * reports the tools runnable exactly when `lake` is found, the one thing the
- * pool needs. Its programs (`./programs`) check each round of their
+ * pool needs. Its programs (`./programs`) check their
  * child's work with its tools, or, `lean-search`, answer with what a child
  * found.
  */

@@ -25,7 +25,7 @@ You can also start any program yourself, by name, from the terminal.
 
 <AgentModeShapes />
 
-<p class="hero-caption">A chat loops: the assistant converses and calls tools until the work is done. A program runs rounds of a helper agent and checks each round in code.</p>
+<p class="hero-caption">A chat loops: the assistant converses and calls tools until the work is done. A program runs a helper agent and checks its work in code.</p>
 
 ## Starting a program
 
@@ -66,11 +66,10 @@ with your editor or `git diff`.
 Each comment is `\\criticize{comment}{severity}{confidence}`, placed where the
 issue is: severity runs from 5 (invalidates a main claim) down to 1
 (cosmetic), with 0 for a point verified correct, and confidence from 1 (a
-guess) to 5 (certain). After each round the program compares every file with
+guess) to 5 (certain). When the helper is done the program compares every file with
 what it was when the program started: outside the comments and the macro's
-definition nothing may differ. A round that changed anything else is followed
-by another that is told to restore it, up to three rounds, and the answer
-says so when the last round still failed.
+definition nothing may differ, and the answer names each file where
+something did.
 
 ```
 Read as a first-time reader and mark every place where you lose the thread.
@@ -130,7 +129,7 @@ and posters; the Lean agents' jobs are `prove`,
 
 ## Next steps
 
-- [Programs: how they work](./agent-architecture.md): rounds, checks and run storage
+- [Programs: how they work](./agent-architecture.md): checks and run storage
 - [Multi-agent workflows](./multi-agent-workflows.md): helper agents and scripts
 - [Research tools](./research-tools.md): literature and computation
 - [Models](./models.md): choosing a model

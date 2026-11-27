@@ -1,4 +1,4 @@
-import { rounds } from 'builtIn:rounds';
+import { checked } from 'builtIn:checked';
 
 const WRITER = [
   "You write and maintain formalization blueprints: LaTeX documents, built with the leanblueprint package and its CLI, that split a proof into small statements with explicit dependencies and link each to its Lean declaration. Follow the package's own macros and the file layout leanblueprint new creates; invent no parallel conventions.",
@@ -13,7 +13,7 @@ const WRITER = [
 const CHECK = 'leanblueprint web && leanblueprint checkdecls';
 
 export default async (args, launch) => {
-  // A missing CLI fails the launch before any round is paid for.
+  // A missing CLI fails the launch before the child is paid for.
   try {
     await tools.bash({ command: 'leanblueprint --version' });
   } catch {
@@ -21,7 +21,7 @@ export default async (args, launch) => {
       'blueprint checks its work with the leanblueprint CLI, which is not installed: pip install leanblueprint.',
     );
   }
-  return rounds(
+  return checked(
     {
       name: 'blueprint',
       system: WRITER,
@@ -39,7 +39,6 @@ export default async (args, launch) => {
         'web_search',
         'web_fetch',
       ],
-      rounds: 2,
       extension: '.tex',
       describes:
         "the blueprint's .tex files (a project without one starts with leanblueprint new)",
