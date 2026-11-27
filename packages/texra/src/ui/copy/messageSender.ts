@@ -9,8 +9,9 @@ import type { MessageSender } from '@texra-ai/worldline/transcript';
 export function messageSenderLabel(sender: MessageSender): string {
   switch (sender.kind) {
     case 'run':
-      // An unnamed sender may be an agent, a command or a script.
-      return sender.label ?? 'Report';
+      // An unnamed sender may be an agent, a command or a script, and what
+      // it sent a report, a message or an instruction: its text says which.
+      return sender.label ?? 'Message';
     case 'notification':
       return sender.source ? `Notice · ${sender.source}` : 'Notice';
     case 'self':
