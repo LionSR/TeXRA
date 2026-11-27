@@ -8,7 +8,7 @@ import {
 } from '@texra-ai/worldline/schemas';
 import { type Session } from '@texra-ai/worldline';
 import { compareByNewestCreationTime } from '@texra-ai/worldline/transcript';
-import { readModelOptions } from '@texra-ai/worldline/host';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { defaultShortcutModifierLabel } from '@cli/runtime/terminal/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import {
@@ -78,11 +78,12 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
       activeRunId === undefined
         ? []
         : yield* context.runSession.records(activeRunId).readSkills;
-    const [option] = yield* readModelOptions(context.stores, [model]);
+    const [option] = yield* loadModelOptions(context.stores, [model]);
     appendLocalNotice(
       formatCliSessionStatus(view, run, {
         agent: meta.chat.label,
         model,
+        modelReasoning: option?.reasoning,
         modelAccess: option?.usageRoute,
         activeSkills,
         sessionId: run ? rootRunId.get() : undefined,

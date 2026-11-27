@@ -172,6 +172,7 @@ export function formatCliModelDetails(model: ModelOptionData): string {
   if (model.availability === 'missing-key')
     lines.push(`recovery: ${CLI_SETUP_RECOVERY}`);
   if (model.context) lines.push(`context: ${model.context}`);
+  if (model.reasoning) lines.push(`reasoning: ${model.reasoning}`);
   if (model.cost) lines.push(`cost: ${model.cost}`);
   if (model.hint) {
     lines.push('');

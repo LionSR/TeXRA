@@ -43,6 +43,7 @@ function listFormSelectWindow(args: {
   readonly frameRows: number;
   readonly descriptionRows: number;
   readonly detailRows: number;
+  readonly footerRows: number;
   readonly selectMarginTop?: number;
 }): {
   readonly maxVisibleItems: number;
@@ -52,6 +53,7 @@ function listFormSelectWindow(args: {
     args.frameRows +
     args.descriptionRows +
     args.detailRows +
+    args.footerRows +
     Math.max(0, args.selectMarginTop ?? 0);
   const selectRows = Math.max(1, args.availableRows - chromeRows);
   if (args.itemCount <= selectRows) {
@@ -69,6 +71,7 @@ interface ListFormProps<T> {
   readonly availableRows: number;
   readonly items: ReadonlyArray<SelectItem<T>>;
   readonly activeValue?: T;
+  readonly onHighlightChange?: (value: T) => void;
   /** One dim line of guidance under the title. The form paints it and
    *  counts the rows it wraps to, so a long line never pushes the list out
    *  of the frame. */
@@ -76,6 +79,9 @@ interface ListFormProps<T> {
   /** Anything else between the description and the list. The form
    *  measures the rows it takes, wrapped lines and margins included. */
   readonly detail?: ReactNode;
+  /** Anything rendered below the list and above the key hints. Measured into
+   *  the select row budget alongside `detail`. */
+  readonly footer?: ReactNode;
   readonly compactDetail?: ReactNode;
   readonly compactVisibleItems?: number;
   readonly emptyMessage?: string;
@@ -95,8 +101,10 @@ interface ListFormProps<T> {
 export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
   const { columns } = useWindowSize();
   const detailRef = useRef<DOMElement>(null);
-  // Zero until the first layout, and in the layouts that draw no detail box.
+  const footerRef = useRef<DOMElement>(null);
+  // Zero until the first layout, and in the layouts that draw no detail/footer box.
   const detailRows = useBoxMetrics(detailRef).height;
+  const footerRows = useBoxMetrics(footerRef).height;
   if (props.items.length === 0 && props.emptyMessage !== undefined) {
     return (
       <FormFrame
@@ -126,6 +134,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
         <Select
           items={props.items}
           activeValue={props.activeValue}
+          onHighlightChange={props.onHighlightChange}
           maxVisibleItems={Math.min(
             props.items.length,
             Math.max(1, props.compactVisibleItems ?? 1),
@@ -149,6 +158,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
       ? wrappedRowCount(props.description, contentWidth)
       : 0,
     detailRows,
+    footerRows,
     selectMarginTop: props.selectMarginTop,
   });
   return (
@@ -164,11 +174,15 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
         <Select
           items={props.items}
           activeValue={props.activeValue}
+          onHighlightChange={props.onHighlightChange}
           maxVisibleItems={selectWindow.maxVisibleItems}
           showOverflow={selectWindow.showOverflow}
           onSelect={props.onSelect}
           onCancel={props.onCancel}
         />
+      </Box>
+      <Box ref={footerRef} flexDirection="column" flexShrink={0}>
+        {props.footer}
       </Box>
     </FormFrame>
   );
