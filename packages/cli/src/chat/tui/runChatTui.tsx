@@ -25,7 +25,7 @@ import {
   type RunId,
   type AgentConfig,
   type ApprovalPolicy,
-  RUN_OUTCOME,
+  attentionOf,
   toErrorMessage,
 } from '@texra-ai/worldline/schemas';
 import { isWorking } from '@texra-ai/worldline/schemas';
@@ -631,29 +631,18 @@ export async function runChat(
     untilShutdown.fork(chatController.resume(initialResume.id));
   }
 
-  // The one turn-finished notification: the root run's turn finishes,
-  // at WAITING ("your turn", alongside the StatusBar pill) or at its outcome.
-  // A run that ends after waiting was already announced, and a stop the user
-  // asked for is not news. A turn end, not `attentionOf`'s `finished`: a
-  // conversation's turn ends at WAITING with no outcome.
-  const rootStandingNow = () => runViewOf(currentView(), rootRunId.get());
-  let rootStanding = rootStandingNow();
+  // The one turn-finished notification: the root run's turn finishes, as
+  // every host reads it (`attentionOf`), alongside the StatusBar pill.
+  let shownView = currentView();
   onChatClose(
     subscribeToSignalChanges([sessionView()], () => {
-      const previous = rootStanding;
-      rootStanding = rootStandingNow();
-      if (rootStanding === undefined) return;
-      const { outcome } = rootStanding;
-      if (
-        previous?.position !== 'waiting' &&
-        (rootStanding.position === 'waiting' ||
-          (outcome !== null &&
-            outcome !== previous?.outcome &&
-            // A stop ends the run cancelled: no "finished" bell for it.
-            outcome !== RUN_OUTCOME.CANCELLED))
-      ) {
-        notify(runAttentionLine(rootStanding, runStatus(rootStanding).key));
-      }
+      const previous = shownView;
+      shownView = currentView();
+      const root = attentionOf(shownView, previous).finished.find(
+        (run) => run.id === rootRunId.get(),
+      );
+      if (root !== undefined)
+        notify(runAttentionLine(root, runStatus(root).key));
     }),
   );
 
