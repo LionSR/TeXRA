@@ -1,7 +1,7 @@
 import { css, type CSSResult } from 'lit';
 
 /**
- * Chrome of a `wa-drawer` overlay (the Tasks drawer). The drawer owns the
+ * Chrome of a `wa-drawer` overlay (`SessionDrawer`, titled Tasks). The drawer owns the
  * backdrop, Escape, light dismiss and the focus trap; these rules hand its
  * body to the surface's own column and lay out the title-plus-close row the
  * surface draws in place of the drawer's header. The surface still sets the

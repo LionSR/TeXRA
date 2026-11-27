@@ -245,7 +245,9 @@ export class ModelPicker extends TexraElement {
     const query = this.searchText.trim();
     return choices.filter((choice) =>
       matchesQuery(
-        `${choice.label} ${choice.value} ${choice.row?.provider ?? ''}`,
+        // Model names and ids are ASCII: fold them without the locale, so
+        // a Turkish locale's dotless i does not hide "OpenAI" from "openai".
+        `${choice.label} ${choice.value} ${choice.row?.provider ?? ''}`.toLowerCase(),
         query,
       ),
     );
