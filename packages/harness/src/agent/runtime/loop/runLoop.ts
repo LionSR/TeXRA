@@ -262,10 +262,8 @@ const finishRun =
 type TurnServices = AgentRun | AgentRunServices | ModelAccess;
 
 /**
- * The policy a committed text-only response runs: a blank turn after a tool
- * result (a message delivered at the request may sit between them) asks once
- * more, the terminal tool gets one forced turn per turn, else the turn ends
- * with this text. Each step is a row (a resume finds it); `done` ends the turn.
+ * The policy a committed text-only response runs: the terminal tool gets
+ * one forced turn per turn, else the turn ends with this text. Each step is a row (a resume finds it); `done` ends the turn.
  */
 const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
   cell: RunCell,

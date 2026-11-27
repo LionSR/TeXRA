@@ -142,7 +142,6 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
   const [facts] = dispatchFactsFor(
     [{ callId: SCRIPT_CALL_ID, name: SCRIPT_TOOL_NAME, argumentsText }],
     (yield* ScopedRef.get(run.steps))?.tools.registry,
-    run.logger,
   );
   if (facts === undefined)
     return yield* Effect.die(new Error('One call in, one dispatch fact out.'));

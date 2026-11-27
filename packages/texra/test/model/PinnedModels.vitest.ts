@@ -15,7 +15,9 @@ import {
 } from '@texra/model/curatedModels';
 import {
   CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_MODELS,
   CODEX_DEFAULT_MODEL,
+  CODEX_MODELS,
 } from '@texra/shared/agentCliSettings';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
@@ -49,6 +51,11 @@ describe('pinned model ids', () => {
     expect(config?.retired ?? false).toBe(false);
     expect(config?.deprecated ?? false).toBe(false);
     expect(config?.openRouterOnly ?? false).toBe(false);
+  });
+
+  it('each agent CLI default is a model its CLI lists', () => {
+    expect(CLAUDE_AGENT_MODELS).toContain(CLAUDE_AGENT_DEFAULT_MODEL);
+    expect(CODEX_MODELS).toContain(CODEX_DEFAULT_MODEL);
   });
 
   // CHATGPT_SETUP_MODEL proves ChatGPT subscription access, which only a

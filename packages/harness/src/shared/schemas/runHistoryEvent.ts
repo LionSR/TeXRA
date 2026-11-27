@@ -221,9 +221,6 @@ export const ModelMessagePayloadSchema = Schema.Union([
     }
     const issues: Schema.FilterIssue[] = [];
     const ids = new Set(p.calls.map((c) => c.callId));
-    // A duplicate has a primary to reuse, so it names a call that precedes it
-    // and is not itself a duplicate. Membership in `ids` alone would accept a
-    // call naming itself, which can never finish.
     p.calls.forEach((call, index) => {
       // Order, identity and tool: a fact that names another tool than the
       // part it stands for is the one the resume rule would dispatch, so the

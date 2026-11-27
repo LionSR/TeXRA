@@ -4,7 +4,7 @@
  * Both CLIs name their model the way every TeXRA setting does, as an llm-zoo
  * selection string (`provider/id[@effort]`), and both send the effort the one
  * reasoning policy chooses: the call's own level, else the model string's,
- * else the user's saved level, else the policy default, snapped to a level
+ * else the policy default, snapped to a level
  * the model (and the route, when it reports one) accepts.
  */
 import { Effect, Result, Schema } from 'effect';
@@ -61,7 +61,7 @@ export function selectAgentCliModel(
 
 /**
  * The effort to send for a selection: `effort` (the call's own level)
- * overrides the model string's, and `options.userEffort` is the saved level.
+ * overrides the model string's.
  */
 export function agentCliReasoning(
   selection: SelectedModel,

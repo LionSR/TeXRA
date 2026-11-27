@@ -332,7 +332,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         const calls = dispatchFactsFor(
           localCallsOf(turn.content),
           (yield* ScopedRef.get(run.steps))?.tools.registry,
-          logger,
         );
         // The completed turn, committed once before any local tool runs; it
         // closes the invocation and retires its failure in the fold.

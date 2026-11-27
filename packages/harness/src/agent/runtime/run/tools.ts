@@ -3,8 +3,7 @@
  * the uniform tool definitions of a `TurnRequest`, and the per-call dispatch
  * facts stamped on a `response` row so the fold and the resume rule need no
  * tool registry. Contiguous parallel calls run together; every barrier
- * runs alone; a call whose name and arguments repeat an earlier one in the same
- * window is a duplicate that never executes.
+ * runs alone.
  */
 import { Effect, Predicate, Result, Schema } from 'effect';
 import type { ResolvedTools } from '@agent/runtime/agentToolResolution';
@@ -62,19 +61,11 @@ export function dispatchFactsFor(
   calls: readonly LocalCall[],
   /** The request's step's tools; undefined while no step is open. */
   registry: ResolvedTools['registry'] | undefined,
-  logger: AgentTrace,
 ): readonly DispatchFacts[] {
-  const parsed = calls.map((call) => ({
-    callId: call.callId,
-    name: call.name,
-    input: parseCallArguments(call, logger),
-  }));
-  const laneOf = (call: { readonly name: string }) =>
-    registry?.get(call.name)?.lane ?? 'barrier';
-  return parsed.map((call) => ({
+  return calls.map((call) => ({
     callId: call.callId,
     toolName: call.name,
-    lane: laneOf(call),
+    lane: registry?.get(call.name)?.lane ?? 'barrier',
     replay: registry?.get(call.name)?.replay ?? 'unsafe',
     logId: crypto.randomUUID(),
   }));
