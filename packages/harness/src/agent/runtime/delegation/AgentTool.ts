@@ -36,6 +36,7 @@ import {
   programGrants,
   RUN_OUTCOME,
   AGENT_TOOL_NAME,
+  SKIPPED_RESULT_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -228,7 +229,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
     return errorResult(
       `The agent run ${runId} for '${agentName}' was stopped, so this call was skipped.`,
       {
-        name: 'Skipped',
+        name: SKIPPED_RESULT_NAME,
         summary: `Skipped '${agentName}'`,
       },
     );

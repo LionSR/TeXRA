@@ -4,7 +4,7 @@
  * `process.output` rows, or its failure.
  */
 
-import { DELIVERY_FAMILY } from '@shared/deliveryTags';
+import { DELIVERY_ATTRIBUTE, DELIVERY_FAMILY } from '@shared/deliveryTags';
 
 import type {
   ChildRunDelivery,
@@ -38,8 +38,8 @@ export interface BackgroundBashCall {
 }
 
 const callAttributes = ({ command, description }: BackgroundBashCall) => [
-  { name: 'command', value: command },
-  ...(description ? [{ name: 'description', value: description }] : []),
+  { name: DELIVERY_ATTRIBUTE.command, value: command },
+  ...(description ? [{ name: DELIVERY_ATTRIBUTE.description, value: description }] : []),
 ];
 
 /**

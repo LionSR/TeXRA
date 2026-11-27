@@ -13,7 +13,7 @@ import { continuationOf } from '@agent/storage/continuation';
 import { endRunRows } from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runOwnership';
 import { logFailure } from '@logger/effectLog';
-import { DELIVERY_FAMILY } from '@shared/deliveryTags';
+import { DELIVERY_ATTRIBUTE, DELIVERY_FAMILY } from '@shared/deliveryTags';
 import { describeRefusal, NESTED_NOUNS, RUN_OUTCOME } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { SessionViewAccess, SessionLog } from '@shared/session/runHistory';
@@ -47,7 +47,7 @@ const reportInterrupted = Effect.fn('reportInterrupted')(function* (
     family: FAMILY_OF[child.identity.kind],
     runId: child.id,
     attributes:
-      child.command === null ? [] : [{ name: 'command', value: child.command }],
+      child.command === null ? [] : [{ name: DELIVERY_ATTRIBUTE.command, value: child.command }],
     message,
   };
   yield* endRunRows({

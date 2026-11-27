@@ -190,6 +190,10 @@ export const SELF_TOOL_NAME = 'self';
 /** The tool that reads run history and manages live runs. */
 export const EXECUTIONS_TOOL_NAME = 'executions';
 
+/** The `name` of the error result of a child call the user stopped: the
+ *  script's rejection carries it, and the script stage reads it. */
+export const SKIPPED_RESULT_NAME = 'Skipped';
+
 export const ToolResultSchema = Schema.Union([
   ExecutedToolResultSchema,
   ErrorToolResultSchema,
