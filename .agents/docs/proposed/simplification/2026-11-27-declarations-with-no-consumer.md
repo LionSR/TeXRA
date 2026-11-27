@@ -35,10 +35,14 @@ included, which an earlier draft's `packages src`-only check missed — it would
 have wrongly deleted `commandManifest.ts`, read by
 `scripts/sync-package-contributes.mjs`).
 
-The tree is tight: 27 of 4,235 exports (0.6 %) had no external reader, and only
-two were a whole dead module (`editedFileMatch.ts`, `Pagination.ts`). The two
-dead declarations — `copyDereferenced` and `PENDING_BOX` — trace directly to
-#15229's deletion.
+The tree is tight: the dead-export scan flagged 27 of 4,235 exported
+declarations (0.6 %) as unread within `packages`/`src`; the whole-repo
+cross-check then cleared three (`commandManifest.ts`'s, read by a build script),
+leaving 24 with no reader. Only two were a whole dead module
+(`editedFileMatch.ts`, `Pagination.ts`). The two dead declarations —
+`copyDereferenced` and `PENDING_BOX` — trace directly to #15229's deletion (it
+removed `copyDereferenced`'s last caller and the document task runs `PENDING_BOX`
+marked); the two dead modules were orphaned earlier.
 
 ## Landed with this note
 
@@ -91,18 +95,20 @@ in their own module. Unlike the app packages, the harness publishes `.d.ts`
 (`packages/harness/dist/`), so dropping `export` is not free, and the value of
 the keystroke is nil. Recorded so a later run does not re-raise them as easy wins:
 
-- `ToolUseOpening` (`agent/runtime/loop/runLoop.ts`) is the return type of the
-  **exported** `openToolUse` and the parameter of the **exported** `runToolUse`.
-  It is part of two exported signatures; unexporting it would force the
-  declaration emit to inline or error, for no gain. It is not a dead export — it
-  is a named type two exported entries share. Leave exported.
-- `TakenFollowUp` (`shared/session/runRowsShape.ts`), `ContextReplace`
-  (`shared/session/runFacts.ts`) and `EmlImageAttachment` (`tools/emlParser.ts`)
-  are each used only inside a non-exported type in the same file. Dropping
-  `export` is most likely safe (the sibling non-exported types already compile in
-  the exported shapes that hold them), but the payoff is one keyword each and the
-  only way to be sure is the full declaration build. Below the bar on their own;
-  fold into a harness public-surface pass if one opens for another reason.
+- `ToolUseOpening` (`agent/runtime/loop/runLoop.ts`) and `ContextReplace`
+  (`shared/session/runFacts.ts`) are part of the exported surface:
+  `ToolUseOpening` is the return type of the **exported** `openToolUse` and the
+  parameter of the **exported** `runToolUse`, and `ContextReplace` is a field
+  type of the **exported** `RunFacts`. Unexporting either would force the
+  declaration emit to inline or error, for no gain — neither is a dead export,
+  but a named type its exported holders share. Leave exported.
+- `TakenFollowUp` (`shared/session/runRowsShape.ts`) and `EmlImageAttachment`
+  (`tools/emlParser.ts`) are each used only inside a non-exported type in the
+  same file. Dropping `export` is most likely safe (the sibling non-exported
+  types already compile in the exported shapes that hold them), but the payoff is
+  one keyword each and the only way to be sure is the full declaration build.
+  Below the bar on their own; fold into a harness public-surface pass if one
+  opens for another reason.
 
 `LocalRuntimeStateSchema` (`shared/schemas/sessionViewInput.ts`) is in the
 published `harness.schemas` API report — intentional SDK surface, not dead.
