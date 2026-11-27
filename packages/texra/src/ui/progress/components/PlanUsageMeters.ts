@@ -29,6 +29,7 @@ import {
 import { TexraElement } from '@ui/litBase';
 import { TickerController } from '@ui/litControllers/TickerController';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
+import { popoverPanelStyles } from '@ui/styles/overlaySurfaceStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 
@@ -66,8 +67,10 @@ export class PlanUsageMeters extends TexraElement {
   static override styles = [
     TexraElement.styles,
     toneStyles,
+    popoverPanelStyles,
     css`
       :host {
+        --popover-panel-width: 24rem;
         display: inline-flex;
         min-width: 0;
       }
@@ -110,25 +113,6 @@ export class PlanUsageMeters extends TexraElement {
       }
       .chip wa-progress-bar {
         width: 2.5rem;
-      }
-      wa-popover {
-        --arrow-size: 0;
-        --max-width: 24rem;
-      }
-      wa-popover::part(body) {
-        padding: 0;
-      }
-      .panel {
-        width: 24rem;
-        max-width: calc(100vw - 2 * var(--wa-space-m));
-        font-size: var(--font-size-sm);
-      }
-      .head {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-xs);
-        padding: var(--wa-space-xs) var(--wa-space-s);
-        border-block-end: var(--border-thin) solid var(--color-border);
       }
       .title {
         font-weight: var(--font-weight-medium);
@@ -256,8 +240,8 @@ export class PlanUsageMeters extends TexraElement {
         without-arrow
         @wa-show=${() => this.refresh(false)}
       >
-        <div class="panel">
-          <div class="head">
+        <div class="popover-panel">
+          <div class="popover-panel-head">
             <span class="title">Subscription usage</span>
             ${renderIconActionButton({
               id: 'plan-usage-refresh',

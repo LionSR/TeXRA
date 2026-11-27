@@ -30,6 +30,7 @@ import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { TexraElement } from '@ui/litBase';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import { popoverPanelStyles } from '@ui/styles/overlaySurfaceStyles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { isCommitEnter } from '@ui/wa/keyActivation';
 import {
@@ -125,34 +126,22 @@ export class ModelPicker extends TexraElement {
   static override styles = [
     TexraElement.styles,
     chipTriggerStyles,
+    popoverPanelStyles,
     css`
       :host {
+        --popover-panel-width: 20rem;
         display: inline-flex;
         min-width: 0;
       }
       .chip-effort {
         color: var(--color-text-secondary);
       }
-      wa-popover {
-        --arrow-size: 0;
-        --max-width: min(20rem, calc(100vw - 2 * var(--wa-space-m)));
-      }
-      wa-popover::part(body) {
-        padding: 0;
-      }
-      .panel {
+      .popover-panel {
         display: flex;
         flex-direction: column;
-        width: min(20rem, calc(100vw - 2 * var(--wa-space-m)));
         max-height: min(24rem, 70vh);
-        font-size: var(--font-size-sm);
       }
       .search {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-xs);
-        padding: var(--wa-space-xs) var(--wa-space-s);
-        border-block-end: var(--border-thin) solid var(--color-border);
         color: var(--color-text-secondary);
       }
       .search input {
@@ -386,8 +375,8 @@ export class ModelPicker extends TexraElement {
           this.active = 0;
         }}
       >
-        <div class="panel">
-          <label class="search">
+        <div class="popover-panel">
+          <label class="search popover-panel-head">
             ${waIcon('magnifying-glass')}
             <input
               type="text"
