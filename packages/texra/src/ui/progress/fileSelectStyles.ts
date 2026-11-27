@@ -1,11 +1,6 @@
 /**
- * Shared file-select styles for the launcher's Shadow DOM components.
- *
- * These styles are used by:
- * - FileSelectGroup
- * - LatexDiffsSection
- *
- * Consolidating them here prevents duplication across Shadow DOM components.
+ * File-select styles for FileSelectGroup's Shadow DOM, kept in their own
+ * sheet so the component file stays focused on behavior.
  */
 
 import { css } from 'lit';
@@ -80,9 +75,8 @@ const fileSelectLayoutStyles = css`
     width: 100%;
   }
 
-  /* FileSelectGroup and LatexDiffsSection both render this shared header and
-     action structure. Stack their action clusters once each .file-select
-     container can no longer hold both groups, so sidebars and desktop panes
+  /* Stack the action cluster once the .file-select container can no longer
+     hold the header and actions side by side, so sidebars and desktop panes
      adapt independently of the viewport. */
   @container (max-width: 18rem) {
     .file-select-header {
