@@ -179,7 +179,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
   function* () {
     const input = yield* promptInput(
       'Clone Overleaf/ShareLaTeX Project',
-      'Enter project URL or 24-character project ID.',
+      CLONE_COPY.projectPrompt,
     );
     if (!input) return;
 

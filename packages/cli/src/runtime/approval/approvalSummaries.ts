@@ -180,7 +180,7 @@ function agentProposalApprovalSummary(
       ? [`${WORKING_DIRECTORY_LABEL}: ${workingDirectory}`]
       : []),
     ...fileGroups,
-    'Instruction:',
+    `${CHILD_AGENT_COPY.instructionLabel}:`,
     ...instructionLines.map((line) => `  ${line}`),
   ].join('\n');
 }
