@@ -8,6 +8,7 @@ import { Option, Schema, SchemaGetter } from 'effect';
 // Local imports
 import { RunIdSchema, NonNegativeIntSchema } from '@shared/schemas';
 import {
+  EXECUTIONS_DEFAULT_ACTION,
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
@@ -43,8 +44,8 @@ const ViewActionSchema = Schema.Struct({
   // picks the first branch that decodes, and this is the only one whose
   // `action` takes null and absence.
   action: nullishWithDefault(
-    Schema.Literal('view'),
-    'view',
+    Schema.Literal(EXECUTIONS_DEFAULT_ACTION),
+    EXECUTIONS_DEFAULT_ACTION,
     'Read run data (returns immediately). Default action.',
   ),
 

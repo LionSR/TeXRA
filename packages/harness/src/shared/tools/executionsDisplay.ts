@@ -1,6 +1,6 @@
 import { Predicate } from 'effect';
 
-const EXECUTIONS_DEFAULT_ACTION = 'view';
+import { EXECUTIONS_DEFAULT_ACTION } from '@shared/toolUse';
 
 /** The executions action a call is performing, defaulted when absent or blank. */
 export function executionsAction(input: Record<string, unknown>): string {
