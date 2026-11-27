@@ -46,14 +46,12 @@ one disclosure, no separators and no frame around a row.
 
 Each is an instance of a rule above, seen in the pass and not changed.
 
-- **Rule 2. A command's pane is a conversation pane.** A background command
-  opens under the "Agent" tab with an `assistant >` breadcrumb and a
-  conversation header (`packages/texra/src/ui/progress/components/ProcessRunContent.ts`,
-  `packages/texra/src/ui/progress/components/RunHeader.ts`). It should read as
-  a terminal session: the command as the session's first line, its output
-  under it on one surface, its exit as the last line, and a terminal icon in
-  its tab and its list row. Not verified in the running app: the golden store
-  holds no command that is still listed, so this needs a live run.
+- **Rule 2. A command's pane is still under the "Agent" tab.** Its command is
+  now the first line of its session, on the output's surface with no frame
+  (`packages/texra/src/ui/progress/components/ProcessRunContent.ts`), but the
+  pane opens under the "Agent" tab with a conversation header
+  (`packages/texra/src/ui/progress/components/RunHeader.ts`) and shows no
+  exit line when the command ends.
 - **Rule 2. A stopped server reads "Error".** A command a person or its task
   stopped is drawn with the failure mark. A stop is not a failure.
 - **Rule 5, 1. Three homes for one agent.** An agent a task started is in the
