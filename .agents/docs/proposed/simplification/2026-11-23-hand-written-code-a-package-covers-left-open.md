@@ -362,7 +362,9 @@ Landed:
   `validate-run.mjs` found a project store by listing `workspace-storage`
   in eight scenarios, polled with three deadline loops beside `waitFor`,
   and spawned `find` twice (`FIND.EXE` on Windows): `projectStore`,
-  a `waitFor` that returns what its check found, and `fs.globSync`. The
+  a `waitFor` that returns what its check found, and a recursive
+  `readdirSync`. Not `fs.globSync`: its `**` skips hidden directories, so
+  it never found the service logs under `home/.texra`. The
   provider key list, the fake key and the validation build were written in
   it and in `generate-golden-store.mjs`, and the node-pty loader in three
   scripts; `validationAgent.mjs` and `nodePtySpawnHelper.mjs` own them.
