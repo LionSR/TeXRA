@@ -815,7 +815,7 @@ const SCENARIOS = [
   {
     name: 'config-form',
     env: { HARNESS_ENTRIES: '4' },
-    keys: [...CONFIG_FORM_KEYS, DOWN, DOWN, '\r'],
+    keys: [...CONFIG_FORM_KEYS, DOWN, '\r'],
     frame: 'viewport',
     expect: [
       '/config · Tasks and agents',
@@ -838,16 +838,15 @@ const SCENARIOS = [
     name: 'config-category-back-responsive',
     env: { HARNESS_ENTRIES: '4' },
     // Reuses the shared Select instance across linked form -> list ->
-    // category. `/config` leads with two action rows ("API keys", "GitHub
-    // token") before the setting categories, and "Git" is the
-    // fourth category, so it is the sixth row (index 5). The keystrokes walk
+    // category. `/config` leads with one action row ("API keys") before the
+    // setting categories, and "Git" is the fourth category, so it is the
+    // fifth row (index 4). The keystrokes walk
     // the list with ↑/↓ so the scenario does not depend on which hotkey a row
     // happens to get.
     keys: [
       ...CONFIG_FORM_KEYS,
       { input: '\r', until: 'Add provider API key' },
       ESC,
-      DOWN,
       DOWN,
       DOWN,
       DOWN,
@@ -905,6 +904,20 @@ const SCENARIOS = [
     unexpect: ['AUTO: COMMANDS', 'Run a command'],
   },
   {
+    name: 'approval-policy-status',
+    frame: 'scrollback',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/approval yolo', '\r', '/status', '\r'],
+    expect: [
+      'Approval mode: Allow shell commands and file edits without asking.',
+      'API keys',
+      // `/status` names the policy by its one user-facing description.
+      'approval: Allow shell commands and file edits without asking.',
+      '/ commands',
+    ],
+    unexpect: ['Usage: /approval', 'Ready yolo'],
+  },
+  {
     // The status bar is the single owner of active-run liveness. The harness
     // publishes a real activation and executing flow step; frame settlement
     // advances the displayed duration beyond zero.
@@ -943,7 +956,7 @@ const SCENARIOS = [
     // The row's hotkey is its place in the list: wait for the list to show
     // it on that key before pressing it, so a reordered list fails here
     // instead of switching another plugin.
-    keys: ['/plugins', { input: '\r', until: 'a. Multi-Agent Workflow' }, 'a'],
+    keys: ['/plugins', { input: '\r', until: '8. Multi-Agent Workflow' }, '8'],
     frame: 'viewport',
     expect: ['/plugins', 'Multi-Agent Workflow — on · TeXRA plugin · 2 tools'],
     unexpect: ['Multi-Agent Workflow — off'],

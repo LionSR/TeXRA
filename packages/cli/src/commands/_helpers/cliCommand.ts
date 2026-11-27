@@ -27,12 +27,12 @@ import { setLogSink } from '@texra-ai/worldline/node';
 import {
   APPROVAL_POLICIES,
   APPROVAL_POLICY_DEFAULT,
-  APPROVAL_POLICY_SETTING,
   ensureError,
   formatWordList,
 } from '@texra-ai/worldline/schemas';
 import { withForkFailureReporting } from '@texra-ai/worldline/transcript';
 import { CLI_OUTPUT_FORMATS } from '@texra/shared/cliOutputFormat';
+import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 
 // Local imports - CLI
 import type { RunChatInit } from '@cli/chat/tui/runChatTui';
@@ -116,14 +116,14 @@ const OutputFormat = GlobalFlag.Setting('output-format')({
     Flag.optional,
   ),
 });
-// Each value with the setting row's label, and the row's default.
-const APPROVAL_POLICY_VALUES = APPROVAL_POLICIES.map(
-  (policy) =>
-    `${policy} (${APPROVAL_POLICY_SETTING.choices[policy].label}${policy === APPROVAL_POLICY_DEFAULT ? '; default' : ''})`,
-).join(' or ');
 const ApprovalPolicy = GlobalFlag.Setting('approval-policy')({
   flag: Flag.Literals('approval-policy', APPROVAL_POLICIES).pipe(
-    Flag.withDescription(`Approval policy: ${APPROVAL_POLICY_VALUES}`),
+    Flag.withDescription(
+      `Approval policy: ${APPROVAL_POLICIES.map(
+        (policy) =>
+          `${policy} (${approvalPolicyLabel(policy)}${policy === APPROVAL_POLICY_DEFAULT ? '; default' : ''})`,
+      ).join(' or ')}`,
+    ),
     Flag.optional,
   ),
 });

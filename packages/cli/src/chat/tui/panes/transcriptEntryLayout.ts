@@ -138,8 +138,8 @@ function wrapWithPrefix(
   firstPrefix: string,
   continuationPrefix: string,
 ): readonly string[] {
-  // Budget against the wider gutter: roles like `fileList` indent continuations
-  // further than the first line, so wrapping to the first prefix alone would
+  // Budget against the wider gutter: an activity row indents continuations
+  // further than its first line, so wrapping to the first prefix alone would
   // push every wrapped row past `columns` and let the terminal re-wrap it.
   const gutter = Math.max(
     textDisplayWidth(firstPrefix),

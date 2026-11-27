@@ -25,9 +25,6 @@ export const STATUS_DIAMOND = '◆';
 /** The warning tone's marker (`TONE_PAINT`). */
 export const WARNING = '⚠';
 
-/** Heading marker for a round's results in the document task run details. */
-export const PENDING_BOX = '□';
-
 /** Terminal-failure marker; the ✗/✓ counterpart to TICK. */
 export const CROSS = '✗';
 
