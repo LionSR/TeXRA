@@ -10,7 +10,9 @@
  *
  * A token `target` does not define resolves to `undefined`, never to the
  * inherited colour an undefined `var()` would compute to: the caller decides
- * whether that is a host bug to report or a key to leave at its default.
+ * whether that is a host bug to report or a key to leave at its default. So
+ * does every token when `target` cannot render a child (a shadow host with no
+ * slot): pass an element whose children are rendered.
  */
 export function cssTokenColors(
   target: Element,
@@ -32,13 +34,20 @@ export function cssTokenColors(
     const probe = document.createElement('span');
     probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;color:var(${token})`;
     target.append(probe);
+    let computed: string;
     try {
-      context.clearRect(0, 0, 1, 1);
-      context.fillStyle = getComputedStyle(probe).color;
-      context.fillRect(0, 0, 1, 1);
+      computed = getComputedStyle(probe).color;
     } finally {
       probe.remove();
     }
+    // A probe that is not rendered has no computed colour: a child of a
+    // shadow host whose shadow root has no slot, or of a detached element.
+    // The canvas ignores an empty fill style and would paint its default
+    // black, so every token would read as black.
+    if (!computed) return undefined;
+    context.clearRect(0, 0, 1, 1);
+    context.fillStyle = computed;
+    context.fillRect(0, 0, 1, 1);
     const value =
       '#' +
       [...context.getImageData(0, 0, 1, 1).data]
