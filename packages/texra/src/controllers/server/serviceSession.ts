@@ -48,7 +48,6 @@ import {
 } from '@texra-ai/worldline/plugins';
 import { activationView, replayTrace } from '@texra-ai/worldline/host';
 import { remoteSessionView } from '@texra/shared/session/webviewSessionLayer';
-import { requestErrorText } from '@ui/copy/requestErrors';
 import {
   writeFileIfUnchanged,
   type WriteProjectFile,
@@ -403,18 +402,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     callService(
       link,
       (reason) => new Rejected({ reason }),
-      (client) =>
-        requestOnService(client, workspace, runtimeRequest).pipe(
-          // The service's own bridge error (a request it could not parse, a
-          // handler that died) is a refusal worded for the user; a runtime
-          // refusal arrives as its class.
-          Effect.catchTags({
-            Invalid: (error) =>
-              Effect.fail(new Rejected({ reason: requestErrorText(error) })),
-            Internal: (error) =>
-              Effect.fail(new Rejected({ reason: requestErrorText(error) })),
-          }),
-        ),
+      (client) => requestOnService(client, workspace, runtimeRequest),
     );
   // The watch names its runs to this window's own view too, so the view
   // folds their transcripts while it runs; each service the link holds

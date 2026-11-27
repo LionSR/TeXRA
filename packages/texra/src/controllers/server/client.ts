@@ -46,6 +46,7 @@ import {
   Rejected,
   ensureError,
 } from '@texra-ai/worldline/schemas';
+import { requestErrorText } from '@ui/copy/requestErrors';
 import {
   envFlag,
   IS_WINDOWS,
@@ -93,7 +94,9 @@ export const environmentApiKeys = (): Readonly<Record<string, string>> =>
  * `request` to the session of `workspace` the service holds: the outcome its
  * kind is answered with. A message carries this process's keys, which the
  * run resumes with if the message wakes it. An answer of another kind (a
- * service from another build) is `Rejected`.
+ * service from another build) is `Rejected`, and so is the service's own
+ * bridge error (a request it could not parse, a handler that died), worded
+ * for the user; a runtime refusal arrives as its class.
  */
 export const requestOnService = <R extends RuntimeCommand>(
   client: ServiceClient,
@@ -107,6 +110,12 @@ export const requestOnService = <R extends RuntimeCommand>(
         ? { ...request, apiKeys: request.apiKeys ?? environmentApiKeys() }
         : request,
   }).pipe(
+    Effect.catchTags({
+      Invalid: (error) =>
+        Effect.fail(new Rejected({ reason: requestErrorText(error) })),
+      Internal: (error) =>
+        Effect.fail(new Rejected({ reason: requestErrorText(error) })),
+    }),
     Effect.filterOrFail(
       (outcome) => isOutcomeOf<R['kind']>(request.kind, outcome),
       (outcome) =>
