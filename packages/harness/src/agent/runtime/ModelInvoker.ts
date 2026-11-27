@@ -88,7 +88,7 @@ import {
   type InvokeRequest,
 } from './run/recordedRequest';
 import { providerMessages } from './providerMessages';
-import { dispatchFactsFor, localCallsOf } from './run/tools';
+import { dispatchFact, localCallsOf } from './run/tools';
 import { configRow } from './loop/rows';
 import type { SessionServices } from './rootLaunch';
 
@@ -329,10 +329,9 @@ export const modelInvokerLayer = (): Layer.Layer<
         yield* saveDebug(turn, 'response', invocation, bound);
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs);
         const responseId = randomUUID();
-        const calls = dispatchFactsFor(
-          localCallsOf(turn.content),
-          (yield* ScopedRef.get(run.steps))?.tools.registry,
-          logger,
+        const registry = (yield* ScopedRef.get(run.steps))?.tools.registry;
+        const calls = localCallsOf(turn.content).map((call) =>
+          dispatchFact(call, registry),
         );
         // The completed turn, committed once before any local tool runs; it
         // closes the invocation and retires its failure in the fold.

@@ -479,7 +479,7 @@ a loop turn may hold none, or several as the loop calls the model again after
 tool results) MUST commit once, as one `response` row with a fresh `responseId`,
 which puts the loop at `response.ready` without a position of its own
 (`shared/session/turnRowHandlers.ts#'response.ready'`). It carries one
-dispatch fact per local call (`agent/runtime/run/tools.ts#dispatchFactsFor`)
+dispatch fact per local call (`agent/runtime/run/tools.ts#dispatchFact`)
 (`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`,
 `shared/schemas/runHistoryEvent.ts#DispatchFactsSchema`). The loop MUST dispatch
 only the pending response its fold holds
