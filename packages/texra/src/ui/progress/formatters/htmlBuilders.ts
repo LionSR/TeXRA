@@ -22,6 +22,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Side-effect import - register the <copy-button> element drawn below
 import '@ui/progress/components/CopyButton';
+import { getComposedPathElement } from '@ui/progress/components/composedPath';
 
 // Local imports - formatter helpers
 
@@ -190,20 +191,40 @@ export function buildDetailsCard(opts: {
   return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.open ?? false}>${buildDetailsSummary(opts.summary)}${opts.body}</wa-details>`;
 }
 
+/** Matches the span `buildFileLinkSpan` draws. */
+export const FILE_LINK = '.file-link';
+
 /**
- * Build the clickable file-path span the webview's delegated click handler
- * turns into an editor navigation. `content` is the visible label; pass
- * `startLine` to target a line within the file.
+ * Build the clickable file-path span a view's delegated click handler turns
+ * into an editor navigation (`fileLinkTarget`). `content` is the visible
+ * label; pass `startLine` to target a line within the file.
  */
 export function buildFileLinkSpan(
   filePath: string,
   content: unknown,
-  options: { startLine?: number } = {},
+  options: { startLine?: number; id?: string; className?: string } = {},
 ): TemplateResult {
   const lineSuffix = options.startLine ? `:${options.startLine}` : '';
   const accessibleName = `Open ${filePath}${lineSuffix}`;
+  const classes = {
+    'file-link': true,
+    'clickable-link': true,
+    [options.className ?? '']: options.className !== undefined,
+  };
   // prettier-ignore
-  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(options.startLine)} role="button" tabindex="0" aria-label=${accessibleName} dir="auto">${content}</span>`;
+  return html`<span id=${ifDefined(options.id)} class=${classMap(classes)} data-file=${filePath} data-file-line=${ifDefined(options.startLine)} role="button" tabindex="0" aria-label=${accessibleName} dir="auto">${content}</span>`;
+}
+
+/** The file, and the line when it names one, of the file link a click or
+ *  key event came through. */
+export function fileLinkTarget(
+  event: Event,
+): { readonly path: string; readonly line?: number } | undefined {
+  const link = getComposedPathElement(event, FILE_LINK, HTMLElement);
+  const path = link?.dataset.file;
+  if (!path) return undefined;
+  const line = Number(link?.dataset.fileLine);
+  return { path, ...(Number.isInteger(line) && line > 0 && { line }) };
 }
 
 /** Build a file's `+3 -1` chip: the counts for the eye, the sentence for a

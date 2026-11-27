@@ -838,8 +838,11 @@ wa-input.desktop-command-palette-input {
   background: var(--dot-color, currentColor);
 }
 
-.desktop-editor-dirty-dot {
-  flex: 0 0 auto;
+.unsaved-dot {
+  flex: none;
+}
+
+.desktop-editor-tree-row .unsaved-dot {
   --dot-color: var(--wa-color-brand-fill-loud);
 }
 

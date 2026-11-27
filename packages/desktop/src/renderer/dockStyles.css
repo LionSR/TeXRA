@@ -84,9 +84,6 @@
   flex: 0 0 var(--control-size-s);
   margin-inline-start: auto;
 }
-.shell-dock-dirty {
-  flex: none;
-}
 .shell-dock-actions {
   display: flex;
   align-items: center;
