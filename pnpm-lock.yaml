@@ -242,9 +242,6 @@ importers:
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
-      glob:
-        specifier: 'catalog:'
-        version: 14.0.6
       ink:
         specifier: ^8.0.0
         version: 8.0.0(patch_hash=7e6caf6fee06e527930846329915b4dd2cf242ae67d9df136ceec8f607d72e7b)(@types/react@19.3.0)(react@19.3.1)
