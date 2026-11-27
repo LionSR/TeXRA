@@ -81,6 +81,9 @@ On 2026-11-22, by the owner's decision:
    then be read off the launch's `Deferred`, except that a launch cut after
    `runValidated` and before the hand-over would answer `false` and put the
    activated skills back into the input. Decide whether that edge matters.
+   **Landed 2026-11-27:** `claimRootLaunch(body, unended)` holds the mask,
+   the claim, the `ensuring`, the fork and the wait; the launch keeps its
+   own `held` flag, so the edge does not arise.
 2. **`attachTo` reassigns `receive` from inside its frame loop**
    (`packages/texra/src/controllers/server/windowHost.ts`). Only the
    attachment id arrives late; a `Deferred` for the id lets the server be
