@@ -845,7 +845,7 @@ const SCENARIOS = [
     // happens to get.
     keys: [
       ...CONFIG_FORM_KEYS,
-      { input: '\r', until: 'Add provider API key' },
+      { input: '\r', until: 'Add a provider API key' },
       ESC,
       DOWN,
       DOWN,
@@ -864,7 +864,7 @@ const SCENARIOS = [
       'Esc back',
     ],
     unexpect: [
-      'Add provider API key',
+      'Add a provider API key',
       'No configurable settings are available here yet.',
       'Platform not initialized',
       '/config · error',
@@ -1053,7 +1053,7 @@ const SCENARIOS = [
     keys: ['/key', '\r'],
     frame: 'viewport',
     expect: [
-      'Add provider API key',
+      'Add a provider API key',
       'Choose the service that issued the key.',
       'GLM API/GLM Coding Plan',
       'Kimi Code',

@@ -7,7 +7,8 @@ import {
   ERROR_ENTRY_PREFIX,
   NOTICE_ENTRY_PREFIX,
   STATUS_DOT,
-  TOOL_OUTPUT_CORNER,
+  hangingIndent,
+  TOOL_OUTPUT_PREFIX,
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
@@ -91,7 +92,7 @@ const ROW_GEOMETRY = {
   progressStatus: DETAIL_GEOMETRY,
   error: {
     firstPrefix: ERROR_ENTRY_PREFIX,
-    continuationPrefix: ' '.repeat(ERROR_ENTRY_PREFIX.length),
+    continuationPrefix: hangingIndent(ERROR_ENTRY_PREFIX),
     inset: 2,
     marginBottomRows: 0,
     marginTopRows: 0,
@@ -105,7 +106,7 @@ const ROW_GEOMETRY = {
   },
   user: {
     firstPrefix: USER_ENTRY_PREFIX,
-    continuationPrefix: ' '.repeat(USER_ENTRY_PREFIX.length),
+    continuationPrefix: hangingIndent(USER_ENTRY_PREFIX),
     inset: 2,
     marginBottomRows: USER_ENTRY_MARGIN_BOTTOM_ROWS,
     marginTopRows: USER_ENTRY_MARGIN_TOP_ROWS,
@@ -154,19 +155,17 @@ function wrapWithPrefix(
     );
 }
 
-const CORNER_PREFIX = `${TOOL_OUTPUT_CORNER} `;
-
 function leadingWhitespacePrefix(line: string): string {
   return line.match(/^\s+/)?.[0] ?? '';
 }
 
 function wrapDisplayLine(line: string, columns: number): readonly string[] {
-  if (line.startsWith(CORNER_PREFIX)) {
+  if (line.startsWith(TOOL_OUTPUT_PREFIX)) {
     return wrapWithPrefix(
-      line.slice(CORNER_PREFIX.length),
+      line.slice(TOOL_OUTPUT_PREFIX.length),
       columns,
-      CORNER_PREFIX,
-      ' '.repeat(CORNER_PREFIX.length),
+      TOOL_OUTPUT_PREFIX,
+      hangingIndent(TOOL_OUTPUT_PREFIX),
     );
   }
   const prefix = leadingWhitespacePrefix(line);
@@ -240,7 +239,7 @@ function entryLines(
           headline,
           columns,
           NOTICE_ENTRY_PREFIX,
-          ' '.repeat(NOTICE_ENTRY_PREFIX.length),
+          hangingIndent(NOTICE_ENTRY_PREFIX),
         );
       }
       // An answer its model ended early says so under its text, wrapped

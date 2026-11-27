@@ -29,6 +29,8 @@ lands.
    `title` everywhere and an id per row. The same three files write the
    message header (icon, author, time, Copy) out in full; one
    `buildMessageHeader` beside `messageHeaderStyles` would hold it.
+   (The 2026-11-27 run gave the user message's time the native `title`;
+   the file-path hint is still open.)
 2. **A clickable file path has three markups and three click handlers.**
    `buildFileLinkSpan` (`htmlBuilders.ts`) is the owner; `FileList.ts` and
    `ProposalRequestPanel.ts` write their own span without its accessible
@@ -53,6 +55,8 @@ lands.
    The success mark is `check` in three places and `circle-check`
    (`TONE_GLYPH.success`) in one, in three greens. `statusGlyph({ tone })`
    with a `tone-*` class is the owner; which green stays is a design call.
+   (The 2026-11-27 run gave `LaTeXTab.ts`'s missing dependency
+   `circle-exclamation`, the error glyph its colour already said.)
 7. **Closed.** `BackgroundTasksPanel.ts`'s badges take their variant from
    a `RunTone` table and their glyph and accessible name from the running
    and waiting statuses. The table stays in the panel until a second badge
@@ -86,10 +90,9 @@ lands.
 
 ## Terminal
 
-13. **`detailRows` is still counted by the caller.** `ListForm` now measures
-    its description; `AccountAccessForm.tsx`, `GitHubTokenForm.tsx` and the
-    skills forms still pass a row count for a `detail` they render, at one
-    row a line.
+13. **Closed.** `ListForm` measures the box it draws its `detail` in
+    (Ink's `useBoxMetrics`), so no form passes a row count and a wrapped
+    line is counted.
 14. **Closed.** `TasksForm.tsx` shows the newest rows under a dim
     `previousRowsText` marker when the transcript is longer than its budget.
 15. **Clipping text to fit beside a fixed suffix** is written in
