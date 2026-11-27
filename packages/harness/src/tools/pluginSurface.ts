@@ -201,13 +201,13 @@ export {
 // or external.
 export { pathToLocationIn } from '@common/storage/fileLocation';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
-// The harness's retry policy: which HTTP statuses are worth retrying, and
-// the randomized exponential backoff `Schedule` its fetches retry on.
+// The randomized exponential backoff `Schedule` the harness's fetches retry on.
 export { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
-export { isTransientHttpStatus } from '@utils/core/httpStatus';
-// A tool's requests: one attempt under a deadline, the transient-failure
-// retry, and the scoped clients an attempt's scope aborts.
+// A tool's requests: which HTTP statuses are worth retrying, one attempt
+// under a deadline, the transient-failure retry, and the scoped clients an
+// attempt's scope aborts.
 export {
+  isTransientHttpStatus,
   retryTransientFetch,
   scopedClient,
   type RetryTransientFetchOptions,

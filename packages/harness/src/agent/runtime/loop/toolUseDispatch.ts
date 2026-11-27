@@ -86,7 +86,7 @@ import {
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
-} from '@shared/toolResultText';
+} from '@tools/core/toolResultText';
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { ToolRegistry } from '@tools/toolTable';

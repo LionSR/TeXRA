@@ -932,17 +932,12 @@ type InboxItem = (
 
 ## isTransientHttpStatus
 
-Whether an HTTP status code is transient (worth retrying): 408 request
-timeout, 429 rate limit, or 5xx server error. Other 4xx statuses are
-permanent and won't change on retry.
+Whether an HTTP status is worth retrying: 408 request timeout, 429 rate
+limit, or a 5xx server error. Any other 4xx will not change on a retry.
 
-This is the general-purpose HTTP policy (tool fetches, tool timeouts,
-device-code polling). The llm package's internal provider-error retry
-policy is a separate, deliberately different policy for LLM provider SDK
-errors: it also treats 409 Conflict as retryable, because a provider API's
-409 usually signals a transient session/resource race, unlike a generic
-HTTP 409. Don't merge the two without re-confirming that call for every
-consumer.
+This is the policy for a tool's own requests. The llm package's retry of
+provider errors is deliberately different: it also retries 409, which a
+provider API uses for a session or resource race.
 
 ```ts
 function isTransientHttpStatus(status: number): boolean

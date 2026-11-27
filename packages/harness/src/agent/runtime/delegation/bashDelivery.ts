@@ -39,7 +39,9 @@ export interface BackgroundBashCall {
 
 const callAttributes = ({ command, description }: BackgroundBashCall) => [
   { name: DELIVERY_ATTRIBUTE.command, value: command },
-  ...(description ? [{ name: DELIVERY_ATTRIBUTE.description, value: description }] : []),
+  ...(description
+    ? [{ name: DELIVERY_ATTRIBUTE.description, value: description }]
+    : []),
 ];
 
 /**

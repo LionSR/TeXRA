@@ -124,9 +124,13 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
 
   const loaded = yield* loadChatExportInput(runId, options.session);
   if (loaded._tag === 'noConfig')
-    return yield* new Rejected({ reason: TRANSCRIPT_EXPORT_COPY.unavailable.no_record });
+    return yield* new Rejected({
+      reason: TRANSCRIPT_EXPORT_COPY.unavailable.no_record,
+    });
   if (loaded._tag === 'noConversation')
-    return yield* new Rejected({ reason: TRANSCRIPT_EXPORT_COPY.unavailable.no_rows });
+    return yield* new Rejected({
+      reason: TRANSCRIPT_EXPORT_COPY.unavailable.no_rows,
+    });
   const exportInput = loaded.input;
 
   const result = yield* writeExport(

@@ -47,7 +47,9 @@ const reportInterrupted = Effect.fn('reportInterrupted')(function* (
     family: FAMILY_OF[child.identity.kind],
     runId: child.id,
     attributes:
-      child.command === null ? [] : [{ name: DELIVERY_ATTRIBUTE.command, value: child.command }],
+      child.command === null
+        ? []
+        : [{ name: DELIVERY_ATTRIBUTE.command, value: child.command }],
     message,
   };
   yield* endRunRows({

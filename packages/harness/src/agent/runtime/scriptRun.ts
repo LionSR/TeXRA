@@ -45,7 +45,10 @@ export interface ScriptCallCard {
 const statusOf = (result: ToolResultPayload | undefined): ScriptCallOutcome => {
   if (result === undefined) return 'unfinished';
   if (result.result.status === 'executed') return 'completed';
-  if (result.disposition === 'skipped' || result.result.name === SKIPPED_RESULT_NAME)
+  if (
+    result.disposition === 'skipped' ||
+    result.result.name === SKIPPED_RESULT_NAME
+  )
     return 'skipped';
   return 'failed';
 };
