@@ -33,7 +33,8 @@ import {
 } from '@texra-ai/worldline/plugins';
 import {
   AgentCliEffortSchema,
-  ClaudeAgentModelSchema,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_MODELS,
 } from '@texra/shared/agentCliSettings';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspaceOptions';
 
@@ -78,11 +79,11 @@ const ClaudeAgentInputSchema = Schema.Struct({
   }),
   model: optionalInput(
     Schema.String,
-    `Claude model reference, optionally with an effort suffix (e.g. 'anthropic/claude-opus-5-5' or 'anthropic/claude-opus-5-5@high'). Any non-retired Anthropic model; current ones: ${ClaudeAgentModelSchema.literals.join(', ')}. Defaults to the user-configured model.`,
+    `Claude model reference, optionally with an effort suffix (e.g. 'anthropic/claude-opus-5-5' or 'anthropic/claude-opus-5-5@high'). Any non-retired Anthropic model; current ones: ${CLAUDE_AGENT_MODELS.join(', ')}. Default: ${CLAUDE_AGENT_DEFAULT_MODEL}.`,
   ),
   effort: optionalInput(
     AgentCliEffortSchema,
-    "Reasoning effort; overrides the model's @effort suffix. Defaults to the user-configured effort (medium unless changed). A level the model lacks becomes the nearest one it has.",
+    "Reasoning effort; overrides the model's @effort suffix. A level the model lacks becomes the nearest one it has.",
   ),
   session_id: optionalInput(
     Schema.NonEmptyString,

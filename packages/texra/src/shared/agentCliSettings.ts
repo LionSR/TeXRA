@@ -1,7 +1,9 @@
 import { Schema } from 'effect';
 import {
   isClaudeCodeModel,
+  isCodexModel,
   MODEL_CONFIGS,
+  type ModelConfig,
   type ModelRef,
   ReasoningEffort,
 } from '@texra-ai/llm';
@@ -12,19 +14,24 @@ import {
  * their own schemas.
  */
 
-/** The models the `claude_code` tool's `model` input takes: the eligible
- *  ones that are not deprecated, in registry order. */
-export const ClaudeAgentModelSchema = Schema.Literals(
+/** The eligible models that are not deprecated, by reference, in registry
+ *  order: what a tool's `model` input lists. */
+const currentModels = (eligible: (config: ModelConfig) => boolean) =>
   Object.values(MODEL_CONFIGS)
-    .filter((config) => isClaudeCodeModel(config) && config.deprecated !== true)
-    .map((config) => config.ref),
-);
+    .filter((config) => eligible(config) && config.deprecated !== true)
+    .map((config) => config.ref);
+
+/** The current models the `claude_code` tool's `model` input lists. */
+export const CLAUDE_AGENT_MODELS = currentModels(isClaudeCodeModel);
+/** The current models the `codex` tool's `model` input lists. */
+export const CODEX_MODELS = currentModels(isCodexModel);
+
 /** The model a Claude Code call runs when it names none. */
 export const CLAUDE_AGENT_DEFAULT_MODEL: ModelRef =
   'anthropic/claude-sonnet-5-5';
 
 /**
- * The model Codex runs: the newest Codex model. llm-zoo records no release
+ * The model a Codex call runs when it names none: the newest Codex model. llm-zoo records no release
  * date, so "newest" is not derivable from the registry;
  * `PinnedModels.vitest.ts` checks it is live.
  */

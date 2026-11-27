@@ -68,30 +68,36 @@ const UNPROBED_ROUTE_EFFORTS: readonly ReasoningEffort[] = EFFORT_SCALE.slice(
 );
 
 /**
- * Resolve Codex's model and effort through the reasoning policy. A level above `high` is kept only when the installed CLI
+ * The run a Codex call asks for: its own model and effort, else the
+ * defaults, through the reasoning policy. A level above `high` is kept only when the installed CLI
  * (`binaryPath`) reports it for the model's slug, so other levels never wait
  * on a slow or hung Codex binary.
  */
 export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
   binaryPath: string | undefined,
+  input: {
+    readonly model?: string | null;
+    readonly effort?: AgentCliEffort | null;
+  },
 ): Effect.fn.Return<
   CodexRun,
   ToolError | StateReadFailed,
   ChildProcessSpawner
 > {
   const selection = yield* selectAgentCliModel(
-    CODEX_DEFAULT_MODEL,
+    input.model ?? CODEX_DEFAULT_MODEL,
     CODEX_MODEL_RULE,
   );
+  const asked = input.effort ?? undefined;
   const slug = codexBackendModelId(selection.config);
-  const uncapped = yield* agentCliReasoning(selection, undefined, {});
+  const uncapped = yield* agentCliReasoning(selection, asked, {});
   const { effort } = uncapped.choice;
   const resolved =
     effort === null || UNPROBED_ROUTE_EFFORTS.includes(effort)
       ? uncapped
       : yield* codexRouteEfforts(binaryPath, slug).pipe(
           Effect.flatMap((routeEfforts) =>
-            agentCliReasoning(selection, undefined, { routeEfforts }),
+            agentCliReasoning(selection, asked, { routeEfforts }),
           ),
         );
   return {
