@@ -76,7 +76,7 @@ export function parseLatexGitUrl(input: string): OverleafRemote | null {
 
 /** Where a remote's git token is stored and what one must look like. How a
  *  host asks for it is worded in `@ui/copy/clone`. */
-export interface OverleafTokenSpec {
+interface OverleafTokenSpec {
   /** Secret-storage key the token is cached under. */
   tokenKey: string;
   /** Optional format check; rejects obviously-wrong tokens before cloning. */

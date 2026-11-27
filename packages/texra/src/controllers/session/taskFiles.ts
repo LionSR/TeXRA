@@ -137,7 +137,7 @@ const GLOB_OPTIONS = {
 
 /** Whether a named path is a glob the resolution would expand, for a host
  *  that checks a name before it resolves. */
-export function isTaskFileGlob(spec: string): boolean {
+function isTaskFileGlob(spec: string): boolean {
   return hasMagic(spec, GLOB_OPTIONS);
 }
 
@@ -307,7 +307,7 @@ export const resolveTaskFiles = Effect.fn('resolveTaskFiles')(function* (
 /** Inputs split by what a run does with each: binary media travels as
  *  media, so it stays out of the text a run interpolates and names its
  *  outputs after. */
-export function splitMediaFiles(files: readonly string[]): {
+function splitMediaFiles(files: readonly string[]): {
   readonly inputFiles: string[];
   readonly mediaFiles: string[];
 } {

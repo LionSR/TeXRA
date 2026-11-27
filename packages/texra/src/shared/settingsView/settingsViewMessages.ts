@@ -82,8 +82,7 @@ export const DERIVED_SETTINGS_SNAPSHOTS = Object.freeze([
 ] as const);
 
 /** A snapshot whose whole payload is derived from the settings catalog. */
-export type DerivedSettingsSnapshot =
-  (typeof DERIVED_SETTINGS_SNAPSHOTS)[number];
+type DerivedSettingsSnapshot = (typeof DERIVED_SETTINGS_SNAPSHOTS)[number];
 
 /** Every settings-view snapshot: what a row's `surfaces.settingsView` names. */
 export type SettingsViewSnapshot =
