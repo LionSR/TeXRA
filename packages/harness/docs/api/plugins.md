@@ -1658,13 +1658,12 @@ class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()(
 ## PromptSection
 
 A plugin's section of each request's system text, rendered from the tool
-names the request's step offers, whether the run is a child and its
-workspace configuration ('' for none).
+names the request's step offers and its workspace configuration ('' for
+none).
 
 ```ts
 type PromptSection = (ctx: {
   readonly offered: readonly string[];
-  readonly isChild: boolean;
   /** The run's workspace configuration, for a section that follows a
    *  setting of its plugin's. */
   readonly config: ConfigProvider;
