@@ -45,7 +45,6 @@ const CHANNEL = 'latexPreview';
  */
 export type BuildDisplayFn = (
   location: FileLocation,
-  options?: { preserveFocus?: boolean },
 ) => Effect.Effect<void, Error, PreviewServices>;
 
 /**
@@ -294,7 +293,6 @@ export const previewProposedLatex = (
 
       yield* options.openBuildDisplay(
         pathToLocationIn(entry.request.roots.workspace, tempPath),
-        { preserveFocus: true },
       );
     }),
   );
@@ -360,6 +358,6 @@ export const runLatexdiff = (
         entry.request.roots.workspace,
         diffPath,
       );
-      yield* options.openBuildDisplay(diffLocation, { preserveFocus: true });
+      yield* options.openBuildDisplay(diffLocation);
     }),
   );

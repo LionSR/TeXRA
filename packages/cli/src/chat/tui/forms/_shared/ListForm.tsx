@@ -183,7 +183,7 @@ interface AsyncListFormControls<TData> {
 
 interface AsyncListFormProps<TData, TValue> extends Omit<
   ListFormProps<TValue>,
-  'items' | 'onSelect'
+  'items' | 'onSelect' | 'detail' | 'compactDetail'
 > {
   readonly loadingLabel: string;
   readonly load: () => Effect.Effect<TData, Error, ProcessServices>;
@@ -248,8 +248,8 @@ export function AsyncListForm<TData, TValue>(
     <ListForm
       {...listProps}
       items={items}
-      detail={detailFor?.(data) ?? listProps.detail}
-      compactDetail={compactDetailFor?.(data) ?? listProps.compactDetail}
+      detail={detailFor?.(data)}
+      compactDetail={compactDetailFor?.(data)}
       onSelect={select}
     />
   );

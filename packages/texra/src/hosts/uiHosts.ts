@@ -1,43 +1,11 @@
 // Third-party imports
 import { type Effect, Schema } from 'effect';
 
-export interface DiffSource {
-  filePath: string;
-}
-
 /** How a diff is named: the title its view shows, and the path the
  *  desktop's Review pane files it under. */
 export interface DiffLabel {
   readonly title: string;
   readonly displayPath: string;
-}
-
-/**
- * The host's diff surface: showing a diff, the one verb the two windowed
- * hosts answer. The terminal has no second surface to show one in — its
- * tool-edit modal renders the diff inline, and no CLI action names the
- * `openDiff` host case — so this port stays at two implementations.
- * Closing a diff, revealing its first change and reading back its proposed
- * side are VS Code's alone — its tab model is what they are written against —
- * so they live on `VscodeDiffViewHost` beside the approval host that calls
- * them, and the desktop's Review workbench names its own close by preview id.
- *
- * The member is an `Effect`, so the host's own refusal — VS Code declining
- * `vscode.diff`, the desktop failing to read a side or to hand a patch file to
- * the OS editor — reaches the caller through the failure channel instead of as
- * a rejection a lift had to re-tag, and interrupting the fiber that opened a
- * diff abandons the wait instead of detaching from it. The error is any
- * `Error`: each implementation fails with what its surface raised (a VS Code
- * command rejection, a `HostFailed`, a filesystem error), and the
- * callers that need a tag map it into their own.
- */
-export interface DiffViewHost {
-  /** Show the diff. The caller already holds the session it described. */
-  openDiff(
-    original: DiffSource,
-    proposed: DiffSource,
-    label: DiffLabel,
-  ): Effect.Effect<void, Error>;
 }
 
 /**

@@ -23,7 +23,6 @@ export function createDiscardChangesDialog(appRoot: HTMLElement) {
   const { dialog } = createOverlayDialog({
     appRoot,
     prefix: 'desktop-discard',
-    ariaLabel: DISCARD_CHANGES_COPY.question,
     closeLabel: DISCARD_CHANGES_COPY.keep,
     title: DISCARD_CHANGES_COPY.question,
     content,

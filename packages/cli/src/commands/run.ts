@@ -1,7 +1,7 @@
 import { Effect, Option } from 'effect';
 import { Argument, Flag } from 'effect/cli';
 
-import { programOrigin, type RunId } from '@texra-ai/worldline/schemas';
+import { programOrigin } from '@texra-ai/worldline/schemas';
 
 import {
   failUsage,
@@ -189,12 +189,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
 export const executeCliRun = Effect.fn('executeCliRun')(function* (
   config: AgentConfigPayload,
   runContext: CliContext,
-  options: {
-    readonly services: CliExecuteOptions['services'];
-    /** False when invocation-owned temporary inputs will not survive exit. */
-    readonly recoveryInputIsDurable: boolean;
-    readonly runId?: RunId;
-  },
+  options: CliExecuteOptions,
 ): Effect.fn.Return<number, Error, ProcessServices | CliInvocation> {
   const run = yield* executeCliConfig(config, runContext, options);
   if (!run.ok) return run.exitCode;

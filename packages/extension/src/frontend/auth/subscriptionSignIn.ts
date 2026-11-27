@@ -63,7 +63,6 @@ function vscodePresenter(
           error,
         ),
       ),
-      Effect.asVoid,
     ),
     presentSignInUrl: Effect.fn('subscriptionSignIn.presentSignInUrl')(
       function* (url) {

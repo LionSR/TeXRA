@@ -9,6 +9,7 @@ import { wakeNotes } from '@agent/followUp/followUpMessages';
 import { cancelWakeRows, Inbox } from '@agent/followUp/Inbox';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { consumedRows } from '@agent/runtime/loop/rows';
+import { AgentError } from '@common/errors/agentErrors';
 import { logFailure } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
@@ -64,11 +65,11 @@ export class RunOpenRejected extends Schema.TaggedError<RunOpenRejected>()(
 
 type RunConfigRow = Extract<SessionRowDraft, { readonly type: 'run.config' }>;
 
-/** The rows that register a run, and the `run.start` among them of a run
- *  they give birth to (null: the run exists, and they re-register it). */
+/** The rows that register a run, and the `run.start` among them of the
+ *  run they give birth to. */
 export interface Registration {
   readonly rows: readonly SessionRowDraft[];
-  readonly start: Extract<SessionRowDraft, { type: 'run.start' }> | null;
+  readonly start: Extract<SessionRowDraft, { type: 'run.start' }>;
   /** Its configuration as a `run.config`, apart from `rows`, so the batch
    *  that commits them records one: a run whose loop is not this
    *  process's records this one (`registerRun`), as does a fork of a run
@@ -114,22 +115,19 @@ export const registerRun = Effect.fn('registerRun')(function* (
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error, OpenServices | RunHistory> {
   const opens = yield* registrationRows(runId, record, options);
-  const rows = Effect.succeed([...opens.rows, opens.config]);
-  const born = opens.start !== null;
-  const cell = yield* (yield* RunHistory).open(
-    runId,
-    born ? { registration: rows } : { activation: () => rows },
-  );
-  if (born) yield* cell.append([]);
+  const cell = yield* (yield* RunHistory).open(runId, {
+    registration: Effect.succeed([...opens.rows, opens.config]),
+  });
+  yield* cell.append([]);
 });
 
-/** The rows that register a run, uncommitted, in commit order: a new run's
- *  `run.start`, its `run.activate` (a re-registration's with the grants it
- *  ends) and the description it is born with; and its configuration, for
- *  its first batch to record ({@link Registration}). A caller commits them
- *  with the run's first history in one batch, so no crash leaves it
- *  registered without that history. A child is refused under a parent that
- *  was stopped. */
+/** The rows that register a new run, uncommitted, in commit order: its
+ *  `run.start`, its `run.activate` and the description it is born with;
+ *  and its configuration, for its first batch to record
+ *  ({@link Registration}). A caller commits them with the run's first
+ *  history in one batch, so no crash leaves it registered without that
+ *  history. A child is refused under a parent that was stopped, and a run
+ *  that exists already is refused: it resumes. */
 export const registrationRows = Effect.fn('registrationRows')(function* (
   runId: RunId,
   record: RunRecord,
@@ -154,24 +152,25 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
   const config = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
     pinRunWorkingDirectory(record, (yield* SessionRoots).workspace),
   );
+  if (prior)
+    return yield* new AgentError({
+      message: `Run ${runId} already exists; resume it.`,
+    });
   const worktree = config.workingDirectory?.trim();
-  const start = prior
-    ? null
-    : ({
-        type: 'run.start',
-        aggregateId: runId,
-        identity: options.identity,
-        takesFollowUps: options.takesFollowUps,
-        worktree: worktree ? { workingDirectory: worktree } : null,
-        parent: options.parent ?? null,
-        provenance: options.provenance ?? null,
-        grants: options.grants ?? NO_APPROVAL_GRANTS,
-        maxCostUsd: options.maxCostUsd ?? null,
-      } satisfies Registration['start']);
+  const start = {
+    type: 'run.start',
+    aggregateId: runId,
+    identity: options.identity,
+    takesFollowUps: options.takesFollowUps,
+    worktree: worktree ? { workingDirectory: worktree } : null,
+    parent: options.parent ?? null,
+    provenance: options.provenance ?? null,
+    grants: options.grants ?? NO_APPROVAL_GRANTS,
+    maxCostUsd: options.maxCostUsd ?? null,
+  } satisfies Registration['start'];
   const rows: SessionRowDraft[] = [
-    ...(start === null ? [] : [start]),
+    start,
     { type: 'run.activate', aggregateId: runId },
-    ...(prior ? yield* (yield* Approvals).activationRows(runId) : []),
   ];
   if (options.description !== undefined)
     rows.push(descriptionRow(runId, options.description, 'model'));
@@ -196,7 +195,8 @@ export interface RunEnding {
    *  it (it reads the report itself). Null, or absent: nothing to report
    *  (a stop). */
   readonly report?: ChildRunDelivery | null;
-  /** Rows committed ahead of the end (a process run's exit). */
+  /** Rows committed ahead of the end (a stop's `run.stop`, a process run's
+   *  exit). */
   readonly leading?: readonly UnfoldedDraft[];
 }
 
@@ -311,14 +311,13 @@ export const lastReportRecipients = Effect.fn('lastReportRecipients')(
 const endIn = Effect.fn('endIn')(function* (
   tx: Pick<SessionTransaction, 'append'>,
   input: RunEnding,
-  leading: readonly UnfoldedDraft[] = [],
 ): Effect.fn.Return<EndedRun, Error, EndServices> {
   const { append } = tx;
   const { runId, outcome, error } = input;
   const log = yield* SessionLog;
   const facts = yield* log.facts(runId);
   if (facts === null) return null;
-  const ahead = [...leading, ...(input.leading ?? [])];
+  const ahead = input.leading ?? [];
   if (facts.end !== null) {
     if (error !== undefined)
       yield* Effect.logWarning(
@@ -440,7 +439,11 @@ export const stopRun = Effect.fn('stopRun')(function* (
         if (stop.length > 0) yield* tx.append(stop);
         return true;
       }
-      yield* endIn(tx, { runId, outcome: RUN_OUTCOME.CANCELLED }, stop);
+      yield* endIn(tx, {
+        runId,
+        outcome: RUN_OUTCOME.CANCELLED,
+        leading: stop,
+      });
       return true;
     }).pipe(Effect.provide(services)),
   );

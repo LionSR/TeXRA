@@ -168,11 +168,10 @@ const returnBinaryAttachment = Effect.fn('ReadFileTool.returnBinaryAttachment')(
     ToolContext | FileSystem.FileSystem
   > {
     const copy = ATTACHMENT_COPY[kind];
-    const attachment = yield* buildFileAttachment({
-      filePath: resolved.fsPath,
-      description: `${copy.label} returned by read_file tool.`,
+    const attachment = yield* buildFileAttachment(
       resolved,
-    });
+      `${copy.label} returned by read_file tool.`,
+    );
 
     const baseSummary = `Attached ${copy.label} ${attachment.path}.`;
     const summary = input.range

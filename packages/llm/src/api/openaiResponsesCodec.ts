@@ -182,7 +182,7 @@ export const terminalParts = Effect.fn('llm.responses.terminalParts')(
       },
       {
         kind: 'finish',
-        finish: { finishReason },
+        finishReason,
         snapshot,
       },
     ] satisfies PartEvent[];

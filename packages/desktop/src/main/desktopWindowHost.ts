@@ -167,12 +167,10 @@ export function createDesktopWindowHost(options: {
       const { roots } = project;
       const name = project.display.name;
       const diff = diffHost.inProject(roots);
-      const dialogsOfProject: Omit<
-        DesktopAgentRunHost,
-        'openBuildDisplay' | 'openDiff'
-      > = {
+      const run: DesktopAgentRunHost = {
         openPath: (filePath) => presented(previewHost.openPath(filePath)),
-        confirm: (question) => dialogs.confirm(question, name),
+        openBuildDisplay: (location) =>
+          presented(previewHost.openBuildDisplayIn(roots)(location)),
         notify: (level, message) => notify(level, message, name),
         ask: (level, message, labels) =>
           dialogs.ask(level, message, labels, name),
@@ -180,12 +178,7 @@ export function createDesktopWindowHost(options: {
           dialogs.pickTranscriptExportFormat(name),
       };
       return {
-        run: {
-          ...dialogsOfProject,
-          openDiff: diff.openDiff,
-          openBuildDisplay: (location) =>
-            presented(previewHost.openBuildDisplayIn(roots)(location)),
-        } satisfies DesktopAgentRunHost,
+        run,
         // The tool-edit preview presents its own failures.
         toolEditPreview: {
           openPath: previewHost.openPath,

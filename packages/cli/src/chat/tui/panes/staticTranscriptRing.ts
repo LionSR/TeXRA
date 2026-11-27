@@ -103,7 +103,7 @@ export interface ChildHeader {
  * TUI's notices, its final prefix, and the facts the session header names.
  */
 export interface StaticScrollbackSource {
-  readonly entries: readonly TranscriptRow[] | undefined;
+  readonly entries: readonly TranscriptRow[];
   readonly finalRows: number;
   /** Whether the run is working: a user prompt still waiting for its live
    *  continuation stays out of the scrollback while it is. */
@@ -164,7 +164,7 @@ interface StaticTranscriptItemMetrics {
  *  pays for a second full layout pass. */
 function staticTranscriptItemMetrics(
   item: StaticTranscriptItem,
-  width?: number,
+  width: number,
 ): StaticTranscriptItemMetrics {
   if (item.kind === 'header') {
     return {
@@ -300,7 +300,7 @@ class StaticTranscriptTotalsAccumulator {
 
 function staticTranscriptItemsTotals(
   items: readonly StaticTranscriptItem[],
-  width?: number,
+  width: number,
 ): StaticTranscriptTotals {
   const totals = new StaticTranscriptTotalsAccumulator();
   let aboveMarginBottomRows = 0;
@@ -321,7 +321,7 @@ function trimStaticTranscriptItems(
   items: readonly StaticTranscriptItem[],
   options: {
     readonly totals: StaticTranscriptTotals;
-    readonly width?: number;
+    readonly width: number;
   },
 ): RingTail {
   const budgets = STATIC_TRANSCRIPT_RING_BUDGETS;
@@ -376,7 +376,7 @@ function trimStaticTranscriptItems(
 function retainedStaticTranscriptTail(
   items: readonly StaticTranscriptItem[],
   options: {
-    readonly width?: number;
+    readonly width: number;
   },
 ): RingTail {
   if (items.length === 0) {
@@ -456,7 +456,7 @@ function ensureStaticSessionHeader({
   readonly meta: SessionMeta;
   readonly source: StaticScrollbackSource;
   readonly totals: StaticTranscriptTotals;
-  readonly width?: number;
+  readonly width: number;
 }): {
   readonly items: readonly StaticTranscriptItem[];
   readonly totals: StaticTranscriptTotals;
@@ -581,7 +581,7 @@ function buildScrollback(origin: number, input: ScrollbackInput): Scrollback {
     totals: EMPTY_TOTALS,
     width,
   });
-  const rows = source.entries ?? [];
+  const rows = source.entries;
   const printable = printableFinalRows(
     rows,
     0,
@@ -624,7 +624,7 @@ export function advanceScrollback(
   if (current.ownerKey === undefined) {
     return buildScrollback(current.origin, input);
   }
-  const rows = source.entries ?? [];
+  const rows = source.entries;
   const extendsPrinted =
     rows.length >= current.printedThrough &&
     rows[current.printedThrough - 1] === current.lastRow;
