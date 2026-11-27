@@ -22,6 +22,7 @@
 import {
   Array as Arr,
   Effect,
+  Equal,
   type FileSystem,
   Option,
   Predicate,
@@ -231,14 +232,15 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       credential: undefined,
       flags: undefined,
     });
-    /** Write `patch` when it changes a field, so an unchanged write
-     *  publishes nothing. */
+    /** Write `patch` when it changes a field's value, so an unchanged write
+     *  publishes nothing: a producer that reads the same list again builds
+     *  a new array, which is not a change. */
     const write = (patch: Partial<Inputs>) =>
       SubscriptionRef.updateSome(inputs, (current) =>
         Object.entries(patch).some(
           // cast: `Object.entries` widens keys to string; `patch` is a
           // `Partial<Inputs>`, so each key is one of `Inputs`.
-          ([key, value]) => current[key as keyof Inputs] !== value,
+          ([key, value]) => !Equal.equals(current[key as keyof Inputs], value),
         )
           ? Option.some({ ...current, ...patch })
           : Option.none(),
