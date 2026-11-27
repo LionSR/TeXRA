@@ -22,9 +22,9 @@ export { designTokens } from './litStyles';
 //   rendered markdown compose it, so it stays a direct import.
 // - './statusIndicatorStyles' — single-purpose 7px status dot (the run
 //   header and the run-list row).
-// - './overlaySurfaceStyles' — shared chrome for the two wa-drawer overlay
-//   surfaces (ToolsSheet, SessionDrawer); a direct import names its callers
-//   plainly enough that the barrel would add nothing.
+// - './overlaySurfaceStyles' — chrome for the SessionDrawer wa-drawer overlay
+//   surface; a direct import names its caller plainly enough that the barrel
+//   would add nothing.
 
 // Component styles
 export { compactFormControlStyles } from './selectStyles';
