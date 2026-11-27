@@ -91,7 +91,7 @@ function formatReceivedMessageTemplate(
   const text = row.text.full.trim();
   const from = messageSenderLabel(sender);
   const open =
-    sender.kind === 'run'
+    sender.kind === 'run' && sender.inSession
       ? renderIconActionButton({
           icon: 'arrow-up-right-from-square',
           label: `Open ${from}`,

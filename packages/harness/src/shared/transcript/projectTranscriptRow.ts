@@ -225,11 +225,13 @@ function messageSender(
   if (from === undefined || from.kind === 'user') return undefined;
   if (from.kind === 'self') return { kind: 'self' };
   if (from.kind === 'notification') return from;
-  const label = runLabels?.get(from.runId)?.label.trim();
+  const run = runLabels?.get(from.runId);
+  const label = run?.label.trim();
   return {
     kind: 'run',
     runId: from.runId,
     ...(label && label !== from.runId ? { label } : {}),
+    inSession: run !== undefined,
   };
 }
 

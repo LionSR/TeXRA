@@ -281,12 +281,18 @@ interface LogRow extends TranscriptRowBase {
 ## MessageSender
 
 Who sent a message a run took, when not the person: another run (with
-its label as the session names it, when it has one), a host's notice by
-its source, or the run's own note for a later time.
+its label as the session names it, when it has one, and whether the
+session still holds it, so a host links only to a run it can show), a
+host's notice by its source, or the run's own note for a later time.
 
 ```ts
 type MessageSender =
-  | { readonly kind: 'run'; readonly runId: RunId; readonly label?: string }
+  | {
+      readonly kind: 'run';
+      readonly runId: RunId;
+      readonly label?: string;
+      readonly inSession: boolean;
+    }
   | { readonly kind: 'notification'; readonly source: string }
   | { readonly kind: 'self' };
 ```
