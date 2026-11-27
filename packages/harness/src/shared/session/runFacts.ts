@@ -163,7 +163,7 @@ const toolOf = (pending: PendingResponse, callId: string): string | undefined =>
 /**
  * The replacements waiting once `p` finished its call of `pending`: an
  * executed `replace` of the `context` tool adds its own, in range order,
- * highest first. A duplicate copies its primary's result, not its request.
+ * highest first.
  */
 export function requestedEdits(
   facts: RunFacts,

@@ -509,8 +509,8 @@ before the result (`agent/runtime/loop/toolUseDispatch.ts#opening`). A body
 interrupted or cut by a crash commits no result; a resume settles it (section
 9, "`tool.intent`, no result"). A result no body returned names a card only
 when an attempt of the call opened one: a call a recovered response never
-started, a duplicate, a script's host function and a call after the turn ended
-name none, and one that settles a started call as outcome unknown closes the
+started, a script's host function and a call after the turn ended name
+none, and one that settles a started call as outcome unknown closes the
 card its intent opened (`agent/runtime/loop/toolUseDispatch.ts#skipCall`,
 `#commitResult`). The delivering `append` MUST
 commit only once every call of the response has settled, as one tool group bound

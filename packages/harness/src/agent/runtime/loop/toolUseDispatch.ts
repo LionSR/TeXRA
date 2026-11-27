@@ -2,8 +2,7 @@
  * Dispatch of one committed response's tool calls, from the run's state and
  * back into it. What it guarantees, by construction: contiguous parallel
  * calls run concurrently under a small window while every other call is a
- * barrier that runs alone and in order; a call repeating an earlier call's
- * name and arguments never executes and derives its primary's result; a
+ * barrier that runs alone and in order; a
  * result that ends the turn stops dispatch after its group; one interrupt
  * cancels the whole in-flight batch through the fiber; an ordinary tool
  * failure becomes a model-visible error result; and a durable write failure
@@ -40,7 +39,6 @@ import {
   Semaphore,
 } from 'effect';
 
-import { normalizeToolCallError } from '@tools/core/toolCallParsing';
 import { extractToolAttachments } from '@tools/core/toolAttachmentExtraction';
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
 import {
@@ -176,6 +174,13 @@ const issuedBy = (state: RunState, scriptCallId: string) =>
 const storedResult = (result: ToolResult): ToolCallResult['result'] =>
   Schema.decodeUnknownSync(FinishedToolResultSchema)(result);
 
+/** A tool call's failure as the model reads it: the tool's name and the
+ *  failure's message, a schema failure's as its rendered issue tree. */
+const failureText = (toolName: string, error: unknown): string =>
+  error instanceof Schema.SchemaError
+    ? `${toolName}: Invalid parameters:\n${error.message}`
+    : `${toolName}: ${toErrorMessage(error)}`;
+
 const dispositionOf = (
   result: Pick<ToolResult, 'status'>,
 ): ToolCallResult['disposition'] =>
@@ -284,8 +289,8 @@ const resultRow = (
   ...(blobs.length > 0 && { blobs }),
 });
 
-/** Commit a result no body returned (a duplicate's copy, a script's host
- *  function's answer, a skip) at `attempt`; `card` says whether an attempt
+/** Commit a result no body returned (a script's host function's answer, a
+ *  skip) at `attempt`; `card` says whether an attempt
  *  of the call opened the card this result then closes. */
 const commitResult = (
   call: Call,
@@ -317,8 +322,7 @@ const skipCall = (
 /**
  * Finish one call from where its rows left it, under `place`: the script
  * that issued it, or the door a `script` call issues its own through. A
- * finished call keeps its result; a duplicate derives its primary, effects
- * stripped; a call after a group that `ended` the turn, one untouched in a
+ * finished call keeps its result; a call after a group that `ended` the turn, one untouched in a
  * recovered response, and a started body that may have run and may not be
  * replayed are skipped, closing their cards; any other runs at the attempt
  * `resumedAttempt` names, asking again whatever it asked. A throwing tool
@@ -482,7 +486,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
           ),
         );
       if (failed.kind === 'refused') return yield* failed.refusal;
-      const message = normalizeToolCallError(
+      const message = failureText(
         fact.toolName,
         failed.kind === 'error' ? failed.error : failed.defect,
       );

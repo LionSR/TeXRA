@@ -94,12 +94,6 @@ export interface ToolUseOpening {
   readonly activation: CommitOrdinal;
 }
 
-/** A user message the loop appends itself. */
-const nudge = (text: string) => ({
-  role: 'user' as const,
-  content: [{ kind: 'text' as const, text }],
-});
-
 /** A failed handed-down call answers with its error and a script that
  *  returned text with that text; otherwise the turn's response rows supply
  *  its answer, including after a resume. */
@@ -262,10 +256,10 @@ const finishRun =
 type TurnServices = AgentRun | AgentRunServices | ModelAccess;
 
 /**
- * The policy a committed text-only response runs: a blank turn after a tool
- * result (a message delivered at the request may sit between them) asks once
- * more, the terminal tool gets one forced turn per turn, else the turn ends
- * with this text. Each step is a row (a resume finds it); `done` ends the turn.
+ * The policy a committed text-only response runs: its text is the answer
+ * shown as final, the terminal tool gets one forced turn per turn, else the
+ * turn ends with this text. Each step is a row (a resume finds it); `done`
+ * ends the turn.
  */
 const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
   cell: RunCell,
@@ -284,9 +278,16 @@ const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
     at.finalTool?.turn !== at.turn &&
     at.structured === null
   ) {
-    const row = appendRow(runId, [nudge(FINAL_TOOL_INSTRUCTION)], {
-      reason: 'final-tool',
-    });
+    const row = appendRow(
+      runId,
+      [
+        {
+          role: 'user',
+          content: [{ kind: 'text', text: FINAL_TOOL_INSTRUCTION }],
+        },
+      ],
+      { reason: 'final-tool' },
+    );
     return { state: yield* cell.append([row]), done: false };
   }
   return { state: at, done: true };
