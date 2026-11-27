@@ -4,7 +4,7 @@
  * the settings webview renders the same words the hosts build rows with.
  */
 import { ReasoningEffort, selectModel } from '@texra-ai/llm';
-import { getModelLabel } from '@texra-ai/worldline/schemas';
+import { getModelLabel, joinFacts } from '@texra-ai/worldline/schemas';
 
 /**
  * Display labels for llm-zoo's reasoning efforts, written low → high. The key type keeps the record
@@ -75,13 +75,11 @@ export function isExpensiveModel(outputPrice: number | undefined): boolean {
  */
 export function modelSelectionLabel(model: string): string {
   const request = selectModel(model)?.request;
-  return [
+  return joinFacts([
     getModelLabel(model),
     request?.effort === undefined
       ? undefined
       : REASONING_LEVEL_LABELS[request.effort],
     request?.mode === 'pro' ? 'Pro' : request?.mode,
-  ]
-    .filter((part) => part !== undefined)
-    .join(' · ');
+  ]);
 }
