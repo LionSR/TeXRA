@@ -798,7 +798,7 @@ done: the call or turn that asked asks again under a new id. The one request
 the activation does not cancel is one a person answered while no process held
 the run: the decide door resumes the run for that answer, and the activation
 commits its `request.decided` after its `run.activate`
-(`agent/runtime/loop/runLoop.ts#heldAnswers`), so the call that asked starts
+(`agent/runtime/loop/runLoop.ts#takeAnswers`), so the call that asked starts
 again and takes the decision from the row when it asks the same thing
 (`agent/runtime/loop/toolGuard.ts#askOf`).
 

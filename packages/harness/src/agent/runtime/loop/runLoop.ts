@@ -189,8 +189,7 @@ const openRun = Effect.fn('toolUse.openRun')(function* (
             // request still open: after the `run.activate`, so the call that
             // asked reads it as not yet seen and takes it (`resumedAttempt`).
             const answered: SessionRowDraft[] = [];
-            for (const [requestId, decision] of runs.heldAnswers(runId)) {
-              runs.dropAnswer(runId, requestId);
+            for (const [requestId, decision] of runs.takeAnswers(runId)) {
               if (state.requests[requestId]?.decided !== null) continue;
               answered.push({
                 type: 'request.decided',
