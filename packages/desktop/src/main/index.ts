@@ -169,6 +169,14 @@ export const startDesktop = (mainDir: string): void => {
               ),
           });
           yield* Scope.addFinalizer(shutdownScope, windows.released);
+          // This process holds the single-instance lock (`bootstrap.ts`): a
+          // second launch focuses the running window and quits itself.
+          app.on('second-instance', () => windows.focus());
+          // Both are heard from here on, while the projects still open: a
+          // window closed in that time is reopened as one closed later is.
+          app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0) windows.reopen();
+          });
           // A startup that fails closes this scope, and the opening window
           // with it, before the shutdown runs.
           const opening = yield* Effect.forkScoped(windows.open);
@@ -223,10 +231,6 @@ export const startDesktop = (mainDir: string): void => {
           );
           yield* registry.activate(registry.list().at(-1)?.roots.workspace);
 
-          // This process holds the single-instance lock (`bootstrap.ts`): a
-          // second launch focuses the running window and quits itself. One
-          // that lands before the windows exist has nothing to focus.
-          app.on('second-instance', () => windows.focus());
           // Ask the renderer to close before draining process services. A dirty
           // editor can veto that close and remain fully operational. Once the
           // window really closes, its handler calls app.quit() again and this
@@ -251,9 +255,6 @@ export const startDesktop = (mainDir: string): void => {
             (message) => noticeIn(processScope)('warning', message),
             { discard: true },
           );
-          app.on('activate', () => {
-            if (BrowserWindow.getAllWindows().length === 0) windows.reopen();
-          });
           // For the process lifetime: the fallback project's scope is the
           // last the shutdown releases.
           yield* followDesktopAttention(
