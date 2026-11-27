@@ -3,7 +3,6 @@
 import {
   appendFileSync,
   existsSync,
-  globSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -1061,7 +1060,10 @@ function removeScratch(dir) {
   // `serve-<pid>.sock`, which a long home keeps outside `dir`, under `/tmp`.
   // The client opens the log before it starts the service, so a service
   // still starting is waited for briefly.
-  for (const found of globSync('**/serve.log', { cwd: dir })) {
+  // Listed, not globbed: a glob's `**` skips the hidden `.texra`.
+  const files = existsSync(dir) ? readdirSync(dir, { recursive: true }) : [];
+  for (const found of files) {
+    if (path.basename(found) !== 'serve.log') continue;
     const log = path.join(dir, found);
     const dataRoot = path.dirname(path.dirname(log));
     if (serviceLogPath(dataRoot) !== log) continue;
@@ -1662,9 +1664,11 @@ async function validateSdkResumeApproval() {
       'resuming SDK harness',
     );
     // The workspace's store: the global one beside it holds no runs.
-    const [store] = globSync('**/workspace-storage/**/*.project-v1.db', {
-      cwd: storage,
-    });
+    const store = readdirSync(storage, { recursive: true }).find(
+      (file) =>
+        file.endsWith('.project-v1.db') &&
+        file.split(path.sep).includes('workspace-storage'),
+    );
     const rows = storeRows(
       path.join(storage, store),
       `SELECT e.type, json_extract(e.data, '$.requestId') AS requestId,
