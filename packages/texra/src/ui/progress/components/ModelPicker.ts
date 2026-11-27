@@ -30,7 +30,14 @@ import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { TexraElement } from '@ui/litBase';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import { popoverPanelStyles } from '@ui/styles/overlaySurfaceStyles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { isCommitEnter } from '@ui/wa/keyActivation';
+import {
+  listMoveOfKey,
+  matchesQuery,
+  nextListIndex,
+} from '@ui/wa/listInteraction';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /** One row of a model choice: a host row, or the selected model as itself. */
@@ -85,11 +92,6 @@ function levelOf(
   return levels === undefined ? named : nearestEffort(levels, named);
 }
 
-const matches = (choice: ModelChoice, query: string): boolean =>
-  `${choice.label} ${choice.value} ${choice.row?.provider ?? ''}`
-    .toLowerCase()
-    .includes(query);
-
 /** A composer chip's trigger, shared with the composer's other chips. */
 export const chipTriggerStyles = css`
   .chip-trigger {
@@ -124,34 +126,22 @@ export class ModelPicker extends TexraElement {
   static override styles = [
     TexraElement.styles,
     chipTriggerStyles,
+    popoverPanelStyles,
     css`
       :host {
+        --popover-panel-width: 20rem;
         display: inline-flex;
         min-width: 0;
       }
       .chip-effort {
         color: var(--color-text-secondary);
       }
-      wa-popover {
-        --arrow-size: 0;
-        --max-width: min(20rem, calc(100vw - 2 * var(--wa-space-m)));
-      }
-      wa-popover::part(body) {
-        padding: 0;
-      }
-      .panel {
+      .popover-panel {
         display: flex;
         flex-direction: column;
-        width: min(20rem, calc(100vw - 2 * var(--wa-space-m)));
         max-height: min(24rem, 70vh);
-        font-size: var(--font-size-sm);
       }
       .search {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-xs);
-        padding: var(--wa-space-xs) var(--wa-space-s);
-        border-block-end: var(--border-thin) solid var(--color-border);
         color: var(--color-text-secondary);
       }
       .search input {
@@ -252,10 +242,15 @@ export class ModelPicker extends TexraElement {
   @query('.search input') private search?: HTMLInputElement;
 
   private filtered(choices: readonly ModelChoice[]): readonly ModelChoice[] {
-    const needle = this.searchText.trim().toLowerCase();
-    return needle === ''
-      ? choices
-      : choices.filter((choice) => matches(choice, needle));
+    const query = this.searchText.trim();
+    return choices.filter((choice) =>
+      matchesQuery(
+        // Model names and ids are ASCII: fold them without the locale, so
+        // a Turkish locale's dotless i does not hide "OpenAI" from "openai".
+        `${choice.label} ${choice.value} ${choice.row?.provider ?? ''}`.toLowerCase(),
+        query,
+      ),
+    );
   }
 
   /** Another model, at the level remembered for it (its row's), or its
@@ -284,16 +279,18 @@ export class ModelPicker extends TexraElement {
     );
   }
 
+  /** The search keeps Home and End for its caret; the arrows move. */
   private onSearchKey(event: KeyboardEvent, shown: readonly ModelChoice[]) {
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault();
-      const step = event.key === 'ArrowDown' ? 1 : -1;
-      this.active = (this.active + step + shown.length) % (shown.length || 1);
-    } else if (event.key === 'Enter') {
+    if (isCommitEnter(event)) {
       event.preventDefault();
       const choice = shown.at(this.active);
       if (choice !== undefined) this.pick(choice);
+      return;
     }
+    const move = listMoveOfKey(event.key, 'vertical');
+    if (move !== 'next' && move !== 'previous') return;
+    event.preventDefault();
+    this.active = Math.max(0, nextListIndex(move, this.active, shown.length));
   }
 
   protected override updated(): void {
@@ -380,8 +377,8 @@ export class ModelPicker extends TexraElement {
           this.active = 0;
         }}
       >
-        <div class="panel">
-          <label class="search">
+        <div class="popover-panel">
+          <label class="search popover-panel-head">
             ${waIcon('magnifying-glass')}
             <input
               type="text"

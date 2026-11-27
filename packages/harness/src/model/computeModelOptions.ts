@@ -35,11 +35,24 @@ import {
 
 /** A routed model's verdict; its wording reads the route it was decided
  *  over. `unknown-model` is the verdict on a model no route was decided for. */
-interface ModelAvailabilityStatus {
-  kind: Exclude<ModelAvailabilityKind, 'unknown-model'>;
-  /** The subscription paying for the next request; absent means own keys. */
-  usageRoute?: DeclinableUsageRoute;
-}
+type ModelAvailabilityStatus =
+  | {
+      readonly kind: 'retired' | 'unserved';
+      /** Why no route serves the model: its route's `reason`. */
+      readonly reason: string;
+      readonly usageRoute?: undefined;
+    }
+  | {
+      readonly kind: KeyVerdictKind;
+      /** The subscription paying for the next request; absent means own keys. */
+      readonly usageRoute?: DeclinableUsageRoute;
+    };
+
+/** The verdicts a route that serves the model gives. */
+type KeyVerdictKind = Exclude<
+  ModelAvailabilityKind,
+  'unknown-model' | 'retired' | 'unserved'
+>;
 
 /**
  * Everything an unavailable-reason builder needs to word its message — all of
@@ -60,17 +73,13 @@ interface UnavailableReasonContext {
  */
 const UNAVAILABLE_REASON_BUILDERS: {
   readonly [
-    K in ModelAvailabilityStatus['kind']
+    K in KeyVerdictKind
   ]: (typeof MODEL_AVAILABILITY_STATUS)[K]['available'] extends true
     ? undefined
     : (reasonCtx: UnavailableReasonContext) => string;
 } = {
   'provider-key': undefined,
   'subscription-access': undefined,
-  retired: ({ model }) =>
-    `Model "${model}" is retired and no longer available from its provider. Choose an active model.`,
-  unserved: ({ model }) =>
-    `Model "${model}" is served only through OpenRouter or GitHub Copilot, which this build no longer supports, or cannot call tools, which every run needs. Choose another model.`,
   'missing-key': ({ model, source }) =>
     `Model "${model}" requires your ${providerDisplayName(source)} API key. Provide it to continue.`,
   'key-unreadable': ({ model, source }) =>
@@ -126,7 +135,6 @@ function routeVerdict({ rawConfig, route }: RoutedModel):
       readonly keyOf: ApiKeyProviderId;
       readonly usageRoute: DeclinableUsageRoute | undefined;
     } {
-  if (rawConfig.retired) return { verdict: { kind: 'retired' } };
   switch (route.kind) {
     case 'session':
       return {
@@ -135,7 +143,12 @@ function routeVerdict({ rawConfig, route }: RoutedModel):
     case 'no-api-key':
       return { verdict: { kind: 'missing-key' } };
     case 'unserved':
-      return { verdict: { kind: 'unserved' } };
+      return {
+        verdict: {
+          kind: rawConfig.retired === true ? 'retired' : 'unserved',
+          reason: route.reason,
+        },
+      };
     case 'api-key':
       return {
         keyOf: route.provider,
@@ -505,11 +518,14 @@ function optionOf(
   const { decision } = decided;
   const { route, config } = decision;
   const source = modelSource(route, config);
-  const { kind, usageRoute } = decided.verdict;
-  const unavailableReason = UNAVAILABLE_REASON_BUILDERS[kind]?.({
-    model,
-    source,
-  });
+  const { verdict } = decided;
+  const { kind, usageRoute } = verdict;
+  // An unserved model is worded as its run's bind refuses it
+  // (`decideRoute`).
+  const unavailableReason =
+    'reason' in verdict
+      ? `Model "${model}" ${verdict.reason}. Choose another model.`
+      : UNAVAILABLE_REASON_BUILDERS[verdict.kind]?.({ model, source });
   const savedEffort = reasoningLevels[config.ref];
   return {
     model,

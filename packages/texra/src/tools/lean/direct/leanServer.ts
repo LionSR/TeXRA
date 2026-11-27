@@ -51,12 +51,15 @@ import {
   type PerKeyLane,
   withPerKeyLane,
 } from '@texra-ai/worldline/plugins';
-import type { DiagnosticSeverity } from '@texra/tools/diagnosticFormatting';
+import type {
+  DiagnosticSeverity,
+  GenericDiagnostic,
+} from '@texra/tools/diagnosticFormatting';
 import type { LeanServerInfo } from '../leanServerInfo';
 import {
   LeanFileUnreadable,
   LspRangeSchema,
-  type LeanDiagnostic,
+  type FetchDiagnosticsResult,
 } from '../leanTypes';
 
 const LOG_CHANNEL = 'lean.direct';
@@ -65,7 +68,6 @@ const LspDiagnosticSchema = Schema.Struct({
   range: LspRangeSchema,
   message: Schema.String,
   severity: Schema.optional(Schema.Finite),
-  source: Schema.optional(Schema.String),
 });
 type LspDiagnostic = typeof LspDiagnosticSchema.Type;
 
@@ -145,15 +147,9 @@ export class LeanServer extends Context.Service<
      * Open the file (if needed) and wait for Lean to elaborate it. `complete`
      * is false when the wait ended first: the diagnostics are those so far.
      */
-    readonly diagnostics: (filePath: string) => Effect.Effect<
-      {
-        readonly diagnostics: LeanDiagnostic[];
-        readonly complete: boolean;
-        /** The text Lean was sent for the version these describe. */
-        readonly text: string;
-      },
-      LeanSessionError
-    >;
+    readonly diagnostics: (
+      filePath: string,
+    ) => Effect.Effect<FetchDiagnosticsResult, LeanSessionError>;
     /**
      * Open the file (if needed), wait for Lean to elaborate it, and send a
      * position-scoped LSP request. Position requests like `$/lean/plainGoal`
@@ -186,7 +182,7 @@ interface FileState {
   /** The file's text as this version was opened with it. */
   readonly text: string;
   /** Absent until Lean publishes diagnostics for this version. */
-  readonly diagnostics?: LeanDiagnostic[];
+  readonly diagnostics?: GenericDiagnostic[];
   /** Lean's last `$/lean/fileProgress` for this version, if it sent one. */
   readonly progress: 'unreported' | 'processing' | 'elaborated';
 }
@@ -609,7 +605,7 @@ const make = ({
     });
   }).pipe(Effect.withSpan('LeanServer.make'));
 
-function toLeanDiagnostic(d: LspDiagnostic): LeanDiagnostic {
+function toLeanDiagnostic(d: LspDiagnostic): GenericDiagnostic {
   return {
     // LSP `DiagnosticSeverity` (Error=1) is the VS Code numeric severity
     // (Error=0) that `GenericDiagnostic` uses, shifted by one: translate so
@@ -621,7 +617,6 @@ function toLeanDiagnostic(d: LspDiagnostic): LeanDiagnostic {
       start: { line: d.range.start.line, character: d.range.start.character },
       end: { line: d.range.end.line, character: d.range.end.character },
     },
-    source: d.source,
   };
 }
 

@@ -82,19 +82,10 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
   const call = yield* ToolContext;
   const resolved = yield* resolveToolPath(call.env, input.path);
   const displayPath = resolved.display;
-  // The result names the file read as an edit's result names an edited
-  // file, so an edit of it later in the run finds the read in the rows.
-  const reads = [displayPath];
 
   const attachmentKind = getAttachmentConfig(resolved.absolute);
-  if (attachmentKind) {
-    const result = yield* returnBinaryAttachment(
-      input,
-      attachmentKind,
-      resolved,
-    );
-    return { ...result, reads };
-  }
+  if (attachmentKind)
+    return yield* returnBinaryAttachment(input, attachmentKind, resolved);
 
   const fs = yield* FileSystem.FileSystem;
 
@@ -137,7 +128,7 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
     );
   }
 
-  return { ...result, reads };
+  return result;
 });
 
 function getAttachmentConfig(filePath: string): AttachmentKind | null {

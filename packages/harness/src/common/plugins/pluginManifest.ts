@@ -562,10 +562,7 @@ export const readPlugin = Effect.fn('readPlugin')(function* (
     hooks: yield* hooksOf(dir, name.success, found),
     code: yield* Effect.fromResult(parts.code),
     ignored: yield* Effect.fromResult(parts.ignored),
-    warnings: [
-      ...mcp.warnings,
-      ...(native.refused === null ? [] : [native.refused]),
-    ],
+    warnings: [...mcp.warnings, ...native.warnings],
   } satisfies ResolvedPlugin;
 });
 

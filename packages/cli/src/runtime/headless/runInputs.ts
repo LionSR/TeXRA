@@ -15,15 +15,14 @@ import {
 
 const STDIN_INPUT_TOKEN = '-';
 const STDIN_INPUT_BASENAME = 'stdin.tex';
-const INPUT_REQUIRED_MESSAGE =
-  'At least one input file is required for a program.';
 
 const FLAG_BY_ROLE: Readonly<Record<TaskFileRole, string>> = {
   input: '--input',
   context: '--context',
 };
 
-/** A refused file named on the command line, in the flag's words. */
+/** A refused file named on the command line, in the flag's words: the one
+ *  wording of each `TaskFilesReason`. */
 function usageMessage(reason: TaskFilesReason): string {
   switch (reason._tag) {
     case 'NotFound':
@@ -37,7 +36,7 @@ function usageMessage(reason: TaskFilesReason): string {
     case 'EmptyText':
       return 'stdin: no data on stdin. Pipe content in and pass `-` to one file-taking flag.';
     case 'NoInput':
-      return INPUT_REQUIRED_MESSAGE;
+      return 'At least one input file is required for a program.';
   }
 }
 

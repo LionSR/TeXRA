@@ -50,7 +50,6 @@ import {
   PlainGoalSchema,
   PlainTermGoalSchema,
   type LeanProjectCommand,
-  type LspResult,
 } from '../leanTypes';
 import type { LeanServerInfo } from '../leanServerInfo';
 
@@ -368,16 +367,15 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
       server.requestElaborated(filePath, line, column, method),
     ).pipe(
       Effect.flatMap(Schema.decodeUnknownEffect(Schema.NullOr(reply))),
-      Effect.map((data): LspResult<T> =>
+      Effect.map((data): Result.Result<T, string> =>
         data
-          ? { data }
-          : { data: null, error: 'Lean returned no data for this position.' },
+          ? Result.succeed(data)
+          : Result.fail('Lean returned no data for this position.'),
       ),
       Effect.catch((error) =>
-        Effect.succeed<LspResult<T>>({
-          data: null,
-          error: toErrorMessage(error),
-        }),
+        Effect.succeed<Result.Result<T, string>>(
+          Result.fail(toErrorMessage(error)),
+        ),
       ),
       Effect.withSpan('LeanServerPool.positionRequest', {
         attributes: { method },

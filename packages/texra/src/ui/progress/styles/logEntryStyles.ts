@@ -193,15 +193,6 @@ export const logEntryStyles = css`
     color: var(--color-text-secondary);
   }
 
-  .error-timestamp {
-    flex: 0 0 auto;
-    margin-inline-start: auto;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
   .banner-content {
     margin: 0;
   }

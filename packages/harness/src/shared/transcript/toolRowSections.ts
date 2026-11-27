@@ -15,6 +15,7 @@ import {
 } from 'effect';
 import {
   AGENT_TOOL_NAME,
+  EXECUTIONS_TOOL_NAME,
   LineChangesSchema,
   PROGRAM_TOOL_NAME,
   McpToolOutputSchema,
@@ -500,7 +501,7 @@ const SECTION_BUILDERS: readonly {
     build: buildScriptSections,
   },
   {
-    match: (ctx) => normalizeToolName(ctx.toolName) === 'executions',
+    match: (ctx) => normalizeToolName(ctx.toolName) === EXECUTIONS_TOOL_NAME,
     build: buildExecutionsSections,
   },
   {

@@ -13,7 +13,6 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/popover/popover.js';
-import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
 // Local imports
 import type { PlanUsage } from '@texra/shared/session/hostSnapshot';
@@ -29,8 +28,10 @@ import {
 import { TexraElement } from '@ui/litBase';
 import { TickerController } from '@ui/litControllers/TickerController';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
+import { popoverPanelStyles } from '@ui/styles/overlaySurfaceStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { quotaBarStyles, renderQuotaBar } from '@ui/wa/quotaBar';
 
 /** The plan as its provider names its tier, else as TeXRA names the plan. */
 const planName = (usage: PlanUsage): string =>
@@ -66,8 +67,11 @@ export class PlanUsageMeters extends TexraElement {
   static override styles = [
     TexraElement.styles,
     toneStyles,
+    popoverPanelStyles,
+    quotaBarStyles,
     css`
       :host {
+        --popover-panel-width: 24rem;
         display: inline-flex;
         min-width: 0;
       }
@@ -101,34 +105,8 @@ export class PlanUsageMeters extends TexraElement {
         font-variant-numeric: tabular-nums;
         font-weight: var(--font-weight-medium);
       }
-      wa-progress-bar {
-        --track-height: 0.3rem;
-        --indicator-color: var(--color-text-secondary);
-      }
-      wa-progress-bar:is(.tone-warning, .tone-danger) {
-        --indicator-color: var(--tone-color);
-      }
       .chip wa-progress-bar {
         width: 2.5rem;
-      }
-      wa-popover {
-        --arrow-size: 0;
-        --max-width: 24rem;
-      }
-      wa-popover::part(body) {
-        padding: 0;
-      }
-      .panel {
-        width: 24rem;
-        max-width: calc(100vw - 2 * var(--wa-space-m));
-        font-size: var(--font-size-sm);
-      }
-      .head {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-xs);
-        padding: var(--wa-space-xs) var(--wa-space-s);
-        border-block-end: var(--border-thin) solid var(--color-border);
       }
       .title {
         font-weight: var(--font-weight-medium);
@@ -188,12 +166,7 @@ export class PlanUsageMeters extends TexraElement {
     const tone = subscriptionQuotaTone(window);
     const toneClass = tone === undefined ? '' : `tone-${tone}`;
     return html`<span class="chip ${toneClass}">
-      ${planName(usage)}
-      <wa-progress-bar
-        class=${toneClass}
-        value=${window.percentUsed}
-        aria-hidden="true"
-      ></wa-progress-bar>
+      ${planName(usage)} ${renderQuotaBar(window)}
       <span class="chip-percent">${Math.round(window.percentUsed)}%</span>
     </span>`;
   }
@@ -221,11 +194,7 @@ export class PlanUsageMeters extends TexraElement {
         const reset = formatSubscriptionUsageReset(window.resetAt, now);
         return html`<div class="window ${toneClass}">
           <span>${subscriptionUsageWindowLabel(window)}</span>
-          <wa-progress-bar
-            class=${toneClass}
-            value=${window.percentUsed}
-            label=${subscriptionUsageWindowLabel(window)}
-          ></wa-progress-bar>
+          ${renderQuotaBar(window, subscriptionUsageWindowLabel(window))}
           <span class="window-used">${subscriptionQuotaUsed(window)}</span>
           ${reset ? html`<span class="window-reset quiet">${reset}</span>` : nothing}
         </div>`;
@@ -256,8 +225,8 @@ export class PlanUsageMeters extends TexraElement {
         without-arrow
         @wa-show=${() => this.refresh(false)}
       >
-        <div class="panel">
-          <div class="head">
+        <div class="popover-panel">
+          <div class="popover-panel-head">
             <span class="title">Subscription usage</span>
             ${renderIconActionButton({
               id: 'plan-usage-refresh',

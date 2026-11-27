@@ -560,7 +560,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     : yield* childResult(call, approved.label, launched.success, key);
 });
 
-export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
+export const AgentTool: DefinedTool<AgentInput, PluginToolServices> =
   defineTool({
     name: AGENT_TOOL_NAME,
     requiresApproval: 'inBody',

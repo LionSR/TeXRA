@@ -50,6 +50,7 @@ and the log line of a notice that could not be shown.
    never gets those tools when a GUI window later continues it. Decision:
    delete the strip and rely on the capability, or derive the list from the
    declarations.
+   Landed on 2026-11-26: the strip is deleted.
 3. **Closed (2026-11-27).** llm answers which image types a protocol takes
    (`takesImageInput`, `packages/llm/src/protocol.ts`), and the harness asks
    it where an image becomes a part.
@@ -58,13 +59,14 @@ and the log line of a notice that could not be shown.
    `packages/cli/src/runtime/models/modelAccess.ts`, which `doctor.ts`
    reads, and an unknown `--model` points at `texra models list --all`.
 5. **Closed (2026-11-27).** Which finished turn is news is `attentionOf`'s
-   `finished` list, read by the desktop and the terminal; the extension
-   announces none.
+   `finished` list, read by the desktop and the terminal; #15229 deleted the
+   extension's chime, so the extension announces none.
 6. **The OpenAI ambient-header rejection is stated once per Responses
    transport** (`packages/llm/src/api/openaiResponses.ts`,
    `packages/llm/src/api/openaiResponsesWebSocket.ts`): the same
    environment variable and sentence. Low value; state the pair beside
    `openaiClient`.
+   Already landed: `refuseAmbientOpenAiHeaders`.
 
 ## Checked and declined
 

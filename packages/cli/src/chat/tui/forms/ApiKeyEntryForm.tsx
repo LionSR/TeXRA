@@ -8,6 +8,7 @@ import {
   providerDisplayName,
 } from '@texra-ai/llm';
 import { providerKeyUrl } from '@texra/model/providerPresentation';
+import { PROVIDER_KEY_COPY } from '@ui/copy/credentials';
 import { planCreditsHint } from '@ui/copy/modelAccess';
 
 import { TextEntryForm } from './_shared/TextEntryForm';
@@ -31,7 +32,7 @@ export function ApiKeyEntryForm(
 
   return (
     <TextEntryForm
-      title="Add a provider API key"
+      title={PROVIDER_KEY_COPY.add}
       helper={
         <>
           <Text dimColor>Provider: {label}</Text>

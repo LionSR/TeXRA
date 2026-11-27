@@ -30,6 +30,7 @@ import { focusRingStyles } from '@ui/styles/controlStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 
 // Local imports - shared icons and utils
+import { factDot } from '@ui/wa/factDot';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /** Each counter's icon and tooltip anchor in the strip; its name, order
@@ -217,10 +218,9 @@ export class UsagePanel extends LitElement {
     return html`
       <span class="run-summary__value">
         ${join(
-          visibleTokenStats(this.usage).map(renderTokenStat),
-          html`<span aria-hidden="true">·</span>`,
+          [...visibleTokenStats(this.usage).map(renderTokenStat), costRoute],
+          factDot,
         )}
-        <span aria-hidden="true">·</span>${costRoute}
       </span>
     `;
   }
@@ -259,7 +259,7 @@ export class UsagePanel extends LitElement {
           >${shown.badge.compactLabel}</span
         >`;
       case 'billed':
-        return html`${shown.amount} ·
+        return html`${shown.amount} ${factDot()}
           <span id="usage-route-badge" class="run-summary__route">
             ${shown.badge.compactLabel}
           </span>`;

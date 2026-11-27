@@ -53,16 +53,24 @@ const read = async (file) => {
   }
 };
 
-/** text without its \criticize{...}{...}{...} annotations, braces balanced. */
+/** text without its \criticize{comment}{severity}{confidence} annotations:
+ *  the macro and its three brace groups, each balanced and each after
+ *  optional whitespace, which is how the editor reads one. A fourth group
+ *  is the document's own text and stays, and a \criticize with fewer than
+ *  three groups is not an annotation. */
 const withoutAnnotations = (text) => {
   let kept = '';
   let from = 0;
   for (;;) {
-    const at = text.indexOf(MACRO + '{', from);
+    const at = text.indexOf(MACRO, from);
     if (at < 0) return kept + text.slice(from);
-    kept += text.slice(from, at);
     let end = at + MACRO.length;
-    while (text[end] === '{') {
+    let groups = 0;
+    for (; groups < 3; groups += 1) {
+      let open = end;
+      while (/\s/.test(text[open] ?? '')) open += 1;
+      if (text[open] !== '{') break;
+      end = open;
       let depth = 0;
       do {
         if (text[end] === '\\') end += 1;
@@ -71,6 +79,7 @@ const withoutAnnotations = (text) => {
         end += 1;
       } while (depth > 0 && end < text.length);
     }
+    kept += text.slice(from, groups === 3 ? at : end);
     from = end;
   }
 };

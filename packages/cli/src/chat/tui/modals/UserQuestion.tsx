@@ -168,7 +168,7 @@ function boundedUserQuestionPromptLines({
   question,
   width,
 }: {
-  readonly context?: string | null;
+  readonly context: string | undefined;
   readonly maxDisplayLines: number;
   readonly question: string;
   readonly width: number;

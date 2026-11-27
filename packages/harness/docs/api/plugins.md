@@ -484,9 +484,8 @@ interface ConfigProvider {
    * (`catalog.defaultOf`) for a config-file row; any other key reads as
    * `undefined` when absent.
    *
-   * It is synchronous because some readers cannot wait for an Effect: the
-   * replacement engine's rule sets, a tool's `prompt` callback, the
-   * approval `policy` callback, the VS Code status bar's paint, the host
+   * It is synchronous because some readers cannot wait for an Effect: a
+   * tool's `prompt` callback, the approval `policy` callback, the VS Code status bar's paint, the host
    * snapshot's projection and the CLI's startup rows, read before its
    * runtime exists. A read is cheap: each scope's JSON store it consults
    * (workspace, global, and local for a local row) stats its file (inode,
@@ -1659,13 +1658,12 @@ class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()(
 ## PromptSection
 
 A plugin's section of each request's system text, rendered from the tool
-names the request's step offers, whether the run is a child and its
-workspace configuration ('' for none).
+names the request's step offers and its workspace configuration ('' for
+none).
 
 ```ts
 type PromptSection = (ctx: {
   readonly offered: readonly string[];
-  readonly isChild: boolean;
   /** The run's workspace configuration, for a section that follows a
    *  setting of its plugin's. */
   readonly config: ConfigProvider;

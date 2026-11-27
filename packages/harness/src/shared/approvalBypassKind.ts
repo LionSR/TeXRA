@@ -59,23 +59,6 @@ export const ApprovalGrantsSchema = Schema.Struct({
 });
 export type ApprovalGrants = typeof ApprovalGrantsSchema.Type;
 
-/**
- * The policy a launch's privileged actions (commands, edits, delegated
- * work) are decided under: Ask when the launch narrows to it, Auto-approve
- * when it asks for that, else the project's. Auto-approve gets there by
- * turning the run's grants on
- * (`rootLaunch`), not by changing the run's policy, which stays the
- * project's: a question or a retry still goes to a person where one can
- * answer it.
- */
-export function launchPolicy(
-  project: ApprovalPolicy,
-  approval: LaunchApproval | undefined,
-): ApprovalPolicy {
-  if (approval === undefined) return project;
-  return approval === 'autoApprove' ? 'yolo' : approval;
-}
-
 /** A run's policy: the project's (`project`), narrowed by the strictest
  *  launch limit on its ancestry; without a run, the project's. */
 export function runPolicy(
