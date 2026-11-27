@@ -484,9 +484,8 @@ interface ConfigProvider {
    * (`catalog.defaultOf`) for a config-file row; any other key reads as
    * `undefined` when absent.
    *
-   * It is synchronous because some readers cannot wait for an Effect: the
-   * replacement engine's rule sets, a tool's `prompt` callback, the
-   * approval `policy` callback, the VS Code status bar's paint, the host
+   * It is synchronous because some readers cannot wait for an Effect: a
+   * tool's `prompt` callback, the approval `policy` callback, the VS Code status bar's paint, the host
    * snapshot's projection and the CLI's startup rows, read before its
    * runtime exists. A read is cheap: each scope's JSON store it consults
    * (workspace, global, and local for a local row) stats its file (inode,

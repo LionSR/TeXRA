@@ -1140,23 +1140,6 @@ failure.
 const LaunchNoticeSchema: Struct<{ readonly event: Literal<"requestShowInstruction">; readonly payload: Struct<{ readonly key: String; readonly message: String; }>; }>
 ```
 
-## launchPolicy
-
-The policy a launch's privileged actions (commands, edits, delegated
-work) are decided under: Ask when the launch narrows to it, Auto-approve
-when it asks for that, else the project's. Auto-approve gets there by
-turning the run's grants on
-(`rootLaunch`), not by changing the run's policy, which stays the
-project's: a question or a retry still goes to a person where one can
-answer it.
-
-```ts
-function launchPolicy(
-  project: ApprovalPolicy,
-  approval: LaunchApproval | undefined,
-): ApprovalPolicy
-```
-
 ## listingTypeOf
 
 The listing type the fold keys `latest` by, from the kind's listing class,
