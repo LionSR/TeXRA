@@ -2,11 +2,11 @@
  * `<script-stage>`: the calls one `script` call issued, painted from the
  * shared script-stage model (`scriptStages` in `@texra-ai/worldline/transcript`): the card's
  * summary line, then each section's calls in issue order, one row a call.
- * A call that runs a child is a summary row: its agent, what it last said,
- * its model and cost. It opens its child run; Review opens the run that is
- * asking; "Stop this agent", in a running row's menu, stops the call's
- * child, which the call then answers as `Skipped`. Any other call is its
- * own tool card, which its host slots in under the call's id: the card is
+ * A call that launched a child is a summary row: its agent, what it last
+ * said, its model and cost. It opens its child run; Review opens the run
+ * that is asking; "Stop this agent", in a running row's menu, stops the
+ * call's child, which the call then answers as `Skipped`. Any other call,
+ * an `agent` call that launched nothing included, is its own tool card, which its host slots in under the call's id: the card is
  * the row, and its disclosure opens the call's output in place. Holds no
  * state: every send is a surface or runtime event.
  */
@@ -230,7 +230,7 @@ export class ScriptStage extends LitElement {
   }
 
   private renderCall(call: ScriptCallView): TemplateResult {
-    if (!call.runsChild)
+    if (call.childRunId === undefined)
       return html`<div role="listitem"><slot name=${call.id}></slot></div>`;
     const child =
       call.childRunId === undefined

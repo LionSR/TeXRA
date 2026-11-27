@@ -223,11 +223,13 @@ export function renderToolSections(
       filePath = section.path;
       if (section.path === said) return [];
     }
-    // The header already names it ("Completed 'drafter'").
+    // The header already names it, quoted as a call's summary writes it
+    // ("Completed 'drafter'"). A bare substring would also match a short
+    // name inside an unrelated word.
     if (
       section.kind === 'identifier' &&
       section.note === undefined &&
-      said.includes(section.value)
+      said.includes(`'${section.value}'`)
     )
       return [];
     return [renderToolSection(section, filePath)];

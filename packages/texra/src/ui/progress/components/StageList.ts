@@ -489,8 +489,8 @@ export class StageList extends LitElement {
   }
 
   /** Rows of a stage, in transcript order. A script stage is its calls as
-   *  the script-stage model reads them: a call that runs a child is that
-   *  view's row, and any other call's own card is slotted in at its place
+   *  the script-stage model reads them: a call that launched a child is
+   *  that view's row, and any other call's own card is slotted in at its place
    *  in the list, so its disclosure opens its output where its row is. A
    *  row of the stage that is no call follows the list. */
   private renderStageBody(node: StageEntry): TemplateResult {
@@ -498,7 +498,9 @@ export class StageList extends LitElement {
     if (!script || !this.view || !this.surface)
       return this.renderRowEntries(node.rows, `stage:${node.stage.id}`);
     const cards = new Set(
-      script.calls.flatMap((call) => (call.runsChild ? [] : [call.id])),
+      script.calls.flatMap((call) =>
+        call.childRunId === undefined ? [call.id] : [],
+      ),
     );
     const calls = new Set(script.calls.map((call) => call.id));
     // Bounded like any stage's rows: a card mounts its sections (a
