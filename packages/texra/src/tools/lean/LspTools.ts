@@ -28,7 +28,6 @@ import {
   extractHoverText,
   type LeanProjectCommand,
   type LeanUnavailable,
-  type LspResult,
 } from './leanTypes';
 import {
   LeanLanguageServices,
@@ -402,18 +401,22 @@ function executeLeanInspectTool(
     request: (
       services: LeanLanguageServicesShape,
       filePath: string,
-    ) => Effect.Effect<LspResult<T>, never, Scope.Scope>,
+    ) => Effect.Effect<Result.Result<T, string>, never, Scope.Scope>,
     empty: { readonly message: string; readonly summary: string },
     render: (data: T) => ToolResult,
   ): Effect.fn.Return<ToolResult, Error, ToolContext | LeanLanguageServices> {
     const call = yield* ToolContext;
     const services = yield* LeanLanguageServices;
-    const { data, error } = yield* forCallerRun(
+    const answer = yield* forCallerRun(
       request(services, yield* leanFilePath(file, call)),
     );
-    if (!data)
-      return noPositionData(empty.message, location, empty.summary, error);
-    return render(data);
+    if (Result.isFailure(answer)) {
+      return errorResult(
+        `${empty.message} at ${location}\nError: ${answer.failure}`,
+        { summary: empty.summary },
+      );
+    }
+    return render(answer.success);
   });
 
   // Each dispatch composes one program, run once below: a failed
@@ -490,23 +493,6 @@ Line and column are 1-indexed.`,
   schema: LeanInspectInputSchema,
   execute: executeLeanInspectTool,
 });
-
-/**
- * Shared "language server returned nothing" error for the three inspect
- * dispatches. The optional LSP error string is surfaced inline so the
- * agent sees the underlying cause.
- */
-function noPositionData(
-  message: string,
-  location: string,
-  summary: string,
-  error?: string,
-): ToolResult {
-  return errorResult(
-    `${message} at ${location}${error ? `\nError: ${error}` : ''}`,
-    { summary },
-  );
-}
 
 /** Resolve a Lean file once in the invoking project before the host program runs. */
 function leanFilePath(file: string, call: ToolContextShape) {

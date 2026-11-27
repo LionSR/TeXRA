@@ -22,11 +22,12 @@ function zshFlagValueSuffix(
   flag: CompletionFlag,
   variant: CompletionFlagVariant,
 ): string {
-  if (variant.values.length > 0) return `: :(${variant.values.join(' ')})`;
-  if (!variant.takesValue) return '';
+  const { value } = variant;
+  if (value.kind === 'choice') return `: :(${value.values.join(' ')})`;
+  if (value.kind === 'none') return '';
   const dynamicSource = DYNAMIC_VALUE_FLAG_SOURCES[flag.name];
   if (dynamicSource) return `:${flag.name}:($(${dynamicSource.shellFunction}))`;
-  return `:${variant.valueKind ?? 'value'}:`;
+  return `:${value.kind}:`;
 }
 
 /** Positional specs for the source-backed paths, plus the fixed shell list. */

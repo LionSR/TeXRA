@@ -127,33 +127,31 @@ const CONVERSATION_PAGE_FORMAT_OPTIONS: ConversationFormatOptions = {
   toolBlockLimit: 100,
 };
 
-interface ConversationPageFormatOptions {
-  /** Zero-based index of the first message in this page. */
-  readonly offset?: number;
-  /** Total messages in the unsliced archive. */
-  readonly totalMessages?: number;
-  /** Archive-selection facts shown before the message blocks. */
-  readonly metadata?: readonly string[];
-}
-
-/** Render a stored conversation as numbered <message> blocks. */
+/**
+ * Render one page of a stored conversation as numbered <message> blocks:
+ * up to `limit` messages from the zero-based `offset`, under the archive's
+ * size, the interval returned and the offset of the next page.
+ */
 export function formatConversation(
   conversation: readonly ExportNode[],
-  options: ConversationPageFormatOptions = {},
+  offset: number,
+  limit: number,
 ): string {
-  const offset = options.offset ?? 0;
-  const totalMessages = options.totalMessages ?? conversation.length;
-  const messages = conversation.map((msg, i) => {
+  const start = Math.min(offset, conversation.length);
+  const page = conversation.slice(start, start + limit);
+  const end = start + page.length;
+  const messages = page.map((msg, i) => {
     const { role, content } = formatConversationMessage(
       msg,
       CONVERSATION_PAGE_FORMAT_OPTIONS,
     );
-    return `<message index="${offset + i + 1}" role="${role}">\n${content}\n</message>`;
+    return `<message index="${start + i + 1}" role="${role}">\n${content}\n</message>`;
   });
 
   return [
-    `Conversation (${totalMessages} messages):`,
-    ...(options.metadata ?? []),
+    `Conversation (${conversation.length} messages):`,
+    `Returned message interval: [${start}, ${end})`,
+    `Next offset: ${end < conversation.length ? end : 'none'}`,
     '',
     messages.join('\n\n'),
   ].join('\n');

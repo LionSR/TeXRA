@@ -71,8 +71,8 @@ interface DesktopLogEntry {
   readonly level: DesktopLogLevel;
   readonly raw: string;
   readonly summary: string;
-  readonly timestamp?: string;
-  readonly timestampLabel: string;
+  /** Absent on a partial entry: a line the sink did not write whole. */
+  readonly timestamp: string | undefined;
 }
 
 interface LogViewerState {
@@ -152,8 +152,7 @@ function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
       raw,
       summary:
         truncateSummary(message, LOG_SUMMARY_MAX_LENGTH) || '(no message)',
-      ...(timestamp ? { timestamp } : {}),
-      timestampLabel: timestamp ? formatTimestamp(timestamp) : 'Partial entry',
+      timestamp: timestamp || undefined,
     };
   });
 }
@@ -191,7 +190,11 @@ export function createLogsPane(): LogsPaneController {
           </span>
           <span class="desktop-log-entry-level">${presentation.label}</span>
           <time class="desktop-log-entry-time" datetime=${entry.timestamp ?? ''}
-            >${entry.timestampLabel}</time
+            >${
+              entry.timestamp
+                ? formatTimestamp(entry.timestamp)
+                : 'Partial entry'
+            }</time
           >
           <span class="desktop-log-entry-preview truncate"
             >${entry.summary}</span

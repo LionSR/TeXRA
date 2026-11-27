@@ -9,6 +9,7 @@ import {
   type WorkbenchKind,
   type WorkbenchTab,
 } from '../shared/desktopShellState';
+import { unsavedDot } from './paneChrome';
 import type {
   DockviewApi,
   DockviewGroupPanel,
@@ -133,7 +134,7 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
           title=${tab.target ?? tab.title}
           >${tab.title}</span
         >
-        ${actions.isDirty(id) ? html`<span class="status-dot shell-dock-dirty" role="img" aria-label="Unsaved changes"></span>` : nothing}
+        ${actions.isDirty(id) ? unsavedDot() : nothing}
         <span
           class="shell-dock-tab-close"
           @pointerdown=${(event: Event) => event.stopPropagation()}

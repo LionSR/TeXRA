@@ -60,7 +60,7 @@ Landed since:
    write `Schema.decodeUnknownSync(row.schema)(undefined)`:
    - `packages/texra/src/ui/settings/tabs/GitTab.ts`
    - `packages/texra/src/ui/settings/settingsState.ts`
-   - `packages/cli/src/chat/tui/forms/ConfigForm.tsx`
+   - `packages/cli/src/chat/tui/forms/CliConfigForm.tsx`
 
    `configDefault` in `packages/harness/src/shared/state/stateSettings.ts`
    memoizes this, but only for `slot: 'config'` rows, and the Git tab's row

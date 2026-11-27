@@ -142,6 +142,9 @@ export function lineRangeOf(value: unknown): {
   };
 }
 
+/** The `executions` action a call that names none performs. */
+export const EXECUTIONS_DEFAULT_ACTION = 'view';
+
 /** Default `executions wait` timeout (seconds) when the model omits `timeout`. */
 export const EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS = 300;
 

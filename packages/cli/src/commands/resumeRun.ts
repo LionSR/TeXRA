@@ -14,6 +14,7 @@ import {
   formatResumeCommand,
   oneShotResumeNotice,
 } from '../chat/tui/state/resumeHint';
+import { taskNotFoundText } from '../runtime/history';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/platform/logSinks';
@@ -97,7 +98,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     return resumeFailureExit(id, configResult.failure);
   const config = configResult.success;
   if (!config) {
-    return yield* failUsage(`Task not found: ${id}`);
+    return yield* failUsage(taskNotFoundText(id, context.cwd));
   }
   const program = programOf(config) !== null;
   // A fork reads the source's committed rows, whoever holds it, and the

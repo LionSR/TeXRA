@@ -387,8 +387,7 @@ function crash({ said, results, call }: GoldenTurn) {
         description: 'Record the batch effect',
       }),
     ],
-    // The file the first step read, edited in the next response: a process
-    // resumed between the two answers the edit's read gate from the rows.
+    // The file the first step read, edited in the next response.
     () => [
       call('edit_file', {
         path: 'notes.tex',

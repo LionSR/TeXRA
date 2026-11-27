@@ -11,7 +11,6 @@ import {
 } from '@texra-ai/worldline/node';
 
 import * as NodeStream from '@effect/platform-node/NodeStream';
-import { parse as parseContentDisposition } from 'content-disposition';
 import {
   Cause,
   Duration,
@@ -21,13 +20,12 @@ import {
   Option,
   Path,
   PlatformError,
-  Result,
   Schedule,
   Schema,
   Stream,
 } from 'effect';
 import { Tar } from 'effect/encoding';
-import { Headers, HttpClient } from 'effect/http';
+import { HttpClient } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 
 import type { WorkspaceRoots } from '@texra-ai/worldline';
@@ -52,10 +50,10 @@ const DOWNLOAD_RETRIES = 2;
 const EXTRACT_TIMEOUT_MS = 30_000;
 
 /**
- * A source-download failure that ends the retry loop immediately — a PDF-only
- * submission, a 404, or another non-transient HTTP status: retrying cannot
- * change the answer. `downloadArxivSource` also fails with it for the
- * non-download errors (invalid input, no open workspace, extraction or
+ * A source-download failure that ends the retry loop immediately — a 404 or
+ * another non-transient HTTP status: retrying cannot change the answer.
+ * `downloadArxivSource` also fails with it for the non-download errors
+ * (invalid input, no open workspace, a PDF-only submission, extraction or
  * placement failure), which no retry can fix either.
  */
 class ArxivSourcePermanentError extends Schema.TaggedError<ArxivSourcePermanentError>()(
@@ -137,23 +135,6 @@ function describeIndent(result: IndentLatexResult): string {
   }
 }
 
-/**
- * Determine file extension from content-type header.
- * Handles tar, gzip, and tex content types. The caller rejects a PDF content
- * type first (no LaTeX source available), so a PDF never reaches here.
- */
-function getExtensionFromContentType(contentType: string): string {
-  const isTar = contentType.includes('tar');
-  const isGzip = contentType.includes('gz');
-  const isTex = contentType.includes('tex') || contentType.includes('plain');
-
-  if (isTar && isGzip) return '.tar.gz';
-  if (isTar) return '.tar';
-  if (isGzip) return '.gz';
-  if (isTex) return '.tex';
-  return '';
-}
-
 const ARXIV_CHANNEL = 'arxivProcessor';
 
 /** @returns Error message if invalid, null if valid */
@@ -186,15 +167,14 @@ const retryableDownloadFailure = (cause: Cause.Cause<ArxivSourceError>) => {
  * Download `url` to disk, retrying transient failures — network errors,
  * the per-attempt deadline, or 408/429/5xx (see
  * {@link isTransientHttpStatus}) — with exponential backoff. Permanent
- * failures — other 4xx statuses or a PDF-only submission — end the retry
- * loop immediately. Interruption stops both the active attempt and the
+ * failures — other 4xx statuses — end the retry loop immediately. Interruption stops both the active attempt and the
  * backoff sleep.
  */
 function downloadFile(
   url: string,
-  destBasePath: string,
-): Effect.Effect<string, ArxivSourceError, DownloadServices> {
-  return downloadFileOnce(url, destBasePath).pipe(
+  destPath: string,
+): Effect.Effect<void, ArxivSourceError, DownloadServices> {
+  return downloadFileOnce(url, destPath).pipe(
     // Retry the whole ordinary failure, never a mixed cleanup cause. Effect's
     // typed-error retry otherwise selects one failure and drops its siblings.
     Effect.sandbox,
@@ -225,9 +205,8 @@ function downloadFile(
 
 function downloadFileOnce(
   url: string,
-  destBasePath: string,
-): Effect.Effect<string, ArxivSourceError, DownloadServices> {
-  let destPath = destBasePath;
+  destPath: string,
+): Effect.Effect<void, ArxivSourceError, DownloadServices> {
   // The request, the deadline and the file writes all fail as `Error`s.
   const downloadError = (cause: Error) => {
     const timedOut = Cause.isTimeoutError(cause);
@@ -260,50 +239,7 @@ function downloadFileOnce(
         : new ArxivSourcePermanentError({ message });
     }
 
-    // Extract filename from Content-Disposition header if available.
-    // Uses content-disposition package for full RFC 6266 / RFC 5987 compliance,
-    // which handles both `filename=` and `filename*=UTF-8''...` (percent-encoded
-    // Unicode names).
-    const disposition = Headers.get(response.headers, 'content-disposition');
-    let filename: string | undefined;
-    if (Option.isSome(disposition)) {
-      const parsed = Result.try({
-        try: () =>
-          parseContentDisposition(disposition.value).parameters.filename,
-        catch: toErrorMessage,
-      });
-      if (Result.isSuccess(parsed)) {
-        filename = parsed.success;
-      } else {
-        // Malformed header; the content-type fallback below handles it.
-        yield* Effect.logDebug(
-          'Ignoring malformed Content-Disposition header from arXiv source download',
-        ).pipe(
-          Effect.annotateLogs({
-            data: { header: disposition.value, error: parsed.failure },
-          }),
-        );
-      }
-    }
-    if (filename) {
-      // basename prevents path traversal from a crafted header value.
-      destPath = path.join(path.dirname(destBasePath), path.basename(filename));
-    } else {
-      const contentType = Option.getOrElse(
-        Headers.get(response.headers, 'content-type'),
-        () => '',
-      );
-      if (contentType.includes('pdf')) {
-        // No LaTeX source available: a permanent failure, not retried.
-        return yield* new ArxivSourcePermanentError({
-          message: PDF_ONLY_SUBMISSION_ERROR,
-        });
-      }
-      destPath = destBasePath + getExtensionFromContentType(contentType);
-    }
-
     yield* Stream.run(response.stream, fs.sink(destPath));
-    return destPath;
   }).pipe(
     // One deadline spans the headers and the body. Closing the scope closes
     // the file handle, then aborts the request.
@@ -333,7 +269,31 @@ const gunzip = NodeStream.pipeThroughDuplex({
 });
 
 /**
- * Extract `tarPath`, gzipped or not, into `destDir`, a directory made for
+ * The first `count` bytes of `bytes`, fewer when it ends sooner. Chunks are
+ * joined until there are enough: a stream may start with a short one.
+ */
+const firstBytes = <E, R>(
+  bytes: Stream.Stream<Uint8Array, E, R>,
+  count: number,
+): Effect.Effect<Buffer, E, R> =>
+  bytes.pipe(
+    Stream.scan(
+      () => Buffer.alloc(0),
+      (head, chunk) => Buffer.concat([head, chunk]),
+    ),
+    Stream.takeUntil((head) => head.length >= count),
+    Stream.runLast,
+    Effect.map((head) =>
+      Option.getOrElse(head, () => Buffer.alloc(0)).subarray(0, count),
+    ),
+  );
+
+/** Where a tar header block names its format, and the name every tar since
+ *  POSIX.1-1988 writes there (GNU tar's variant starts with it too). */
+const TAR_MAGIC = { offset: 257, text: 'ustar' };
+
+/**
+ * Extract the tar archive `tar` into `destDir`, a directory made for
  * it. The archive is untrusted: only its files and directories are written,
  * each beneath `destDir`; a path named twice keeps its last entry. A link, or a path that
  * leaves the directory, is skipped and named in the log; with no link ever
@@ -341,42 +301,35 @@ const gunzip = NodeStream.pipeThroughDuplex({
  * deadline's included) stops the writes.
  */
 const extractTarFile = Effect.fn('arxivProcessor.extractTarFile')(function* (
-  tarPath: string,
+  tar: Stream.Stream<Uint8Array, ArxivSourcePermanentError>,
   destDir: string,
 ): Effect.fn.Return<
   void,
   ArxivSourcePermanentError,
   FileSystem.FileSystem | Path.Path
 > {
-  yield* Effect.logDebug(`Extracting tar file: ${tarPath} to ${destDir}`);
+  yield* Effect.logDebug(`Extracting tar archive to ${destDir}`);
   const fs = yield* FileSystem.FileSystem;
   const paths = yield* Path.Path;
-  const extract = Effect.gen(function* () {
-    const magic = Buffer.concat(
-      yield* Stream.runCollect(fs.stream(tarPath, { bytesToRead: 2 })),
-    );
-    const archive = fs.stream(tarPath);
-    const gzipped = magic[0] === 0x1f && magic[1] === 0x8b;
-    yield* (gzipped ? archive.pipe(gunzip) : archive).pipe(
-      Stream.pipeThroughChannel(Tar.decode()),
-      Stream.runForEach(({ header, body }) => {
-        const target = paths.resolveWithin(destDir, header.path);
-        if (
-          Option.isNone(target) ||
-          (header.type !== 'File' && header.type !== 'Directory')
-        )
-          return Effect.logWarning(
-            `Skipped archive entry (${header.type}): ${header.path}`,
-          );
-        if (header.type === 'Directory')
-          return fs.makeDirectory(target.value, { recursive: true });
-        return Effect.andThen(
-          fs.makeDirectory(paths.dirname(target.value), { recursive: true }),
-          Stream.run(body, fs.sink(target.value)),
+  const extract = tar.pipe(
+    Stream.pipeThroughChannel(Tar.decode()),
+    Stream.runForEach(({ header, body }) => {
+      const target = paths.resolveWithin(destDir, header.path);
+      if (
+        Option.isNone(target) ||
+        (header.type !== 'File' && header.type !== 'Directory')
+      )
+        return Effect.logWarning(
+          `Skipped archive entry (${header.type}): ${header.path}`,
         );
-      }),
-    );
-  });
+      if (header.type === 'Directory')
+        return fs.makeDirectory(target.value, { recursive: true });
+      return Effect.andThen(
+        fs.makeDirectory(paths.dirname(target.value), { recursive: true }),
+        Stream.run(body, fs.sink(target.value)),
+      );
+    }),
+  );
   yield* extract.pipe(
     Effect.timeout(Duration.millis(EXTRACT_TIMEOUT_MS)),
     Effect.catch((cause) => {
@@ -580,9 +533,8 @@ const claimDirAndPlaceSource = Effect.fn(
 });
 
 /**
- * Download the arXiv source tarball into a unique staging directory in the
- * paper directory, reject PDF-only submissions, and place the source files
- * into the paper root. The staging directory is removed by a scope
+ * Download the arXiv source into a unique staging directory in the paper
+ * directory and place the source files into the paper root. The staging directory is removed by a scope
  * finalizer, so the caller must run this inside `Effect.scoped`.
  */
 const downloadAndPlaceSource = Effect.fn(
@@ -606,27 +558,21 @@ const downloadAndPlaceSource = Effect.fn(
         recursive: true,
       }).pipe(withLogChannel(ARXIV_CHANNEL)),
   );
-  const downloadBasePath = path.join(downloadDirFull, 'source');
+  const downloadedPath = path.join(downloadDirFull, 'source');
 
   progress(`Downloading arXiv source for ${id}...`, 20);
 
   const downloadUrl = `https://arxiv.org/src/${id}`;
-  const downloadedPath = yield* downloadFile(downloadUrl, downloadBasePath);
-
-  // Detect PDF-only submissions (no LaTeX source available)
-  if (hasExtension(downloadedPath, '.pdf')) {
-    return yield* new ArxivSourcePermanentError({
-      message: PDF_ONLY_SUBMISSION_ERROR,
-    });
-  }
-
+  yield* downloadFile(downloadUrl, downloadedPath);
   yield* placeSourceFiles(downloadedPath, downloadDirFull, paperDirFull);
 });
 
 /**
- * Place the downloaded source into the paper directory: extract a tar/tgz
- * archive in staging and move its entries in, or decompress (gzip) and
- * rename a single source file to main.tex; nothing existing is overwritten.
+ * Place the downloaded source into the paper directory: extract a tar
+ * archive in staging and move its entries in, or name a single source file
+ * main.tex; nothing existing is overwritten. What the download is (a PDF,
+ * gzipped or not, an archive or one file) is read from its bytes: the file
+ * name and content type a server sends are claims about them.
  */
 const placeSourceFiles = Effect.fn('arxivProcessor.placeSourceFiles')(
   function* (
@@ -636,11 +582,22 @@ const placeSourceFiles = Effect.fn('arxivProcessor.placeSourceFiles')(
   ) {
     const fs = yield* FileSystem.FileSystem;
     const progress = yield* LatexProgress;
+    const downloaded = fs
+      .stream(downloadedPath)
+      .pipe(Stream.mapError(permanentFsError));
+    const start = yield* firstBytes(downloaded, 4);
+    if (start.toString('latin1') === '%PDF') {
+      return yield* new ArxivSourcePermanentError({
+        message: PDF_ONLY_SUBMISSION_ERROR,
+      });
+    }
+    const gzipped = start[0] === 0x1f && start[1] === 0x8b;
+    const source = gzipped ? downloaded.pipe(gunzip) : downloaded;
+    const end = TAR_MAGIC.offset + TAR_MAGIC.text.length;
     const isArchive =
-      hasExtension(downloadedPath, '.tar') ||
-      downloadedPath.endsWith('.tar.gz') ||
-      hasExtension(downloadedPath, '.tgz');
-    const isGzipOnly = !isArchive && hasExtension(downloadedPath, '.gz');
+      (yield* firstBytes(source, end))
+        .subarray(TAR_MAGIC.offset, end)
+        .toString('latin1') === TAR_MAGIC.text;
 
     if (isArchive) {
       progress('Extracting source files...', 60);
@@ -651,7 +608,7 @@ const placeSourceFiles = Effect.fn('arxivProcessor.placeSourceFiles')(
       );
       const staged = (entry: string) => path.join(extractedDir, entry);
       const placed = (entry: string) => path.join(paperDirFull, entry);
-      yield* extractTarFile(downloadedPath, extractedDir);
+      yield* extractTarFile(source, extractedDir);
       const entries = yield* permanentFs(fs.readDirectory(extractedDir));
       const collisions = yield* Effect.filter(
         entries,
@@ -677,21 +634,18 @@ const placeSourceFiles = Effect.fn('arxivProcessor.placeSourceFiles')(
       return;
     }
 
-    // For gzip-compressed single files, decompress first
+    // A gzipped single file is decompressed in staging first, chunk by
+    // chunk; interruption closes gunzip and both handles.
     let sourceFilePath = downloadedPath;
-    if (isGzipOnly) {
+    if (gzipped) {
       progress('Decompressing source file...', 60);
-      const decompressedPath = downloadedPath.replace(/\.gz$/, '');
-      // Chunk by chunk, never whole; interruption closes gunzip and both handles.
-      yield* fs.stream(downloadedPath).pipe(
-        gunzip,
-        Stream.run(fs.sink(decompressedPath)),
+      sourceFilePath = path.join(downloadDirFull, 'main.tex');
+      yield* source.pipe(
+        Stream.run(fs.sink(sourceFilePath)),
         Effect.catchTag('PlatformError', (error) =>
           Effect.fail(permanentFsError(error)),
         ),
       );
-      yield* permanentFs(fs.remove(downloadedPath, { force: true }));
-      sourceFilePath = decompressedPath;
     }
 
     // Rename to main.tex and move to paper root. The facade's `rename`
@@ -701,13 +655,11 @@ const placeSourceFiles = Effect.fn('arxivProcessor.placeSourceFiles')(
     // `main.tex` symlink names an entry too, and must block the rename
     // rather than be replaced by a regular file.
     const targetPath = path.join(paperDirFull, 'main.tex');
-    if (sourceFilePath !== targetPath) {
-      if ((yield* permanentFs(entryTypeIn(fs, targetPath))) !== undefined) {
-        return yield* new ArxivSourcePermanentError({
-          message: `Target already exists: ${targetPath}`,
-        });
-      }
-      yield* permanentFs(fs.rename(sourceFilePath, targetPath));
+    if ((yield* permanentFs(entryTypeIn(fs, targetPath))) !== undefined) {
+      return yield* new ArxivSourcePermanentError({
+        message: `Target already exists: ${targetPath}`,
+      });
     }
+    yield* permanentFs(fs.rename(sourceFilePath, targetPath));
   },
 );

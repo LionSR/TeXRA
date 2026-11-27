@@ -39,6 +39,7 @@ import {
 } from '@texra-ai/worldline/schemas';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { launchApproval } from '@cli/runtime/platform/cliContext';
+import { taskNotFoundText } from '@cli/runtime/history';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { createHostRunActions } from '@texra/controllers/session/hostRunActions';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
@@ -459,7 +460,7 @@ export function createChatSessionController(
             { concurrency: 2 },
           );
           if (!config || !exists) {
-            appendLocalErrorTranscript(`Task not found: ${id}`);
+            appendLocalErrorTranscript(taskNotFoundText(id, cwd));
             yield* endWithout(CliExitCode.Usage);
             return;
           }

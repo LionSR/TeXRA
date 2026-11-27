@@ -25,9 +25,6 @@ export const STATUS_DIAMOND = '◆';
 /** The warning tone's marker (`TONE_PAINT`). */
 export const WARNING = '⚠';
 
-/** Heading marker for a round's results in the document task run details. */
-export const PENDING_BOX = '□';
-
 /** Terminal-failure marker; the ✗/✓ counterpart to TICK. */
 export const CROSS = '✗';
 
@@ -66,5 +63,10 @@ export const ERROR_ENTRY_PREFIX = '! ';
 /** Local notice rows (a slash command's result): dim, never model text. */
 export const NOTICE_ENTRY_PREFIX = '» ';
 
-/** Corner glyph that opens each tool-output block. */
-export const TOOL_OUTPUT_CORNER = '⎿';
+/** What opens a tool-output block: the corner glyph and its gutter space. */
+export const TOOL_OUTPUT_PREFIX = '⎿ ';
+
+/** The blank gutter under a row prefix, for the rows that continue it. */
+export function hangingIndent(prefix: string): string {
+  return ' '.repeat(prefix.length);
+}

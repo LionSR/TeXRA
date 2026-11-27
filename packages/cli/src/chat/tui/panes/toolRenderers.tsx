@@ -30,7 +30,11 @@ import {
   truncateSummaryToWidth,
 } from '@cli/runtime/terminal/terminalText';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
-import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
+import {
+  hangingIndent,
+  STATUS_DOT,
+  TOOL_OUTPUT_PREFIX,
+} from '@cli/tui/ui/glyphs';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
 import {
@@ -112,11 +116,11 @@ function row(spans: readonly ToolDisplaySpan[]): ToolDisplayLine {
 }
 
 const CORNER_PREFIX_SPAN: ToolDisplaySpan = Object.freeze({
-  text: `${TOOL_OUTPUT_CORNER} `,
+  text: TOOL_OUTPUT_PREFIX,
   dim: true,
 });
 const CONTINUATION_PREFIX_SPAN: ToolDisplaySpan = Object.freeze({
-  text: '  ',
+  text: hangingIndent(TOOL_OUTPUT_PREFIX),
   dim: true,
 });
 
@@ -304,7 +308,7 @@ function patchTextLines(
   const diffWidth =
     width === undefined ? undefined : width - PATCH_PREVIEW_INDENT;
   return groups.flatMap((group) => [
-    `${TOOL_OUTPUT_CORNER} ${group.fileLabel}`,
+    `${TOOL_OUTPUT_PREFIX}${group.fileLabel}`,
     ...(diffWidth === undefined
       ? diffDisplayLines(group.hunks)
       : wrappedDiffDisplayLines(group.hunks, diffWidth)

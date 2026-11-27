@@ -24,7 +24,11 @@ import {
   UP_DOWN_KEYS,
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
-import { Select, type SelectItem } from '@cli/tui/ui/Select';
+import {
+  Select,
+  SelectGroupHeading,
+  type SelectItem,
+} from '@cli/tui/ui/Select';
 import { HOLLOW_DOT, REUSED, STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import { fillRows, safeTerminalText } from '@cli/runtime/terminal/terminalText';
@@ -235,13 +239,7 @@ export function ScriptStagePopup({
     const entry = byKey.get(item.value);
     if (entry === undefined) return null;
     if (entry.kind === 'heading') {
-      return (
-        <Box height={1} overflowY="hidden">
-          <Text bold dimColor wrap="truncate-end">
-            {safeTerminalText(entry.text)}
-          </Text>
-        </Box>
-      );
+      return <SelectGroupHeading text={safeTerminalText(entry.text)} />;
     }
     return <CallRow call={entry.call} />;
   };

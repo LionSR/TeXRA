@@ -1,12 +1,12 @@
 /**
  * Experimental: surface `\criticize{message}{severity}{confidence}` annotations
- * inserted by critique-style agents (criticize, notation, logic, enhance,
- * ...) as VS Code diagnostics — squiggles in the editor and entries in the
- * Problems panel, like a linter.
+ * an agent writes as VS Code diagnostics — squiggles in the editor and
+ * entries in the Problems panel, like a linter.
  *
  * Two ingest paths:
- *   1. A document task's documents rows parse each output `.tex` file.
- *      Universal — any agent that writes the macro participates.
+ *   1. Each `.tex` file TeXRA writes in the project is parsed again
+ *      (`workspaceFilesWritten`). Universal — any agent that writes the
+ *      macro participates.
  *   2. The `diagnostics` tool's `add` command routes through the `add` of
  *      {@link makeInlineCriticism} here, for agents that want to flag issues
  *      without inserting the macro.

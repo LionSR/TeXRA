@@ -5,6 +5,7 @@ import { lookup } from 'node:dns';
 import { Duration, Effect, Result, Schema, Stream } from 'effect';
 import { FetchHttpClient, HttpClient, type HttpClientError } from 'effect/http';
 import ipaddr from 'ipaddr.js';
+import { parseMIMEType } from 'undici';
 
 // Local imports - core
 import {
@@ -187,7 +188,7 @@ const getPublic = Effect.fn('WebFetchTool.getPublic')(function* (
   }
 });
 
-/** Fetch `url` with transient retries, as text plus its content type. */
+/** Fetch `url` with transient retries, as text plus its media type. */
 const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
   retryTransientFetch(
     Effect.gen(function* () {
@@ -203,10 +204,13 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
         );
       }
 
-      const contentType = response.headers['content-type'] ?? '';
-      const charset = /charset=([^\s;]+)/i
-        .exec(contentType)?.[1]
-        ?.replaceAll(/^["']|["']$/gu, '');
+      // The header as the Fetch standard reads it: the type lower-cased and
+      // without its parameters, the charset unquoted. Absent or malformed
+      // is no type.
+      const parsed = parseMIMEType(response.headers['content-type'] ?? '');
+      const mediaType = parsed === 'failure' ? null : parsed.essence;
+      const charset =
+        parsed === 'failure' ? undefined : parsed.parameters.get('charset');
       // A label TextDecoder does not know decodes as UTF-8, as an absent
       // one does, and the result says so: the text may read garbled.
       const supported =
@@ -240,7 +244,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       );
       return {
         rawBody,
-        contentType,
+        mediaType,
         unsupportedCharset: supported ? null : (charset ?? null),
       };
     }),
@@ -271,14 +275,15 @@ const fetchAsMarkdown = Effect.fn('WebFetchTool.execute')(function* ({
   url,
   prompt,
 }: WebFetchInput) {
-  const { rawBody, contentType, unsupportedCharset } = yield* fetchPage(url);
+  const { rawBody, mediaType, unsupportedCharset } = yield* fetchPage(url);
 
-  const ctLower = contentType.toLowerCase();
+  // HTML or XML by its type, compared whole: a substring test reads an
+  // Office document (`…openxmlformats…`) as XML. An untyped body is guessed
+  // from its first character.
   const isMarkupContent =
-    ctLower.includes('html') ||
-    ctLower.includes('xml') ||
-    ctLower.includes('xhtml') ||
-    (!contentType && rawBody.trim().startsWith('<'));
+    mediaType === null
+      ? rawBody.trim().startsWith('<')
+      : mediaType === 'text/html' || /[/+]xml$/.test(mediaType);
 
   const markdown = isMarkupContent
     ? yield* Effect.try({
