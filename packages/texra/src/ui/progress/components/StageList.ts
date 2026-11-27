@@ -488,26 +488,36 @@ export class StageList extends LitElement {
     `;
   }
 
-  /** Rows of a stage, in transcript order. A script stage leads with its
-   *  calls as the script-stage model reads them; the calls' own cards, with
-   *  their output, open below it from the card's Log. */
+  /** Rows of a stage, in transcript order. A script stage is its calls as
+   *  the script-stage model reads them: a call that runs a child is that
+   *  view's row, and any other call's own card is slotted in at its place
+   *  in the list, so its disclosure opens its output where its row is. A
+   *  row of the stage that is no call follows the list. */
   private renderStageBody(node: StageEntry): TemplateResult {
     const script = this.scripts.get(node.stage.id);
-    const rows = this.renderRowEntries(node.rows, `stage:${node.stage.id}`);
-    const callsKey = `calls:${node.stage.id}`;
-    const callsOpen = this.expanded?.get(callsKey) === true;
-    return html`${
-      script && this.view && this.surface
-        ? html`<script-stage
-              .stage=${script}
-              .view=${this.view}
-              .surface=${this.surface}
-              .runId=${this.runId}
-              ?logOpen=${callsOpen}
-            ></script-stage>
-            ${callsOpen ? rows : nothing}`
-        : rows
-    }`;
+    if (!script || !this.view || !this.surface)
+      return this.renderRowEntries(node.rows, `stage:${node.stage.id}`);
+    const cards = new Set(
+      script.calls.flatMap((call) => (call.runsChild ? [] : [call.id])),
+    );
+    const calls = new Set(script.calls.map((call) => call.id));
+    return html`<script-stage
+        .stage=${script}
+        .view=${this.view}
+        .surface=${this.surface}
+        >${repeat(
+          node.rows.filter((row) => cards.has(row.id)),
+          (row) => row.id,
+          (row) =>
+            html`<div slot=${row.id} class="script-call">
+              ${this.renderLogEntry(row)}
+            </div>`,
+        )}</script-stage
+      >${repeat(
+        node.rows.filter((row) => !calls.has(row.id)),
+        (row) => row.id,
+        (row) => this.renderLogEntry(row),
+      )}`;
   }
 
   /** Render a stage: a script stage as a plain container, its script-stage

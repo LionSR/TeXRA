@@ -1,11 +1,14 @@
 /**
  * `<script-stage>`: the calls one `script` call issued, painted from the
  * shared script-stage model (`scriptStages` in `@texra-ai/worldline/transcript`): the card's
- * summary line, then each section's calls as plain rows in issue order. An
- * `agent` row opens its child run; Review opens the run that is asking;
- * "Stop this agent", in a running row's menu, stops the call's child, which
- * the call then answers as `Skipped`. "Log" opens the calls' own cards
- * below the card. Holds no state: every send is a surface or runtime event.
+ * summary line, then each section's calls in issue order, one row a call.
+ * A call that runs a child is a summary row: its agent, what it last said,
+ * its model and cost. It opens its child run; Review opens the run that is
+ * asking; "Stop this agent", in a running row's menu, stops the call's
+ * child, which the call then answers as `Skipped`. Any other call is its
+ * own tool card, which its host slots in under the call's id: the card is
+ * the row, and its disclosure opens the call's output in place. Holds no
+ * state: every send is a surface or runtime event.
  */
 
 // Third-party imports
@@ -59,30 +62,25 @@ const scriptStageStyles = css`
   }
 
   .section {
-    padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
-    font-weight: var(--font-weight-semibold);
+    padding: var(--wa-space-xs) var(--wa-space-2xs) var(--wa-space-3xs);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
   }
 
   .summary {
-    padding: var(--wa-space-2xs) var(--wa-space-s);
+    padding: var(--wa-space-2xs);
     color: var(--color-text-secondary);
     font-variant-numeric: tabular-nums;
-  }
-
-  .log {
-    display: flex;
-    padding: var(--wa-space-2xs) var(--wa-space-s);
-    border-top: var(--border-thin) solid var(--color-border);
   }
 
   .row {
     display: flex;
     align-items: center;
     gap: var(--wa-space-xs);
-    min-height: 32px;
+    min-height: 28px;
     min-width: 0;
-    padding: var(--wa-space-3xs) var(--wa-space-s);
-    border-top: var(--border-thin) solid var(--color-border);
+    padding: 0 var(--wa-space-2xs);
+    border-radius: var(--wa-border-radius-s);
   }
 
   .row.is-linked {
@@ -101,10 +99,16 @@ const scriptStageStyles = css`
   }
 
   .row-label {
-    flex: 0 0 auto;
-    max-width: 40%;
-    font-weight: var(--font-weight-semibold);
+    flex: 0 1 auto;
+    max-width: 60%;
+    font-weight: var(--font-weight-medium);
     ${truncateDeclarations}
+  }
+
+  .row-open {
+    flex: 0 0 auto;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
   }
 
   .row-last,
@@ -173,10 +177,6 @@ export class ScriptStage extends LitElement {
   @property({ attribute: false }) stage!: ScriptStageView;
   @property({ attribute: false }) view!: SessionView;
   @property({ attribute: false }) surface!: Surface;
-  /** The run whose transcript holds the stage: the Log toggle's key. */
-  @property({ attribute: false }) runId: RunId | null = null;
-  /** The calls' own cards are open below the card. */
-  @property({ type: Boolean }) logOpen = false;
 
   private select(runId: RunId): void {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', runId }));
@@ -230,6 +230,8 @@ export class ScriptStage extends LitElement {
   }
 
   private renderCall(call: ScriptCallView): TemplateResult {
+    if (!call.runsChild)
+      return html`<div role="listitem"><slot name=${call.id}></slot></div>`;
     const child =
       call.childRunId === undefined
         ? undefined
@@ -295,22 +297,11 @@ export class ScriptStage extends LitElement {
         target === undefined
           ? nothing
           : waIcon(talk ? 'comments' : 'chevron-right', {
+              className: 'row-open',
               label: talk ? TALK_TO_AGENT : undefined,
             })
       }
     </div>`;
-  }
-
-  private toggleLog(): void {
-    if (this.runId === null) return;
-    this.dispatchEvent(
-      SessionUiEvents.surface({
-        kind: 'group',
-        runId: this.runId,
-        key: `calls:${this.stage.id}`,
-        expanded: !this.logOpen,
-      }),
-    );
   }
 
   override render(): TemplateResult {
@@ -333,13 +324,6 @@ export class ScriptStage extends LitElement {
               (call) => this.renderCall(call),
             )}`,
         )}
-      </div>
-      <div class="log">
-        ${renderLabeledActionButton({
-          text: 'Log',
-          expanded: this.logOpen,
-          onClick: () => this.toggleLog(),
-        })}
       </div>`;
   }
 }

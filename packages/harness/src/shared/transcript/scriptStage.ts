@@ -69,6 +69,9 @@ export interface ScriptCallView {
   /** The card's id (`logId`). */
   readonly id: string;
   readonly toolName: string;
+  /** The call runs a child (`agent()`, `program()`, `self()`): its row
+   *  summarizes that run. Any other call's card says all there is of it. */
+  readonly runsChild: boolean;
   /** An `agent` call's label or agent; any other call's tool and preview. */
   readonly label: string;
   readonly status: ScriptCallStatus;
@@ -241,6 +244,7 @@ function callView(
   return {
     id: row.id,
     toolName,
+    runsChild: agent,
     label,
     status,
     section: row.section ?? null,
@@ -331,7 +335,7 @@ export function scriptStages(
         outcome: stage.end?.outcome ?? null,
         calls,
         sections: sectionsOf(calls),
-        agents: Arr.countBy(calls, (call) => CHILD_TOOLS.has(call.toolName)),
+        agents: Arr.countBy(calls, (call) => call.runsChild),
         needsYou: Arr.countBy(calls, (call) => call.needsYou),
         costUsd,
       },
