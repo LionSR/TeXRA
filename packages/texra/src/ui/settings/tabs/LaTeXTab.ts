@@ -3,7 +3,6 @@
 
 import { Predicate, Struct } from 'effect';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { html, nothing, type TemplateResult } from 'lit';
@@ -42,6 +41,8 @@ import { renderSettingsBanner } from '@ui/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+// Registers <copy-button>, the one Copy every view draws.
+import '@ui/progress/components/CopyButton';
 
 // Local imports - catalog-driven settings rows
 import {
@@ -57,6 +58,10 @@ import {
   LATEXDIFF_CHANGES_ONLY_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
 } from '@texra/shared/settings/latexdiffSettings';
+
+/** The two actions beside an install command, wherever one is shown. */
+const COPY_INSTALL_COMMAND = 'Copy install command';
+const RUN_IN_TERMINAL = 'Run in Terminal';
 
 /** What the Dependencies section says of one dependency: the toolchain's
  *  dependencies, and LaTeX Workshop, which installs through a VS Code
@@ -209,7 +214,7 @@ export class LaTeXTab extends TexraSignalElement {
     return html`
       <div class="dependency-card">
         <div class="dependency-row">
-          ${waIcon(installed ? 'check' : 'triangle-exclamation', {
+          ${waIcon(installed ? 'check' : 'circle-exclamation', {
             className: `dependency-icon ${installed ? 'installed' : 'missing'}`,
           })}
           <div class="dependency-info">
@@ -230,13 +235,13 @@ export class LaTeXTab extends TexraSignalElement {
           installCmd
             ? html`
                 <div class="dependency-install-actions">
-                  <wa-copy-button
-                    value=${installCmd.command}
-                    copy-label="Copy install command"
-                  ></wa-copy-button>
+                  <copy-button
+                    .text=${installCmd.command}
+                    .label=${COPY_INSTALL_COMMAND}
+                  ></copy-button>
                   ${renderLabeledActionButton({
                     icon: 'terminal',
-                    text: 'Run in Terminal',
+                    text: RUN_IN_TERMINAL,
                     title: `Run: ${installCmd.command}`,
                     kind: 'secondary',
                     onClick: () => this.handleRunInTerminal(installCmd.command),
@@ -307,13 +312,13 @@ export class LaTeXTab extends TexraSignalElement {
       description,
       actions: html`
         <code class="install-command-text" dir="ltr">${installCommand}</code>
-        <wa-copy-button
-          value=${installCommand}
-          copy-label="Copy install command"
-        ></wa-copy-button>
+        <copy-button
+          .text=${installCommand}
+          .label=${COPY_INSTALL_COMMAND}
+        ></copy-button>
         ${renderLabeledActionButton({
           icon: 'terminal',
-          text: 'Run in Terminal',
+          text: RUN_IN_TERMINAL,
           kind: 'secondary',
           title: `Run ${pmName} installer in a terminal`,
           onClick: () => this.handleRunInTerminal(installCommand),
