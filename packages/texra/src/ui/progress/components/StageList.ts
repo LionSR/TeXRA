@@ -77,6 +77,19 @@ const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
 const TIMELINE_ITEM_WINDOW_STEP = 120;
 const DEFAULT_STAGE_ROW_WINDOW = 400;
 const STAGE_ROW_WINDOW_STEP = 400;
+const WINDOW_TRIM_STEP = 40;
+
+/**
+ * How many of `count` items stay unrendered above a window of `size`: the
+ * excess, in whole steps. Removing the oldest item each time one arrives
+ * makes the browser restyle every item after it, tens of milliseconds per
+ * arrival on a long conversation, so a window lets up to a step more
+ * through and drops them together.
+ */
+function hiddenAbove(count: number, size: number): number {
+  const excess = Math.max(0, count - size);
+  return excess - (excess % WINDOW_TRIM_STEP);
+}
 
 const stageListStyles = css`
   /* Phase labels may come from workflow plans, so let long or untranslated
@@ -148,7 +161,8 @@ export class StageList extends LitElement {
    *  `turnLayout`), rebuilt when the transcript or the run changes. */
   private layout: LayoutItem[] = [];
 
-  /** Number of recent top-level timeline entries currently rendered. */
+  /** Number of recent top-level timeline entries rendered, before the
+   *  step {@link hiddenAbove} lets through. */
   @state() private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
 
   /** Number of recent rows rendered for each stage. Reassigned
@@ -277,7 +291,7 @@ export class StageList extends LitElement {
   ): TemplateResult {
     const windowSize =
       this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW;
-    const hiddenCount = Math.max(0, rows.length - windowSize);
+    const hiddenCount = hiddenAbove(rows.length, windowSize);
     const visibleRows = hiddenCount > 0 ? rows.slice(hiddenCount) : rows;
 
     return html`${
@@ -330,10 +344,11 @@ export class StageList extends LitElement {
   }
 
   private visibleLayoutItems(): LayoutItem[] {
-    const layout = this.layout;
-    return layout.length <= this.timelineItemWindow
-      ? layout
-      : layout.slice(-this.timelineItemWindow);
+    const hiddenCount = hiddenAbove(
+      this.layout.length,
+      this.timelineItemWindow,
+    );
+    return hiddenCount > 0 ? this.layout.slice(hiddenCount) : this.layout;
   }
 
   /** One item of the layout; the key names its kind, since a script's
@@ -420,7 +435,7 @@ export class StageList extends LitElement {
         const scope = `work:${work.id}`;
         const windowSize =
           this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW;
-        const hiddenCount = Math.max(0, work.items.length - windowSize);
+        const hiddenCount = hiddenAbove(work.items.length, windowSize);
         return html`${
           hiddenCount > 0
             ? this.renderRevealButton({
