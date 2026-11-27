@@ -73,6 +73,8 @@ export function formatToolUseTemplate(
   // A card wears its tool's icon unless its state has something to say:
   // the user's feedback, an interruption or a failure.
   let iconName: IconName;
+  // Whether the row's icon is the tool's own, so it names the tool.
+  let iconNamesTool = false;
   if (
     look !== undefined &&
     (model.userInstruction !== undefined || stopped || showAsError)
@@ -80,8 +82,9 @@ export function formatToolUseTemplate(
     iconName = statusGlyph(look);
   } else {
     const icon = tools.icons[normalizedToolName];
-    iconName =
-      (icon === undefined ? undefined : DRAWN_ICONS.get(icon)) ?? 'wrench';
+    const own = icon === undefined ? undefined : DRAWN_ICONS.get(icon);
+    iconNamesTool = own !== undefined;
+    iconName = own ?? 'wrench';
   }
 
   const headerPreview = truncateWithEllipsis(
@@ -150,11 +153,17 @@ export function formatToolUseTemplate(
   // prettier-ignore
   const extraContent = html`${timerTemplate}${stoppedTemplate}`;
 
+  // A row says what its call did once. Beside the tool's own icon, the
+  // sentence the call reports ("Read notes.tex") needs no "read_file" before
+  // it; the name is spelled out where no icon of the tool's stands for it
+  // (a generic or a state icon, a spinner) or the row has nothing else to say.
+  const named = !iconNamesTool || running || headerPreview === '';
   return buildToolUseDetails({
     row,
     iconName,
     running: running && model.userInstruction === undefined,
-    label: model.headerLabel,
+    label: named ? model.headerLabel : '',
+    title: named ? undefined : model.headerLabel,
     detail: headerPreview || undefined,
     isError: showAsError,
     content: html`${sections}`,
