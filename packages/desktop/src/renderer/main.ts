@@ -648,7 +648,12 @@ function rerenderShell(): void {
   render(
     projectWorkbenches.has(shell.active)
       ? shellTemplate()
-      : noWorkspacePlaceholder,
+      : // Until the first projects message says which folders reopened, the
+        // window is empty: the invitation to open one would be wrong for a
+        // launch that is about to show a project.
+        recentProjects === undefined
+        ? nothing
+        : noWorkspacePlaceholder,
     appRoot,
   );
   const project = projectWorkbenches.get(shell.active);
