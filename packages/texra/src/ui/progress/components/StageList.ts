@@ -501,12 +501,33 @@ export class StageList extends LitElement {
       script.calls.flatMap((call) => (call.runsChild ? [] : [call.id])),
     );
     const calls = new Set(script.calls.map((call) => call.id));
-    return html`<script-stage
+    // Bounded like any stage's rows: a card mounts its sections (a
+    // terminal, a diff) whether or not it is open, so a script with
+    // thousands of calls shows its recent cards and reveals the rest. An
+    // older call's place in the list stays, empty, until then.
+    const scope = `stage:${node.stage.id}`;
+    const cardRows = node.rows.filter((row) => cards.has(row.id));
+    const hiddenCount = Math.max(
+      0,
+      cardRows.length -
+        (this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW),
+    );
+    return html`${
+        hiddenCount > 0
+          ? this.renderRevealButton({
+              hiddenCount,
+              step: STAGE_ROW_WINDOW_STEP,
+              scope,
+              kind: 'rows',
+              label: 'call',
+            })
+          : nothing
+      }<script-stage
         .stage=${script}
         .view=${this.view}
         .surface=${this.surface}
         >${repeat(
-          node.rows.filter((row) => cards.has(row.id)),
+          cardRows.slice(hiddenCount),
           (row) => row.id,
           (row) =>
             html`<div slot=${row.id} class="script-call">
