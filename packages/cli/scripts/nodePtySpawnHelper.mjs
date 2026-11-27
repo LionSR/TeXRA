@@ -5,8 +5,7 @@ import process from 'node:process';
 
 /**
  * Restore the execute bit on node-pty's prebuilt `spawn-helper` when the
- * install dropped it. Shared by the PTY validators (validate-tui, validate-run)
- * before they load node-pty.
+ * install dropped it, which a script does before it loads node-pty.
  */
 export function ensureNodePtySpawnHelperExecutable() {
   if (process.platform === 'win32') return;
@@ -27,4 +26,14 @@ export function ensureNodePtySpawnHelperExecutable() {
   } catch {
     // node-pty will report the underlying PTY load/spawn failure itself.
   }
+}
+
+/** node-pty's `spawn`, with its helper made executable first. */
+export async function loadPtySpawn() {
+  ensureNodePtySpawnHelperExecutable();
+  const pty = await import('node-pty');
+  const spawn = pty.spawn ?? pty.default?.spawn;
+  if (typeof spawn !== 'function')
+    throw new Error('node-pty did not expose spawn');
+  return spawn;
 }

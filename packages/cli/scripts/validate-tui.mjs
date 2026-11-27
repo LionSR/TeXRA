@@ -40,7 +40,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { spawnSync } from 'node:child_process';
 import { parseArgs as parseNodeArgs } from 'node:util';
 
-import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
+import { loadPtySpawn } from './nodePtySpawnHelper.mjs';
 import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
 
 // Every harness this script starts resolves `~/.texra` in a temporary home.
@@ -2869,14 +2869,11 @@ if (useExistingHarness) {
 let ptySpawn;
 let Terminal;
 try {
-  ensureNodePtySpawnHelperExecutable();
-  const ptyMod = await import('node-pty');
-  ptySpawn = ptyMod.spawn ?? ptyMod.default?.spawn;
+  ptySpawn = await loadPtySpawn();
   const xtermMod = await import('@xterm/headless');
   Terminal = xtermMod.Terminal ?? xtermMod.default?.Terminal;
-  if (typeof ptySpawn !== 'function' || typeof Terminal !== 'function') {
-    throw new Error('node-pty/@xterm/headless did not expose the expected API');
-  }
+  if (typeof Terminal !== 'function')
+    throw new Error('@xterm/headless did not expose Terminal');
 } catch (err) {
   console.error(
     '[validate-tui] failed — install the TUI dev deps to run this validator:\n' +
