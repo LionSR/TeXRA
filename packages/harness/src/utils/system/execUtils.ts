@@ -78,10 +78,6 @@ const releaseLifeline = (handle: ChildProcessHandle): Effect.Effect<void> =>
     withLogChannel(CHANNEL),
   );
 
-function normalizeOutput(text: string | null | undefined): string {
-  return text?.trim() ?? '';
-}
-
 /**
  * The complete environment a command runs with: {@link inheritedEnv} on the
  * extended PATH, the caller's overrides, and the
@@ -105,14 +101,14 @@ function commandEnv(
 }
 
 function execResult(
-  stdout: string | null | undefined,
-  stderr: string | null | undefined,
+  stdout: string,
+  stderr: string,
   end: ExecEnd,
 ): ExecResult {
   return {
     success: end._tag === 'Exited' && end.code === 0,
-    stdout: normalizeOutput(stdout),
-    stderr: normalizeOutput(stderr),
+    stdout: stdout.trim(),
+    stderr: stderr.trim(),
     end,
   };
 }
