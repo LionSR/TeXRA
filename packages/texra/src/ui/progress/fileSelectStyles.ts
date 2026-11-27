@@ -9,7 +9,7 @@ import { truncateDeclarations } from '@ui/styles/commonViewStyles';
 import { buttonStyles } from '@ui/styles/controlStyles';
 
 /** Core file-select layout styles. */
-export const fileSelectLayoutStyles = css`
+const fileSelectLayoutStyles = css`
   .file-select {
     margin-bottom: var(--wa-space-xs);
     container-type: inline-size;
