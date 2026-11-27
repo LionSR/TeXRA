@@ -30,9 +30,6 @@ catalogs:
     '@typescript/native':
       specifier: npm:typescript@^7.0.2
       version: 7.0.2
-    content-disposition:
-      specifier: ^3.1.0
-      version: 3.1.0
     diff:
       specifier: ^9.0.0
       version: 9.0.0
@@ -563,9 +560,6 @@ importers:
       '@xterm/xterm':
         specifier: ^6.0.0
         version: 6.0.0
-      content-disposition:
-        specifier: 'catalog:'
-        version: 3.1.0
       diff:
         specifier: 'catalog:'
         version: 9.0.0
@@ -2606,10 +2600,6 @@ packages:
   content-disposition@1.1.0:
     resolution: {integrity: sha512-5jRCH9Z/+DRP7rkvY83B+yGIGX96OYdJmzngqnw2SBSxqCFPd0w2km3s5iawpGX8krnwSGmF0FW5Nhr0Hfai3g==}
     engines: {node: '>=18'}
-
-  content-disposition@3.1.0:
-    resolution: {integrity: sha512-6lwVDK9bsenmMu7hxcLuUiu+FzFBDAdfQR1LKbE+SCo7/Qfpm2NG8X9f8AJgumfoVID/4r1stSxcmCeiT7pfkQ==}
-    engines: {node: '>=22'}
 
   content-type@1.0.5:
     resolution: {integrity: sha512-nTjqfcBFEipKdXCv4YDQWCfmcLZKm81ldF0pAopTvyrFGVbcR6P/VAAd5G7N+0tTr8QqiU0tFadD6FK4NtJwOA==}
@@ -6542,8 +6532,6 @@ snapshots:
       yargs: 18.0.0
 
   content-disposition@1.1.0: {}
-
-  content-disposition@3.1.0: {}
 
   content-type@1.0.5: {}
 
