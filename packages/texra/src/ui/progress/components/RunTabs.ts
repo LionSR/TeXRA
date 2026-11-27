@@ -140,16 +140,24 @@ export class RunTabs extends TexraElement {
    *  none and carries the rollup alone, with no disclosure; the drawer and
    *  the docked list show every child, a document task run's calls
    *  included, so a call's own subagents stay reachable under their
-   *  parent. */
-  private childrenOf(run: RunView): RunView[] {
+   *  parent. A command leaves the list when it ends: its report is in its
+   *  task's conversation, and nothing of it can be continued. The one on
+   *  screen stays until another run is shown. */
+  private childrenOf(run: RunView, selected: RunId | null): RunView[] {
     if (this.topLevelOnly) return [];
     return run.childIds
       .map((id) => this.runOfEvent(id))
-      .filter((child): child is RunView => child !== undefined);
+      .filter((child): child is RunView => child !== undefined)
+      .filter(
+        (child) =>
+          child.identity.kind !== 'process' ||
+          child.outcome == null ||
+          child.id === selected,
+      );
   }
 
   private renderNode(run: RunView, selected: RunId | null): TemplateResult {
-    const children = this.childrenOf(run);
+    const children = this.childrenOf(run, selected);
     const expandable = children.length > 0;
     const expanded = expandable && this.isExpanded(run);
     return html`
@@ -180,7 +188,9 @@ export class RunTabs extends TexraElement {
   private holds(run: RunView, selected: RunId | null): boolean {
     return (
       run.id === selected ||
-      this.childrenOf(run).some((child) => this.holds(child, selected))
+      this.childrenOf(run, selected).some((child) =>
+        this.holds(child, selected),
+      )
     );
   }
 
