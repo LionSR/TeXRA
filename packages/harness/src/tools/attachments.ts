@@ -15,7 +15,7 @@ import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { formatCount } from '@utils/text/stringUtils';
 
-export interface BuildFileAttachmentOptions {
+interface BuildFileAttachmentOptions {
   /** Path to a workspace file (relative or absolute) */
   filePath: string;
   /** Optional description surfaced to the model */

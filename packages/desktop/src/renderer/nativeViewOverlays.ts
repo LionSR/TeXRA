@@ -6,7 +6,7 @@ export function trackNativeViewOverlays(onChange: () => void) {
   const target = (event: Event) => {
     const [origin] = event.composedPath();
     return origin instanceof HTMLElement &&
-      origin.matches('wa-dropdown, wa-dialog, wa-drawer')
+      origin.matches('wa-dropdown, wa-dialog, wa-drawer, wa-popover')
       ? origin
       : undefined;
   };

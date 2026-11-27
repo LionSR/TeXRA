@@ -120,7 +120,6 @@ export { toolDisplayKind, type ToolDisplayKind } from '@shared/tools/toolKind';
 export {
   buildMcpToolName,
   isMcpToolName,
-  mcpServerOfToolName,
   normalizeToolName,
 } from '@shared/tools/toolDisplayName';
 // A script's stages and calls, and the children a dispatch card lists.

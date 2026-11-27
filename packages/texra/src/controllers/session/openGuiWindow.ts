@@ -24,6 +24,7 @@ import type {
   RuntimePresentationEventPayloads,
 } from '@texra-ai/worldline';
 import {
+  PlanQuotas,
   presenterOn,
   sessionFsLayer,
   workspaceEnvironmentLayer,
@@ -33,6 +34,7 @@ import {
 import { workspaceRelativePath } from '@texra-ai/worldline/node';
 import {
   AppSignals,
+  emitAppSignal,
   Secrets,
   ToolRegistry,
   type StorageFs,
@@ -73,6 +75,7 @@ import {
   type WindowClient,
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
+import { setReasoningLevel } from '@texra/controllers/settingsView/modelSelection';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { pickLauncherFiles, type OpenFilesDialog } from './launcherFilePicker';
 import {
@@ -551,10 +554,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             request.paths,
             getIncludedExtensions(request.category),
           );
-          if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
+          if (attached.paths.length > 0 && attached.rejectedCount > 0) {
             yield* host.notify(
               'info',
-              `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-project item')}.`,
+              `Attached ${formatResultCount(attached.paths.length, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-project item')}.`,
             );
           }
           return { kind: 'files', paths: attached.paths };
@@ -631,8 +634,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'polish':
         case 'savePastedImage':
           return yield* draftRequests.handle(request, port);
-        case 'refreshFiles':
-          yield* snapshot.refreshFiles;
+        case 'refreshUsage':
+          if (request.force === true)
+            yield* PlanQuotas.use((quotas) => quotas.invalidate());
+          yield* snapshot.refreshUsage;
           return done;
         case 'dismissBanner':
           yield* snapshot.dismissBanner(request.banner);
@@ -650,6 +655,14 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return done;
         case 'openSettings':
           yield* bindings.openSettings(request.target);
+          return done;
+        case 'setReasoningLevel':
+          yield* setReasoningLevel(roots.globalState, {
+            modelName: request.model,
+            level: request.level,
+          });
+          // The rows name the level a run sends: reload them in every window.
+          yield* emitAppSignal('modelAccessChanged', undefined);
           return done;
         case 'apiKeyBanner':
           yield* request.action === 'set'

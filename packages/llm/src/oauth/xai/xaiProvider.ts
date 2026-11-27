@@ -21,7 +21,11 @@ import {
   pollDeviceAuthorization,
   type SubscriptionDeviceCodePrompt,
 } from '../deviceAuthorization.js';
-import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
+import {
+  NonEmptyJwtClaim,
+  absentWhenInvalid,
+  decodeJwtClaimsWithSchema,
+} from '../jwtDecode.js';
 import {
   OAuthHttpError,
   oauthHttpError,
@@ -97,20 +101,24 @@ const XAI_DEVICE_DEFAULT_EXPIRES_SEC = 5 * 60;
 /** RFC 8628 slow_down increment (seconds). */
 const XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC = 5;
 
+/** A positive count of seconds as a number or its text. */
+const PositiveSeconds = Schema.Union([
+  Schema.Finite,
+  Schema.FiniteFromString,
+]).check(Schema.isGreaterThan(0));
+
 /** Raw response from the OAuth token endpoint (code exchange + refresh). */
 const XaiTokenResponseSchema = SubscriptionTokenResponseSchema.mapFields(
   Struct.assign({
     // Provider-boundary guard: absent or non-positive expires_in is not a
     // security decision — fall back to a short default and let JWT exp / 401
     // drive the real refresh. Prefer access JWT exp in buildSession when present.
-    expires_in: Schema.Union([Schema.Finite, Schema.FiniteFromString])
-      .check(Schema.isGreaterThan(0))
-      .pipe(
-        Schema.catchDecoding(() =>
-          Effect.succeed(Option.some(XAI_DEFAULT_EXPIRES_IN_SEC)),
-        ),
-        Schema.withDecodingDefault(Effect.succeed(XAI_DEFAULT_EXPIRES_IN_SEC)),
+    expires_in: PositiveSeconds.pipe(
+      Schema.catchDecoding(() =>
+        Effect.succeed(Option.some(XAI_DEFAULT_EXPIRES_IN_SEC)),
       ),
+      Schema.withDecodingDefault(Effect.succeed(XAI_DEFAULT_EXPIRES_IN_SEC)),
+    ),
     token_type: Schema.optional(Schema.NullOr(Schema.String)),
     scope: Schema.optional(Schema.NullOr(Schema.String)),
   }),
@@ -127,13 +135,7 @@ export type XaiSession = typeof XaiSessionSchema.Type;
 
 /** A positive count of seconds as a number or its text; anything else reads
  *  as absent, and the flow's own default applies. */
-const OptionalSeconds = Schema.optional(
-  Schema.NullOr(
-    Schema.Union([Schema.Finite, Schema.FiniteFromString]).check(
-      Schema.isGreaterThan(0),
-    ),
-  ),
-).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))));
+const OptionalSeconds = absentWhenInvalid(Schema.NullOr(PositiveSeconds));
 
 /** RFC 8628 device-code authorization response. */
 const XaiDeviceCodeSchema = Schema.Struct({
@@ -163,9 +165,7 @@ type XaiJwtClaims = typeof XaiJwtClaimsSchema.Type;
 const XaiJwtPayloadSchema = Schema.Struct({
   email: NonEmptyJwtClaim,
   preferred_username: NonEmptyJwtClaim,
-  exp: Schema.optional(Schema.Finite).pipe(
-    Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
-  ),
+  exp: absentWhenInvalid(Schema.Finite),
 }).pipe(
   Schema.decodeTo(XaiJwtClaimsSchema, {
     decode: SchemaGetter.transform((claims) => ({
@@ -208,12 +208,8 @@ const requestDeviceCode = Effect.fn('xai.requestDeviceCode')(function* () {
 
 /** An RFC 6749 error body; a field of another shape reads as absent. */
 const DeviceErrorBodySchema = Schema.Struct({
-  error: Schema.optional(Schema.String).pipe(
-    Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
-  ),
-  error_description: Schema.optional(Schema.String).pipe(
-    Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
-  ),
+  error: absentWhenInvalid(Schema.String),
+  error_description: absentWhenInvalid(Schema.String),
 });
 
 /**

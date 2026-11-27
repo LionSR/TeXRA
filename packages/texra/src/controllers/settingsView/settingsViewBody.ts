@@ -65,10 +65,7 @@ import {
   type SettingsViewInboundHandlerRegistry,
 } from '@texra/controllers/settingsView/settingsHostBindings';
 import { settingsMemoryCommands } from '@texra/controllers/settingsView/settingsMemoryCommands';
-import {
-  buildModelSelectionPage,
-  setReasoningLevel,
-} from '@texra/controllers/settingsView/modelSelection';
+import { buildModelSelectionPage } from '@texra/controllers/settingsView/modelSelection';
 import { settingsPluginCommands } from '@texra/controllers/settingsView/settingsPluginCommands';
 import {
   buildProfilePage,
@@ -346,11 +343,6 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           Effect.andThen(changed('settings')),
           Effect.andThen(emitAppSignal('modelAccessChanged', undefined)),
         ),
-      setModelReasoningLevel: (message) =>
-        setReasoningLevel(roots.globalState, {
-          modelName: message.modelName,
-          level: message.level,
-        }).pipe(Effect.andThen(changed('settings'))),
       updateStateSetting: (message) =>
         updateStateSetting(message.key, message.value),
       setSkillEnabled: (message) =>

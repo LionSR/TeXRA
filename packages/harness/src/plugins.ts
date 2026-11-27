@@ -17,7 +17,6 @@
  *   [`optionalInput`](#optionalinput),
  *   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
  *   ([`requestToolEditApproval`](#requesttooleditapproval),
- *   [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),
  *   [`approvedWriteConflict`](#approvedwriteconflict)).
  * - **Native plugins**: an installed plugin folder's `harness.mjs` is a
  *   module whose default export ([`NativeEntryModule`](#nativeentrymodule))

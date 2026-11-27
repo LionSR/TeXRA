@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { Effect, Layer } from 'effect';
+import { Layer } from 'effect';
 import {
   codemode,
   fileOps,
@@ -25,14 +25,10 @@ import {
 } from '@texra-ai/worldline/plugins';
 
 // Local imports
-import replacementEngine, {
-  logReplacementDiagnostics,
-} from '@replacement/engine';
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import { texraPlugin } from '@texra/tools/texraPlugin';
 import type { ToolInstallAction } from '@texra/shared/settingsView/settingsViewMessages';
 import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
-import { hasExtension } from '@texra-ai/worldline/schemas';
 
 // Local file imports
 import {
@@ -46,9 +42,10 @@ import { EditorHost, editorRegistry, type EditorRegistry } from './editorHost';
 import { lean4 } from './lean/plugin';
 import { OpenPdfTool } from './OpenPdfTool';
 /**
- * Setup-assistant tools: a narrow set for the onboarding agent, one per
- * concern. Every read-only fact about the environment is one report, so the
- * agent never sequences overlapping reads:
+ * Setup functions: script functions (offered with the script tool, never
+ * sent as tools of their own), one per concern. Every read-only fact about
+ * the environment is one report, so a script never sequences overlapping
+ * reads:
  *   - probe_environment — the read-only environment and credential report
  *     (or, given a `tool`, a recheck of that one tool after an install)
  *   - unset_api_key — remove a persisted provider credential
@@ -70,7 +67,6 @@ import { OpenPdfTool } from './OpenPdfTool';
  * layer over what the host passes `texraPlugins`.
  */
 import { ProbeEnvironmentTool } from './setup/ProbeEnvironmentTool';
-import { SETUP_PROMPT } from './setup/setupPrompt';
 import { UnsetApiKeyTool } from './setup/UnsetApiKeyTool';
 import { InvokeCommandTool } from './setup/InvokeCommandTool';
 import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
@@ -87,7 +83,6 @@ import {
   type EditorIntegrationShape,
 } from '@texra/hosts/editorIntegration';
 import { wolfram } from './wolframPlugin';
-import { type WriteFilter } from '@texra-ai/worldline/builtins';
 import { Settings } from '@texra-ai/worldline/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 
@@ -126,16 +121,6 @@ export type TexraPlugin = Plugin & {
   readonly icons?: Readonly<Record<string, string>>;
 };
 
-/** TeXRA's filter on `write_file`: a `.tex` file's content goes through the
- *  replacement rules of the call's workspace. */
-const texWriteFilter: WriteFilter = (path, content, config) => {
-  if (!hasExtension(path, '.tex')) return Effect.succeed(content);
-  const replaced = replacementEngine.applyToTexWrite(content, config);
-  return logReplacementDiagnostics(replaced.diagnostics).pipe(
-    Effect.as(replaced.text),
-  );
-};
-
 /** The host capabilities (`ITool.hostCapability`) a plugin serves to a
  *  session's storage root, read each time a step asks. */
 const serves = (capabilities: (storage: string) => Iterable<string>) =>
@@ -165,8 +150,6 @@ const latexDiagnostics = (editors: EditorRegistry): TexraPlugin => ({
   },
 });
 
-const FIND_TEX_SOURCES = `Find the project's TeX sources with relative paths (e.g., \`find . -name "*.tex"\`).`;
-
 const MATH_IN_REPLIES = `For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.`;
 
 /**
@@ -174,9 +157,8 @@ const MATH_IN_REPLIES = `For math in responses, use $...$ or \\(...\\) for inlin
  * annotations and the PDF viewer (each offered where the host serves it),
  * and the user-question dialog. Its
  * prompt section, at every step that offers a tool, says how replies write
- * math and names the configured default bibliography; how to find the TeX
- * sources and read the bibliography is said only to a step offered a tool
- * that does it.
+ * math and names the configured default bibliography; how to read the
+ * bibliography is said only to a step offered a tool that does it.
  */
 const core = (
   editors: EditorRegistry,
@@ -194,7 +176,6 @@ const core = (
         names.some((name) => offered.includes(name));
       const bibPath = Settings.getConfig(config, BIB_DEFAULT_PATH_SETTING);
       return [
-        ...(offers('bash') ? [FIND_TEX_SOURCES] : []),
         MATH_IN_REPLIES,
         ...(offers('open_pdf')
           ? [
@@ -228,9 +209,9 @@ const core = (
   }),
 });
 
-/** The onboarding agent's narrow set, one concern per tool, over the host's
- *  setup capabilities: a tool that needs a member the host left undefined
- *  is not offered. The members are read when asked, not here. */
+/** The setup functions every script has, one concern each, over the host's
+ *  setup capabilities: a function that needs a member the host left
+ *  undefined is not offered. The members are read when asked, not here. */
 const setup = (
   platform: SetupPlatformShape,
   host: SetupHost['Service'],
@@ -238,8 +219,6 @@ const setup = (
 ) =>
   definePlugin<SetupPlatform | SetupHost>({
     id: 'setup',
-    prompt: ({ offered }) =>
-      offered.includes('probe_environment') ? SETUP_PROMPT : '',
     processLayer: {
       layer: Layer.mergeAll(
         Layer.succeed(SetupPlatform)(platform),
@@ -299,7 +278,7 @@ export const texraPlugins = (host: {
   const editors = host.editors ?? editorRegistry(() => ({}));
   const plugins: readonly TexraPlugin[] = [
     {
-      ...fileOps({ writeFilter: texWriteFilter }),
+      ...fileOps,
       icons: {
         bash: 'terminal',
         read_file: 'file',

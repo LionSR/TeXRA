@@ -23,6 +23,7 @@ import {
   joinFacts,
   stripControlCharacters,
 } from '@utils/text/stringUtils';
+import { appendHead } from '@utils/text/appendTail';
 
 const RESULT_RESPONSE_PREVIEW_LINES = 12;
 const RESULT_RESPONSE_PREVIEW_CHARS = 1400;
@@ -37,7 +38,7 @@ function truncatedResultResponsePreview(response: string): string {
   let preview = lines.slice(0, RESULT_RESPONSE_PREVIEW_LINES).join('\n');
   const charLimited = preview.length > RESULT_RESPONSE_PREVIEW_CHARS;
   if (charLimited) {
-    preview = preview.slice(0, RESULT_RESPONSE_PREVIEW_CHARS).trimEnd();
+    preview = appendHead('', preview, RESULT_RESPONSE_PREVIEW_CHARS).trimEnd();
   }
 
   if (!lineLimited && !charLimited) return trimmed;

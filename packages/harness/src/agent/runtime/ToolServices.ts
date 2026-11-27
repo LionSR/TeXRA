@@ -1,4 +1,4 @@
-import { Context, Effect, Schema, type Scope } from 'effect';
+import { Context, Effect, type Scope } from 'effect';
 import { ToolContext } from '@tools/core/ToolTypes';
 import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';

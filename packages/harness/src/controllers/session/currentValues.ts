@@ -9,7 +9,6 @@
  */
 import {
   Clock,
-  Duration,
   Effect,
   Result,
   Schedule,
@@ -58,12 +57,10 @@ const VALUE_KIND = JSON.stringify([
 /** A failed change read's backoff: 250 ms doubling, at most 30 s, eight
  *  times, so it ends after about a minute. */
 const READ_RETRIES = 8;
-const READ_RETRY = Schedule.exponential('250 millis').pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, Duration.seconds(30))),
-  ),
-  Schedule.upTo({ times: READ_RETRIES }),
-);
+const READ_RETRY = Schedule.min([
+  Schedule.exponential('250 millis'),
+  Schedule.spaced('30 seconds'),
+]).pipe(Schedule.upTo({ times: READ_RETRIES }));
 
 /**
  * A read that tells whether something changed (this module's feed, and the

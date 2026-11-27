@@ -88,17 +88,6 @@ interface ConfigStore {
 }
 ```
 
-## createSymlink
-
-Link `destination` to `sourceAbsolute`, parent directories included. An
-existing link there is replaced; any other entry fails `AlreadyExists` and
-stays. A host that cannot make links (`EPERM`, `EACCES`, `EINVAL`,
-`ENOTSUP`) gets a copy of the source instead.
-
-```ts
-const createSymlink: (sourceAbsolute: string, destination: string) => Effect<void, PlatformError, FileSystem>
-```
-
 ## currentBranch
 
 The checked-out branch, or null when HEAD is detached or unreadable.
@@ -505,19 +494,6 @@ the process could not run; a non-zero exit is the caller's to word.
 const machineGit: (args: readonly string[], options?: { readonly cwd?: string | undefined; readonly env?: Readonly<Record<string, string>> | undefined; readonly input?: string | undefined; } | undefined) => Effect<{ stdout: string; stderr: string; code: ExitCode; }, PlatformError, ChildProcessSpawner>
 ```
 
-## MachineGitResult
-
-How a {@link machineGit} command ended.
-
-```ts
-interface MachineGitResult {
-  readonly stdout: string;
-  /** Trimmed. */
-  readonly stderr: string;
-  readonly code: number;
-}
-```
-
 ## meansAbsent
 
 Whether a failure means nothing is at the path: it is not there
@@ -799,14 +775,6 @@ function setLogSink(
   next: LogSink | null,
   options: { readonly trusted?: boolean } = {},
 ): void
-```
-
-## toPosixPath
-
-Convert a path to POSIX style (forward slashes, collapsed separators, resolved `.` and `..`).
-
-```ts
-function toPosixPath(relativePath: string): string
 ```
 
 ## whichOnExtendedPath

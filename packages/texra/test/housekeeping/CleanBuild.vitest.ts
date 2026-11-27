@@ -4,7 +4,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { collectFilesFromPatterns } from '@housekeeping/artifactFiles';
+import { auxFilesOf } from '@housekeeping/artifactFiles';
 import { findBuildDirectories } from '@housekeeping/buildDirectories';
 import { nodePlatformLayer, rootedFsLayer } from '@test/support/fsTestUtils';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
@@ -42,7 +42,7 @@ describe('findBuildDirectories', () => {
   );
 });
 
-describe('collectFilesFromPatterns', () => {
+describe('auxFilesOf', () => {
   // A folder whose name only contains "build" is not the build folder: its
   // own `build/` holds the artifacts.
   it.live('searches the build directory of a folder named like one', () =>
@@ -58,14 +58,13 @@ describe('collectFilesFromPatterns', () => {
           );
         });
 
-        const found = yield* collectFilesFromPatterns(
-          workspace,
-          'rebuild',
-          ['paper'],
-          ['.aux'],
+        const found = yield* auxFilesOf(
+          path.join(workspace, 'rebuild', 'paper.tex'),
         ).pipe(Effect.provide(nodePlatformLayer));
 
-        expect([...found]).toEqual(['rebuild/build/paper.aux']);
+        expect([...found]).toEqual([
+          path.join(workspace, 'rebuild', 'build', 'paper.aux'),
+        ]);
       }),
     ),
   );

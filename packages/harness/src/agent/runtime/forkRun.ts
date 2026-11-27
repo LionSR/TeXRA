@@ -160,10 +160,7 @@ const viewRows = (
       aggregateId: runId,
       payload: {
         cause: 'fork',
-        trigger: null,
-        range: { from: 0, to: 0 },
         messages: copied.messages,
-        usage: null,
         input,
       },
       ...(copied.blobs.length > 0 && { blobs: copied.blobs }),

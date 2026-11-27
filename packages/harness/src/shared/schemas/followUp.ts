@@ -208,7 +208,7 @@ export type ResumeRefusal = typeof ResumeRefusalSchema.Type;
 
 /**
  * The one wording of a refused resume or message, shared by every host and
- * tool output: a resume's refusal ({@link ResumeRefusal}), or `readFailed`,
+ * tool output: a resume's refusal (`ResumeRefusal`), or `readFailed`,
  * a message whose run's rows could not be read just now (a failing store),
  * which says nothing about the run itself.
  */

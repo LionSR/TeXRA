@@ -439,7 +439,7 @@ function limits({ said, results, call }: GoldenTurn) {
  *  that program by name. */
 function ownProgram(t: GoldenTurn) {
   const { system, call } = t;
-  const folder = /^\s*(.+): Project memory: .*\(writable\)$/m.exec(system)?.[1];
+  const folder = /^\s*(.+): Project memory: /m.exec(system)?.[1];
   return Effect.succeed(
     stepped(
       t,

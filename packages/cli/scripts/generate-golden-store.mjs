@@ -222,6 +222,17 @@ function scenario(root) {
     path.join(project, 'paper.tex'),
     '\\section{Input}\nThe golden annotate program reviews this file.\n',
   );
+  // A `wolframscript` first on PATH that answers the Wolfram plugin's probe,
+  // so the plugin's prompt section stands from the first step on every
+  // machine: without one, the probe's "not found" lands between two steps of
+  // a run, at a point that depends on timing.
+  const bin = path.join(root, 'bin');
+  mkdirSync(bin);
+  writeFileSync(
+    path.join(bin, 'wolframscript'),
+    '#!/bin/sh\necho "WolframScript 1.0.0"\n',
+    { mode: 0o755 },
+  );
   // A plugin whose \`PostToolUse\` hooks see each \`bash\` call and hold each
   // \`plan\` call until \`plan.release\` appears beside the project, the
   // hooks' working directory.
@@ -278,6 +289,7 @@ function scenario(root) {
     OPENAI_API_KEY: FAKE_KEY,
     // The helper model's provider: a run's session label (`run.description`).
     DEEPSEEK_API_KEY: FAKE_KEY,
+    PATH: [bin, process.env.PATH].join(path.delimiter),
     ...testLaunchEnv(home),
     // The system prompt names the shell (normalized away, but named on
     // every machine) and dates in this zone.
@@ -536,7 +548,7 @@ async function generate(root) {
       '--context',
       'notes.tex',
       '--approval-policy',
-      'never',
+      'ask',
       '--output-format',
       'json',
       '--print',
@@ -552,7 +564,7 @@ async function generate(root) {
     '--input',
     'paper.tex',
     '--approval-policy',
-    'never',
+    'ask',
     '--output-format',
     'json',
     '--print',
@@ -757,7 +769,7 @@ async function generate(root) {
     '--instruction',
     'Before the fork.',
     '--approval-policy',
-    'never',
+    'ask',
     '--output-format',
     'json',
     '--print',
@@ -874,7 +886,7 @@ async function generate(root) {
     '--instruction',
     'A run to delete.',
     '--approval-policy',
-    'never',
+    'ask',
     '--output-format',
     'json',
     '--print',

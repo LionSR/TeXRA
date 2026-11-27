@@ -28,23 +28,15 @@ import type {
 import type { DatabaseAggregateClosed } from '@shared/session/database';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type { CellError } from '@shared/session/runHistory';
-import type { StepRoot } from '@utils/files/externalRoots';
 
 /**
  * The guard the run loop applies before a tool's body runs, declared on the
- * tool instead of called inside it: the paths the call writes and the command
- * it must get approved. The run loop is the one place either is checked,
- * so no tool body re-checks its own roots or asks for the
+ * tool instead of called inside it: the command it must get approved. The
+ * run loop is the one place it is checked, so no tool body asks for the
  * command's approval; a tool whose body asks its own question declares
  * `requiresApproval: 'inBody'` (below).
  */
 export interface ToolGuard<T> {
-  /**
-   * The paths this call writes, read from its arguments. Each is resolved
-   * against the call's workspace and working directory — which refuses a path
-   * outside either — and refused when it lands in a read-only external root.
-   */
-  readonly writes?: (input: T) => readonly string[];
   /**
    * The command this call runs. Present: the loop puts it through the
    * session's command approval before the body runs.
@@ -208,16 +200,14 @@ export interface CallRequests {
 
 /**
  * Where a call works: the session's roots (its workspace folder, the
- * setting slots and its storage), the run's working directory, and the
- * read-only roots the call's step accepts (the skills it lists or its user
- * activated). A tool's paths resolve against it.
+ * setting slots and its storage) and the run's working directory. A tool's
+ * paths resolve against it.
  * `workingDirectory` is already absolute or absent: the run decides it once
  * where it is launched (`buildAgentLaunchContext`).
  */
 export interface ToolEnv {
   readonly roots: WorkspaceRoots;
   readonly workingDirectory?: string;
-  readonly stepRoots?: readonly StepRoot[];
   /** The run the call works for. */
   readonly run: ToolRun;
 }

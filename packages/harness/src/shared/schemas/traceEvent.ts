@@ -10,7 +10,6 @@ import {
   ToolCardSchema,
 } from './toolCard';
 import { FinishedToolResultSchema } from './toolResult';
-import { RunOutcomeSchema } from './run';
 import { TokenUsageStatsSchema } from './usage';
 
 function trace<T extends string, const F extends Schema.Struct.Fields>(

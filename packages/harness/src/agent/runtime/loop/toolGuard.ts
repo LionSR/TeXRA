@@ -2,8 +2,8 @@
  * Whether one call proceeds, decided once, in an order that makes a
  * permission cover the operation that actually runs: what the call's
  * `PreToolUse` hooks said and how they rewrote it (recorded by `StepHooks.preToolUse`,
- * so a resume reads them back), the final input decoded again, the paths it
- * writes checked, then the policy's one reading (`sessionPermission`, as
+ * so a resume reads them back), the final input decoded again, then the
+ * policy's one reading (`sessionPermission`, as
  * `Approvals.permission`) over that input, whose ask opens the call's
  * request through the run's cell. The hooks' answer is on `RunCall.hook`
  * for the whole call: a tool whose body opens its own request (an edit's
@@ -23,7 +23,6 @@ import {
 import {
   type DecisionOf,
   type HookOutcomePayload,
-  asToolError,
   type RefusalDecision,
   type RequestPayload,
   type RunId,
@@ -42,7 +41,6 @@ import type {
   ApprovalOperation,
   HookAnswer,
 } from '@shared/session/sessionApprovals';
-import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
 
@@ -195,7 +193,7 @@ const rejection = Effect.fn('toolUse.guard')(function* (
     guard?.command !== undefined ||
     tool.requiresApproval === true ||
     (hook === 'ask' && tool.requiresApproval === undefined);
-  if (!guard?.writes && !asks && !rewritten) return undefined;
+  if (!asks && !rewritten) return undefined;
   // The chain reads the call's own validated arguments, from the same schema
   // `call` validates with; a tool whose parameters are a pass-through JSON
   // Schema (an MCP server's) takes a JSON object, as its `call` checks. A
@@ -226,22 +224,6 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   // cast: the guard's declared input, per the note above.
   const decoded = (parsed ? parsed.success : input) as never;
   const call = yield* ToolContext;
-
-  // Resolution and the read-only-root check both reject with a `ToolError`
-  // the dispatcher reports to the model, so they stay a failure rather than
-  // becoming a defect.
-  const targets = yield* Effect.try({
-    try: () => guard?.writes?.(decoded) ?? [],
-    catch: asToolError,
-  });
-  yield* Effect.forEach(
-    targets,
-    (target) =>
-      resolveToolPath(call.env, target).pipe(
-        Effect.flatMap((path) => assertWritable(path, path.display)),
-      ),
-    { discard: true },
-  );
 
   if (!asks) return undefined;
   // The call as the prompt shows it: the guard's spelling, else the tool's

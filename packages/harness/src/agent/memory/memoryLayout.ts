@@ -19,12 +19,11 @@ import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { canonicalizePath, type StepRoot } from '@utils/files/externalRoots';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 
 /** The file of a memory folder a step shows its model. */
-export const MEMORY_INDEX = 'MEMORY.md';
+const MEMORY_INDEX = 'MEMORY.md';
 
 /**
  * How much of one index a step shows. The text is sent with every request,
@@ -60,16 +59,6 @@ export const memoryFolders = (
     holds: 'what is true of this project',
   },
 ];
-
-/** The roots a step accepts for `folders`, which its calls read and write. */
-export const memoryRoots = (
-  folders: readonly MemoryFolder[],
-): readonly StepRoot[] =>
-  folders.map(({ path: folder, label }) => ({
-    absolutePath: canonicalizePath(folder),
-    label,
-    writable: true,
-  }));
 
 /** `text` cut to the bound at a line, saying so where it was cut. */
 const bounded = (text: string): string => {

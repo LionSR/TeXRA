@@ -11,7 +11,11 @@ import {
   getBasename,
   ApprovalPolicySchema,
   APPROVAL_POLICY_DEFAULT,
+  DeclinableUsageRouteSchema,
+  NonNegativeIntSchema,
+  PlanQuotaFailureSchema,
 } from '@texra-ai/worldline/schemas';
+import { SubscriptionUsageWindowSchema } from '@texra/shared/model/subscriptionUsage';
 import { ModelOptionDataSchema } from '@texra/shared/pickerOptions';
 
 /** Open workspace folder offered as a run working directory. */
@@ -69,9 +73,32 @@ const OnboardingFunnelStateSchema = Schema.Literals([
 ]);
 export type OnboardingFunnelState = typeof OnboardingFunnelStateSchema.Type;
 
+/**
+ * What the process knows of one subscription plan's quota: its windows as
+ * last learned and when, or why none is known. `unobserved` is a plan whose
+ * replies state its quota and none has arrived in this process yet.
+ */
+const PlanUsageSchema = Schema.Struct({
+  plan: DeclinableUsageRouteSchema,
+  /** The plan's tier as its provider names it, when it says: plans of one
+   *  route differ in their windows and limits, so the name is the
+   *  provider's and no window is assumed. */
+  planName: Schema.optional(Schema.NonEmptyString),
+  windows: Schema.Array(SubscriptionUsageWindowSchema),
+  /** When the windows were learned, in epoch milliseconds. */
+  at: Schema.optional(NonNegativeIntSchema),
+  unknown: Schema.optional(
+    Schema.Literals(['unobserved', ...PlanQuotaFailureSchema.literals]),
+  ),
+});
+export type PlanUsage = typeof PlanUsageSchema.Type;
+
 export const HostSnapshotSchema = Schema.Struct({
   project: ProjectDisplaySchema,
   modelOptions: Schema.Array(ModelOptionDataSchema),
+  /** The quota of each subscription plan a listed model bills, for the
+   *  status bar's meters; a plan nothing states the quota of is left out. */
+  planUsage: Schema.Array(PlanUsageSchema),
   /** How a tool call is painted, from what the process's plugins declare
    *  (`TexraPlugin`): its icon by normalized tool name. */
   tools: Schema.Struct({
@@ -117,6 +144,7 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
   return {
     project,
     modelOptions: [],
+    planUsage: [],
     tools: { icons: {} },
     workspaceRoots: [],
     approvalPolicy: APPROVAL_POLICY_DEFAULT,

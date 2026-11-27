@@ -86,7 +86,7 @@ export interface JsonRpcConnection {
   readonly close: (reason: string) => Effect.Effect<void>;
 }
 
-/** What {@link makeJsonRpcConnection} connects: the peer's byte streams
+/** What `makeJsonRpcConnection` connects: the peer's byte streams
  *  and the owner's handlers. */
 export interface JsonRpcConnectionOptions {
   /** The peer's output: bytes we decode. */
@@ -99,7 +99,7 @@ export interface JsonRpcConnectionOptions {
   ) => Effect.Effect<void>;
   /**
    * The result of a request the peer sends us, or `undefined` to refuse it
-   * with `MethodNotFound`.
+   * with JSON-RPC's method-not-found error (`-32601`).
    */
   readonly onRequest?: (
     method: string,

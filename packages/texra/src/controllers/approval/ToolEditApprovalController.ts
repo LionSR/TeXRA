@@ -296,9 +296,7 @@ export class ToolEditApprovalController {
                 })
               : Effect.uninterruptible(entry.preview.openProposed());
           case 'showLatexdiff':
-            // ONLYCHANGEDPAGE keeps a tool-edit diff focused on the changes.
             return runLatexdiff(entry, {
-              subtype: 'ONLYCHANGEDPAGE',
               openBuildDisplay: this.buildDisplayFor(entry),
             });
         }

@@ -627,7 +627,7 @@ function validateRunCommand() {
       '--cwd',
       cwd,
       '--approval-policy',
-      'never',
+      'ask',
       '--print',
     ];
 
@@ -720,7 +720,7 @@ function validateToolUseAgentRunCommand() {
         '--cwd',
         cwd,
         '--approval-policy',
-        'never',
+        'ask',
         '--output-format',
         'json',
         '--print',
@@ -774,7 +774,7 @@ function validateHistoryQueryRunCommand() {
         '--cwd',
         cwd,
         '--approval-policy',
-        'never',
+        'ask',
         '--output-format',
         'ndjson',
         '--print',
@@ -932,7 +932,7 @@ function echoProject(cwd, config = null) {
           '--cwd',
           work,
           '--approval-policy',
-          'never',
+          'ask',
           '--output-format',
           'json',
           '--print',
@@ -1170,7 +1170,7 @@ if (!input.stop_hook_active)
         '--cwd',
         project.work,
         '--approval-policy',
-        'never',
+        'ask',
         '--output-format',
         'json',
         '--print',
@@ -1294,7 +1294,7 @@ export default async () => 'never runs';
     ]);
     assertSuccess(chat, 'texra run of an agent offered program');
     const started = cli([
-      ...runArgs('review-kit:first-line', 'never'),
+      ...runArgs('review-kit:first-line', 'ask'),
       '--input',
       'notes.txt',
     ]);
@@ -1324,7 +1324,7 @@ export default async () => 'never runs';
           text.includes('`review-kit:first-line`: Quote the first line'),
       ).length;
     const broken = cli([
-      ...runArgs('review-kit:broken', 'never'),
+      ...runArgs('review-kit:broken', 'ask'),
       '--input',
       'notes.txt',
     ]);

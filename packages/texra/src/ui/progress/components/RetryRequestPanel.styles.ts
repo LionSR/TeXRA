@@ -21,39 +21,9 @@ export const retryRequestPanelStyles: CSSResult = css`
     text-wrap: pretty;
   }
 
-  .retry-request__error-details {
-    --spacing: 0;
-    margin: 0;
-    font-size: var(--font-size-xs);
-  }
-
-  .retry-request__error-details::part(header) {
-    min-height: var(--height-control-compact);
-    padding: 0;
-    box-sizing: border-box;
-    color: var(--color-text-secondary);
-  }
-
-  .retry-request__error-details::part(content) {
-    padding: 0;
-  }
-
-  .retry-request__error-summary {
-    cursor: pointer;
-    color: var(--color-text-secondary);
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-3xs);
-    user-select: none;
-  }
-
-  .retry-request__error-summary:hover {
-    color: var(--wa-color-text-normal);
-  }
-
   .retry-request__error-body {
     margin: 0;
-    padding: var(--wa-space-2xs) 0;
+    padding: 0 var(--wa-space-2xs) var(--wa-space-2xs);
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-xs);
     white-space: pre-wrap;

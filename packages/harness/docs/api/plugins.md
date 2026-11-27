@@ -20,7 +20,6 @@ plugin is written with. The built-in plugins are
   [`optionalInput`](#optionalinput),
   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
   ([`requestToolEditApproval`](#requesttooleditapproval),
-  [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),
   [`approvedWriteConflict`](#approvedwriteconflict)).
 - **Native plugins**: an installed plugin folder's `harness.mjs` is a
   module whose default export ([`NativeEntryModule`](#nativeentrymodule))
@@ -356,16 +355,6 @@ interface BoundModel extends Binding {
 }
 ```
 
-## buildApprovalRejectedResult
-
-```ts
-function buildApprovalRejectedResult(
-  path: string,
-  sourceTool: string,
-  refusal: RefusalDecision,
-): ToolResult
-```
-
 ## buildDiffHunks
 
 Unified-diff hunks between two texts — the one diff engine behind every
@@ -379,33 +368,6 @@ names the cause, and the caller that owns the edit reports it through
 
 ```ts
 function buildDiffHunks(oldText: string, newText: string): DiffHunks
-```
-
-## buildFileAttachment
-
-Build a tool attachment by reading a workspace file and packaging metadata.
-
-```ts
-const buildFileAttachment: (args_0: BuildFileAttachmentOptions) => Effect<{ readonly [x: string]: unknown; readonly mimeType: string; readonly path: string; readonly description?: string | undefined; readonly digest?: string | undefined; readonly base64Data?: string | undefined; readonly bytes?: Uint8Array<ArrayBuffer> | undefined; }, ToolError, FileSystem | ToolContext>
-```
-
-## BuildFileAttachmentOptions
-
-```ts
-interface BuildFileAttachmentOptions {
-  /** Path to a workspace file (relative or absolute) */
-  filePath: string;
-  /** Optional description surfaced to the model */
-  description?: string;
-  /** Override detected MIME type */
-  mimeType?: string;
-  /**
-   * Pre-resolved path. When provided, skips the internal resolveToolPath()
-   * call — use this to avoid double-resolution when the caller already
-   * resolved the path (e.g. ReadTool).
-   */
-  resolved?: ToolPathResolution;
-}
 ```
 
 ## CallRequests
@@ -797,12 +759,6 @@ interface DraftBlob {
 }
 ```
 
-## EditRecord
-
-```ts
-type EditRecord = typeof EditRecordSchema.Type;
-```
-
 ## emitAppSignal
 
 Publish `signal` from a program: {@link AppSignals}' `emit`.
@@ -869,18 +825,6 @@ The plugin fact kinds a store reads, by `plugin/kind`.
 
 ```ts
 type FactKinds = Readonly<Record<FactName, FactKind>>;
-```
-
-## formatToolOutput
-
-Format tool output with a header and content.
-
-```ts
-function formatToolOutput(
-  header: string,
-  content: string | string[] | null,
-  noMatchesText: string = '(no entries)',
-): string
 ```
 
 ## getGitignoreMatcher
@@ -1004,18 +948,6 @@ consumer.
 function isTransientHttpStatus(status: number): boolean
 ```
 
-## isTransportReason
-
-A request that got no (complete) answer: nothing responded, or the
-connection dropped mid-body (undici's `TypeError`, "terminated"; a
-malformed body is a `SyntaxError`).
-
-```ts
-function isTransportReason(
-  reason: HttpClientError.HttpClientError['reason'],
-): boolean
-```
-
 ## ITool
 
 Contract for tool implementations.
@@ -1112,26 +1044,6 @@ interface ITool<E = Error, R = never> {
 }
 ```
 
-## jitteredExponentialBackoffMs
-
-Compute a jittered exponential backoff delay: `baseMs * 2^(failures-1)`,
-capped at `maxMs`, then randomized by +/-20% and capped again
-so jitter can never push the result past `maxMs`. Shared by every retry/
-backoff loop in the codebase so the jitter formula only exists once.
-
-`unitRandom` is the caller's uniform draw in [0, 1) — `yield* Random.next`
-in the Effect callers — so a test fixes the jitter through Effect's
-`Random` reference instead of stubbing the global `Math.random`.
-
-```ts
-function jitteredExponentialBackoffMs(
-  baseMs: number,
-  failures: number,
-  maxMs: number,
-  unitRandom: number,
-): number
-```
-
 ## JsonRpcConnection
 
 ```ts
@@ -1160,7 +1072,7 @@ class JsonRpcConnectionDisposed extends Schema.TaggedError<JsonRpcConnectionDisp
 
 ## JsonRpcConnectionOptions
 
-What {@link makeJsonRpcConnection} connects: the peer's byte streams
+What `makeJsonRpcConnection` connects: the peer's byte streams
 and the owner's handlers.
 
 ```ts
@@ -1175,7 +1087,7 @@ interface JsonRpcConnectionOptions {
   ) => Effect.Effect<void>;
   /**
    * The result of a request the peer sends us, or `undefined` to refuse it
-   * with `MethodNotFound`.
+   * with JSON-RPC's method-not-found error (`-32601`).
    */
   readonly onRequest?: (
     method: string,
@@ -1269,20 +1181,6 @@ type LogOptions =
             readonly data: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded'];
           };
     }[MessageType];
-```
-
-## makeJsonRpcConnection
-
-```ts
-const makeJsonRpcConnection: (options: JsonRpcConnectionOptions) => Effect<{ connection: JsonRpcConnection; inputEnded: Effect<void, never, never>; }, never, Scope>
-```
-
-## MEMORY_INDEX
-
-The file of a memory folder a step shows its model.
-
-```ts
-const MEMORY_INDEX: "MEMORY.md"
 ```
 
 ## MemoryFolder
@@ -1427,32 +1325,14 @@ function optionalInput<S extends Schema.Top>(
 ): Schema.optional<Schema.NullOr<S>>
 ```
 
-## parseWorkingDirectory
-
-Trim and validate a working_directory value. Must be absolute if provided.
-
-```ts
-function parseWorkingDirectory(
-  raw: string | null | undefined,
-): Result.Result<string | undefined, ToolError>
-```
-
 ## pathToLocationIn
 
-Convert a string path to a FileLocation against the workspace root its
-caller holds as data: `undefined` with no folder open, which resolves every
-path as external.
-
-NOT run-storage aware — it can only create workspace or external locations.
-For run-storage awareness, use `sourceLocationUnder`.
-
-Path normalization is handled internally - you can pass paths with either
-forward slashes or backslashes. It's safe to pass already-normalized paths
-(path.normalize() is idempotent).
-
-- `@param` workspaceRoot - The session's workspace root
-- `@param` target - Absolute or workspace-relative path
-- `@returns` FileLocation (workspace or external, never runStorage)
+A path's `FileLocation` against the workspace root its caller holds:
+`workspace` when it lies inside `workspaceRoot` (an absolute path by its
+symlink-aware relative form, a relative one read against the root with
+either separator), `external` otherwise, never `runStorage`. With no folder
+open (`workspaceRoot` undefined) every path is external, a relative one
+resolved against the process's working directory, and an empty one throws.
 
 ```ts
 function pathToLocationIn(
@@ -1811,13 +1691,11 @@ type RefusalDecision = Extract<
 
 ## renderPrompt
 
-Render a prompt string using nunjucks templating. A template is code: its
-expressions run in this process, so render only text the agent's author
-wrote, never text taken from a project's files or an end user.
-
-- `@param` prompt The prompt template string
-- `@param` variables Variables to use in template rendering
-- `@returns` The rendered prompt; a template error fails with its message
+`prompt` rendered as a nunjucks template over `variables`; a template
+error, or `nunjucks` failing to load, fails with its message. A template
+is code: its expressions run in this process, so render only text the
+agent's author wrote, never text taken from a project's files or an end
+user.
 
 ```ts
 const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>
@@ -1851,19 +1729,17 @@ const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApp
 ## resolveToolPath
 
 Resolve a tool path, relative or absolute, against the call's working
-directory when the run has one and its workspace folder otherwise.
-
-A path that escapes that root is accepted only inside a root the call's
-step accepts (`stepRoots`) or with path protection switched off; otherwise
-it fails with a `ToolError` the tool runner reports to the model. With no
-folder open and no working directory, only an absolute path can resolve.
+directory when the run has one and its workspace folder otherwise. A path
+outside that root resolves to itself: a call reaches any file the process
+can. With no folder open and no working directory, only an absolute path
+can resolve.
 
 `fsPath` is workspace-relative for a workspace path, so the confined
 `WorkspaceFs` view answers it, and absolute for a working-directory or
 outside path.
 
 ```ts
-const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, ToolError | StateReadFailed, never>
+const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, ToolError, never>
 ```
 
 ## retryTransientFetch
@@ -2165,19 +2041,6 @@ interface SettingsStores {
 }
 ```
 
-## sourceLocationUnder
-
-Where a path a run reads from lives, under the roots its caller holds: a
-file in run storage keeps its run's provenance, anything else is its
-workspace or external location.
-
-```ts
-function sourceLocationUnder(
-  roots: { readonly storage: string; readonly workspace: string | undefined },
-  inputPath: string,
-): FileLocation
-```
-
 ## StateReadFailed
 
 An authoritative state read failed; absence is a successful read.
@@ -2260,20 +2123,6 @@ class StateWriteFailed extends Schema.TaggedError<StateWriteFailed>()(
     cause: Schema.Defect(),
   },
 )
-```
-
-## StepRoot
-
-A directory one step accepts for its own calls, canonical
-(`canonicalizePath`): a skill it lists or its user activated, read-only,
-or a memory folder, which its calls also write.
-
-```ts
-interface StepRoot {
-  readonly absolutePath: string;
-  readonly label: string;
-  readonly writable?: boolean;
-}
 ```
 
 ## StorageFs
@@ -2495,9 +2344,8 @@ interface ToolEditProposal {
 ## ToolEnv
 
 Where a call works: the session's roots (its workspace folder, the
-setting slots and its storage), the run's working directory, and the
-read-only roots the call's step accepts (the skills it lists or its user
-activated). A tool's paths resolve against it.
+setting slots and its storage) and the run's working directory. A tool's
+paths resolve against it.
 `workingDirectory` is already absolute or absent: the run decides it once
 where it is launched (`buildAgentLaunchContext`).
 
@@ -2505,7 +2353,6 @@ where it is launched (`buildAgentLaunchContext`).
 interface ToolEnv {
   readonly roots: WorkspaceRoots;
   readonly workingDirectory?: string;
-  readonly stepRoots?: readonly StepRoot[];
   /** The run the call works for. */
   readonly run: ToolRun;
 }
@@ -2526,29 +2373,16 @@ class ToolError extends Data.TaggedError('ToolError')<{
 }>
 ```
 
-## ToolFileAttachment
-
-```ts
-type ToolFileAttachment = typeof ToolFileAttachmentSchema.Type;
-```
-
 ## ToolGuard
 
 The guard the run loop applies before a tool's body runs, declared on the
-tool instead of called inside it: the paths the call writes and the command
-it must get approved. The run loop is the one place either is checked,
-so no tool body re-checks its own roots or asks for the
+tool instead of called inside it: the command it must get approved. The
+run loop is the one place it is checked, so no tool body asks for the
 command's approval; a tool whose body asks its own question declares
 `requiresApproval: 'inBody'` (below).
 
 ```ts
 interface ToolGuard<T> {
-  /**
-   * The paths this call writes, read from its arguments. Each is resolved
-   * against the call's workspace and working directory — which refuses a path
-   * outside either — and refused when it lands in a read-only external root.
-   */
-  readonly writes?: (input: T) => readonly string[];
   /**
    * The command this call runs. Present: the loop puts it through the
    * session's command approval before the body runs.
@@ -2579,28 +2413,35 @@ interface ToolGuard<T> {
 
 ## ToolPathCall
 
-The call fields a tool path resolves against: the session's roots (its
-workspace folder and the setting slots containment policy is read from),
-the run's working directory, and the read-only roots the call's step
-accepts (the skills it lists or its user activated; none outside a run).
-A tool's `ToolContext.env` satisfies it structurally.
-`workingDirectory` is already absolute or absent: the run decides it once
-where it is launched (`buildAgentLaunchContext`).
+The call fields a tool path resolves against: the session's workspace
+folder and the run's working directory. A tool's `ToolContext.env`
+satisfies it structurally. `workingDirectory` is already absolute or
+absent: the run decides it once where it is launched
+(`buildAgentLaunchContext`).
 
 ```ts
 interface ToolPathCall {
-  readonly roots: { readonly workspace: string | undefined } & SettingsStores;
+  readonly roots: { readonly workspace: string | undefined };
   readonly workingDirectory?: string;
-  readonly stepRoots?: readonly StepRoot[];
 }
 ```
 
 ## ToolPathResolution
 
-A resolved tool path plus the POSIX form a tool shows for it.
+A tool path resolved against the call's root: its root-relative and
+absolute spellings, the path filesystem calls take, and the POSIX form
+a tool shows for it.
 
 ```ts
-interface ToolPathResolution extends WorkspacePathResolution {
+interface ToolPathResolution {
+  readonly relative: string;
+  readonly absolute: string;
+  /**
+   * The path to pass to filesystem operations.
+   * Absolute when operating outside the workspace (e.g. a worktree),
+   * workspace-relative otherwise.
+   */
+  readonly fsPath: string;
   readonly display: string;
 }
 ```
@@ -2755,22 +2596,6 @@ interface ToolTable {
 }
 ```
 
-## unifiedDiffText
-
-Unified-diff body between two texts (`text` is undefined when they are
-identical), with the pass's {@link DiffHunks.timeout} for the caller to
-report.
-
-Carries no `---`/`+++` file header: every consumer already names the file in
-its own surrounding prose.
-
-```ts
-function unifiedDiffText(
-  oldText: string,
-  newText: string,
-): { readonly text: string | undefined; readonly timeout: string | undefined }
-```
-
 ## ValueFamily
 
 One family of current values: its stored name and the schema its value
@@ -2848,33 +2673,4 @@ class WorkspaceFs extends Context.Service<
   WorkspaceFs,
   RootedFileSystem
 >()('@texra-ai/worldline/platform/WorkspaceFs')
-```
-
-## WorkspacePathResolution
-
-A tool path resolved against the call's roots: its root-relative and
-absolute spellings, the path filesystem calls take, and the external root
-it falls in, if any.
-
-```ts
-interface WorkspacePathResolution {
-  readonly relative: string;
-  readonly absolute: string;
-  /**
-   * The path to pass to filesystem operations.
-   * Absolute when operating outside the workspace (e.g. a worktree),
-   * workspace-relative otherwise.
-   */
-  readonly fsPath: string;
-  /**
-   * When the resolved path falls inside a step root, this
-   * describes that root (label, writable flag). Undefined for workspace paths
-   * and for any external path outside the allowlist.
-   */
-  readonly external?: {
-    readonly root: string;
-    readonly writable: boolean;
-    readonly label: string;
-  };
-}
 ```

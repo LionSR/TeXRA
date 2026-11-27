@@ -218,7 +218,7 @@ const machineGitEnv: Effect.Effect<NodeJS.ProcessEnv> = Effect.suspend(() => {
 });
 
 /** How a {@link machineGit} command ended. */
-export interface MachineGitResult {
+interface MachineGitResult {
   readonly stdout: string;
   /** Trimmed. */
   readonly stderr: string;

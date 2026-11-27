@@ -14,6 +14,7 @@
  */
 import { Array as Arr, Predicate } from 'effect';
 import {
+  AGENT_TOOL_NAME,
   PROGRAM_TOOL_NAME,
   TOOL_CALL_STATUS,
   type RequestPayload,
@@ -29,7 +30,11 @@ import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import { toolCallTexts } from '@shared/toolUse';
 import { formatScriptCallFiles } from '@shared/transcript/scriptCall';
 import { getBasename } from '@utils/core/pathBasics';
-import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
+import {
+  firstLine,
+  formatCompactDuration,
+  formatCostUsd,
+} from '@utils/text/stringUtils';
 
 import { childAnswer } from './toolRowSections';
 import type { ToolRow as AppliedToolRow, TranscriptRow } from './transcriptRow';
@@ -42,7 +47,7 @@ const nameOf = (input: Readonly<Record<string, unknown>>): string | undefined =>
 /** The calls that run a child: `agent()`, `program()`, and `self()`, this
  *  agent again. */
 const CHILD_TOOLS: ReadonlySet<string> = new Set([
-  'agent',
+  AGENT_TOOL_NAME,
   PROGRAM_TOOL_NAME,
   'self',
 ]);
@@ -256,16 +261,6 @@ function callView(
 function sectionsOf(calls: readonly ScriptCallView[]): ScriptSectionView[] {
   return [...Map.groupBy(calls, (call) => call.section)].map(
     ([title, members]) => ({ title, calls: members }),
-  );
-}
-
-/** The first non-blank line of `text`, trimmed. */
-function firstLine(text: string): string {
-  return (
-    text
-      .split('\n')
-      .map((line) => line.trim())
-      .find((line) => line.length > 0) ?? ''
   );
 }
 

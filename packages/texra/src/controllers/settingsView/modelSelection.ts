@@ -13,7 +13,6 @@ import {
   getEnabledModels,
   getHelperModelName,
   readModelOptions,
-  type ModelVerdict,
   REASONING_LEVELS_KEY,
 } from '@texra-ai/worldline/host';
 import {
@@ -103,8 +102,6 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
   // models this host shows, via the same shared computation the CLI picker
   // uses (`readModelOptions`). Passing an explicit list keeps the picker's
   // view authoritative and avoids re-deriving availability at render time.
-  // Each option carries its decided route's config, which the reasoning
-  // controls read.
   const configs = new Map<string, ModelConfig>(
     enableableModels()
       // The Models tab groups rows by `MODEL_SOURCE_ORDER`, so a config whose
@@ -148,8 +145,7 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
 
     if (!item.deprecated && isFastFirstResponseModel(config.inputPrice))
       leading.add(name);
-    const reasoning = reasoningChoice(decided);
-    items.push(reasoning === undefined ? item : { ...item, reasoning });
+    items.push(item);
   }
 
   // Name order, except that a current fast-first-response model leads its
@@ -160,29 +156,3 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
       a.name.localeCompare(b.name),
   );
 });
-
-/**
- * A Models-tab row's reasoning controls, from what a run on the row's route
- * sends (`ModelVerdict.reasoning`, the bind's own decision): the levels the
- * route can carry, the level a run sends with none saved, and, with a level
- * saved, the level a run sends for it: the saved one, or the one the policy
- * substitutes where the route cannot carry it. The row offers no choice
- * where the route carries one level or none.
- */
-function reasoningChoice(
-  decided: Extract<ModelVerdict, { config: ModelConfig }>,
-): ModelSelectionItem['reasoning'] {
-  const { reasoning, savedEffort } = decided;
-  if (reasoning === undefined || reasoning.efforts.length <= 1)
-    return undefined;
-  const sent = 'refused' in reasoning.sent ? undefined : reasoning.sent.effort;
-  return {
-    levels: [...reasoning.efforts],
-    ...(!('refused' in reasoning.fallback) && {
-      default: reasoning.fallback.effort,
-    }),
-    ...(savedEffort !== undefined &&
-      sent !== undefined &&
-      reasoning.efforts.includes(sent) && { saved: sent }),
-  };
-}

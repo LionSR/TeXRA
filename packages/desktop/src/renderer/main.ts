@@ -57,7 +57,11 @@ import {
   desktopCommandPaletteShortcut,
 } from './desktopShortcutRegistry';
 import './desktopShell.css';
-import { shellSidebarTemplate, type RailProject } from './desktopShell';
+import {
+  shellSidebarTemplate,
+  shellStatusBarTemplate,
+  type RailProject,
+} from './desktopShell';
 import {
   initialDesktopShellState,
   openWorkbenchTab,
@@ -343,7 +347,8 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
             code.
           </li>
           <li>
-            Review every edit as a diff and approve commands before they run.
+            It works on its own: runs commands, edits files, and shows what it
+            changed.
           </li>
           <li>Bring your own model keys or subscriptions.</li>
         </ul>
@@ -558,6 +563,13 @@ function shellTemplate(): TemplateResult {
                   root,
                 }),
               onSelectProject: selectProject,
+              onToggleProject: (key) =>
+                setShell({
+                  ...shell,
+                  collapsed: shell.collapsed.includes(key)
+                    ? shell.collapsed.filter((other) => other !== key)
+                    : [...shell.collapsed, key],
+                }),
               onProjectAction: (key, action) => {
                 if (action !== 'rename')
                   return projectRail.runProjectAction(key, action);
@@ -577,6 +589,15 @@ function shellTemplate(): TemplateResult {
           <div class="shell-workspace-layout">${main}</div>
         </div>
       </wa-split-panel>
+      ${
+        hasWorkspace()
+          ? shellStatusBarTemplate({
+              active: shell.active,
+              planUsage:
+                projectSessions.get(shell.active)?.host$.get()?.planUsage ?? [],
+            })
+          : nothing
+      }
     </div>
   `;
 }

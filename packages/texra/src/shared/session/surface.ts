@@ -257,7 +257,6 @@ function entries<K extends Schema.Top, V extends Schema.Top>(key: K, value: V) {
  */
 const RequestDraftSchema = Schema.Struct({
   note: Schema.optionalKey(Schema.String),
-  model: Schema.optionalKey(Schema.String),
   answers: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({

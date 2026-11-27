@@ -486,7 +486,7 @@ export function createEditorPane(
           >${waIcon(WORKBENCH_KIND_META.editor.icon)}</span
         >
         <span class="desktop-editor-tree-label truncate">${node.name}</span>
-        ${dirty ? html`<span class="status-dot desktop-editor-dirty-dot"></span>` : nothing}
+        ${dirty ? html`<span class="status-dot desktop-editor-dirty-dot" role="img" aria-label="Unsaved changes"></span>` : nothing}
       </wa-tree-item>
     `;
   }

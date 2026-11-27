@@ -373,7 +373,7 @@ export default defineConfig({
           {
             args: 'after-used',
             argsIgnorePattern: '^_',
-            varsIgnorePattern: '^_|Schema$',
+            varsIgnorePattern: '^_',
             caughtErrors: 'none',
             ignoreRestSiblings: true,
           },

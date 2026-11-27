@@ -168,6 +168,16 @@ export function splitContentLines(text: string): string[] {
   return lines;
 }
 
+/** The first non-blank line of `text`, trimmed; `''` when it has none. */
+export function firstLine(text: string): string {
+  return (
+    text
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) ?? ''
+  );
+}
+
 /**
  * Count the number of lines in a string.
  * Handles both Unix (\n) and Windows (\r\n) line endings.

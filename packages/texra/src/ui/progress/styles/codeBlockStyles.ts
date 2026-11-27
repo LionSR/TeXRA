@@ -2,40 +2,37 @@
 import { css } from 'lit';
 
 // Local imports - shared styles
-import { overlineDeclarations } from '@ui/styles/commonViewStyles';
 
 /**
  * Code block styles for syntax highlighted code with language badge and copy button.
  * Used by buildCodeBlock() in htmlBuilders.
  */
 export const codeBlockStyles = css`
+  /* The code alone on a quiet surface: its row or card already says what
+     it is. Copy shows while the block is pointed at or focused. */
   .code-block {
     position: relative;
-    border: var(--border-thin) solid var(--wa-color-surface-border);
-    border-radius: var(--border-radius-medium);
+    border-radius: var(--field-radius);
     overflow: hidden;
     max-width: 100%;
     min-width: 0;
   }
 
-  .code-block-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--wa-space-3xs) var(--wa-space-2xs);
-    background-color: var(--wa-color-surface-lowered);
-    border-bottom: var(--border-thin) solid var(--color-border);
-    font-size: var(--font-size-xs);
+  .code-block-copy {
+    position: absolute;
+    inset-block-start: var(--wa-space-3xs);
+    inset-inline-end: var(--wa-space-3xs);
+    opacity: 0;
   }
 
-  .code-block-language {
-    ${overlineDeclarations}
+  .code-block:is(:hover, :focus-within) .code-block-copy {
+    opacity: var(--opacity-full);
   }
 
   .code-block pre {
     margin: 0;
     padding: var(--wa-space-2xs);
-    background-color: var(--wa-color-surface-default);
+    background-color: var(--wa-color-surface-lowered);
     border: 0;
     border-radius: 0;
     overflow-x: auto;

@@ -54,7 +54,7 @@ Formatting does not run on its own after agent execution. The selected formatter
 
 ## <wa-icon library="texra" name="diff-single"></wa-icon> Version comparison with `latexdiff`
 
-`latexdiff` produces a compiled PDF comparing two versions of a `.tex` document, with additions underlined in blue and deletions struck through in red. TeXRA runs it automatically after a program's run, or on demand against another file or a Git commit (`latexdiff-vc` via the <wa-icon library="texra" name="git-commit"></wa-icon> **Commit** dropdown). Read the [LaTeX Diff guide](./latex-diff.md) for the full workflow.
+`latexdiff` produces a compiled PDF comparing two versions of a `.tex` document, with additions underlined in blue and deletions struck through in red. TeXRA shows one as the preview of a `.tex` edit awaiting your approval, and the assistant runs it in the shell when you ask for a diff against another file or a Git commit. Read the [LaTeX Diff guide](./latex-diff.md) for both.
 
 ## <wa-icon library="texra" name="symbol-numeric"></wa-icon> Document statistics with `texcount`
 

@@ -85,7 +85,7 @@ of being read as text. Audio transcription requires a model with native audio
 support:
 
 ```bash
-texra run transcribe --input recording.m4a --instruction "Write talk.tex" --model google/gemini-4-argon --print
+texra run transcribe --input recording.m4a --instruction "Write talk.tex" --model google/gemini-4-neon --print
 ```
 
 You can combine text and media with repeated `--input` flags. Pass read-only
@@ -481,7 +481,7 @@ texra tasks send <id> "<text>"                     # send a follow-up or resume
 texra tasks stop <id>                              # stop a running task
 ```
 
-You can shorten any `<id>` to a unique prefix. Multiple terminals can attach to the same task; `attach` is read-only, so answer pending approvals in `texra chat` via `/tasks`. Per-command approval settings (`--approval-policy`, `TEXRA_APPROVAL_POLICY`) apply only to that task and can tighten the project policy (or set `yolo` unless the project policy is `never` / **Block**). With `--no-input`, the task follows the same approval policy without prompting.
+You can shorten any `<id>` to a unique prefix. Multiple terminals can attach to the same task; `attach` is read-only, so answer pending approvals in `texra chat` via `/tasks`. Per-command approval settings (`--approval-policy`, `TEXRA_APPROVAL_POLICY`) apply only to that task and set `ask` or `yolo` for it. With `--no-input`, the task follows the same approval policy without prompting.
 
 Manage the service directly:
 
@@ -561,9 +561,7 @@ for every project. A project file that sets it is ignored and `texra doctor` rep
 The corresponding environment variables are `TEXRA_MODEL`,
 `TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. The approval policy a
 command asks for (`--approval-policy` or `TEXRA_APPROVAL_POLICY`) does not
-replace the stored one: it can
-only narrow it for that command's tasks, and `yolo` auto-approves them unless
-the stored policy is `never` (**Block**). Run
+replace the stored one: it applies to that command's tasks only. Run
 `texra doctor` to see which project config file was loaded and whether any
 keys were ignored.
 
