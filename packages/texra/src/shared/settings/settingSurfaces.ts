@@ -110,10 +110,10 @@ interface Placement {
   /** Write-time consequences, read by the settings write handlers. */
   readonly onWrite?: SettingWriteEffects;
   /**
-   * The CLI `/config` panel edits the row in this existing list form (the
-   * skills form) instead of the scalar read/write accessor.
+   * The CLI `/config` panel edits the row in this list form instead of the
+   * scalar read/write accessor. The skills form is the only one.
    */
-  readonly openForm?: string;
+  readonly openForm?: 'skills';
 }
 
 /** A catalog row at least one TeXRA UI renders, with where and how. */

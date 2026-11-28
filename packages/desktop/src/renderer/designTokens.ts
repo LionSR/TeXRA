@@ -12,7 +12,7 @@ import { designTokens, visuallyHiddenStyles } from '@ui/styles';
 import { overlineStyles, truncateStyles } from '@ui/styles/commonViewStyles';
 import { placeholderStyles } from '@ui/wa/emptyState';
 import { lineChangeStatsStyles, noticeStyles } from '@ui/styles/surfaceStyles';
-import { toneStyles } from '@ui/styles/toneStyles';
+import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 import {
   buttonStyles,
   focusRingStyles,
@@ -32,7 +32,8 @@ shared.replaceSync(
     formControlStyles,
     settingsRowStyles,
     noticeStyles,
-    toneStyles,
+    // The status dot and the tone-* classes it reads.
+    statusIndicatorStyles,
     visuallyHiddenStyles,
     lineChangeStatsStyles,
     placeholderStyles,

@@ -1,8 +1,11 @@
 import {
   appendFileSync,
+  closeSync,
   existsSync,
+  fstatSync,
   mkdirSync,
-  readFileSync,
+  openSync,
+  readSync,
   renameSync,
   statSync,
 } from 'node:fs';
@@ -78,11 +81,26 @@ export function readDesktopLogSnapshot(options: {
     workspaceRoot,
   );
   try {
-    const buffer = readFileSync(path);
-    const truncated = buffer.length > MAX_VIEWER_LOG_BYTES;
-    const excerpt = truncated
-      ? buffer.subarray(buffer.length - MAX_VIEWER_LOG_BYTES)
-      : buffer;
+    // Only the tail is read: the log grows for as long as the app runs, and
+    // this runs on the main thread at every change while the Logs tab shows.
+    const file = openSync(path, 'r');
+    let excerpt: Buffer;
+    let truncated: boolean;
+    try {
+      const { size } = fstatSync(file);
+      truncated = size > MAX_VIEWER_LOG_BYTES;
+      excerpt = Buffer.alloc(Math.min(size, MAX_VIEWER_LOG_BYTES));
+      const read = readSync(
+        file,
+        excerpt,
+        0,
+        excerpt.length,
+        size - excerpt.length,
+      );
+      excerpt = excerpt.subarray(0, read);
+    } finally {
+      closeSync(file);
+    }
     return {
       path: redactedPath,
       truncated,

@@ -1,4 +1,5 @@
-/** Host-neutral relaunch and retry actions shared by extension and desktop. */
+/** The run actions every host binds: launch, resume, Run again… and fork,
+ *  for the GUI windows and the terminal chat. */
 
 import type {
   LaunchError,
@@ -34,8 +35,9 @@ import {
 const CHANNEL = 'HostRunActions';
 
 /** The launch facts an action adds to a validated request, as the
- *  session's `start` takes them: the run's id when the host minted it, and
- *  the run a chat's new round continues. */
+ *  session's `start` takes them: the run's id when the host minted it, the
+ *  run a chat's new round continues, the round's approval, and whether the
+ *  run takes the helper model (the compile fixer). */
 type RunValidatedOptions = Pick<
   StartInput,
   'helperModel' | 'approval' | 'runId' | 'continues'
@@ -53,13 +55,12 @@ export interface HostRunActionPorts {
    *  setup from its records. */
   readonly session: Session;
   /** The window's follow-up for a run it started, once started: show the
-   *  run once its surfaces hold it, and retire the missing-agent banner its
-   *  agent resolved. */
+   *  run once its surfaces hold it. */
   launched(run: Run): Effect.Effect<void>;
 }
 
-/** What a host's request handlers do once {@link createHostRunActions} has bound
- *  that host's launcher, catalogs, key prompt, and notifications. */
+/** What a host's request handlers do once {@link createHostRunActions} has
+ *  bound that host's session, notices and progress view. */
 export interface HostRunActions {
   /**
    * The window's launcher: start a fresh run of an already decoded
@@ -165,7 +166,7 @@ export const createHostRunActions = Effect.fn(
         ),
       ),
     );
-  /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
+  /** A run the launcher can relaunch: one with a saved config. */
   const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(function* (
     runId: RunId,
     action: 'resume' | 'runAgain',

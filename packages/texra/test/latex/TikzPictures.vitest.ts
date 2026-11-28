@@ -1,11 +1,15 @@
+import { readFileSync } from 'node:fs';
+
 import { it } from '@effect/vitest';
 import { Context, Effect, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { pathToLocationIn } from '@texra-ai/worldline/plugins';
-import { extractTikzPictures } from '@latex/tikzPictures';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { compileTikzPictures, extractTikzPictures } from '@latex/tikzPictures';
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { nodePlatformLayer, rootedFsLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
+import { TEXRA_APP } from '@test/support/texraApp';
 
 function extractFromPaper(content: string) {
   return Layer.build(
@@ -109,6 +113,43 @@ describe('extractTikzPictures', () => {
           ],
         ],
       ]);
+    }),
+  );
+});
+
+describe('compileTikzPictures', () => {
+  // The template is a project setting: its `{{ tikzpicture }}` is the one
+  // placeholder, and the rest is LaTeX, where `{#1}` is a macro argument.
+  it.live('writes the picture into a template whose preamble has macros', () =>
+    Effect.gen(function* () {
+      const template = String.raw`\documentclass{standalone}
+\newcommand{\vect}[1]{\mathbf{#1}}
+\begin{document}
+{{ tikzpicture }}
+\end{document}`;
+      const picture = String.raw`\begin{tikzpicture}\node {$\vect{x}$ costs \$5};\end{tikzpicture}`;
+      const context = yield* Layer.build(
+        FakeHost.layer({
+          app: TEXRA_APP,
+          config: { 'latex.tikzTemplate': template },
+          files: { '/workspace/paper.tex': '' },
+        }),
+      );
+      const host = Context.get(context, FakeHost);
+      const paper = pathToLocationIn(host.roots.workspace, 'paper.tex');
+      yield* compileTikzPictures(paper, [['fig', [picture]]], host.roots).pipe(
+        Effect.provide([
+          rootedFsLayer(host.roots),
+          scriptedSpawnerLayer(() => ({ exitCode: 0 })).layer,
+        ]),
+      );
+
+      expect(
+        readFileSync(
+          host.path('workspace', 'build', 'paper', 'fig.tex'),
+          'utf8',
+        ),
+      ).toBe(template.replace('{{ tikzpicture }}', () => picture));
     }),
   );
 });
