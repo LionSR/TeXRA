@@ -42,7 +42,7 @@ import {
   RUN_OUTCOME,
   type RunEnd,
   type RunId,
-  type SubagentProgressUpdate,
+  type SubagentProgressNotify,
   type ToolResult,
   type ToolResultPayload,
 } from '@shared/schemas';
@@ -201,7 +201,7 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
   call: RunToolCall,
   recovery: {
     /** Progress lines for the parent's trace. */
-    readonly notify: (update: SubagentProgressUpdate) => void;
+    readonly notify: SubagentProgressNotify;
     /** How long the wait for a child resumed now lasts; an answered
      *  child's read is not timed. */
     readonly timeoutMs: number | null | undefined;
