@@ -30,7 +30,6 @@ import {
   type LeanInspection,
   type LeanInspectionReply,
   type LeanProjectCommand,
-  type LeanUnavailable,
 } from './leanTypes';
 import { LeanLanguageServices } from './leanLanguageServices';
 
@@ -104,14 +103,6 @@ const LeanInspectInputSchema = Schema.Struct({
 });
 
 type LeanInspectInput = typeof LeanInspectInputSchema.Type;
-
-/** The tool's answer when Lean cannot serve a call: the pool's message,
- *  which carries the setup advice where the toolchain is the cause. */
-const leanUnavailableResult = (
-  failed: string,
-  failure: LeanUnavailable,
-  summary: string,
-): ToolResult => errorResult(`${failed}: ${failure.message}`, { summary });
 
 /** What Lean reports on a declaration that a `sorry` stands in for. */
 const SORRY = "declaration uses 'sorry'";
@@ -228,13 +219,13 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
     forCallerRun(services.fetchDiagnosticsForFile(absoluteFile)),
   );
   if (Result.isFailure(fetched)) {
-    // Only a file that could not be opened is a "could not open file".
+    // Only a file that could not be opened is a "could not open file"; a
+    // Lean that cannot serve the call says why in the pool's message.
     const failure = fetched.failure;
     return failure._tag === 'LeanUnavailable'
-      ? leanUnavailableResult(
-          `Failed to get diagnostics for ${file}`,
-          failure,
-          'Failed to get diagnostics',
+      ? errorResult(
+          `Failed to get diagnostics for ${file}: ${failure.message}`,
+          { summary: 'Failed to get diagnostics' },
         )
       : errorResult(
           `Could not open file ${file}: ${failure.message}\n\nMake sure the file exists and is accessible.`,
@@ -325,23 +316,14 @@ Use when diagnostics are stale or after editing imports.`,
         Effect.as(
           executed(`Restarted ${file}`, 'Restarted Lean server for this file'),
         ),
-        // The pool's cause is the answer.
-        Effect.catchTags({
-          LeanFileCommandFailed: (failure) =>
-            Effect.succeed(
-              errorResult(`Could not restart ${file}: ${failure.message}`, {
-                summary: 'Command failed',
-              }),
-            ),
-          LeanUnavailable: (failure) =>
-            Effect.succeed(
-              leanUnavailableResult(
-                `Could not restart ${file}`,
-                failure,
-                'Command failed',
-              ),
-            ),
-        }),
+        // The pool's cause is the answer, whichever of its failures it is.
+        Effect.catch((failure) =>
+          Effect.succeed(
+            errorResult(`Could not restart ${file}: ${failure.message}`, {
+              summary: 'Command failed',
+            }),
+          ),
+        ),
       );
     }).pipe(
       catchLeanFailure(
