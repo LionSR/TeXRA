@@ -39,8 +39,6 @@ sequenceDiagram
     comments.
     `prove` and `lean-simplify` ask Lean for errors, `sorry` and new axioms.
     `blueprint` runs `leanblueprint web` and `leanblueprint checkdecls`.
-    `write-up` checks that the note states the claim as it was given and
-    that the working files did not change.
 3.  **The answer.** The program reports what the check found beside the
     helper's reply, so the answer says plainly when the work is not
     finished, whatever the helper said of it.

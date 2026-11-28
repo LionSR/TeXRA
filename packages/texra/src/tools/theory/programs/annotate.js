@@ -6,7 +6,6 @@
  * every file is what it was when the program started, whitespace aside. Its
  * answer names each file where anything else changed.
  */
-import { read } from 'builtIn:text';
 
 /** The \criticize annotation: its arguments, scale and definition. */
 const CRITICIZE = [
@@ -33,6 +32,24 @@ const REVIEWER = [
 
 const MACRO = '\\criticize';
 const DEFINITION = CRITICIZE.split('\n');
+
+/** The lines `read_file` shows in one call. */
+const PAGE = 2000;
+
+/** The whole text of file, read a page at a time: `read_file` numbers its
+ *  lines and shows no more than a page of them. */
+const read = async (file) => {
+  const lines = [];
+  for (let start = 1; ; start += PAGE) {
+    const { output } = await tools.read_file({
+      path: file,
+      range: { start, end: start + PAGE - 1 },
+    });
+    const page = output === '' ? [] : output.split('\n');
+    lines.push(...page.map((line) => line.replace(/^ *\d+\t/, '')));
+    if (page.length < PAGE) return lines.join('\n');
+  }
+};
 
 /** text without its \criticize{comment}{severity}{confidence} annotations:
  *  the macro and its three brace groups, each balanced and each after

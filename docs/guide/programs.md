@@ -52,15 +52,14 @@ is on by default.
 
 ## LaTeX programs
 
-They work on the files in your project directly, with the same file tools
+Both work on the files in your project directly, with the same file tools
 the assistant uses. Nothing is staged for you to accept: review the changes
 with your editor or `git diff`.
 
-| Program      | What it does                                                                                       | What the instruction decides                                                                             |
-| :----------- | :------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------- |
-| `annotate`   | Reviews the `.tex` files by adding `\\criticize{}` comments in place. It never rewrites.           | The point of view, for example a first-time reader. With none it reads as a referee of the mathematics.  |
-| `transcribe` | Turns media files into a new LaTeX file: handwriting or scans, or audio, by the media file's type. | The file to write, and anything specific about the content, such as who the speakers are.                |
-| `write-up`   | Writes a result up for a reader from the working files that hold its argument, in a fresh context. | The reader to write for. With none it writes for a researcher in the field who has not seen the project. |
+| Program      | What it does                                                                                       | What the instruction decides                                                                            |
+| :----------- | :------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------ |
+| `annotate`   | Reviews the `.tex` files by adding `\\criticize{}` comments in place. It never rewrites.           | The point of view, for example a first-time reader. With none it reads as a referee of the mathematics. |
+| `transcribe` | Turns media files into a new LaTeX file: handwriting or scans, or audio, by the media file's type. | The file to write, and anything specific about the content, such as who the speakers are.               |
 
 ### `annotate`
 
@@ -85,28 +84,6 @@ audio needs a model with native audio support (read
 [Working with figures](./working-with-figures.md)). It writes
 `transcript.tex` unless the instruction names another file, and never
 overwrites a file that exists.
-
-### `write-up`
-
-For a result that has been worked out and now has to be read by someone
-else. You give it the working files that hold the argument, a file holding
-the exact statement claimed, and the path of the note to write. The helper
-that writes the note sees none of the conversation that produced the result,
-only those files, so a step it cannot follow from them is a step a reader
-could not follow either. The note opens with the statement, gives a map of
-the proof a reader can stop after, then the full argument, with each proof
-naming the earlier results it uses. A step the files do not justify stays
-visible in the note as a marked gap.
-
-When the helper is done the program checks two things in code: the note
-states the claim as the claim file gives it, whitespace aside, and the
-working files and the claim file are what they were. The answer lists the
-gaps and the least certain steps, so they can go back to be worked on.
-
-Ask for it in a chat ("write up the result in notes/ for a referee; the
-statement is in claim.tex"). The assistant passes the claim file and the
-note's path as the program's arguments. `texra run` passes a program no
-arguments, so this one starts from a chat.
 
 ## Everything else: ask
 
