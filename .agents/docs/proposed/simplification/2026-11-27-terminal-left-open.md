@@ -35,6 +35,9 @@ glyph and an export the document task details left, and derives the
    the extension's status-bar tooltip now says "Project approval policy:"
    as the terminal does.
 
+On 2026-11-28, items 2 to 4 wait on the open #15275, which holds
+`statusBarDisplay.ts`, `StatusBar.tsx` and `sessionStatus.ts`.
+
 ## Checked and left
 
 - `configureAnsi` (item 5 of the 2026-11-24 note): still a deep module whose

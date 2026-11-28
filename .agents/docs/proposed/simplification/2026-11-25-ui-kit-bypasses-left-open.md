@@ -98,12 +98,16 @@ lands.
     `controlStyles.ts`, so the lower file cannot import it back). The
     2026-11-26 run moved `visuallyHiddenDeclarations` down into
     `controlStyles.ts`, where `.action-button-label` now interpolates it.
-    `truncateDeclarations` takes the same move once `FileList.styles.ts`
-    and `SessionDrawer.ts`, two of its importers, are out of open PRs.
+    `truncateDeclarations` takes the same move; on 2026-11-28 its
+    importer `progress/components/ModelPicker.ts` is held by the open
+    #15275, and moving it without that file needs a re-export.
 
 The 2026-11-26 run closed entries 2, 4, 5, 7, 12, 14, 16 and 17 and half of
 1 and 10, and rewrote 3 and 13 to what it found. Its scan of the three hosts
 found no new custom icon, colour literal or inline style.
+
+The 2026-11-28 run closed entries 1, 3 and 11 and the status half of 10,
+and took the "Failed to render" glyph out of 6.
 
 ## Checked and declined
 
