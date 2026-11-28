@@ -71,16 +71,6 @@ On 2026-11-22, by the owner's decision:
   2025). The refusal `EFF-ADOPT-mcp-client` is rewritten to refuse a client
   of our own for older servers.
 
-On 2026-11-28, with effect 4.1.7:
-
-- **Servers on MCP 2025-06-18 and 2025-03-26 start again.** The client now
-  takes adapters for those revisions (`McpProtocol.v2025_06_18`,
-  `v2025_03_26`), still one per connection. `open` in `mcpServer.ts` asks
-  for the newest and, when the server answers an older one of the three,
-  closes that process and starts it on the matching adapter. Only
-  2024-11-05 servers are refused. The unsupported-revision branch reads
-  the client's reason through `Effect.catchReason`.
-
 ## Open
 
 1. **The chat's launch and resume claim a root launch the same way.**
