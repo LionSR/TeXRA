@@ -385,21 +385,13 @@ export class ToolEditApprovalController {
    * cannot be read may hold the user's edits, so the read fails the release
    * before its dispose: the staged files stay, and the report names where.
    */
-  private readonly unapplied: (
+  private unapplied(
     pending: PendingToolEdit,
     preview: ToolEditPreview,
     proposal: string,
     applied: Ref.Ref<boolean>,
-  ) => PreviewCall<string | undefined> = Effect.fn(
-    'ToolEditApprovalController.unapplied',
-  )(
-    { self: this },
-    function* (
-      pending: PendingToolEdit,
-      preview: ToolEditPreview,
-      proposal: string,
-      applied: Ref.Ref<boolean>,
-    ) {
+  ): PreviewCall<string | undefined> {
+    return Effect.gen({ self: this }, function* () {
       if (yield* Ref.get(applied)) return undefined;
       const listed = this.options.session.view
         .current()
@@ -418,8 +410,8 @@ export class ToolEditApprovalController {
         ),
       );
       return left === proposal.replaceAll('\r\n', '\n') ? undefined : left;
-    },
-  );
+    }).pipe(Effect.withSpan('ToolEditApprovalController.unapplied'));
+  }
 
   private decide(
     pending: PendingRequest,
