@@ -69,7 +69,7 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { approvalModeLine } from '@ui/copy/approvalPolicy';
 // What no public entry serves: the session's own owners, which the fixtures
 // seed rows through, the leaves they build rows with (`toJsonValue` among
 // them), and the stored model selection's key (this file is an exemption in
@@ -1773,9 +1773,7 @@ function setHarnessApprovalPolicy(policy: ApprovalPolicy): void {
     ...sessionMeta.get(),
     approvalPolicy: policy,
   });
-  appendHarnessAssistantTranscript(
-    `Approval mode: ${formatApprovalPolicy(policy)}`,
-  );
+  appendHarnessAssistantTranscript(approvalModeLine(policy));
 }
 
 function applyHarnessApprovalPolicySelection(

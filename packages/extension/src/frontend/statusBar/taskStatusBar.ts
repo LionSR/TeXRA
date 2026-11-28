@@ -15,7 +15,7 @@ import {
   type SessionView,
   type TokenUsageStats,
 } from '@texra-ai/worldline/schemas';
-import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { projectApprovalPolicyLine } from '@ui/copy/approvalPolicy';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { visibleTokenStats } from '@ui/copy/tokenUsage';
 import { runStatusLabel, sectionCountLabel } from '@ui/copy/runStatus';
@@ -72,7 +72,7 @@ function paint(
   // The project's persisted policy: what a run here, or the service's for
   // this project, decides under.
   const policy = Settings.getConfig(config, APPROVAL_POLICY_SETTING);
-  const policyLine = `Approval policy: ${formatApprovalPolicy(policy)}`;
+  const policyLine = projectApprovalPolicyLine(policy);
   const { cost, inputTokens, outputTokens } = usage;
   if (cost === 0 && inputTokens === 0 && outputTokens === 0) {
     item.tooltip = `${policyLine}\n\nClick to show TeXRA tasks`;

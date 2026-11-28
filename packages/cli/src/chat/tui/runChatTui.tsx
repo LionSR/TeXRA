@@ -53,7 +53,7 @@ import {
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { projectApprovalPolicyLine } from '@ui/copy/approvalPolicy';
 import {
   runsHereOnlyMessage,
   sessionStoreMovedAsideMessage,
@@ -366,9 +366,7 @@ export async function runChat(
           patchSessionMeta({
             approvalPolicy: effectiveApprovalPolicy(chatPolicy, policy),
           });
-          appendLocalNotice(
-            `Project approval policy: ${formatApprovalPolicy(policy)}`,
-          );
+          appendLocalNotice(projectApprovalPolicyLine(policy));
         }),
         // The value is written: a failed repaint leaves the line as it was.
         Effect.ignore({

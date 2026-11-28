@@ -11,7 +11,7 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import type { SessionRequests } from '@cli/chat/tui/state/approvalQueue';
-import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { approvalModeLine } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_NOUN } from '@ui/copy/delegationApproval';
 import { type SlashCommandContext } from './slashContext';
 import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
@@ -29,7 +29,7 @@ export function applyCliApprovalPolicySelection(
 ): Effect.Effect<void> {
   const policy = parseApprovalPolicy(input.trim().toLowerCase());
   if (!policy) return Effect.sync(() => setTransientNotice(APPROVAL_USAGE));
-  const confirm = `Approval mode: ${formatApprovalPolicy(policy)}`;
+  const confirm = approvalModeLine(policy);
   return context
     .setApprovalPolicy(policy)
     .pipe(Effect.andThen(Effect.sync(() => appendLocalNotice(confirm))));
