@@ -8,16 +8,16 @@ notes left behind open PRs that have since merged or closed, read each
 against the code, and ran one read-only sweep of the hosts. Two PRs were
 open (#15275, #15276); neither holds a file named here.
 
-The PR that adds this note lands eight of them, under one rule: a fact is
+The PR that adds this note lands seven of them, under one rule: a fact is
 decided in the layer that owns it, and the views and hosts above read it.
 
 - **App controller, not the view.** A plan with no credential is left out of
   `HostSnapshot.planUsage` (`hostSnapshotSource.ts`); the meters filtered it
   at render, so the desktop footer rendered empty.
 - **One function in the copy.** The window a plan runs out of first
-  (`limitingQuotaWindow`), the project's approval policy line and the chat's
-  approval mode line (`packages/texra/src/ui/copy/approvalPolicy.ts`), and
-  the desktop toggle's "waiting on you".
+  (`limitingQuotaWindow`) and the desktop toggle's "waiting on you". The
+  approval policy lines, which this audit also found worded per host, landed
+  the same morning as `APPROVAL_POLICY_LINE` in #15287.
 - **llm.** `routedApiKeyProvider` answers "is this secret a known provider's
   key" for the terminal, the host snapshot and the settings body.
 - **Harness.** `isEditLikeToolName` is on the transcript entry, and the turn
