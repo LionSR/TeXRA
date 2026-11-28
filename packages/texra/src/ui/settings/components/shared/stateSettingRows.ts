@@ -70,7 +70,11 @@ export function catalogEnumChoices(
  * settings-view placement is a defect: no snapshot would ever reach it.
  */
 function placedRow(row: SettingRow) {
-  return TEXRA_SETTINGS.settingsViewRow(row.key);
+  const entry = TEXRA_SETTINGS.settingsViewByKey(row.key);
+  if (!entry) {
+    throw new Error(`No settings-view catalog row for setting "${row.key}"`);
+  }
+  return entry;
 }
 
 /**

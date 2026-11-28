@@ -309,12 +309,6 @@ function isSettingsViewRow(row: TexraSettingRow): row is SettingsViewRow {
   return row.surfaces.settingsView !== undefined;
 }
 
-/** The settings-view row a key names, or undefined when it names none. */
-function settingsViewRowOf(key: string): SettingsViewRow | undefined {
-  const row = placedByKey.get(key);
-  return row !== undefined && isSettingsViewRow(row) ? row : undefined;
-}
-
 /**
  * The catalog TeXRA's hosts hand the harness, and the lookups TeXRA's settings
  * UIs read: every list is a filter over the placed rows, never hand-maintained.
@@ -322,19 +316,9 @@ function settingsViewRowOf(key: string): SettingsViewRow | undefined {
 export const TEXRA_SETTINGS = Object.freeze({
   catalog,
   /** Look up a row the settings view's unified write path owns. */
-  settingsViewByKey: settingsViewRowOf,
-  /**
-   * The settings-view row a key names, throwing when it names none. A signal
-   * or control bound to a key no snapshot can ever reach is a defect, not a
-   * silent default; this owns that wording for every reader that requires the
-   * row to exist.
-   */
-  settingsViewRow: (key: string): SettingsViewRow => {
-    const row = settingsViewRowOf(key);
-    if (row === undefined) {
-      throw new Error(`No settings-view catalog row for setting "${key}"`);
-    }
-    return row;
+  settingsViewByKey: (key: string): SettingsViewRow | undefined => {
+    const row = placedByKey.get(key);
+    return row !== undefined && isSettingsViewRow(row) ? row : undefined;
   },
   /**
    * The rows one settings-view snapshot carries, in catalog order: the
