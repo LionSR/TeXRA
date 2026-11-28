@@ -122,7 +122,7 @@ export function statementRefusal(sql: string): string | null {
       shape,
     )
   ) {
-    return 'Only a read is allowed: one SELECT, WITH, EXPLAIN or VALUES statement.';
+    return 'Only a read is allowed: one SELECT, WITH or VALUES statement, or an EXPLAIN of one.';
   }
   if (shape.trim().replace(/;\s*$/, '').includes(';')) {
     return 'Send one statement per query; this one has more than one.';
