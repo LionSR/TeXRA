@@ -56,7 +56,7 @@ import {
   setTransientNotice,
 } from './tui/state/cliState';
 import type { TuiSession } from './tui/state/sessionRunState';
-import { oneShotResumeNotice } from './tui/state/resumeHint';
+import { oneShotResumeNotice } from '../runtime/resumeCommand';
 import { currentView, runViewOf, sessionView } from './tui/state/sessionView';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import {

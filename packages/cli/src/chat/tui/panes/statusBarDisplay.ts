@@ -51,7 +51,7 @@ import {
 import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
 import { taskCostStatus } from '../sessionStatus';
-import { formatResumeCommand } from '../state/resumeHint';
+import { formatResumeCommand } from '../../../runtime/resumeCommand';
 import { type TransientNotice } from '../state/cliState';
 import type {
   ApprovalPolicy,
