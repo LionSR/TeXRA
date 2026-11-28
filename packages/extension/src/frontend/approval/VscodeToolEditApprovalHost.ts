@@ -46,8 +46,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     this.storageDirectory = storageDirectory;
     this.fork = fork;
     // A preview's build shows beside the request the user is answering.
-    this.openBuildDisplay = (location) =>
-      showBuilt([location], { preserveFocus: true });
+    this.openBuildDisplay = (location) => showBuilt(location, true);
   }
 
   focused(): boolean {

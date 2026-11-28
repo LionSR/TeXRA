@@ -9,7 +9,7 @@ const TERMINAL_RUN_GUIDANCE =
 
 function formatCliRunFileInstruction(init: {
   readonly inputFiles: readonly string[];
-  readonly contextFiles?: readonly string[];
+  readonly contextFiles: readonly string[];
 }): string | undefined {
   const parts = [
     formatFileListInstruction({
@@ -22,7 +22,7 @@ function formatCliRunFileInstruction(init: {
     }),
     formatFileListInstruction({
       title: 'Read-only context files:',
-      files: init.contextFiles ?? [],
+      files: init.contextFiles,
       guidance: [
         'Use these files as supporting context for the task.',
         'Do not modify them unless the user explicitly asks for edits.',

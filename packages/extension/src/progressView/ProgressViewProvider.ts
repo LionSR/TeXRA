@@ -203,8 +203,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // "Show a built file" for every caller in this window: a scheduled PDF
       // viewer opens in the view's scope, so a close of the view cancels an
       // open still waiting.
-      const showBuilt: ShowBuilt = (locations, options) =>
-        openBuilt(roots, locations, options).pipe(
+      const showBuilt: ShowBuilt = (location, preserveFocus) =>
+        openBuilt(roots, location, preserveFocus).pipe(
           Effect.provideService(Scope.Scope, scope),
         );
       const focusChanged = eventStream(
@@ -223,7 +223,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               label: folder.name,
               value: folder.uri.fsPath,
             })) ?? [],
-          shows: { apiKeyBanner: true, dependencyBanner: true },
+          setupNotices: true,
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the diff editor shows, for each tool edit the session
@@ -255,9 +255,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           openFile: (payload) =>
             withProcessServices(
               runtime,
-              showBuilt([payload.location], {
-                preserveFocus: payload.preserveFocus,
-              }),
+              showBuilt(payload.location, payload.preserveFocus),
             ),
           window: editor,
           runs: {

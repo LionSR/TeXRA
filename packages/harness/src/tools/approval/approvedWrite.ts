@@ -14,10 +14,6 @@ import { withFileWriteLane } from '@utils/files/fileWriteLane';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
-interface WriteApprovedContentResult {
-  appliedContent: string;
-}
-
 /**
  * The approved edit no longer applies: the file changed on disk while the
  * edit waited for approval (another run, a subagent, the user's editor), and
@@ -54,11 +50,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
      *  exist, which is not the same as an empty file. */
     original: string | null,
     finalContent: string,
-  ): Effect.fn.Return<
-    WriteApprovedContentResult,
-    Error,
-    FileSystem.FileSystem | WorkspaceFs
-  > {
+  ): Effect.fn.Return<string, Error, FileSystem.FileSystem | WorkspaceFs> {
     const workspace = nodePath.isAbsolute(path)
       ? undefined
       : yield* WorkspaceFs;
@@ -69,15 +61,14 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       // The proposal read the file with `readNormalizedFile` too, so a file
       // nobody touched meanwhile compares equal, BOM and line ends alike.
       const baseContent = exists ? yield* readNormalizedFile(fs, path) : '';
-      const unchanged = { appliedContent: baseContent };
-      if (exists && baseContent === finalContent) return unchanged;
+      if (exists && baseContent === finalContent) return baseContent;
       // The file must be there exactly when it was there at proposal: one
       // deleted meanwhile is not recreated, one created meanwhile is not
       // merged into.
       if (exists !== (original !== null)) {
         return yield* new ApprovedEditConflictError(path);
       }
-      if (original === finalContent) return unchanged;
+      if (original === finalContent) return baseContent;
       let appliedContent = finalContent;
       if (original !== null && baseContent !== original) {
         const merged = mergeEditOnto(original, finalContent, baseContent);
@@ -91,7 +82,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       if (!exists)
         yield* fs.makeDirectory(nodePath.dirname(path), { recursive: true });
       yield* fs.writeFile(path, Buffer.from(appliedContent, 'utf-8'));
-      return { appliedContent };
+      return appliedContent;
     }).pipe(withFileWriteLane(file));
   },
 );

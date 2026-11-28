@@ -100,13 +100,10 @@ export const HostSnapshotSchema = Schema.Struct({
      *  service was out of reach when it opened. Null while a service
      *  window's service is reached, and for a window with no folder. */
     service: Schema.NullOr(
-      Schema.Union([
-        Schema.Struct({
-          kind: Schema.Literal('offline'),
-          reason: Schema.String,
-        }),
-        Schema.Struct({ kind: Schema.Literal('local'), reason: Schema.String }),
-      ]),
+      Schema.Struct({
+        kind: Schema.Literals(['offline', 'local']),
+        reason: Schema.String,
+      }),
     ),
   }),
   onboarding: OnboardingFunnelStateSchema,

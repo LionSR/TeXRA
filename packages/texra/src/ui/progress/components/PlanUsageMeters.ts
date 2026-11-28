@@ -178,11 +178,11 @@ export class PlanUsageMeters extends TexraElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    // A plan with no credential has no usage to show and nothing to fix here.
     const now = this.ticker.now;
-    const usage = this.usage
-      .filter((plan) => plan.unknown !== 'missing_credentials')
-      .map((plan) => ({ ...plan, windows: currentUsageWindows(plan, now) }));
+    const usage = this.usage.map((plan) => ({
+      ...plan,
+      windows: currentUsageWindows(plan, now),
+    }));
     if (usage.length === 0) return nothing;
     return html`
       <button

@@ -42,16 +42,15 @@ export interface RailProject {
 }
 
 interface ShellSidebarModel {
-  readonly renamingProjectKey?: string | null;
+  readonly renamingProjectKey?: string;
   /** Every open project, in `shell.open` order. */
   readonly projects: readonly RailProject[];
   /** Folders of recently closed projects, the most recent first: offered
    *  under "Open a project" while no project is open. */
   readonly recent: readonly string[];
   readonly shell: Shell;
-  /** Canonical name of the command palette action, from the command catalog. */
-  readonly commandsLabel: string;
-  /** The same name with its shortcut, for the tooltip. */
+  /** The command palette action's canonical name, from the command catalog,
+   *  with its shortcut, for the tooltip. */
   readonly commandsTitle: string;
 }
 

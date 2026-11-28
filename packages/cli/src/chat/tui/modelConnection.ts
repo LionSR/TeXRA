@@ -7,7 +7,7 @@
 import { signal } from '@lit-labs/signals';
 import { Effect, Latch, Stream } from 'effect';
 
-import { apiKeyEntry } from '@texra-ai/llm';
+import { routedApiKeyProvider } from '@texra-ai/llm';
 import {
   appSignalStream,
   type ProcessServices,
@@ -37,11 +37,7 @@ import { selectChatModel } from './commands/handlers/slashContext';
 export const modelAccessChanges: Stream.Stream<void, never, ProcessServices> =
   Stream.merge(
     appSignalStream('credentialChanged').pipe(
-      Stream.filter(({ key }) => {
-        // An unknown provider's key routes no model.
-        const provider = apiKeyEntry(key);
-        return provider !== undefined && provider !== 'unknown';
-      }),
+      Stream.filter(({ key }) => routedApiKeyProvider(key) !== undefined),
     ),
     appSignalStream('modelAccessChanged'),
   ).pipe(Stream.as(undefined));

@@ -26,28 +26,15 @@ export class TexraDiffView extends LitElement {
       :host {
         display: block;
         --diff-min-height: 240px;
-        min-height: var(--diff-min-height);
-      }
-
-      :host([fill]) {
         height: 100%;
         min-height: 0;
       }
 
       .diff-view {
         display: flex;
-        min-height: var(--diff-min-height);
-        height: 42vh;
-        max-height: 640px;
-        border: var(--border-thin) solid var(--color-border);
-        background: var(--wa-color-surface-default);
-      }
-
-      :host([fill]) .diff-view {
         height: 100%;
         min-height: 0;
-        max-height: none;
-        border: 0;
+        background: var(--wa-color-surface-default);
       }
 
       ::slotted(.desktop-diff-editor) {
@@ -69,7 +56,6 @@ export class TexraDiffView extends LitElement {
   @property({ attribute: false }) originalText = '';
   @property({ attribute: false }) proposedText = '';
   @property() language = 'plaintext';
-  @property({ type: Boolean, reflect: true }) fill = false;
 
   @property({ attribute: false })
   hostTheme: Theme = DESKTOP_THEME_KIND.DARK;

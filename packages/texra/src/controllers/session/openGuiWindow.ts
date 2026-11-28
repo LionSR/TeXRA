@@ -225,15 +225,13 @@ interface GuiWindowPorts {
   readonly runs: GuiSession;
   readonly roots: WorkspaceRoots;
   readonly project: ProjectDisplay;
-  /** The snapshot reads only this host answers. The getting-started card
-   *  shows where the host can start a project
-   *  ({@link GuiWindowHost.gettingStarted}). */
+  /** The snapshot reads only this host answers. */
   readonly snapshot: {
     workspaceRoots(): HostSnapshot['workspaceRoots'];
-    readonly shows: {
-      readonly apiKeyBanner: boolean;
-      readonly dependencyBanner: boolean;
-    };
+    /** Whether this host shows the setup notices (see
+     *  `openHostSnapshotSource`); a host with its own setup surfaces, and
+     *  no {@link GuiWindowHost.gettingStarted}, shows none. */
+    readonly setupNotices: boolean;
   };
   readonly toolEdits: ToolEditApprovalHost;
   /** Emits when the window gains focus, so the project's calls come here
@@ -274,11 +272,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     ...(yield* ToolRegistry).entries.values(),
   ] as readonly TexraPlugin[];
   const snapshot = yield* openHostSnapshotSource({
-    workspaceRoots: ports.snapshot.workspaceRoots,
-    shows: {
-      ...ports.snapshot.shows,
-      gettingStarted: host.gettingStarted !== undefined,
-    },
+    ...ports.snapshot,
     project: ports.project,
     tools: {
       icons: Object.fromEntries(
@@ -614,7 +608,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'savePastedImage':
           return yield* draftRequests.handle(request, port);
         case 'refreshUsage':
-          if (request.force === true)
+          if (request.force)
             yield* PlanQuotas.use((quotas) => quotas.invalidate());
           yield* snapshot.refreshUsage;
           return done;

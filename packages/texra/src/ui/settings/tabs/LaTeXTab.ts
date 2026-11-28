@@ -2,7 +2,6 @@
  *  diff, formatting and review, and recommended VS Code settings. */
 
 import { Predicate, Struct } from 'effect';
-import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { html, nothing, type TemplateResult } from 'lit';
@@ -34,16 +33,20 @@ import {
 
 // Local imports - shared webview toolkit
 import { settingsBannerStyles } from '@ui/styles';
+import { PLUGINS_PAGE } from '@ui/copy/plugins';
 import { TexraSignalElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { renderSettingsBanner } from '@ui/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
-import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
+import {
+  renderSetStatusIcon,
+  renderStatusBadge,
+  statusCheckIconStyles,
+} from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { PLUGINS_PAGE } from '@ui/copy/plugins';
 // Registers <copy-button>, the one Copy every view draws.
-import '@ui/progress/components/CopyButton';
+import '@ui/wa/CopyButton';
 
 // Local imports - catalog-driven settings rows
 import {
@@ -60,8 +63,8 @@ import {
   LATEXDIFF_MATH_MARKUP_SETTING,
 } from '@texra/shared/settings/latexdiffSettings';
 
-/** The copy action beside an install command, wherever one is shown; the
- *  run action is the plugins page's "Install in terminal". */
+/** The Copy action beside an install command, wherever one is shown; the
+ *  action that runs it is worded as the Plugins page words its own. */
 const COPY_INSTALL_COMMAND = 'Copy install command';
 
 /** What the Dependencies section says of one dependency: the toolchain's
@@ -207,9 +210,10 @@ export class LaTeXTab extends TexraSignalElement {
           }),
       });
     } else {
-      actionSlot = html`<wa-tag class="setting-badge" variant="neutral" size="s"
-        >Not found</wa-tag
-      >`;
+      actionSlot = renderStatusBadge({
+        label: 'Not found',
+        className: 'setting-badge',
+      });
     }
 
     return html`

@@ -1,7 +1,8 @@
-import { WORKSPACE_DIFF_SUFFIX } from '@latex/latexdiff/diffFileNameManager';
-
 /** The folder beside a document that TeXRA compiles it into. */
 export const LATEX_BUILD_DIRECTORY = 'build';
+
+/** The suffix a workspace diff carries after the edited file's stem. */
+export const WORKSPACE_DIFF_SUFFIX = '_diff';
 
 /**
  * Directories that never hold a source the user works on: build output,

@@ -398,11 +398,11 @@ const removePlugin = Effect.fn('removePlugin')(function* (
     : { name, path: plugin.path, local, leftover: false };
 });
 
-/** One plugin's update: the commit it moved from and to, when fetched. */
+/** One plugin's update: the commits a fetched plugin moved between; a local
+ *  plugin, which is only reread, has none. */
 export interface PluginUpdate {
   readonly name: string;
-  readonly from?: string;
-  readonly to?: string;
+  readonly fetched?: { readonly from: string; readonly to: string };
 }
 
 /**
@@ -458,8 +458,10 @@ const updatePlugins = Effect.fn('updatePlugins')(function* (
       }));
       const update: PluginUpdate = {
         name: plugin.name,
-        from: plugin.commit,
-        to: commit,
+        ...(plugin.commit !== undefined &&
+          commit !== undefined && {
+            fetched: { from: plugin.commit, to: commit },
+          }),
       };
       return update;
     }),
