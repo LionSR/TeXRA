@@ -17,10 +17,8 @@ glyph and an export the document task details left, and derives the
 
 ## Held by open PRs
 
-1. **The design harness still offers Block.** `HARNESS_APPROVAL_USAGE` in
-   `packages/cli/scripts/tui-harness.tsx` reads `[ask | never | yolo]`; the
-   chat's own usage line now reads `APPROVAL_POLICIES`. The harness should
-   import the chat's handler instead of restating it.
+1. **Closed.** The design harness prints the chat's own `APPROVAL_USAGE`
+   (`commands/handlers/approvalCommand.ts`) and its confirmation line.
 2. **A stale comment on the status bar's policy input.**
    `StatusBarChrome.approvalPolicy`
    (`packages/cli/src/chat/tui/panes/statusBarDisplay.ts`) says "a
@@ -32,8 +30,10 @@ glyph and an export the document task details left, and derives the
 4. **The resume command is formatted in the TUI** (the 2026-11-26 layer
    note): moving `packages/cli/src/chat/tui/state/resumeHint.ts` under
    `runtime/` edits three held importers.
-5. **"Approval policy:" against "Project approval policy:"** (the same
-   note): the terminal's line is in `runChatTui.tsx`.
+5. **Closed.** The project's policy line and the chat's are
+   `APPROVAL_POLICY_LINE` (`packages/texra/src/ui/copy/approvalPolicy.ts`);
+   the extension's status-bar tooltip now says "Project approval policy:"
+   as the terminal does.
 
 ## Checked and left
 
