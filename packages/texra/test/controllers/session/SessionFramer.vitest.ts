@@ -2,7 +2,10 @@
 // transcript of a few hundred tool results is one NDJSON line of tens of
 // megabytes, which takes longer to arrive than the transport's liveness
 // window counts as silence, so the client drops a healthy connection,
-// reconnects, asks for the replay again and drops it again.
+// reconnects, asks for the replay again and drops it again. And the
+// receiver applying those frames one by one: a replay's listing (a run's
+// end included) would publish before the run's transcript, so a reader
+// that stops on the outcome (`texra tasks attach`) stops with nothing.
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -13,6 +16,7 @@ import { expect } from 'vitest';
 import type { SessionView } from '@texra-ai/worldline/schemas';
 import type { SessionViewInput } from '@texra-ai/worldline/transcript';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
+import { readsOf } from '@texra/shared/session/sessionFrames';
 
 const existence = { checkedAggregateIds: [], present: [], unreadable: [] };
 
@@ -48,5 +52,10 @@ it.effect(
       // A frame before the drain marker carries the cursor the reader stood
       // at; the marker's frame and the ones after carry the drained commit.
       expect(frames.map((frame) => frame.cursor)).toEqual([3, 3, 7]);
+      // The receiver applies the read whole again.
+      const reads = yield* readsOf(Stream.fromIterable(frames)).pipe(
+        Stream.runCollect,
+      );
+      expect(reads).toEqual([batch]);
     }),
 );

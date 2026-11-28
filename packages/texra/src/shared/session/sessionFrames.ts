@@ -10,7 +10,8 @@
  * - `session.frames`: the session's view inputs from a cursor, with the
  *   transcripts named, as the runtime's reader orders them
  *   (`Session.view.watch`): a replay whole, then each tail read, each input
- *   one `EventsFrame`. A new transcript set is a new call; the frontend's
+ *   one `EventsFrame`; the receiver puts the reads back together
+ *   ({@link readsOf}). A new transcript set is a new call; the frontend's
  *   view interrupts the old one.
  * - `session.host`: what the host renders but does not own, each time its
  *   producers write it.
@@ -25,7 +26,7 @@
  * frontend instance that sent or is answered, and one of `rpc`'s own
  * messages.
  */
-import { Schema } from 'effect';
+import { Schema, Stream } from 'effect';
 import { Rpc, RpcGroup } from 'effect/rpc';
 
 import {
@@ -38,6 +39,7 @@ import {
   CommitOrdinalSchema,
   SessionViewInputSchema,
   TranscriptSubscriptionSchema,
+  type SessionViewInput,
 } from '@texra-ai/worldline/transcript';
 import {
   RpcClientMessageSchema,
@@ -67,6 +69,32 @@ export const EventsFrameSchema = Schema.Struct({
   inputs: Schema.Array(SessionViewInputSchema),
 });
 export type EventsFrame = typeof EventsFrameSchema.Type;
+
+/**
+ * The reader's reads from a subscription's frames: inputs are held until the
+ * marker that closes a read (`replay.complete` after the replay, `drained`
+ * after each tail read) and released together. The sender writes one input
+ * per frame so a long replay keeps the connection alive, but the view must
+ * apply a read whole: a replay applied input by input publishes the listing
+ * (a run's end included) before the run's transcript, and a reader that
+ * stops on the run's outcome would stop with nothing. A read cut off before
+ * its marker is never released, as the reader's own batches never are.
+ */
+export const readsOf = <E, R>(
+  frames: Stream.Stream<EventsFrame, E, R>,
+): Stream.Stream<readonly SessionViewInput[], E, R> =>
+  frames.pipe(
+    Stream.mapAccum(
+      (): SessionViewInput[] => [],
+      (held, frame): readonly [SessionViewInput[], SessionViewInput[][]] => {
+        held.push(...frame.inputs);
+        const last = held.at(-1);
+        return last?._tag === 'replay.complete' || last?._tag === 'drained'
+          ? [[], [held]]
+          : [held, []];
+      },
+    ),
+  );
 
 /** What the host answers a `host.request` with: the pickers and
  *  the drop return the paths they accepted, a polish returns its text, a
