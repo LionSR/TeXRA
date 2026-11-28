@@ -142,7 +142,7 @@ TeXRA supports local stdio [Model Context Protocol](https://modelcontextprotocol
 }
 ```
 
-Server names may use letters, digits, `_`, and `-` (up to 32 characters, no `__`, not ending in `_`). Servers must support MCP revision `2025-11-25` (TypeScript SDK 1.25+); incompatible or failing servers are skipped with an explanation in the transcript.
+Server names may use letters, digits, `_`, and `-` (up to 32 characters, no `__`, not ending in `_`). Servers must support MCP revision `2025-03-26` or later (up to `2025-11-25`); incompatible or failing servers are skipped with an explanation in the transcript.
 
 - **Approval:** Every MCP tool call uses the same approval rules as shell commands (**Settings → General → Approval**). Headless runs require **Auto-approve** to call MCP tools.
 - **Lifecycle:** A server starts on first use, is shared by tasks in the project, and stops 30 minutes after the last task finishes.

@@ -160,9 +160,11 @@ validate is skipped and the resolving run's transcript says why.
   (`projectServers`), shared by that project's runs, kept 30 minutes past its
   last holder and stopped with the session; no server is shared across
   projects.
-- The client is effect/ai's `McpClient` over its stdio transport, speaking
-  MCP 2025-11-25 only (since 2026-11-22; a server answering an older
-  revision fails its start, naming both), spawned through `effect/process`
+- The client is effect/ai's `McpClient` over its stdio transport, asking for
+  MCP 2025-11-25 and starting a server again on 2025-06-18 or 2025-03-26
+  when it answers one of those (the adapters effect 4.1.7's client takes;
+  a server answering any other revision fails its start, naming both),
+  spawned through `effect/process`
   (`packages/harness/src/tools/mcp/mcpServer.ts`).
 - Every MCP call goes through the one approval authority: the loop's guard
   (`guardedToolCall`, `packages/harness/src/agent/runtime/loop/toolGuard.ts`)

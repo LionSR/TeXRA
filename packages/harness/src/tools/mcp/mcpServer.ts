@@ -7,8 +7,10 @@
  * open run or step of that project holds it and for the catalog's idle time
  * after the last one lets go (`projectServers`, `./mcpConfig`).
  *
- * The client speaks MCP 2025-11-25 and nothing older: a server that answers
- * an earlier revision does not start, and its failure names both. Each
+ * The client asks for the newest MCP revision it speaks (`PROTOCOLS`); a
+ * server that answers an older one of them is started again on that one,
+ * and a server that answers any other revision does not start, its failure
+ * naming both. Each
  * listed tool becomes a runtime tool named `mcp__<server>__<tool>` whose
  * JSON Schema passes through as its parameters. Every call is
  * approval-gated through the loop's one guard (the session's bash approval),
@@ -59,9 +61,16 @@ import type { LoadedPluginTools } from './mcpConfig';
 
 const CHANNEL = 'mcp';
 
-/** The revision the client speaks. A server answering another one fails
- *  the start; the official TypeScript SDK answers it from 1.25 on. */
-const PROTOCOL = McpProtocol.v2025_11_25;
+/** The revisions the client speaks, newest first: the stateful ones
+ *  effect/ai's client has an adapter for. The client takes one adapter and
+ *  accepts only its revision, so a server is asked for the first and, when
+ *  it answers a later entry, started again on that one. */
+const PROTOCOLS = [
+  McpProtocol.v2025_11_25,
+  McpProtocol.v2025_06_18,
+  McpProtocol.v2025_03_26,
+] as const;
+type Protocol = (typeof PROTOCOLS)[number];
 const START_TIMEOUT = Duration.seconds(30);
 /** How long the process group has after SIGTERM before SIGKILL, and how
  *  long an exited server's stderr may take to finish draining. */
@@ -272,50 +281,80 @@ const recordingRevision = (transport: McpClient.Transport) => {
   return { transport: recording, answered: () => answered };
 };
 
+/**
+ * Spawn `config`'s server and initialize it on `protocol`, in a scope of its
+ * own under the caller's. A server asked for the newest revision that
+ * answers an older one the client speaks is stopped and started on that one.
+ */
+const open = (
+  config: McpServerConfig,
+  protocol: Protocol,
+): Effect.Effect<
+  McpClient.McpClient,
+  McpStartError | McpClientError.McpClientError,
+  Scope.Scope | ChildProcessSpawner.ChildProcessSpawner | SubscriptionAccounts
+> =>
+  Effect.gen(function* () {
+    const scope = yield* Scope.fork(yield* Effect.scope, 'sequential');
+    const stderr = yield* stderrLogging(config.name);
+    const { transport, answered } = recordingRevision(
+      yield* McpClient.stdio({
+        command: ChildProcess.make(config.command, [...config.args], {
+          env: yield* serverEnv(config),
+          extendEnv: false,
+          // After the client's own close: SIGTERM to the process group, then
+          // SIGKILL once this has passed.
+          forceKillAfter: STOP_TIMEOUT,
+          ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
+        }),
+        protocol,
+      }).pipe(
+        Effect.provideService(
+          ChildProcessSpawner.ChildProcessSpawner,
+          stderr.spawner,
+        ),
+        Scope.provide(scope),
+      ),
+    );
+    // Runs before the transport's close, which ends the process.
+    yield* Scope.addFinalizer(scope, stderr.stopping);
+    return yield* McpClient.make({
+      // The app the process runs, as it names itself to model providers.
+      name: (yield* SubscriptionAccounts).client.id,
+      version: '1',
+    }).pipe(
+      Effect.provideService(McpClient.Transport, transport),
+      Scope.provide(scope),
+      // At initialization the client refuses only a server that answered
+      // another revision than the one asked for.
+      Effect.catchReason('McpClientError', 'UnsupportedError', () => {
+        const revision = answered();
+        const older =
+          protocol === PROTOCOLS[0]
+            ? PROTOCOLS.find((p) => p.protocolVersion === revision)
+            : undefined;
+        if (older !== undefined)
+          return Scope.close(scope, Exit.void).pipe(
+            Effect.andThen(open(config, older)),
+          );
+        // Revisions are dates, so an earlier one is an older MCP SDK the
+        // server can update; a later one is ahead of this client.
+        const advice =
+          revision === undefined || revision < protocol.protocolVersion
+            ? 'update the server (its MCP SDK is older)'
+            : 'this client does not accept a newer revision yet';
+        return Effect.fail(
+          new McpStartError({
+            message: `it answered MCP revision ${revision ?? '(none)'}, but this client speaks ${PROTOCOLS.map((p) => p.protocolVersion).join(', ')}; ${advice}`,
+          }),
+        );
+      }),
+    );
+  });
+
 /** Spawn, initialize and list, in the caller's scope. */
 const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
-  const stderr = yield* stderrLogging(config.name);
-  const { transport, answered } = recordingRevision(
-    yield* McpClient.stdio({
-      command: ChildProcess.make(config.command, [...config.args], {
-        env: yield* serverEnv(config),
-        extendEnv: false,
-        // After the client's own close: SIGTERM to the process group, then
-        // SIGKILL once this has passed.
-        forceKillAfter: STOP_TIMEOUT,
-        ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
-      }),
-      protocol: PROTOCOL,
-    }).pipe(
-      Effect.provideService(
-        ChildProcessSpawner.ChildProcessSpawner,
-        stderr.spawner,
-      ),
-    ),
-  );
-  // Runs before the transport's close, which ends the process.
-  yield* Effect.addFinalizer(() => stderr.stopping);
-  const client = yield* McpClient.make({
-    // The app the process runs, as it names itself to model providers.
-    name: (yield* SubscriptionAccounts).client.id,
-    version: '1',
-  }).pipe(
-    Effect.provideService(McpClient.Transport, transport),
-    // At initialization the client refuses only a server that answered
-    // another revision. Revisions are dates, so an earlier one is an older
-    // MCP SDK the server can update; a later one is ahead of this client.
-    Effect.mapError((error) => {
-      if (error.reason._tag !== 'UnsupportedError') return error;
-      const revision = answered();
-      const advice =
-        revision === undefined || revision < PROTOCOL.protocolVersion
-          ? 'update the server (its MCP SDK is older)'
-          : 'this client does not accept a newer revision yet';
-      return new McpStartError({
-        message: `it answered MCP revision ${revision ?? '(none)'}, but MCP ${PROTOCOL.protocolVersion} is required; ${advice}`,
-      });
-    }),
-  );
+  const client = yield* open(config, PROTOCOLS[0]);
   const tools = new Map<string, ITool<Error, PluginToolServices>>();
   // A server that declares no tools capability lists none.
   for (const listed of yield* client.listTools()) {
