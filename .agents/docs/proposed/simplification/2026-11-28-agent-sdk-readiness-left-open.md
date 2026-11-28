@@ -79,7 +79,7 @@ Neither can land in a scheduled run; each is a design decision the owner owns.
    sends `'ask'`. The owner-rule reading is "collapse the constant column to the
    boolean it is." **But it is not a free collapse.** `runPolicy`
    (`approvalBypassKind.ts`) returns `limit ?? project`, reusing `'ask'` as both
-   the narrow marker *and* the resulting `ApprovalPolicy` value, so
+   the narrow marker _and_ the resulting `ApprovalPolicy` value, so
    `ApprovalPolicyLimit` is a (currently degenerate) subset of `ApprovalPolicy`:
    "the policy a launch may narrow a run to." A boolean would forfeit the ability
    to narrow to any policy other than Ask should one below it return. So this is a
