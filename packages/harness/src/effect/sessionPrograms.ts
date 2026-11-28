@@ -256,7 +256,7 @@ export function makeSessions(
               interactions: { approvalPromptsUnavailable: true },
             }),
             ...(!persistent && {
-              transcriptMode: { kind: 'ephemeral' },
+              ephemeral: true,
             }),
           }),
           sessionFor,

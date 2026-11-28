@@ -18,8 +18,6 @@ import {
   type ToolError,
   logFailure,
   withLogChannel,
-  Settings,
-  type SettingsStores,
   type StateReadFailed,
   withPerKeyLane,
   type PerKeyLane,
@@ -28,10 +26,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Type-only imports
 import type { ModelReasoningEffort } from '@openai/codex-sdk';
-import {
-  CODEX_MODEL_SETTING,
-  CODEX_REASONING_EFFORT_SETTING,
-} from '@texra/shared/settings/integrationSettings';
+import { CODEX_DEFAULT_MODEL } from '@texra/shared/agentCliSettings';
 
 const CHANNEL = 'codexConfig';
 
@@ -73,39 +68,36 @@ const UNPROBED_ROUTE_EFFORTS: readonly ReasoningEffort[] = EFFORT_SCALE.slice(
 );
 
 /**
- * Resolve the configured Codex model and effort through the reasoning
- * policy. A level above `high` is kept only when the installed CLI
+ * The run a Codex call asks for: its own model and effort, else the
+ * defaults, through the reasoning policy. A level above `high` is kept only when the installed CLI
  * (`binaryPath`) reports it for the model's slug, so other levels never wait
  * on a slow or hung Codex binary.
  */
 export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
-  stores: SettingsStores,
   binaryPath: string | undefined,
+  input: {
+    readonly model?: string | null;
+    readonly effort?: AgentCliEffort | null;
+  },
 ): Effect.fn.Return<
   CodexRun,
   ToolError | StateReadFailed,
   ChildProcessSpawner
 > {
-  const modelString = yield* Settings.get(stores, CODEX_MODEL_SETTING);
-  const userEffort = yield* Settings.get(
-    stores,
-    CODEX_REASONING_EFFORT_SETTING,
+  const selection = yield* selectAgentCliModel(
+    input.model ?? CODEX_DEFAULT_MODEL,
+    CODEX_MODEL_RULE,
   );
-  const selection = yield* selectAgentCliModel(modelString, CODEX_MODEL_RULE);
+  const asked = input.effort ?? undefined;
   const slug = codexBackendModelId(selection.config);
-  const uncapped = yield* agentCliReasoning(selection, undefined, {
-    userEffort,
-  });
+  const uncapped = yield* agentCliReasoning(selection, asked, {});
   const { effort } = uncapped.choice;
   const resolved =
     effort === null || UNPROBED_ROUTE_EFFORTS.includes(effort)
       ? uncapped
       : yield* codexRouteEfforts(binaryPath, slug).pipe(
           Effect.flatMap((routeEfforts) =>
-            agentCliReasoning(selection, undefined, {
-              userEffort,
-              routeEfforts,
-            }),
+            agentCliReasoning(selection, asked, { routeEfforts }),
           ),
         );
   return {

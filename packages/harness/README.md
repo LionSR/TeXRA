@@ -209,7 +209,7 @@ corrupt stores (`*.corrupt-<ms>`) are removed only on explicit user deletion
 ## Runtime reference
 
 <details>
-<summary><strong>Peer deps, approvals, Nunjucks `system` note, MCP, memory, logging, and limits</strong></summary>
+<summary><strong>Peer deps, approvals, MCP, memory, logging, and limits</strong></summary>
 
 - **Peers & credentials:** Install `effect`, `@effect/platform-node`,
   `@effect/sql-sqlite-node` (`^4.1.3`), and [`@texra-ai/llm`](../llm/README.md)
@@ -224,11 +224,11 @@ corrupt stores (`*.corrupt-<ms>`) are removed only on explicit user deletion
   `LaunchRefused`, `ToolsRefused`, or `RunFailure`; `resume` fails with
   `ResumeRefused` (`finished`, `unusableCheckpoint`, `earlierBuild`,
   `pluginUnavailable`, `notResumable`).
-- **System prompt (`system`):** Rendered once at launch as author-owned Nunjucks
-  with `CWD`; never place end-user text inside `system` (`AGENTS.md`,
-  `MEMORY.md`, paths, and git branch are never template-rendered).
+- **System prompt (`system`):** Sent as written; it is not a template, so
+  an expression in it (or in `AGENTS.md`, `MEMORY.md`, a path or a git
+  branch) reaches the model as text and never runs.
 - **Approvals:** Default policy is `yolo`; narrow with
-  `approval: 'ask' | 'never'` or `Settings.set`. Under `ask`, attach
+  `approval: 'ask'` or `Settings.set`. Under `ask`, attach
   `session.attach({ approve })` (requests are durable rows; questions and
   post-retry prompts never auto-answer).
 - **Platform (`nodePlatform`):** Reads `<storageDir>/mcp.json` (stdio MCP

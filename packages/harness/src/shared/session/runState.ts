@@ -343,12 +343,14 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
     requires: ({ payload }) => (payload.cause === 'fork' ? 'any' : 'opened'),
     apply: (state, row, copies) => {
       const p = row.payload;
-      const input = withInput(state.input, p.input);
       if (p.cause === 'fork') {
-        const first = state.at === null && state.messages.length === 0;
-        if (!first || p.range.to !== 0)
+        if (state.at !== null || state.messages.length > 0)
           return outOfOrder('a fork edit must be the first view of its run');
-        return Result.succeed({ ...state, messages: p.messages, input });
+        return Result.succeed({
+          ...state,
+          messages: p.messages,
+          input: withInput(state.input, p.input),
+        });
       }
       if (p.range.to > state.messages.length)
         return outOfOrder(
@@ -358,6 +360,7 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
       // next one waiting: so a resume applies each exactly once.
       const [asked, ...waiting] = state.contextEdits;
       const agent = p.cause === 'edit';
+      const compaction = p.cause === 'compaction' ? p : null;
       if (
         agent &&
         (asked === undefined ||
@@ -376,19 +379,20 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
       return Result.succeed({
         ...state,
         messages,
-        invocation: p.trigger === 'overflow' ? null : state.invocation,
-        overflowCompacted: state.overflowCompacted || p.trigger === 'overflow',
+        invocation:
+          compaction?.trigger === 'overflow' ? null : state.invocation,
+        overflowCompacted:
+          state.overflowCompacted || compaction?.trigger === 'overflow',
         continuation: null,
         // The next step renders the system text again, every change in it.
         offeredSystem: null,
         offeredContext: null,
-        usage: addUsage(state.usage, p.usage),
+        usage: addUsage(state.usage, compaction?.usage ?? null),
         contextEdits: agent ? waiting : state.contextEdits,
         countStale:
           state.countStale ||
           p.range.from !== p.range.to ||
           p.messages.length > 0,
-        input,
       });
     },
   },

@@ -15,7 +15,6 @@ import {
   splitContentLines,
   type FileLocation,
 } from '@texra-ai/worldline/schemas';
-import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
 import { runTool, type ToolMissing } from '@texra/utils/system/toolChecks';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -24,7 +23,7 @@ import {
   TIKZ_INPUT_DIRECTORY_SETTING,
 } from '@texra/shared/settings/texraSettings';
 
-// Raw tail, no TeX-log parsing -- a deliberate choice (see compileCheck.ts):
+// Raw tail, no TeX-log parsing -- a deliberate choice:
 // tex compile logs are noisy and heuristic parsing is a losing game, so every
 // caller gets the same last-N-lines excerpt an LLM or a human can read as-is.
 const LOG_TAIL_LINES = 200;
@@ -35,17 +34,6 @@ interface LaTeXCompileOptions {
   readonly outputDirectory?: string;
   /** The engine to drive: latexmk unless named. */
   readonly compiler?: (typeof SUPPORTED_LATEX_COMPILERS)[number];
-  /** Millisecond timeout per compiler invocation. Kills the child on expiry. */
-  readonly timeout?: number;
-  /**
-   * Extra directories to prepend onto the kpathsea search path (TEXINPUTS /
-   * BIBINPUTS / BSTINPUTS), after the main file's own directory and before the
-   * workspace root. Used when a run-storage document compiles outside its
-   * original location so relative `\input{…}` / `\bibliography{…}` targets
-   * (e.g. `figures/fig.tex`, `library.bib`) still resolve against the original
-   * source directory.
-   */
-  readonly extraInputDirs?: readonly string[];
 }
 
 /**
@@ -85,9 +73,15 @@ function buildKpathseaSearchPath(
 }
 
 /**
- * Build the kpathsea search-path overrides (TEXINPUTS / BIBINPUTS / BSTINPUTS)
- * for a LaTeX compile, prepending the workspace and TikZ input directories onto
- * any inherited values.
+ * The kpathsea search-path overrides (TEXINPUTS / BIBINPUTS / BSTINPUTS) for
+ * compiling a document in `documentDir`, prepended onto any inherited values.
+ * The document's own directory comes first — ahead of `.` (the compiler's
+ * cwd, which is the workspace root, not the document's folder) so a
+ * subfolder document's relative `\input{…}` resolves against its own tree
+ * rather than a same-named file at the workspace root. The workspace root
+ * (when the settings put it on the search path) and the TikZ directory
+ * follow. Bibliography search omits `.` and TikZ — only directories that can
+ * hold `.bib`/`.bst` matter there.
  *
  * The three inherited values come from the ambient Effect `ConfigProvider`
  * (the live process environment in production). The subprocess still inherits
@@ -95,14 +89,24 @@ function buildKpathseaSearchPath(
  * only override the three search paths that need prepending.
  */
 const latexInputEnv = Effect.fn('texTools.latexInputEnv')(function* (
-  texInputParts: readonly string[],
-  bibSearchParts: readonly string[],
+  documentDir: string,
+  workspaceRoot: string | undefined,
+  tikzInputDirectory: string,
 ): Effect.fn.Return<Record<string, string>> {
   const [tex, bib, bst] = (yield* Effect.all([
     Config.String('TEXINPUTS').pipe(Config.option, Effect.orDie),
     Config.String('BIBINPUTS').pipe(Config.option, Effect.orDie),
     Config.String('BSTINPUTS').pipe(Config.option, Effect.orDie),
   ])).map(Option.getOrUndefined);
+  // A blank part is dropped by `buildKpathseaSearchPath`.
+  const workspaceParts = workspaceRoot ? [workspaceRoot] : [];
+  const texInputParts = [
+    documentDir,
+    '.',
+    ...workspaceParts,
+    tikzInputDirectory,
+  ];
+  const bibSearchParts = [documentDir, ...workspaceParts];
   const texInputs = buildKpathseaSearchPath(texInputParts, tex);
   const bibInputs = buildKpathseaSearchPath(bibSearchParts, bib);
   const bstInputs = buildKpathseaSearchPath(bibSearchParts, bst);
@@ -112,35 +116,6 @@ const latexInputEnv = Effect.fn('texTools.latexInputEnv')(function* (
     ...(bstInputs && { BSTINPUTS: bstInputs }),
   };
 });
-
-/**
- * Compose the kpathsea search-path parts for a compile. The document's own
- * directory and any caller-supplied source directories come first — ahead of
- * `.` (the compiler's cwd, which is the workspace root, not the document's
- * folder) so a subfolder document's relative `\input{…}` resolves against its
- * own tree rather than a same-named file at the workspace root; the document
- * dir also precedes the extra source dirs so a revised sibling in run storage
- * beats the original-source fallback. The workspace root and TikZ dir follow.
- * Bibliography search omits `.` and TikZ — only directories that can hold
- * `.bib`/`.bst` matter there.
- */
-function buildLatexSearchParts(input: {
-  documentDir: string;
-  extraInputDirs: readonly string[];
-  /** The workspace root, when the settings put it on the search path. */
-  workspaceRoot: string | undefined;
-  tikzInputDirectory: string | undefined;
-}): { texInputParts: string[]; bibSearchParts: string[] } {
-  const { documentDir, extraInputDirs, workspaceRoot, tikzInputDirectory } =
-    input;
-  const sourceDirs = [documentDir, ...extraInputDirs];
-  const workspaceParts = workspaceRoot ? [workspaceRoot] : [];
-  const tikzParts = tikzInputDirectory?.trim() ? [tikzInputDirectory] : [];
-  return {
-    texInputParts: [...sourceDirs, '.', ...workspaceParts, ...tikzParts],
-    bibSearchParts: [...sourceDirs, ...workspaceParts],
-  };
-}
 
 /**
  * Result of a {@link compileLatex2Pdf} attempt. A discriminated union on `ok`
@@ -154,20 +129,6 @@ function buildLatexSearchParts(input: {
 type CompileLatex2PdfResult =
   | { ok: true; pdfPath: string }
   | { ok: false; logTail: string };
-
-/**
- * The build folder of one input, `<dir>/build/<stem>`. Inputs compiled at
- * once get one each: two inputs in one folder that share an `\include` or a
- * `.bib` would otherwise write the same `.aux`/`.bbl` files into one `build/`
- * and corrupt each other's.
- */
-export function perInputBuildDirectory(texPath: string): string {
-  return path.join(
-    path.dirname(texPath),
-    LATEX_BUILD_DIRECTORY,
-    path.parse(texPath).name,
-  );
-}
 
 /**
  * Compile a LaTeX file to PDF.
@@ -199,12 +160,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   ToolMissing,
   FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner
 > {
-  const {
-    outputDirectory,
-    compiler = 'latexmk',
-    timeout,
-    extraInputDirs = [],
-  } = options;
+  const { outputDirectory, compiler = 'latexmk' } = options;
   const fs = yield* FileSystem.FileSystem;
   const workspaceRoot = (yield* WorkspaceFs).root;
   const latexFile = latexLocation.absolutePath;
@@ -230,12 +186,10 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     yield* fs.makeDirectory(outDir, { recursive: true });
 
     // TeX resolves relative `\input{…}` / `\bibliography{…}` against the
-    // compiler's cwd and TEXINPUTS, not the main file's location. When a
-    // run-storage document (round output or latexdiff) compiles from a build
-    // directory, its own folder and any caller-supplied source directories must
-    // be on the search path or `\input{preamble}`, `\input{figures/…}`, and the
-    // bibliography fail to resolve. The file's own directory comes first so a
-    // revised sibling wins over the original source fallback.
+    // compiler's cwd and TEXINPUTS, not the main file's location, so the
+    // file's own folder goes on the search path: a document compiled into
+    // another build directory still resolves `\input{preamble}`,
+    // `\input{figures/…}` and its bibliography.
     const documentDir = path.dirname(latexFile);
 
     const tikzInputDirectory = yield* Settings.get(
@@ -246,16 +200,11 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
       stores,
       INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING,
     );
-    const { texInputParts, bibSearchParts } = buildLatexSearchParts({
+    const env = yield* latexInputEnv(
       documentDir,
-      extraInputDirs,
-      workspaceRoot: includeWorkspace ? workspaceRoot : undefined,
+      includeWorkspace ? workspaceRoot : undefined,
       tikzInputDirectory,
-    });
-
-    // Build kpathsea search-path overrides, prepending workspace/TikZ dirs onto
-    // any inherited values. `path.delimiter` keeps it cross-platform.
-    const env = yield* latexInputEnv(texInputParts, bibSearchParts);
+    );
     for (const [key, value] of Object.entries(env)) {
       yield* Effect.logDebug(`Setting ${key} to: ${value}`);
     }
@@ -276,8 +225,8 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
 
     // Interrupting the compile stops the engine: the fiber's interruption is
     // what aborts the spawn, so nothing threads a signal through. latexmk
-    // hands each pass to a pdflatex/bibtex/biber child, so its stop (and
-    // timeout) signals the whole tree: a tracked-pid kill would stop latexmk
+    // hands each pass to a pdflatex/bibtex/biber child, so its stop
+    // signals the whole tree: a tracked-pid kill would stop latexmk
     // and leave its engine writing into the build directory. A lone pdflatex
     // has no children to reach, and the tree kill's detached spawn would move
     // it out of our process group, where a hard host kill no longer reaches
@@ -286,7 +235,6 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
       runTool(tool, args, {
         cwd: workspaceRoot,
         env,
-        timeout,
         killProcessTree: tool === 'latexmk',
       });
     const pdflatex = runEngine('pdflatex', pdflatexArgs);

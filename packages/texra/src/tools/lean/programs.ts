@@ -3,7 +3,7 @@
  * `lean-simplify` brings them toward library quality without changing what
  * they prove, `blueprint` writes or brings up to date a LeanBlueprint
  * document, and `lean-search` finds what Mathlib and the project already
- * have (one child, built on the core plugin's `builtIn:task`). The others
+ * have (one child). The others
  * each run one child agent per round, told the program's system text and given
  * the file, shell and Lean tools, and checks the round's work in code before
  * it ends or starts the next: `prove` and `lean-simplify` with Lean's own

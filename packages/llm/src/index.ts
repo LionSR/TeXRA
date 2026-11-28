@@ -48,6 +48,7 @@ export {
   ModelOriginSchema,
   originOf,
   sameModelOrigin,
+  takesImageInput,
   TurnProtocolSchema,
 } from './protocol.js';
 export type { ModelOrigin, TurnUsage } from './protocol.js';
@@ -93,7 +94,6 @@ export { ReasoningEffortSchema } from 'llm-zoo/schemas';
 // Credentials and the provider manifest over llm-zoo.
 export {
   CredentialOriginSchema,
-  resolveCredential,
   SecretsFailed,
 } from './providers/credentials.js';
 export type {
@@ -122,6 +122,7 @@ export {
   apiKeyOrigins,
   apiKeySecretName,
   apiKeyEntry,
+  routedApiKeyProvider,
   exposeApiKey,
   hasUsableApiKey,
   isApiProvider,
@@ -156,6 +157,7 @@ export type {
 export {
   chooseReasoning,
   DEFAULT_EFFORT,
+  nearestEffort,
   ReasoningChoiceError,
   reasoningOnRoute,
 } from './models/reasoningChoice.js';

@@ -3,17 +3,14 @@
  * the uniform tool definitions of a `TurnRequest`, and the per-call dispatch
  * facts stamped on a `response` row so the fold and the resume rule need no
  * tool registry. Contiguous parallel calls run together; every barrier
- * runs alone; a call whose name and arguments repeat an earlier one in the same
- * window is a duplicate that never executes.
+ * runs alone.
  */
 import { Effect, Predicate, Result, Schema } from 'effect';
 import type { ResolvedTools } from '@agent/runtime/agentToolResolution';
-import { partitionDuplicateCalls } from '@tools/core/toolCallParsing';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { DispatchFacts } from '@shared/schemas';
 import type { HistoryMessage } from '@shared/session/historyTurns';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 /** One local call of a pending response. */
 interface LocalCall {
@@ -56,49 +53,29 @@ export function parseCallArguments(
 }
 
 /**
- * The dispatch facts of one response's local calls, stamped at append
- * time. Every call gets its card id here: its card opens under it when its
- * body starts, and its result closes it.
+ * The dispatch fact of one local call, stamped at append time: its tool's
+ * lane and replay word (a tool the step does not offer is an unsafe
+ * barrier), and its card id, which its card opens under when its body
+ * starts and its result closes.
  */
-export function dispatchFactsFor(
-  calls: readonly LocalCall[],
+export function dispatchFact(
+  call: Pick<LocalCall, 'callId' | 'name'>,
   /** The request's step's tools; undefined while no step is open. */
   registry: ResolvedTools['registry'] | undefined,
-  logger: AgentTrace,
-): readonly DispatchFacts[] {
-  const parsed = calls.map((call) => ({
+): DispatchFacts {
+  const tool = registry?.get(call.name);
+  return {
     callId: call.callId,
-    name: call.name,
-    input: parseCallArguments(call, logger),
-  }));
-  const laneOf = (call: { readonly name: string }) =>
-    registry?.get(call.name)?.lane ?? 'barrier';
-  const isParallel = (call: { readonly name: string }) =>
-    laneOf(call) === 'parallel';
-  const duplicates =
-    parsed.length > 1 ? partitionDuplicateCalls(parsed, isParallel) : null;
-  if (duplicates !== null && duplicates.size > 0) {
-    logger.debug(
-      `Deduplicated ${formatResultCount(duplicates.size, 'parallel tool call')} with identical name and arguments`,
-    );
-  }
-  return parsed.map((call) => {
-    const primaryIndex = duplicates?.get(call.callId);
-    return {
-      callId: call.callId,
-      toolName: call.name,
-      lane: laneOf(call),
-      replay: registry?.get(call.name)?.replay ?? 'unsafe',
-      duplicateOf:
-        primaryIndex === undefined ? null : parsed[primaryIndex].callId,
-      logId: crypto.randomUUID(),
-    };
-  });
+    toolName: call.name,
+    lane: tool?.lane ?? 'barrier',
+    replay: tool?.replay ?? 'unsafe',
+    logId: crypto.randomUUID(),
+  };
 }
 
 /** What the model reads for a call that may have run and left no result. */
 export const SKIPPED_OUTCOME_UNKNOWN =
-  'The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.';
+  'The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown: it may or may not have run.';
 /** What the model reads for a call of a recovered response that never ran. */
 export const SKIPPED_NOT_STARTED =
   'The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.';

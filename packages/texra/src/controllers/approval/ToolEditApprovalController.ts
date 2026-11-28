@@ -24,16 +24,7 @@
  * user never changed just goes. A window that goes while the request still
  * waits takes its edits with it.
  */
-import {
-  Cause,
-  Effect,
-  Fiber,
-  type FileSystem,
-  type Path,
-  Ref,
-  Scope,
-  Semaphore,
-} from 'effect';
+import { Cause, Effect, Fiber, Ref, Scope, Semaphore } from 'effect';
 
 import {
   type OutcomeOf,
@@ -58,18 +49,12 @@ import {
   runLatexdiff,
   type BuildDisplayFn,
   type LatexPreviewEntry,
+  type PreviewServices,
 } from '@texra/controllers/approval/latexPreview';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'ToolEditApproval';
 
-/**
- * Runtime services this controller's programs take: preview programs stage
- * temp files and the host build spawns the compiler. A host provides them
- * once, where it forks {@link ToolEditApprovalController.follow}.
- */
-type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 type PreviewCall<A> = Effect.Effect<A, HostCommandFailure, PreviewServices>;
 /** An approval's session bypass, sent with its `request.decide`. */
 type Grant = Extract<HostCommand, { kind: 'toolEdit' }>['grant'];
@@ -296,9 +281,7 @@ export class ToolEditApprovalController {
                 })
               : Effect.uninterruptible(entry.preview.openProposed());
           case 'showLatexdiff':
-            // ONLYCHANGEDPAGE keeps a tool-edit diff focused on the changes.
             return runLatexdiff(entry, {
-              subtype: 'ONLYCHANGEDPAGE',
               openBuildDisplay: this.buildDisplayFor(entry),
             });
         }
@@ -402,21 +385,13 @@ export class ToolEditApprovalController {
    * cannot be read may hold the user's edits, so the read fails the release
    * before its dispose: the staged files stay, and the report names where.
    */
-  private readonly unapplied: (
+  private unapplied(
     pending: PendingToolEdit,
     preview: ToolEditPreview,
     proposal: string,
     applied: Ref.Ref<boolean>,
-  ) => PreviewCall<string | undefined> = Effect.fn(
-    'ToolEditApprovalController.unapplied',
-  )(
-    { self: this },
-    function* (
-      pending: PendingToolEdit,
-      preview: ToolEditPreview,
-      proposal: string,
-      applied: Ref.Ref<boolean>,
-    ) {
+  ): PreviewCall<string | undefined> {
+    return Effect.gen({ self: this }, function* () {
       if (yield* Ref.get(applied)) return undefined;
       const listed = this.options.session.view
         .current()
@@ -435,8 +410,8 @@ export class ToolEditApprovalController {
         ),
       );
       return left === proposal.replaceAll('\r\n', '\n') ? undefined : left;
-    },
-  );
+    }).pipe(Effect.withSpan('ToolEditApprovalController.unapplied'));
+  }
 
   private decide(
     pending: PendingRequest,
@@ -462,11 +437,9 @@ export class ToolEditApprovalController {
    *  build runs to its end, in the request's scope, so its close waits for
    *  it rather than delete the files it reads. */
   private buildDisplayFor(entry: StagedPreview): BuildDisplayFn {
-    return (location, options) =>
+    return (location) =>
       Effect.forkIn(
-        Effect.uninterruptible(
-          this.options.host.openBuildDisplay(location, options),
-        ),
+        Effect.uninterruptible(this.options.host.openBuildDisplay(location)),
         entry.scope,
       ).pipe(Effect.flatMap(Fiber.join));
   }

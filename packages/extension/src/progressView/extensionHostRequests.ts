@@ -1,19 +1,16 @@
 /**
  * The extension's half of its window (`openGuiWindow`): the verbs this host
  * performs, bound onto VS Code's commands, editors, pickers, and dialogs,
- * plus the few requests the extension answers its own way -- its tab
- * pop-out, its getting-started commands.
- * Everything else is the one shared body, which decides the order, the
- * guards, and the rejection wording for both GUI hosts. Each handler answers
- * exactly once with an outcome or a request error; a request the extension
- * does not perform is `Rejected` with its reason, never dropped.
+ * its tab pop-out and its getting-started commands among them. The one
+ * shared body decides the order, the guards, and the rejection wording for
+ * both GUI hosts.
  */
 import * as vscode from 'vscode';
-import { Effect, FiberHandle } from 'effect';
+import { Effect } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/worldline';
 import { type ProcessServices } from '@texra-ai/worldline/host';
-import { withLogChannel, pathToLocationIn } from '@texra-ai/worldline/plugins';
+import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { cloneOverleafProject } from '@commands/git/gitCommands';
@@ -22,51 +19,33 @@ import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
-import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { askNotice, vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openFilesDialog, quickPick } from '@frontend/ui/dialogs';
-import { withVSCodeProgress } from '@frontend/ui/progress';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
-import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import type {
-  ConfirmQuestion,
-  HostFailed,
-  NoticeLevel,
-} from '@texra/hosts/uiHosts';
+import type { HostFailed, NoticeLevel } from '@texra/hosts/uiHosts';
 
-import {
-  TRANSCRIPT_EXPORT_FORMAT_CHOICES,
-  TRANSCRIPT_EXPORT_PICK,
-  type TranscriptExportOpenKind,
-} from '@texra/controllers/progressView/exportTranscript';
+import type { TranscriptExportOpenKind } from '@texra/controllers/progressView/exportTranscript';
+import { TRANSCRIPT_EXPORT_COPY } from '@ui/copy/transcriptExport';
 import {
   hostFailed,
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
-import type {
-  OwnHostHandlers,
-  SharedHostCommandBindings,
-} from '@texra/controllers/session/openGuiWindow';
+import type { GuiWindowHost } from '@texra/controllers/session/openGuiWindow';
 import {
   type HostCommandFailure,
   type RequestRefusal,
 } from '@texra/controllers/session/hostCallFailure';
 
 // Local file imports
-import { handleCompare } from './compareFiles';
 import { openFile } from './openFile';
 
 const CHANNEL = 'ExtensionHostRequests';
 
 export interface ExtensionHostRequestsOptions {
   readonly roots: WorkspaceRoots;
-  /** "Show a built file", bound to this window's roots and the view's
-   *  scope, so a close of the view cancels a PDF viewer open still
-   *  waiting. */
-  readonly showBuilt: ShowBuilt;
   readonly extensionPath: string;
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
@@ -83,8 +62,6 @@ export interface ExtensionHostRequestsOptions {
   popOutToEditor(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
 }
-
-const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
 /** The file a tab shows, by its absolute path: a text editor's, or a
  *  custom editor's (an image or a PDF); undefined for any other tab. */
@@ -164,16 +141,12 @@ const openExportPath = (
   );
 };
 
-/** This window's half of its `openGuiWindow`, for the view's scope. */
-export const createExtensionHostRequests = Effect.fn(
-  'createExtensionHostRequests',
-)(function* (options: ExtensionHostRequestsOptions) {
+/** This window's half of its `openGuiWindow`, for the view's scope: every
+ *  verb mapped onto a VS Code command, an editor API, or the sidebar. */
+export function createExtensionHostRequests(
+  options: ExtensionHostRequestsOptions,
+): Omit<GuiWindowHost, 'openFile' | 'window' | 'runs'> {
   const { roots } = options;
-
-  // The window's one comparison refresh: a newer comparison replaces it,
-  // and the view's scope ends it.
-  const diffRefresh = yield* FiberHandle.make();
-  const at = (file: string) => pathToLocationIn(roots.workspace, file);
 
   /** What each getting-started action runs. */
   const gettingStarted = (action: GettingStartedAction) => {
@@ -187,31 +160,13 @@ export const createExtensionHostRequests = Effect.fn(
     }
   };
 
-  /** This host's half of the shared body's binding table: every verb mapped
-   *  onto a VS Code command, an editor API, or the sidebar. */
-  const bindings: SharedHostCommandBindings = {
+  return {
+    // The host's members read `this`, so they cross the boundary bound.
+    notify: (level: NoticeLevel, message: string) =>
+      vscodeUi.notify(level, message),
+    ask: askNotice,
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
     openFiles: openFilesDialog,
-    latexdiff: {
-      openDiffs: ([first, ...rest]) =>
-        first === undefined
-          ? Effect.void
-          : runHandler(
-              'openLatexdiffs',
-              options.showBuilt([at(first), ...rest.map(at)], {
-                preserveFocus: true,
-              }),
-            ),
-      withProgress: (title, task) =>
-        withVSCodeProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title,
-            cancellable: false,
-          },
-          task,
-        ),
-    },
     openSettings: (target) =>
       runHandler('openSettings', options.openSettings(target)),
     // The key store announces the write (`credentialChanged`), which the
@@ -235,50 +190,24 @@ export const createExtensionHostRequests = Effect.fn(
       currentFile,
       openedFiles,
     },
-  };
-
-  /**
-   * The requests this host performs its own way. The capabilities that still
-   * answer with a promise - VS Code commands, the editor APIs - are lifted
-   * once (`executeVscodeCommand`), and this extension's own
-   * commands run as the programs behind them, so no handler re-enters the
-   * runtime between here and the bridge that runs this program.
-   */
-  const own: OwnHostHandlers = {
-    popOut: () => Effect.as(options.popOutToEditor(), done),
-    popBack: () => Effect.as(options.showInSidebar(), done),
-    gettingStarted: (request) =>
-      Effect.as(
-        runHandler(request.action, gettingStarted(request.action)),
-        done,
-      ),
-  };
-
-  return {
-    bindings,
-    own,
-    // The host's members read `this`, so they cross the boundary bound.
-    notify: (level: NoticeLevel, message: string) =>
-      vscodeUi.notify(level, message),
-    ask: askNotice,
-    // Each command is named, so a failure carries a tag, never a rejection.
-    files: {
-      openDiff: (base: string, edited: string, title: string) =>
-        runHandler(
-          'compare',
-          handleCompare(at(base), at(edited), title, diffRefresh),
-        ),
-      // The host's members read `this`, so they cross the boundary bound.
-      confirm: (question: ConfirmQuestion) => vscodeUi.confirm(question),
-      openDirectory: revealFileInOS,
+    // Suspended: each acts on the view, which is built after this table.
+    placement: {
+      popOut: Effect.suspend(() => options.popOutToEditor()),
+      popBack: Effect.suspend(() => options.showInSidebar()),
     },
+    // This extension's own commands run as the programs behind them, so no
+    // handler re-enters the runtime between here and the bridge.
+    gettingStarted: (action) =>
+      Effect.asVoid(runHandler(action, gettingStarted(action))),
+    // Each command is named, so a failure carries a tag, never a rejection.
+    openDirectory: revealFileInOS,
     export: {
-      pickFormat: quickPick(TRANSCRIPT_EXPORT_FORMAT_CHOICES, {
-        title: TRANSCRIPT_EXPORT_PICK.title,
-        placeHolder: TRANSCRIPT_EXPORT_PICK.prompt,
+      pickFormat: quickPick(TRANSCRIPT_EXPORT_COPY.formats, {
+        title: TRANSCRIPT_EXPORT_COPY.pick.title,
+        placeHolder: TRANSCRIPT_EXPORT_COPY.pick.prompt,
         ignoreFocusOut: true,
       }).pipe(Effect.map((choice) => choice?.format)),
       openPath: openExportPath,
     },
   };
-});
+}

@@ -88,10 +88,7 @@ test('first-run screenshot', async () => {
 test('command palette', async () => {
   await showLauncher(launched);
   await expect(launched.page.locator('.shell-conversation')).toBeVisible();
-  await launched.page
-    .locator('.shell-sidebar-primary .shell-sidebar-action')
-    .filter({ hasText: 'Commands' })
-    .click();
+  await launched.page.locator('#shellCommands').click();
   await expect(
     launched.page.locator('.desktop-command-palette'),
   ).toHaveAttribute('open');
@@ -113,10 +110,7 @@ test('settings across themes and window sizes', async () => {
       path: test.info().outputPath(`launcher-${theme}.png`),
       animations: 'disabled',
     });
-    await page
-      .locator('.shell-sidebar-footer .shell-sidebar-action')
-      .filter({ hasText: 'Settings' })
-      .click();
+    await page.locator('#shellSettings').click();
     const settings = page.locator('wa-dialog.desktop-settings-overlay');
     await expect(settings).toHaveJSProperty('open', true);
     const tabs = settings
@@ -189,10 +183,9 @@ test('settings across themes and window sizes', async () => {
       .click();
     await settings.locator('[data-section="subscriptions"]').click();
     const subscription = settings.locator('subscription-section').first();
-    // Presentation fixture only: exercise the reported usage-card boundaries
-    // without credentials, provider requests, or changes to account state.
+    // Presentation fixture only: a signed-in account without credentials,
+    // provider requests, or changes to account state.
     await subscription.evaluate((element) => {
-      const now = Date.now();
       Object.assign(element, {
         auth: {
           provider: 'chatgpt',
@@ -200,28 +193,8 @@ test('settings across themes and window sizes', async () => {
           email: 'researcher@example.org',
           preferSubscription: true,
         },
-        now,
-        usage: {
-          providerName: 'ChatGPT',
-          planName: 'Plus',
-          state: 'available',
-          fetchedAt: now,
-          windows: [
-            {
-              name: '5-hour',
-              percentUsed: 1,
-              resetAt: now + 34 * 60_000,
-            },
-            {
-              name: '7-day',
-              percentUsed: 0,
-              resetAt: now + 6 * 86_400_000,
-            },
-          ],
-        },
       });
     });
-    await expect(subscription.locator('.usage-plan')).toContainText('Plus');
     await page.screenshot({
       path: test.info().outputPath(`settings-subscription-${theme}.png`),
       animations: 'disabled',

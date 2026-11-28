@@ -1,0 +1,168 @@
+import { Clock, Effect } from 'effect';
+
+import {
+  API_KEY_PROVIDER_IDS,
+  apiKeyOrigins,
+  providerDisplayName,
+} from '@texra-ai/llm';
+import {
+  SUBSCRIPTION_AUTH_PROVIDERS,
+  joinFacts,
+} from '@texra-ai/worldline/schemas';
+import { Secrets, type SettingsStores } from '@texra-ai/worldline/plugins';
+import type { PlanUsage } from '@texra/shared/model/subscriptionUsage';
+import { formatSubscriptionUsageSummary } from '@ui/copy/subscriptionUsage';
+import {
+  invalidateSubscriptionUsage,
+  subscriptionUsage,
+} from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
+import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
+import { subscriptionAccountLabel } from '@texra/shared/model/subscriptionAuthStatus';
+import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
+import { OWN_API_KEYS } from '@ui/copy/modelAccess';
+
+import {
+  formatCliCodingPlanPreference,
+  formatCliSubscriptionPreference,
+  cliCodingPlanStatus,
+} from '@cli/runtime/models/modelAccessRoute';
+import {
+  readModelAccessStatus,
+  type ModelAccessStatus,
+} from '@texra/controllers/modelAccess/modelAccessPreference';
+
+interface CliModelAccessOverview {
+  readonly access: ModelAccessStatus;
+  readonly lines: readonly string[];
+}
+
+/**
+ * Read the subscription sessions and the effective model-access route. A program,
+ * because the coding-plan key status underneath it is one: the chat surface
+ * yields it, and a Promise-facing caller runs it on its own runtime.
+ */
+export const loadCliModelAccessOverview = Effect.fn(
+  'apiStatus.loadCliModelAccessOverview',
+)(function* (stores: SettingsStores) {
+  const access = yield* readModelAccessStatus(stores);
+  const lines = [
+    ...SUBSCRIPTION_AUTH_PROVIDERS.map(
+      (provider) =>
+        `${SUBSCRIPTION_AUTH_COPY[provider].label} preference: ${formatCliSubscriptionPreference(access.subscriptions[provider])}`,
+    ),
+    ...CODING_PLAN_SUBSCRIPTIONS.map(
+      (plan) =>
+        `${plan.displayName} preference: ${formatCliCodingPlanPreference(access, plan)}`,
+    ),
+    `Otherwise: ${OWN_API_KEYS.label}`,
+  ];
+  return { access, lines } satisfies CliModelAccessOverview;
+});
+
+/** Format a neutral personal-key inventory. */
+function formatPersonalApiKeysLine(
+  personalKeyProviders: readonly string[],
+  label: string = OWN_API_KEYS.inline,
+): string | undefined {
+  if (personalKeyProviders.length === 0) return undefined;
+  const providers = personalKeyProviders
+    .map((provider) => providerDisplayName(provider))
+    .join(', ');
+  return `${label}: ${providers}`;
+}
+
+/**
+ * Build one model-preference status line, or undefined when there is nothing
+ * to show (neither preferred nor configured).
+ */
+function formatModelPreferenceLine(
+  label: string,
+  preferred: boolean,
+  configReady: boolean,
+  missingMessage: string,
+  configStatus: string,
+): string | undefined {
+  if (!preferred && !configReady) return undefined;
+  const status = preferred && !configReady ? missingMessage : configStatus;
+  return joinFacts([
+    `${label}: ${preferred ? 'preferred' : 'not preferred'}`,
+    status,
+  ]);
+}
+
+/** Render each detailed account/access fact on its owning route. */
+export const loadCliDetailedAccountStatusLines = Effect.fn(
+  'apiStatus.loadCliDetailedAccountStatusLines',
+)(function* (stores: SettingsStores) {
+  const [access, keyStatuses] = yield* Effect.all(
+    [
+      readModelAccessStatus(stores),
+      Effect.flatMap(Secrets, apiKeyOrigins),
+    ] as const,
+    { concurrency: 'unbounded' },
+  );
+  // Detailed `/login status` is user-invoked, so reopening it is the manual
+  // refresh path: the cached usage is dropped first, so every read below
+  // asks its plan's endpoint.
+  yield* invalidateSubscriptionUsage();
+  const codingPlanUsageEntries = yield* Effect.forEach(
+    CODING_PLAN_SUBSCRIPTIONS,
+    (plan) => {
+      const status = cliCodingPlanStatus(access, plan);
+      return Effect.map(
+        status.keySet ? subscriptionUsage(stores, plan.id) : Effect.undefined,
+        (usage) => [plan.id, usage] as const,
+      );
+    },
+    { concurrency: 'unbounded' },
+  );
+  const codingPlanUsage = new Map(codingPlanUsageEntries);
+  const now = yield* Clock.currentTimeMillis;
+  const lines: string[] = [];
+  const withUsage = (line: string, snapshot: PlanUsage | undefined): string => {
+    if (!snapshot) return line;
+    const summary = formatSubscriptionUsageSummary(snapshot, now);
+    return joinFacts([line, summary]);
+  };
+
+  for (const provider of SUBSCRIPTION_AUTH_PROVIDERS) {
+    const subscription = access.subscriptions[provider];
+    const line = formatModelPreferenceLine(
+      SUBSCRIPTION_AUTH_COPY[provider].label,
+      subscription.preferSubscription,
+      subscription.signedIn,
+      'sign in required',
+      subscription.signedIn
+        ? `signed in as ${subscriptionAccountLabel(provider, subscription)}`
+        : 'signed out',
+    );
+    if (line) lines.push(line);
+  }
+
+  for (const plan of CODING_PLAN_SUBSCRIPTIONS) {
+    const status = cliCodingPlanStatus(access, plan);
+    const line = formatModelPreferenceLine(
+      plan.displayName,
+      status.preferred,
+      status.keySet,
+      'key required',
+      status.keySet ? 'key configured' : 'key not configured',
+    );
+    if (line) lines.push(withUsage(line, codingPlanUsage.get(plan.id)));
+  }
+
+  lines.push(`Otherwise: ${OWN_API_KEYS.label}`);
+
+  const otherPersonalKeys = formatPersonalApiKeysLine(
+    API_KEY_PROVIDER_IDS.filter(
+      (provider) =>
+        keyStatuses[provider] !== 'none' &&
+        !CODING_PLAN_SUBSCRIPTIONS.some(
+          (plan) => plan.exclusiveCredential && plan.apiProvider === provider,
+        ),
+    ),
+    'Other API keys',
+  );
+  if (otherPersonalKeys) lines.push(otherPersonalKeys);
+  return lines;
+});

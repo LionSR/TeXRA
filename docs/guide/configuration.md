@@ -23,13 +23,13 @@ The page remembers the sub-tab you last opened while Settings stays open.
   multi-agent coordination).
 - **Memory**: the memories TeXRA keeps across tasks.
 - **Plugins**: everything that adds tools or programs: TeXRA's plugins (such
-  as Codex, Claude Code, Zotero, and GitHub), installed Claude Code and Codex
+  as Codex, Claude Code, Lean, and GitHub), installed Claude Code and Codex
   plugins, and your MCP servers. Each plugin can be switched on or off.
 - **LaTeX**: **Dependencies**, **Compile & diff**, **Formatting**, and, in VS
   Code, the recommended **VS Code settings**.
 - **General**: **Appearance** (desktop app only), **Approval** (the approval
   policy, project-folder protection, and the goal spend cap), **Privacy**
-  (telemetry), and **Git** (the GitHub token and Git commit attribution).
+  (telemetry), and **Git** (Git commit attribution).
 
 Commands such as **TeXRA: Model Settings**, **TeXRA: Approval Settings**, or **TeXRA: Git Settings**
 open the matching section directly.
@@ -158,17 +158,12 @@ context, edited files, and media. Discovery has no settings of its own.
 
 The **LaTeX** view contains the settings that remain useful to change:
 
-- compile and diff behavior (auto-compile, opening the PDF, repairing failed
-  compiles, only changed pages in diff PDFs, math markup in diffs, and diffs
-  between consecutive revisions);
+- how the latexdiff preview of an edit is drawn (only changed pages in diff
+  PDFs, math markup in diffs);
 - formatter selection; and
 - inline criticism display (VS Code only).
 
-The replacement engine's rule groups and custom maps are not shown there. Set
-them in `.texra/config.json` under `texra.latex.enabledReplacements`,
-`texra.latex.enabledReplacementsRegex`, `texra.latex.customReplacements` and
-`texra.latex.customReplacementsRegex`. The auto-compile and latexdiff timeouts
-are edited from the CLI's `/config`.
+The auto-compile and latexdiff timeouts are edited from the CLI's `/config`.
 
 The latexdiff picture-environment pattern is a fixed product rule rather than a
 user setting.

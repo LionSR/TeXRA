@@ -1,9 +1,8 @@
-import { Effect } from 'effect';
 // Third-party imports
+import { Effect } from 'effect';
 
 // Local imports - formatter implementations
 import { Settings, type SettingsStores } from '@texra-ai/worldline/plugins';
-import type { LatexFormatterValue } from '@texra/shared/constants/latexConfig';
 
 // Local file imports
 import type { ToolMissing } from '@texra/utils/system/toolChecks';
@@ -17,6 +16,12 @@ import {
   LATEXINDENT_CONFIG_SETTING,
   TEXFMT_CONFIG_SETTING,
 } from '@texra/shared/settings/texraSettings';
+
+/** A formatter the setting can select. */
+type LatexFormatterId = Exclude<
+  typeof LATEX_FORMATTER_SETTING.schema.Type,
+  'none'
+>;
 
 interface LatexFormatterDefinition {
   /** The row holding this formatter's optional config-file path. */
@@ -34,16 +39,13 @@ interface LatexFormatterDefinition {
 
 export interface LatexFormatter extends LatexFormatterDefinition {
   /** The setting value that selected it. */
-  readonly id: Exclude<LatexFormatterValue, 'none'>;
+  readonly id: LatexFormatterId;
   readonly configPath: string;
 }
 
 // Keyed by every selectable formatter, so the setting's validated value
 // always names one.
-const LATEX_FORMATTERS: Record<
-  Exclude<LatexFormatterValue, 'none'>,
-  LatexFormatterDefinition
-> = {
+const LATEX_FORMATTERS: Record<LatexFormatterId, LatexFormatterDefinition> = {
   'tex-fmt': {
     configFile: TEXFMT_CONFIG_SETTING,
     run: runTexFmt,

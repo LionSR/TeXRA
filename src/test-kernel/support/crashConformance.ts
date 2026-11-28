@@ -425,13 +425,16 @@ const until = (storage: string, ready: (rows: readonly Row[]) => boolean) =>
     Effect.timeout('30 seconds'),
   );
 
-/** The root's view edits, by cause and trigger. */
+/** The root's view edits, by cause and, for a compaction, its trigger. */
 const editsOf = (rows: readonly Row[], root: string) =>
   rows
     .filter((row) => row.run === root && row.type === 'context.edit')
-    .map(
-      (row) => `${String(payload(row).cause)}/${String(payload(row).trigger)}`,
-    );
+    .map((row) => {
+      const { cause, trigger } = payload(row);
+      return trigger === undefined
+        ? String(cause)
+        : `${String(cause)}/${String(trigger)}`;
+    });
 
 /** The root waits for input with `count` answers, after its last view edit. */
 const waitingPastLastEdit = (
@@ -930,7 +933,7 @@ export function crashConformanceSuite(
                     'Model saw: Work through the crash task. (+1)',
                     'Model saw: [Previous conversation summary]\n\nThe golden chat so far. (+0)',
                   ],
-                  edits: ['edit/null', 'compaction/user'],
+                  edits: ['edit', 'compaction/user'],
                   requests: ['model consumed 1', 'compact consumed 1'],
                   model: SWITCH_TO,
                   children: 1,
@@ -970,16 +973,6 @@ export function crashConformanceSuite(
                     (type) => !cleanRows.some((row) => row.type === type),
                   ),
                 ).toEqual([]);
-                // The script's `agent()` approval, which its calls share, is the
-                // script call's (attempt 0): every crash point while it is pending
-                // must resume to that same card, never a second one.
-                expect(
-                  cleanRows.some(
-                    (row) =>
-                      row.type === 'request.opened' &&
-                      /:0:\d+$/.test(String(json(row).requestId)),
-                  ),
-                ).toBe(true);
                 expect(
                   violations([], cleanRows, 0, root, expected, [
                     'batch',

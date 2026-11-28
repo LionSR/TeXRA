@@ -92,7 +92,7 @@ const errorStatus = (field: unknown): number | undefined =>
 /** Anthropic's envelope types itself `error`, so the nested type is read first. */
 const statusFromBody = (body: unknown): number | undefined =>
   Option.getOrUndefined(
-    Arr.findFirst(envelopes(body).reverse(), ({ type, code }) =>
+    Arr.findLast(envelopes(body), ({ type, code }) =>
       Option.fromUndefinedOr(errorStatus(type) ?? errorStatus(code)),
     ),
   );

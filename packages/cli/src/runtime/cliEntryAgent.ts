@@ -7,23 +7,6 @@ import type { ChatLaunch } from '@texra/shared/session/surface';
 
 import { VALIDATION_AGENT, VALIDATION_SWITCH } from './models/validationSwitch';
 
-const EDITOR_TOOLS = new Set([
-  'diagnostics',
-  'inline_comment',
-  'open_pdf',
-  'invoke_command',
-  'install_vscode_extension',
-  'send_to_terminal',
-]);
-
-/** The tool declaration for a new conversation started in the terminal. */
-export function withoutEditorTools(launch: ChatLaunch): ChatLaunch {
-  return {
-    ...launch,
-    tools: launch.tools.filter((name) => !EDITOR_TOOLS.has(name)),
-  };
-}
-
 /** What {@link VALIDATION_AGENT} holds: the run, written inline. */
 const ValidationAgentJson = Schema.fromJsonString(
   Schema.Struct({
@@ -34,7 +17,9 @@ const ValidationAgentJson = Schema.fromJsonString(
 );
 
 /**
- * The entry agent; a validation build started with {@link VALIDATION_AGENT}
+ * The entry agent, as every host declares it: a tool that needs an editor
+ * names the host capability it needs, and a step in a terminal, which serves
+ * none, withholds it. A validation build started with {@link VALIDATION_AGENT}
  * starts the run that variable writes instead (a malformed one is a defect
  * of the script that set it).
  */
@@ -44,7 +29,7 @@ export const cliEntryAgent: Effect.Effect<ChatLaunch> = Effect.gen(
       (yield* envVar(VALIDATION_SWITCH)) === '1'
         ? yield* envVar(VALIDATION_AGENT)
         : undefined;
-    if (!written) return withoutEditorTools(entryAgent());
+    if (!written) return entryAgent();
     return Schema.decodeUnknownSync(ValidationAgentJson)(written);
   },
 );

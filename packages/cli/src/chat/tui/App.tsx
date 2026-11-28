@@ -481,7 +481,7 @@ export function App(props: AppProps): React.JSX.Element {
     // it is the mount's SIGINT policy, wired through the required `onCtrlC`.
     // A background draft never consumes Ctrl+C: only the focused input, the
     // one registered with the draft registry, discards.
-    if (key.ctrl && input === 'c') {
+    if (isCtrlInput(input, key, 'c')) {
       if (formBusy) {
         formProgress.cancel();
       } else if (!activeDraftRegistry.discard()) {
@@ -493,7 +493,7 @@ export function App(props: AppProps): React.JSX.Element {
     // Ctrl-Z suspends like a classic line-mode program would. Works over
     // foreground surfaces for the same reason Ctrl-C does: process-level
     // job control must not depend on which pane owns the keyboard.
-    if (key.ctrl && input === 'z' && props.onSuspend) {
+    if (isCtrlInput(input, key, 'z') && props.onSuspend) {
       props.onSuspend();
       return;
     }

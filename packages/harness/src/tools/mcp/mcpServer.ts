@@ -42,7 +42,7 @@ import { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import { capToolResultText } from '@shared/toolResultText';
+import { capToolResultText } from '@tools/core/toolResultText';
 import type { McpServerConfig } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import type { ToolResult } from '@shared/schemas';
@@ -167,7 +167,7 @@ function mcpTool(
         : 'unsafe',
     // The call as the approval prompt shows it; the loop asks the session's
     // one approval authority before the body runs.
-    guard: { command: thirdPartyCommand(describe) },
+    command: thirdPartyCommand(describe),
     call: (rawInput) => {
       if (!Schema.is(McpArgumentsSchema)(rawInput))
         return Effect.succeed(

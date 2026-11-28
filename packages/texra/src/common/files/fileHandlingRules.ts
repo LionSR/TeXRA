@@ -1,18 +1,12 @@
-import { WORKSPACE_DIFF_SUFFIX } from '@latex/latexdiff/diffFileNameManager';
-
 /** The folder beside a document that TeXRA compiles it into. */
 export const LATEX_BUILD_DIRECTORY = 'build';
 
-/** The folder a packed run's files are copied into. */
-export const PACKED_RUNS_DIRECTORY = 'History';
-
-/** The folder beside an input that a latexdiff-vc pack moves its diffs into. */
-export const PACKED_DIFFS_DIRECTORY = 'Diffs';
+/** The suffix a workspace diff carries after the edited file's stem. */
+export const WORKSPACE_DIFF_SUFFIX = '_diff';
 
 /**
  * Directories that never hold a source the user works on: build output,
- * package and environment trees, and the folders TeXRA writes its own
- * versions, history and diffs into. Every listing and every bulk operation
+ * package and environment trees. Every listing and every bulk operation
  * skips them, so each list below starts from this one. Lowercase; a
  * directory name is compared case-insensitively.
  */
@@ -22,13 +16,11 @@ const MANAGED_DIRECTORIES = Object.freeze([
   '__pycache__',
   'venv',
   'versions',
-  PACKED_RUNS_DIRECTORY.toLowerCase(),
-  PACKED_DIFFS_DIRECTORY.toLowerCase(),
 ]);
 
 /** Built-in file discovery rules. These are product behavior, not settings. */
 export const FILE_HANDLING_RULES = Object.freeze({
-  /** Extensions listed per extension category (`ExtensionCategory`). */
+  /** Extensions listed per document file type (`DocumentFileType`). */
   included: Object.freeze({
     media: Object.freeze([
       '.png',
@@ -61,7 +53,6 @@ export const FILE_HANDLING_RULES = Object.freeze({
       '.cls',
       '.sty',
     ]),
-    edited: Object.freeze(['.txt', '.tex']),
   }),
   ignored: Object.freeze({
     fileExtensions: Object.freeze([
@@ -82,7 +73,6 @@ export const FILE_HANDLING_RULES = Object.freeze({
       'preamble.tex',
       'yaml',
     ]),
-    mediaDirectories: MANAGED_DIRECTORIES,
     /** Skipped when listing the text files a run can take. */
     directories: Object.freeze([
       ...MANAGED_DIRECTORIES,

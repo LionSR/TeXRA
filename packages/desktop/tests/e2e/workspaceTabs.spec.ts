@@ -365,7 +365,7 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
     .toBe(true);
   await expect(panel('agent')).toBeVisible();
   // New task reveals Agent without disturbing document groups.
-  await page.getByRole('button', { name: 'New task', exact: true }).click();
+  await page.getByRole('button', { name: 'New Task', exact: true }).click();
   await expect(panel('agent').locator('session-composer')).toBeVisible();
   await expect(panel('editor')).toHaveCount(2);
   await setWindowSize(960, 760);
@@ -421,7 +421,7 @@ test('moves live terminals and unsaved editors without recreating resources', as
       '.shell-dock-editor[data-panel-id="workbench:editor:first.ts"]:visible .view-lines',
     ),
   ).toContainText('retained edit');
-  // Closing the unsaved editor asks in a styled dialog; Cancel keeps it.
+  // Closing the unsaved editor asks in a styled dialog; Keep editing keeps it.
   await first.locator('.shell-dock-tab-close wa-button').click();
   const discard = page.locator('wa-dialog.desktop-discard-overlay[open]');
   await expect(discard).toContainText('first.ts has unsaved changes');
@@ -544,69 +544,6 @@ test('runs what is typed before a terminal has a shell', async () => {
   await expect(tab('terminal')).toHaveCount(before);
 });
 
-test('keeps browser menus above native content and close controls inside tab bounds', async () => {
-  const { page, app } = launched;
-  const attachedViews = () =>
-    app.evaluate(
-      ({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows().at(0)?.contentView.children.length ?? 0,
-    );
-  const baseline = await attachedViews();
-  await menu(groupOf(tab('editor').first()), 'Browser');
-  await expect.poll(attachedViews).toBe(baseline + 1);
-  const browser = tab('browser');
-  await expect(browser).toBeVisible();
-  const close = browser.locator('.shell-dock-tab-close wa-button');
-  await expect
-    .poll(async () =>
-      close.evaluate((element) => {
-        const r = element.getBoundingClientRect();
-        const hit = document.elementFromPoint(
-          r.x + r.width / 2,
-          r.y + r.height / 2,
-        );
-        return element === hit || element.contains(hit);
-      }),
-    )
-    .toBe(true);
-  const dropdown = groupOf(browser).locator('.shell-dock-actions wa-dropdown');
-  await dropdown.locator('wa-button[slot="trigger"]').click();
-  await expect(
-    dropdown.locator('wa-dropdown-item').filter({ hasText: 'Terminal' }),
-  ).toBeVisible();
-  await expect.poll(attachedViews).toBe(baseline);
-  await page.screenshot({
-    path: test.info().outputPath('browser-group-menu.png'),
-    animations: 'disabled',
-  });
-  await page.keyboard.press('Escape');
-  await expect.poll(attachedViews).toBe(baseline + 1);
-  await close.click();
-  await expect.poll(attachedViews).toBe(baseline);
-
-  // The command palette reaches the same browser tab.
-  await page.keyboard.press(
-    process.platform === 'darwin' ? 'Meta+k' : 'Control+k',
-  );
-  await page
-    .locator('.desktop-command-palette-input')
-    .locator('input')
-    .fill('browser');
-  await page
-    .locator(
-      '.desktop-command-palette-item[data-command-id="texra.desktop.showBrowser"]',
-    )
-    .click();
-  await expect(browser).toBeVisible();
-  await expect.poll(attachedViews).toBe(baseline + 1);
-  await page.screenshot({
-    path: test.info().outputPath('browser-from-command-palette.png'),
-    animations: 'disabled',
-  });
-  await close.click();
-  await expect.poll(attachedViews).toBe(baseline);
-});
-
 test('preserves each project’s grid and unsaved editor when switching projects', async () => {
   const { page, app } = launched;
   const otherPath = mkdtempSync(join(tmpdir(), 'texra-dock-other-'));
@@ -635,7 +572,7 @@ test('preserves each project’s grid and unsaved editor when switching projects
       });
     }, otherPath);
     await page
-      .getByRole('button', { name: 'Open project folder', exact: true })
+      .getByRole('button', { name: 'Open Project Folder', exact: true })
       .click();
     await expect(page.locator('.shell-project-row')).toHaveCount(2);
     const projectB = await titleOf(activeRow);
@@ -667,10 +604,7 @@ test('preserves each project’s grid and unsaved editor when switching projects
       .toBe('background');
     await expect(activeRow).toHaveAttribute('title', projectB);
     // Back through the palette: Switch Project lists the other open project.
-    await page
-      .locator('.shell-sidebar-primary .shell-sidebar-action')
-      .filter({ hasText: 'Commands' })
-      .click();
+    await page.locator('#shellCommands').click();
     const palette = page.locator('.desktop-command-palette');
     await palette
       .locator('[data-command-id="texra.desktop.switchProject"]')

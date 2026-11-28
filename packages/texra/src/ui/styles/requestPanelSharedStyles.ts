@@ -22,7 +22,11 @@ export const requestPanelSharedStyles: CSSResult = css`
     gap: var(--panel-gap);
     position: relative;
     max-width: 100%;
-    padding: var(--panel-padding-block) var(--panel-padding-inline);
+    padding: var(--wa-space-s);
+    /* The composer's surface and edge: a request is answered where a
+       message is written. */
+    border-color: var(--wa-form-control-border-color);
+    background: var(--composer-background, var(--wa-color-surface-raised));
   }
 
   /* The ask is the card's heading: one sentence naming what the agent
@@ -96,7 +100,7 @@ export const requestPanelSharedStyles: CSSResult = css`
     z-index: var(--layer-sticky);
     margin-block-start: auto;
     padding-block-start: var(--wa-space-2xs);
-    background: var(--color-bg-secondary);
+    background: inherit;
   }
 
   .request-card__actions > * {

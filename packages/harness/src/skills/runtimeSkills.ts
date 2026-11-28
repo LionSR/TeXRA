@@ -19,7 +19,7 @@ import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { isPathWithin } from '@utils/core/pathCore';
-import { canonicalizePath } from '@utils/files/externalRoots';
+import { canonicalizePath } from '@utils/files/canonicalPath';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { appEnvName } from '@utils/system/appNamespace';
 import { homeDirectory } from '@utils/system/platformPaths';
@@ -201,7 +201,6 @@ function skillDisplayItem(
     scope: source.scope,
     label: source.label,
     path: skill.path,
-    sourcePath: source.path,
     enabled: !isSkillDisabled(entry, disabled),
   };
 }

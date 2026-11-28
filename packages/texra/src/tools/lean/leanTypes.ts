@@ -74,7 +74,7 @@ const LspMarkedStringSchema = Schema.Union([
 ]);
 
 /** Reply to `textDocument/hover`. */
-export const LspHoverSchema = Schema.Struct({
+const LspHoverSchema = Schema.Struct({
   contents: Schema.Union([
     LspMarkedStringSchema,
     Schema.Struct({ kind: Schema.String, value: Schema.String }),
@@ -82,34 +82,35 @@ export const LspHoverSchema = Schema.Struct({
   ]),
   range: Schema.optional(LspRangeSchema),
 });
-export type LspHover = typeof LspHoverSchema.Type;
 
 // Lean tool contracts
 
 /** Response from $/lean/plainGoal LSP request */
-export const PlainGoalSchema = Schema.Struct({
+const PlainGoalSchema = Schema.Struct({
   goals: Schema.Array(Schema.String),
   rendered: Schema.String,
 });
-export type PlainGoal = typeof PlainGoalSchema.Type;
 
 /** Response from $/lean/plainTermGoal LSP request */
-export const PlainTermGoalSchema = Schema.Struct({ goal: Schema.String });
-export type PlainTermGoal = typeof PlainTermGoalSchema.Type;
-
-/** Typed result from an LSP request */
-export interface LspResult<T> {
-  data: T | null;
-  error?: string;
-}
+const PlainTermGoalSchema = Schema.Struct({ goal: Schema.String });
 
 /**
- * Platform-agnostic diagnostic representation for Lean files.
- * Extends GenericDiagnostic with an optional source field.
+ * What `lean_inspect` asks Lean at a position, by inspection: the LSP request
+ * and the schema of Lean's non-null answer. The tool's input enum is this
+ * table's keys.
  */
-export interface LeanDiagnostic extends GenericDiagnostic {
-  source?: string;
-}
+export const LEAN_INSPECTIONS = Object.freeze({
+  goal: Object.freeze({ method: '$/lean/plainGoal', reply: PlainGoalSchema }),
+  term_goal: Object.freeze({
+    method: '$/lean/plainTermGoal',
+    reply: PlainTermGoalSchema,
+  }),
+  hover: Object.freeze({ method: 'textDocument/hover', reply: LspHoverSchema }),
+});
+export type LeanInspection = keyof typeof LEAN_INSPECTIONS;
+/** Lean's answer to the inspection `K`. */
+export type LeanInspectionReply<K extends LeanInspection> =
+  (typeof LEAN_INSPECTIONS)[K]['reply']['Type'];
 
 /**
  * A file's diagnostics, the answer of
@@ -118,7 +119,7 @@ export interface LeanDiagnostic extends GenericDiagnostic {
  * values here.
  */
 export interface FetchDiagnosticsResult {
-  readonly diagnostics: LeanDiagnostic[];
+  readonly diagnostics: GenericDiagnostic[];
   /**
    * False when Lean had not reported the file elaborated by the end of the
    * wait: `diagnostics` are the ones so far, not the file's verdict.
@@ -142,18 +143,9 @@ export class LeanUnavailable extends Schema.TaggedError<LeanUnavailable>()(
   },
 ) {}
 
-/** The file to diagnose could not be read or opened. */
+/** The file could not be read or opened. */
 export class LeanFileUnreadable extends Schema.TaggedError<LeanFileUnreadable>()(
   'LeanFileUnreadable',
-  {
-    message: Schema.String,
-    cause: Schema.optional(Schema.Defect()),
-  },
-) {}
-
-/** A `lean_file` command ran into a failure of its own, reported by `message`. */
-export class LeanFileCommandFailed extends Schema.TaggedError<LeanFileCommandFailed>()(
-  'LeanFileCommandFailed',
   {
     message: Schema.String,
     cause: Schema.optional(Schema.Defect()),
@@ -163,7 +155,9 @@ export class LeanFileCommandFailed extends Schema.TaggedError<LeanFileCommandFai
 // Helpers
 
 /** Extract text value from hover contents (handles all LSP content formats) */
-export function extractHoverText(contents: LspHover['contents']): string {
+export function extractHoverText(
+  contents: LeanInspectionReply<'hover'>['contents'],
+): string {
   if (typeof contents === 'string') {
     return contents;
   }

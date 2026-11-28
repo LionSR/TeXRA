@@ -210,13 +210,28 @@ function renderToolSection(
   }
 }
 
-/** Paint every section of a tool row, in model order. */
+/** Paint every section of a tool row, in model order. A file section that
+ *  only names `said`, the path the row's own line already shows, is not
+ *  drawn again. */
 export function renderToolSections(
   sections: readonly ToolSection[],
+  said: string,
 ): TemplateResult[] {
   let filePath = '';
-  return sections.map((section) => {
-    if (section.kind === 'file') filePath = section.path;
-    return renderToolSection(section, filePath);
+  return sections.flatMap((section) => {
+    if (section.kind === 'file') {
+      filePath = section.path;
+      if (section.path === said) return [];
+    }
+    // The header already names it, quoted as a call's summary writes it
+    // ("Completed 'drafter'"). A bare substring would also match a short
+    // name inside an unrelated word.
+    if (
+      section.kind === 'identifier' &&
+      section.note === undefined &&
+      said.includes(`'${section.value}'`)
+    )
+      return [];
+    return [renderToolSection(section, filePath)];
   });
 }

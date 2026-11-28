@@ -1,12 +1,6 @@
-<script setup>
-import FlowSteps from '../.vitepress/components/FlowSteps.vue';
-import PolishRunTree from '../.vitepress/components/PolishRunTree.vue';
-import CliRunHero from '../.vitepress/components/CliRunHero.vue';
-</script>
-
 # First run
 
-This walkthrough runs your first program—a polish with `edit`—on a `.tex` file and shows how to inspect the resulting diff in VS Code or the terminal. It takes under five minutes.
+This walkthrough runs your first task, a polish of a `.tex` file, and shows how to inspect what changed in VS Code or the terminal. It takes under five minutes.
 
 If you don't have TeXRA yet, read the [installation guide](./installation.md).
 
@@ -69,68 +63,36 @@ EOF
 4. Type an instruction that names the file:
    > Polish draft.tex: tighten the prose. Preserve all math and citations.
 5. Select **Start task** (the arrow button).
-6. The assistant proposes an `edit` run on `draft.tex`. Check the files and the
-   instruction on the proposal card, then approve it.
 
-The Tasks view opens and streams the run. When it finishes, the
-revised file is listed under **Generated files**. Select its
-**Compare with base** button to see what changed.
+The Tasks view opens and streams the run. The assistant reads `draft.tex`,
+edits it in place and compiles it; each edit asks for your approval with a
+preview of the change. When it finishes, review the file in the editor or
+with `git diff`.
 
 ### In the terminal
 
-```sh
-texra run edit \
-  --input draft.tex \
-  --instruction "Tighten the prose. Preserve all math and citations."
-```
-
-<CliRunHero
-  command='texra run edit --input draft.tex --instruction "Tighten the prose. Preserve all math and citations."'
-  :rounds="[
-    { label: 'Revision 1: draft  ·  r0/draft.tex written', state: 'done' },
-    { label: 'Revision 2: review, rereading its own output', state: 'active' },
-  ]"
-/>
-
-<p class="hero-caption">Mid-run: the first revision is written and the second is reviewing and correcting it. Progress lines on stderr name the current revision. When the run completes, the full path to the final document prints on stdout.</p>
-
-The run prints its progress on stderr.
-When it completes, `edit` has written one folder per revision in the run's
-storage folder (`executions/<run-id>/` in the project's storage under `~/.texra`):
-
-<PolishRunTree />
-
-<p class="hero-caption">Each revision lands in its own folder and keeps the input filename: <code>r0/draft.tex</code> is the first revision, <code>r1/draft.tex</code> the review pass and final. Add <code>--output draft.polished.tex</code> to write the result next to your input instead.</p>
-
-To diff against your original, use the final-document path printed on
-stdout:
-
-```sh
-diff -u draft.tex <path-to-r1/draft.tex-from-stdout>
+```bash
+texra run chat \
+  --instruction "Polish draft.tex: tighten the prose. Preserve all math and citations." \
+  --print
+git diff draft.tex
 ```
 
 ## What just happened
 
-`edit` ran two passes: a first revision, then a review pass that
-rereads its own output and corrects it.
+The assistant worked as a person would: it read the file, made its edits
+with its file tools, and compiled the result. For a job with a check that
+must hold, such as a referee's comments that leave the text alone, it starts
+a [program](./programs.md):
 
-<FlowSteps :steps="[
-  { n: 1, icon: 'wand', title: 'Revision 1: draft', desc: 'Reads draft.tex, applies your instruction, writes the first revision.', chips: [{ text: 'r0/draft.tex', variant: 'info', icon: 'file-code' }] },
-  { n: 2, icon: 'search', title: 'Revision 2: review', desc: 'Rereads its own first revision against the original, then corrects it.', chips: [{ text: 'missing math', variant: 'warning' }, { text: 'notation before definition', variant: 'warning' }, { text: 'generic filler', variant: 'warning' }, { text: 'out-of-scope edits', variant: 'warning' }, { text: 'r1/draft.tex', variant: 'info', icon: 'file-code' }] }
-]" />
-
-<p class="hero-caption"><code>edit</code> is a two-revision program: the first revision drafts from your instruction, the second reviews its own output against a fixed checklist and corrects it into <code>r1/draft.tex</code>.</p>
-
-A program like `edit` does not call tools. It reads input, runs
-its revisions, and writes a diff. The assistant itself
-can read across your project, search literature, verify algebra in
-Wolfram, prove theorems in Lean 4, and compile LaTeX. Read
-[The assistant and programs](./programs.md).
+```bash
+texra run annotate --input draft.tex --instruction "Read as a first-time reader"
+```
 
 ## Next steps
 
-- [**Polish a draft**](./workflows/polish-a-draft.md): the `edit` program in depth: revisions, limits, multi-file projects
+- [**Polish a draft**](./workflows/polish-a-draft.md): how to ask for a careful polish
 - [**The assistant and programs**](./programs.md): what you can ask for, and every program you can start
 - [**Models**](./models.md): choosing a model that matches the work
 - [**TeXRA CLI**](./texra-cli.md): sign-in, project defaults, headless output formats
-- [**LaTeX Diff**](./latex-diff.md): compiled PDF comparison of revisions
+- [**LaTeX Diff**](./latex-diff.md): a marked-up PDF of what changed

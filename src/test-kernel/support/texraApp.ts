@@ -6,11 +6,9 @@
  */
 import { Layer } from 'effect';
 
-import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import { TEXRA_CLIENT } from '@texra/controllers/texraProcessLayer';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { texraPlugins } from '@texra/tools/registry';
-import type { Plugin } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import type { TestApp } from './FakePlatform';
 import { FakeHost, SessionGraph } from './testKernel';
@@ -27,14 +25,6 @@ export const texraHosted = Layer.provideMerge(
   FakeHost.layer({ app: TEXRA_APP }),
 );
 
-/** TeXRA's plugins that own row kinds, as those only: what a store under
- *  test reads their rows with. */
-const FACT_KIND_PLUGINS: readonly Plugin[] = [
-  { id: 'theory', factKinds: APP_FACT_KINDS.theory },
-];
-
-/** The plugin table a store suite runs over: every row kind
- *  TeXRA's plugins own, and no tool. */
-export const storePluginsLayer = Layer.succeed(ToolRegistry)(
-  toolTable([...FACT_KIND_PLUGINS]),
-);
+/** The plugin table a store suite runs over: TeXRA's plugins own no row
+ *  kind, and a store reads no tool. */
+export const storePluginsLayer = Layer.succeed(ToolRegistry)(toolTable([]));

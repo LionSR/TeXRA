@@ -20,7 +20,9 @@
  * each snapshot is mapped.
  */
 import {
+  Array as Arr,
   Effect,
+  Equal,
   type FileSystem,
   Option,
   Predicate,
@@ -32,32 +34,29 @@ import {
 } from 'effect';
 import {
   appSignalStream,
+  PlanQuotas,
   subscribeAppSignal,
   workspaceEnvironmentLayer,
 } from '@texra-ai/worldline/host';
 import {
-  Settings,
   logFailure,
   type AppSignals,
   type Secrets,
   type SettingsStores,
   AppState,
 } from '@texra-ai/worldline/plugins';
-import {
-  APPROVAL_POLICY_SETTING,
-  ensureError,
-} from '@texra-ai/worldline/schemas';
-import { isPathWithin, recentCommitLabels } from '@texra-ai/worldline/node';
-import { apiKeyEntry } from '@texra-ai/llm';
-import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
+import { ensureError } from '@texra-ai/worldline/schemas';
+import { isPathWithin } from '@texra-ai/worldline/node';
+import { routedApiKeyProvider } from '@texra-ai/llm';
+import type { HttpClient } from 'effect/http';
 import type {
-  FileOptions,
   HostSnapshot,
   MissingTool,
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
-import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
+import { planUsageOf } from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
+import { workspaceInputFiles } from '@texra/controllers/session/workspaceFileOptions';
 import {
   hasUsableSetupCredential,
   loadModelOptions,
@@ -82,7 +81,7 @@ type DismissibleBanner = Extract<
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
   tools: HostSnapshot['tools'];
-  /** The project folder the launcher's file lists and the recent commits
+  /** The project folder the launcher's input files
    *  are read from and whose `.env` the credential check reads; `undefined`
    *  for a session with no folder open, which is never a repository. */
   root: string | undefined;
@@ -97,14 +96,11 @@ interface HostSnapshotSourceOptions {
   stores: SettingsStores;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots(): HostSnapshot['workspaceRoots'];
-  /** The notices this host shows: the lost-credential banner, the tools
-   *  this machine lacks, and the offer to start a project (a sample, an
-   *  Overleaf clone, an arXiv download) while the folder has no LaTeX files. */
-  shows: {
-    readonly apiKeyBanner: boolean;
-    readonly dependencyBanner: boolean;
-    readonly gettingStarted: boolean;
-  };
+  /** Whether this host shows the setup notices: the lost-credential banner,
+   *  the tools this machine lacks, and the offer to start a project (a
+   *  sample, an Overleaf clone, an arXiv download) while the folder has no
+   *  LaTeX files. A host with its own setup surfaces shows none of them. */
+  setupNotices: boolean;
 }
 
 /** What the producers write; the snapshot is {@link snapshotOf} of it. */
@@ -113,9 +109,11 @@ interface Inputs {
    *  so the shell never paints an empty model list. */
   readonly loaded: boolean;
   readonly modelOptions: HostSnapshot['modelOptions'];
+  readonly planUsage: HostSnapshot['planUsage'];
   readonly workspaceRoots: HostSnapshot['workspaceRoots'];
-  readonly fileOptions: FileOptions;
-  readonly commits: { readonly commits: string[]; readonly isGitRepo: boolean };
+  /** The project's files a program can take as input; a project with
+   *  none is offered the getting-started card. */
+  readonly inputFiles: readonly string[];
   readonly missingTools: readonly MissingTool[];
   readonly recording: HostSnapshot['recording'];
   readonly service: HostSnapshot['banners']['service'];
@@ -140,14 +138,15 @@ export interface HostSnapshotSource {
     void,
     never,
     | Secrets
+    | PlanQuotas
+    | HttpClient.HttpClient
     | SubscriptionAccounts
     | FileSystem.FileSystem
     | Path.Path
     | ChildProcessSpawner
   >;
-  /** The project's files changed on disk outside TeXRA, or the surface
-   *  asked for a relist. TeXRA's own writes (`workspaceFilesWritten`) are
-   *  followed by the source itself. */
+  /** The project's files changed on disk outside TeXRA. TeXRA's own writes
+   *  (`workspaceFilesWritten`) are followed by the source itself. */
   readonly refreshFiles: Effect.Effect<
     void,
     never,
@@ -156,7 +155,12 @@ export interface HostSnapshotSource {
   /** Each write TeXRA made inside the project, for a host view of the
    *  project's files beside the launcher (the desktop's file tree). */
   readonly filesWritten: Stream.Stream<void, never, AppSignals>;
-  readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
+  /** Read the plans' quotas again, each as the process knows it now. */
+  readonly refreshUsage: Effect.Effect<
+    void,
+    never,
+    PlanQuotas | HttpClient.HttpClient | Secrets
+  >;
   /** A tool may have been installed: the missing tools are checked again,
    *  with the credential. */
   readonly refreshHostBanners: Effect.Effect<
@@ -205,17 +209,20 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     | AppSignals
     | Secrets
     | SubscriptionAccounts
+    | PlanQuotas
+    | HttpClient.HttpClient
     | FileSystem.FileSystem
     | Path.Path
   > {
     const { stores } = options;
+    const sourceScope = yield* Effect.scope;
     const appState = yield* AppState;
     const inputs = yield* SubscriptionRef.make<Inputs>({
       loaded: false,
       modelOptions: [],
+      planUsage: [],
       workspaceRoots: options.workspaceRoots(),
-      fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
-      commits: { commits: [], isGitRepo: false },
+      inputFiles: [],
       missingTools: [],
       recording: null,
       service: null,
@@ -223,14 +230,15 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       credential: undefined,
       flags: undefined,
     });
-    /** Write `patch` when it changes a field, so an unchanged write
-     *  publishes nothing. */
+    /** Write `patch` when it changes a field's value, so an unchanged write
+     *  publishes nothing: a producer that reads the same list again builds
+     *  a new array, which is not a change. */
     const write = (patch: Partial<Inputs>) =>
       SubscriptionRef.updateSome(inputs, (current) =>
         Object.entries(patch).some(
           // cast: `Object.entries` widens keys to string; `patch` is a
           // `Partial<Inputs>`, so each key is one of `Inputs`.
-          ([key, value]) => current[key as keyof Inputs] !== value,
+          ([key, value]) => !Equal.equals(current[key as keyof Inputs], value),
         )
           ? Option.some({ ...current, ...patch })
           : Option.none(),
@@ -267,28 +275,47 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         SubscriptionRef.update(inputs, (s) => ({ ...s, modelOptions })),
       ).pipe(underProjectEnv),
     );
-    const loadFiles = yield* producer(
-      'the project files',
-      Effect.flatMap(workspaceFileOptions(options.root), (fileOptions) =>
-        write({ fileOptions }),
-      ),
-    );
-    const loadCommits = yield* producer(
-      'the recent commits',
+    // The plans the listed models bill, each as the process knows its
+    // quota now: an endpoint's answer (asked when the kept one has expired)
+    // or the last reply's word. A plan nothing states the quota of has no
+    // meter, and neither has one with no credential: it has no usage to
+    // show and nothing a person fixes from the meter.
+    const loadUsage = yield* producer(
+      'the plan usage',
       Effect.gen(function* () {
-        if (options.root === undefined) return;
-        const labels = yield* recentCommitLabels(
-          options.root,
-          yield* Settings.get(stores, GIT_COMMITS_TO_SHOW_SETTING),
+        const { modelOptions } = yield* SubscriptionRef.get(inputs);
+        const plans = Arr.dedupe(
+          modelOptions.flatMap((option) =>
+            option.usageRoute === undefined ? [] : [option.usageRoute],
+          ),
+        );
+        const quotas = yield* PlanQuotas;
+        const planUsage = yield* Effect.forEach(
+          plans,
+          (plan) =>
+            Effect.map(quotas.read(plan, stores), (quota) =>
+              planUsageOf(plan, quota),
+            ),
+          { concurrency: 'unbounded' },
         );
         yield* write({
-          commits: { commits: [...(labels ?? [])], isGitRepo: labels !== null },
+          planUsage: planUsage.flatMap((usage) =>
+            usage === undefined || usage.unknown === 'missing_credentials'
+              ? []
+              : [usage],
+          ),
         });
-      }),
+      }).pipe(underProjectEnv),
+    );
+    const loadFiles = yield* producer(
+      'the project files',
+      Effect.flatMap(workspaceInputFiles(options.root), (inputFiles) =>
+        write({ inputFiles }),
+      ),
     );
     const loadDependencies = yield* producer(
       'the missing tools',
-      options.shows.dependencyBanner
+      options.setupNotices
         ? Effect.flatMap(missingDependencyTools(), (missingTools) =>
             write({ missingTools }),
           )
@@ -343,7 +370,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     // so an OAuth refresh or a GitHub token reloads no catalog. A sign-in
     // announces its token write, then its preference (`modelAccessChanged`).
     const providerKey = ({ key }: { readonly key: string }) =>
-      (apiKeyEntry(key) ?? 'unknown') !== 'unknown';
+      routedApiKeyProvider(key) !== undefined;
     yield* follow(
       Stream.filter(
         yield* subscribeAppSignal('credentialChanged'),
@@ -359,12 +386,13 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         ),
         yield* subscribeAppSignal('modelAccessChanged'),
       ),
-      Effect.andThen(loadCredential, loadModels),
+      Effect.andThen(loadCredential, loadModels).pipe(
+        Effect.andThen(loadUsage),
+      ),
     );
-    // A write TeXRA made inside the project (an accepted output or diff, a
-    // service task's file) can add a file the launcher lists, on every host
-    // alike; a host may also follow edits made outside TeXRA
-    // (`refreshFiles`).
+    // A write TeXRA made inside the project (an accepted edit, a service
+    // task's file) can add a file the launcher lists, on every host alike;
+    // a host may also follow edits made outside TeXRA (`refreshFiles`).
     const root = options.root;
     const writtenInProject = ({
       absolutePaths,
@@ -379,12 +407,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         writtenInProject,
       ),
       loadFiles,
-    );
-    // The approval policy is read live as each snapshot is mapped; a
-    // settings view's write republishes the inputs so the change shows.
-    yield* follow(
-      yield* subscribeAppSignal('approvalPolicyChanged'),
-      SubscriptionRef.update(inputs, (current) => ({ ...current })),
     );
     // Configuring a credential clears a previous "Skip for now", so a user
     // who later loses every credential sees the picker again.
@@ -405,23 +427,15 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     const snapshotOf = (s: Inputs): HostSnapshot => ({
       project: options.project,
       tools: options.tools,
-      approvalPolicy: Settings.getConfig(
-        stores.config,
-        APPROVAL_POLICY_SETTING,
-      ),
       modelOptions: s.modelOptions,
+      planUsage: s.planUsage,
       workspaceRoots: s.workspaceRoots,
-      fileOptions: {
-        ...s.fileOptions,
-        commit: ['HEAD', ...s.commits.commits],
-      },
-      isGitRepo: s.commits.isGitRepo,
       recording: s.recording,
       banners: {
         // A credential that worked stopped working: raised only once a task
         // has finished; before that the "Connect a model" card is the prompt.
         apiKey:
-          options.shows.apiKeyBanner &&
+          options.setupNotices &&
           s.credential === false &&
           s.flags?.firstRunDone === true,
         dependency:
@@ -429,8 +443,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
             ? s.missingTools
             : null,
         gettingStarted:
-          options.shows.gettingStarted &&
-          s.fileOptions.baseFile.length === 0 &&
+          options.setupNotices &&
+          s.inputFiles.length === 0 &&
           !s.dismissed.has('gettingStarted'),
         service: s.service,
       },
@@ -455,16 +469,22 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         Stream.filter((credential) => credential !== undefined),
         Stream.changes,
       ),
-      refresh: Effect.all(
-        [loadModels, loadFiles, loadCommits, hostBanners, loadFlags],
-        { concurrency: 'unbounded', discard: true },
-      ).pipe(Effect.andThen(write({ loaded: true }))),
+      // The usage meters are optional: the snapshot is published first, and
+      // a slow quota endpoint fills them in afterwards.
+      refresh: Effect.all([loadModels, loadFiles, hostBanners, loadFlags], {
+        concurrency: 'unbounded',
+        discard: true,
+      }).pipe(
+        Effect.andThen(write({ loaded: true })),
+        Effect.andThen(Effect.forkIn(loadUsage, sourceScope)),
+        Effect.asVoid,
+      ),
       refreshFiles: loadFiles,
       filesWritten: appSignalStream('workspaceFilesWritten').pipe(
         Stream.filter(writtenInProject),
         Stream.as(undefined),
       ),
-      refreshCommits: loadCommits,
+      refreshUsage: loadUsage,
       refreshHostBanners: hostBanners,
       refreshWorkspaceRoots: Effect.suspend(() =>
         write({ workspaceRoots: options.workspaceRoots() }),

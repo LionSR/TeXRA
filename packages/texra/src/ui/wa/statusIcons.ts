@@ -8,8 +8,24 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 // Local imports
 import { credentialOriginLabel } from '@ui/copy/credentials';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
+import type { IconName } from '@ui/wa/iconNames';
+import { waSpinner } from '@ui/wa/spinner';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { WaVariant } from '@ui/wa/waVariant';
+
+/**
+ * A status's mark: a spinner while its tone is running, so work in progress
+ * moves and a finished run does not, else its glyph. Decorative: the words
+ * beside it, or its holder's label, say the status.
+ */
+export function statusMark(
+  status: { readonly tone: string; readonly glyph: IconName },
+  className?: string,
+): TemplateResult {
+  return status.tone === 'running'
+    ? waSpinner(className)
+    : waIcon(status.glyph, { className });
+}
 
 interface SetStatusFallback {
   readonly label: string;
@@ -20,30 +36,36 @@ interface SetStatusFallback {
 type StatusBadgeAppearance = 'badge' | 'tag';
 
 interface StatusBadgeOptions {
-  /** Pre-rendered leading icon (a `waIcon()` call, a spinner, ...). */
-  readonly icon: TemplateResult;
+  /** Pre-rendered leading icon (a `waIcon()` call, a spinner, ...); a label
+   *  that says it all takes none. */
+  readonly icon?: TemplateResult;
   readonly label: string;
   readonly appearance?: StatusBadgeAppearance;
+  /** Neutral unless the label is a status with a tone (`toneVariant`). */
+  readonly variant?: WaVariant;
   readonly className?: string;
 }
 
 /**
- * Single source of truth for the "icon + label" status indicator, rendered as
- * either a `wa-badge` (filled pill) or a `wa-tag` (compact inline chip) so the
- * settingsView and progressView surfaces cannot drift on markup independently.
+ * Single source of truth for the small labelled status indicator, with or
+ * without a leading icon, rendered as either a `wa-badge` (filled pill) or a
+ * `wa-tag` (compact inline chip) so the settingsView and progressView
+ * surfaces cannot drift on markup independently.
  */
 export function renderStatusBadge({
   icon,
   label,
   appearance = 'tag',
+  variant = 'neutral',
   className,
 }: StatusBadgeOptions): TemplateResult {
+  const content = icon === undefined ? label : html`${icon} ${label}`;
   if (appearance === 'badge') {
     // prettier-ignore
-    return html`<wa-badge variant="neutral" appearance="filled" class=${ifDefined(className)}>${icon} ${label}</wa-badge>`;
+    return html`<wa-badge variant=${variant} appearance="filled" class=${ifDefined(className)}>${content}</wa-badge>`;
   }
   // prettier-ignore
-  return html`<wa-tag variant="neutral" size="s" class=${ifDefined(className)}>${icon} ${label}</wa-tag>`;
+  return html`<wa-tag variant=${variant} size="s" class=${ifDefined(className)}>${content}</wa-tag>`;
 }
 
 interface SetStatusIconOptions<Status extends string, Success extends Status> {
@@ -84,9 +106,7 @@ export function renderSetStatusIcon<
   }
   // cast: a status other than `success` is a key of the total table.
   const fallback = fallbacks[status as Exclude<Status, Success>];
-  return html`<wa-tag variant=${fallback.variant ?? 'neutral'} size="s"
-    >${fallback.label}</wa-tag
-  >`;
+  return renderStatusBadge(fallback);
 }
 
 export const statusCheckIconStyles: CSSResult = css`
@@ -107,10 +127,10 @@ export function renderKeyStatusIcon(
   return renderSetStatusIcon({
     status,
     success: 'secret',
-    title: credentialOriginLabel('secret', 'key'),
+    title: credentialOriginLabel('secret'),
     fallbacks: {
-      env: { label: credentialOriginLabel('env', 'key') },
-      none: { label: credentialOriginLabel('none', 'key') },
+      env: { label: credentialOriginLabel('env') },
+      none: { label: credentialOriginLabel('none') },
     },
   });
 }

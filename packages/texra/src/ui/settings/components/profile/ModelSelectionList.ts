@@ -20,11 +20,8 @@ import {
   type ModelSelectionItem,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
-import {
-  REASONING_LEVEL_LABELS,
-  REASONING_LEVEL_OPTIONS,
-  EXPENSIVE_MODEL_HINT,
-} from '@texra/shared/model/modelPicker';
+import { EXPENSIVE_MODEL_HINT } from '@texra/shared/model/modelPicker';
+import { factDot } from '@ui/wa/factDot';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { modelAvailabilityLabel } from '@ui/copy/modelAccess';
@@ -113,53 +110,6 @@ export class ModelSelectionList extends TexraSignalElement {
     postStateSetting(HELPER_MODEL_SETTING.key, readSelectValue(e));
   }
 
-  private handleReasoningLevelChange(modelName: string, e: Event): void {
-    const value = readSelectValue(e);
-    // The options are the levels listed below and "" for the default, which
-    // clears the saved level.
-    const level =
-      REASONING_LEVEL_OPTIONS.find((option) => option.value === value)?.value ??
-      null;
-    postToHost({
-      command: SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL,
-      modelName,
-      level,
-    });
-  }
-
-  private renderReasoningDropdown(
-    model: ModelSelectionItem,
-  ): TemplateResult | typeof nothing {
-    const { reasoning } = model;
-    if (reasoning === undefined) return nothing;
-
-    const currentValue = reasoning.saved ?? '';
-    const defaultLabel = reasoning.default
-      ? `Default (${REASONING_LEVEL_LABELS[reasoning.default]})`
-      : 'Default';
-
-    return html`
-      <wa-select
-        class="reasoning-level-select"
-        .value=${currentValue}
-        ?disabled=${availabilityOf(model).available === false}
-        @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
-      >
-        <span slot="label" class="visually-hidden"
-          >Reasoning level for ${model.label}</span
-        >
-        <wa-option value=""> ${defaultLabel} </wa-option>
-        ${REASONING_LEVEL_OPTIONS.filter((option) =>
-          reasoning.levels.includes(option.value),
-        ).map(
-          (option) => html`
-            <wa-option value=${option.value}> ${option.label} </wa-option>
-          `,
-        )}
-      </wa-select>
-    `;
-  }
-
   private renderModelRow(
     model: ModelSelectionItem,
     isLastEnabledModel: boolean,
@@ -204,7 +154,7 @@ export class ModelSelectionList extends TexraSignalElement {
           ${
             model.routeLabel
               ? html`<span class="model-route"
-                  >· <bdi dir="auto">${model.routeLabel}</bdi></span
+                  >${factDot()} <bdi dir="auto">${model.routeLabel}</bdi></span
                 >`
               : nothing
           }
@@ -219,7 +169,6 @@ export class ModelSelectionList extends TexraSignalElement {
               : nothing
           }
         </wa-switch>
-        ${this.renderReasoningDropdown(model)}
         <span class="model-metadata">
           ${
             model.contextWindow

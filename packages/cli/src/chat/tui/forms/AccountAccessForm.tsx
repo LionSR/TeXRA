@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink';
 
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
-import { loadCliModelAccessOverview } from '@cli/runtime/models/apiStatus';
+import { loadCliModelAccessOverview } from '@cli/chat/tui/apiStatus';
 import type {
   CliLogoutTarget,
   LoginFormValue,
@@ -17,6 +17,7 @@ import {
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { PROVIDER_KEY_COPY } from '@ui/copy/credentials';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import {
   DEVICE_CODE_DESCRIPTION,
@@ -143,7 +144,7 @@ function buildAccountAccessFormItems(
  *  subscription rows keep their number hotkeys. */
 const API_KEY_ITEM: SelectItem<AccountAccessFormValue> = {
   value: { kind: 'key' },
-  label: 'Add a provider API key',
+  label: PROVIDER_KEY_COPY.add,
   description: ONBOARDING_CHOICE_API_KEY.description,
 };
 
@@ -230,9 +231,6 @@ export function AccountAccessForm(
             )}
           </Box>
         )
-      }
-      detailRows={
-        props.connecting === true ? 0 : 1 + (detailLines?.length ?? 1)
       }
       selectMarginTop={1}
       action="select"

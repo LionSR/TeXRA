@@ -25,20 +25,7 @@ import type {
 } from '@texra/shared/settingsView/settingsViewMessages';
 import type { PluginCard, TexraPlugin } from '@texra/tools/registry';
 
-// ============================================================
-// Tool terminal actions
-// ============================================================
-
-type ToolTerminalAction =
-  | {
-      readonly kind: 'terminal';
-      readonly name: string;
-      readonly command: string;
-    }
-  | {
-      readonly kind: 'none';
-      readonly reason: 'unknownTool' | 'missingCommand';
-    };
+import { SettingsRequestFailed } from './settingsHostBindings';
 
 /** The card a plugin of TeXRA's list carries (`texraPlugins`), which the
  *  table holds as listed; none for a plugin another list adds. */
@@ -47,41 +34,29 @@ const cardOf = (plugin: Plugin | undefined): PluginCard | undefined =>
   (plugin as TexraPlugin | undefined)?.dashboard;
 
 /**
- * Plan the terminal command for a tool-dashboard install/auth action.
- *
- * Hosts re-look up the command from the plugin's card rather than trusting
- * a command string supplied by the webview, and report which of the two
- * failure reasons applies instead of silently doing nothing.
+ * The terminal command, and the terminal's name, of a tool-dashboard
+ * install or auth action, looked up from the plugin's card rather than taken
+ * from the webview. A tool with no card, or a card with no such command,
+ * fails saying which.
  */
-export const planToolTerminalAction = (input: {
-  readonly toolId: string;
-  readonly commandKind: ToolCommandKind;
-}) =>
-  Effect.map(ToolRegistry, ({ entries }): ToolTerminalAction => {
-    const card = cardOf(entries.get(input.toolId));
-    if (card?.setup === undefined)
-      return { kind: 'none', reason: 'unknownTool' };
-
-    const kind = input.commandKind === 'install' ? 'command' : 'auth';
-    const action = card.setup.actions?.find(
-      (each): each is Extract<ToolInstallAction, { command: string }> =>
-        each.kind === kind,
-    );
-    if (action === undefined) return { kind: 'none', reason: 'missingCommand' };
-
-    return {
-      kind: 'terminal',
-      name: `TeXRA: ${card.name}`,
-      command: action.command,
-    };
-  });
-
-/** The card's inline settings rows, as the dashboard item carries them. */
-function settingRows(card: PluginCard): Pick<ToolDashboardItem, 'settings'> {
-  return card.settings
-    ? { settings: card.settings.map(({ row, label }) => [row.key, label]) }
-    : {};
-}
+export const toolTerminalCommand = Effect.fn('toolTerminalCommand')(function* (
+  toolId: string,
+  commandKind: ToolCommandKind,
+) {
+  const noCommand = (reason: string) =>
+    new SettingsRequestFailed({
+      message: `No ${commandKind} command for tool "${toolId}" (${reason})`,
+    });
+  const card = cardOf((yield* ToolRegistry).entries.get(toolId));
+  if (card?.setup === undefined) return yield* noCommand('unknownTool');
+  const kind = commandKind === 'install' ? 'command' : 'auth';
+  const action = card.setup.actions?.find(
+    (each): each is Extract<ToolInstallAction, { command: string }> =>
+      each.kind === kind,
+  );
+  if (action === undefined) return yield* noCommand('missingCommand');
+  return { name: `TeXRA: ${card.name}`, command: action.command };
+});
 
 // ============================================================
 // Public API
@@ -119,12 +94,9 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         id: plugin.id,
         name: card.name,
         description: card.description,
-        tools: (plugin.tools ?? []).map(({ definition: { name } }) => ({
-          name,
-        })),
+        tools: (plugin.tools ?? []).map(({ definition }) => definition.name),
         setup: null,
         switch: 'always-on' as const,
-        ...settingRows(card),
       }));
 
     const resultById = new Map(results.map((result) => [result.id, result]));
@@ -143,7 +115,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         id: plugin.id,
         name: card.name,
         description: card.description,
-        tools: tools.map((name) => ({ name })),
+        tools,
         setup: {
           status,
           statusLabel,
@@ -163,7 +135,6 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
             : disabledIds.has(plugin.id)
               ? 'off'
               : 'on',
-        ...settingRows(card),
       });
     }
 

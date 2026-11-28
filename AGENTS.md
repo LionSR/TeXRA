@@ -124,7 +124,7 @@ A pnpm workspace in three layers (design:
 
 Use the path aliases in `tsconfig.json` instead of relative chains. Harness
 aliases (`@agent/*`, `@platform/*`, `@common/*`, `@utils/*`, …) point into
-`packages/harness/src`; `@texra/*`, `@latex/*`, `@replacement/*`,
+`packages/harness/src`; `@texra/*`, `@latex/*`,
 `@telemetry/*`, `@housekeeping/*` and `@ui/*` point into the app. Inside
 `packages/harness/src` (an ESM package) a relative import names its `.js` file.
 

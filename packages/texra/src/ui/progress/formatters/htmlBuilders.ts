@@ -4,7 +4,7 @@
  */
 
 // Third-party imports
-import { formatResultCount, getBasename } from '@texra-ai/worldline/schemas';
+import { formatResultCount } from '@texra-ai/worldline/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap, type ClassInfo } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -19,14 +19,12 @@ import type { IconName } from '@ui/wa/iconNames';
 import { waSpinner } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { formatMediaLabel } from '@ui/copy/format';
-import { fileLoadTone, statusGlyph } from '@ui/copy/runStatus';
 
 // Side-effect import - register the <copy-button> element drawn below
-import '@ui/progress/components/CopyButton';
+import '@ui/wa/CopyButton';
+import { getComposedPathElement } from '@ui/progress/components/composedPath';
 
 // Local imports - formatter helpers
-import type { FileListRow } from '@texra-ai/worldline/transcript';
 
 // Threshold constants for diff detection heuristics
 const DIFF_DETECTION_LINE_LIMIT = 20;
@@ -136,6 +134,11 @@ interface DetailsSummaryOptions {
   running?: boolean;
   label: string;
   labelClass?: string;
+  /** The label's tooltip. */
+  title?: string;
+  /** What the label acts on (a path, a command), in the reading color
+   *  beside the quieter label. */
+  detail?: string;
   timestamp?: { display: string; tooltip: string };
   copyButton?: {
     title: string;
@@ -147,12 +150,16 @@ interface DetailsSummaryOptions {
 
 /** The summary-slot header of {@link buildDetailsCard}: icon, label, and
  *  optional extras. */
-function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
+export function buildDetailsSummary(
+  options: DetailsSummaryOptions,
+): TemplateResult {
   const {
     iconName,
     running = false,
     label,
     labelClass = 'label',
+    title,
+    detail,
     timestamp,
     copyButton,
     extraContent,
@@ -170,7 +177,7 @@ function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
     : nothing;
   const extraTemplate = extraContent ?? nothing;
   // prettier-ignore
-  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto">${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
+  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto" title=${ifDefined(title)}>${label}${detail ? html`${label ? ' ' : nothing}<span class="summary-detail">${detail}</span>` : nothing}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
 }
 
 /**
@@ -189,20 +196,41 @@ export function buildDetailsCard(opts: {
   return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.open ?? false}>${buildDetailsSummary(opts.summary)}${opts.body}</wa-details>`;
 }
 
+/** Matches the span `buildFileLinkSpan` draws. */
+export const FILE_LINK = '.file-link';
+
 /**
- * Build the clickable file-path span the webview's delegated click handler
- * turns into an editor navigation. `content` is the visible label; pass
- * `startLine` to target a line within the file.
+ * Build the clickable file-path span a view's delegated click handler turns
+ * into an editor navigation (`fileLinkTarget`). `content` is the visible
+ * label and hovering shows the full path, the one hint a file path takes;
+ * pass `startLine` to target a line within the file.
  */
 export function buildFileLinkSpan(
   filePath: string,
   content: unknown,
-  options: { startLine?: number } = {},
+  options: { startLine?: number; className?: string } = {},
 ): TemplateResult {
   const lineSuffix = options.startLine ? `:${options.startLine}` : '';
   const accessibleName = `Open ${filePath}${lineSuffix}`;
+  const classes = {
+    'file-link': true,
+    'clickable-link': true,
+    [options.className ?? '']: options.className !== undefined,
+  };
   // prettier-ignore
-  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(options.startLine)} role="button" tabindex="0" aria-label=${accessibleName} dir="auto">${content}</span>`;
+  return html`<span class=${classMap(classes)} title=${filePath} data-file=${filePath} data-file-line=${ifDefined(options.startLine)} role="button" tabindex="0" aria-label=${accessibleName} dir="auto">${content}</span>`;
+}
+
+/** The file, and the line when it names one, of the file link a click or
+ *  key event came through. */
+export function fileLinkTarget(
+  event: Event,
+): { readonly path: string; readonly line?: number } | undefined {
+  const link = getComposedPathElement(event, FILE_LINK, HTMLElement);
+  const path = link?.dataset.file;
+  if (!path) return undefined;
+  const line = Number(link?.dataset.fileLine);
+  return { path, ...(Number.isInteger(line) && line > 0 && { line }) };
 }
 
 /** Build a file's `+3 -1` chip: the counts for the eye, the sentence for a
@@ -215,45 +243,11 @@ export function buildLineChangeStats(changes: {
   return html`<span class="file-stats"><span class="visually-hidden">${formatResultCount(changes.added, 'line')} added, ${formatResultCount(changes.removed, 'line')} removed</span><span class="added" aria-hidden="true">+${changes.added}</span><span class="removed" aria-hidden="true">-${changes.removed}</span></span>`;
 }
 
-/** Build the `<li>` rows for a file-list banner. The summary line above them
- *  is the row's (`FileListRow.summary`), not derived here. A file that
- *  reached the model as an image or audio clip carries its `media`, and
- *  reports its kind and size beside its name. */
-export function buildFileListRender(
-  files: FileListRow['files'],
-): TemplateResult {
-  // prettier-ignore
-  return html`${files.map((file) => {
-    const tone = fileLoadTone(file.ok);
-    const filePath = file.path;
-    const fileName = getBasename(filePath);
-    const loaded = file.media;
-
-    // The one rule for a loaded file's source label, shared with the CLI
-    // (transcriptRowLines): paint `sourceDisplay`, nothing else — an entry
-    // worth labelling sets `sourceDisplay`, so no host needs a fallback to
-    // spell it out.
-    // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}>${waIcon(statusGlyph({ tone }), { className: `file-load-icon tone-${tone}` })} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${fileName}</bdi>`)}${file.varName ? html` <span class="file-var">[<bdi dir="auto">${file.varName}</bdi>]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(<bdi dir="auto">${file.sourceDisplay}</bdi>)</span>` : ''}${loaded ? html` <span class="file-media"><bdi dir="ltr">${formatMediaLabel(loaded)}</bdi></span>` : ''}</li>`;
-  })}`;
-}
-
 // ============================================================================
 // Syntax Highlighting
 // ============================================================================
 
-/** Human-readable labels for language badges */
-const LANGUAGE_LABELS: Record<string, string> = {
-  bash: 'Bash',
-  json: 'JSON',
-  yaml: 'YAML',
-  javascript: 'JavaScript',
-  typescript: 'TypeScript',
-  python: 'Python',
-  plaintext: 'Text',
-};
-
-/** Build a code block with syntax highlighting, a language badge and a copy button. */
+/** Build a code block with syntax highlighting and a copy button. */
 export function buildCodeBlock(
   text: string,
   language: string,
@@ -264,13 +258,11 @@ export function buildCodeBlock(
   const highlighted =
     language === 'plaintext' ? null : highlightSpans(text, language);
   // prettier-ignore
-  const languageBadge = html`<span class="code-block-language">${LANGUAGE_LABELS[language] ?? language}</span>`;
-  // prettier-ignore
   const copyButton = html`<copy-button .text=${text} .label=${'Copy code'} .look=${'code'}></copy-button>`;
   // prettier-ignore
   const codeTemplate = html`<pre class=${classMap(preClasses)} dir="ltr"><code>${highlighted === null ? text : unsafeHTML(highlighted)}</code></pre>`;
   // prettier-ignore
-  return html`<div class="code-block" data-language=${language}><div class="code-block-header">${languageBadge}${copyButton}</div>${codeTemplate}</div>`;
+  return html`<div class="code-block" data-language=${language}><div class="code-block-copy">${copyButton}</div>${codeTemplate}</div>`;
 }
 
 // ============================================================================

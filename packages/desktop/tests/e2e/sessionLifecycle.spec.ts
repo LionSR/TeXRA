@@ -1,3 +1,7 @@
+import { readFileSync, readdirSync, rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+
 import { Effect, Layer } from 'effect';
 
 import type { RunId } from '@texra-ai/worldline/schemas';
@@ -270,8 +274,7 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
   ).toBeVisible();
   await currentLaunch.page.keyboard.press('Escape');
 
-  // The project and task menus occupy the same action column. Task names
-  // and selected backgrounds use the project label's content column.
+  // The project and task menus occupy the same action column.
   await row.hover();
   const rowMenu = row.locator('#run-tab-actions');
   const centers = await Promise.all([
@@ -285,22 +288,10 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
   ]);
   const centerX = centers.map((found) => found.x + found.width / 2);
   expect(Math.max(...centerX) - Math.min(...centerX)).toBeLessThan(1);
-  const rowBox = await box(row);
+  // A task's title starts where its project's name does.
   const titleBox = await box(row.locator('.tab-title'));
-  expect(Math.abs(titleBox.x - rowBox.x - 8)).toBeLessThan(1);
-  const projectStatus = await box(page.locator('.shell-project-status'));
-  // An idle row shows no status: the interrupted run's row has one.
-  const taskStatus = await box(
-    railRow(currentLaunch, ORPHAN_RUN).locator('.tab-status'),
-  );
-  expect(
-    Math.abs(
-      projectStatus.x +
-        projectStatus.width / 2 -
-        taskStatus.x -
-        taskStatus.width / 2,
-    ),
-  ).toBeLessThan(1);
+  const nameBox = await box(page.locator('.shell-project-name').first());
+  expect(Math.abs(titleBox.x - nameBox.x)).toBeLessThan(1);
   await currentLaunch.page.screenshot({
     path: test.info().outputPath('rail-row-hover.png'),
     animations: 'disabled',
@@ -351,5 +342,84 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
   // The artifact: the relaunched rail without the deleted conversation.
   await currentLaunch.page.screenshot({
     path: test.info().outputPath('rail-after-delete.png'),
+  });
+});
+
+test("a command's output is drawn in the theme's terminal colours", async ({
+  profile,
+  launch,
+}) => {
+  await closeTexraApp(await launch());
+  stopServices(profile.dataRoot, { timeoutMs: 30_000 });
+  // The golden store's `golden_script` run holds a finished `bash` call
+  // with output: the store the app made is replaced by it.
+  const storagePath = await findWorkspaceStoragePath(profile);
+  for (const name of readdirSync(storagePath))
+    if (name.startsWith('texra.project-v1.db')) rmSync(join(storagePath, name));
+  const store = new DatabaseSync(join(storagePath, 'texra.project-v1.db'));
+  try {
+    store.exec(
+      readFileSync(
+        resolve(
+          import.meta.dirname,
+          '../../../../src/test-kernel/fixtures/storage/golden-1.0.sql',
+        ),
+        'utf8',
+      ),
+    );
+  } finally {
+    store.close();
+  }
+
+  const { page } = await launch();
+  await dismissOnboarding(page);
+  await page
+    .locator('.shell-project-runs run-tab')
+    .getByRole('button', { name: /^golden_script · Status: Completed/ })
+    .click();
+  await page.locator('wa-details.work-fold .details-summary').click();
+  await page
+    .locator('.script-call wa-details.tool-use-details')
+    .filter({ hasText: 'Say gathered' })
+    .locator('.details-summary')
+    .click();
+  const rows = page.locator('terminal-output .xterm-rows');
+  await expect(rows).toContainText('gathered');
+  // The text is the terminal foreground token and the surface its
+  // background token, as the terminal's own container resolves them: a
+  // resolver that reads neither paints both black.
+  const painted = await rows.evaluate((element) => {
+    const container = element.closest('.terminal-container');
+    if (!container) throw new Error('The terminal has no container.');
+    const token = (name: string): string => {
+      const probe = document.createElement('span');
+      probe.style.color = `var(${name})`;
+      container.append(probe);
+      const { color } = getComputedStyle(probe);
+      probe.remove();
+      return color;
+    };
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('No canvas context.');
+    // One spelling for both sides, whatever syntax each computes to.
+    const spelled = (color: string): string => {
+      context.fillStyle = color;
+      return context.fillStyle;
+    };
+    const surface = element.closest('.xterm')?.querySelector('.xterm-viewport');
+    if (!surface) throw new Error('The terminal has no viewport.');
+    return {
+      text: spelled(getComputedStyle(element).color),
+      foreground: spelled(token('--wa-color-terminal-foreground')),
+      surface: spelled(getComputedStyle(surface).backgroundColor),
+      background: spelled(token('--wa-color-terminal-background')),
+    };
+  });
+  expect(painted.text).toBe(painted.foreground);
+  expect(painted.surface).toBe(painted.background);
+  expect(painted.text).not.toBe(painted.surface);
+  await page.screenshot({
+    path: test.info().outputPath('command-output-light.png'),
   });
 });

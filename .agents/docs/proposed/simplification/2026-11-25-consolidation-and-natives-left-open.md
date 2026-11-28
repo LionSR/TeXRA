@@ -36,6 +36,10 @@ These landed in the PR that adds this note:
    Switching changes every export's name (case and Unicode kept, `_` for an
    unsafe character), and `modelFileName` lives in a file #15229 edits.
    Decide the name's form, then take it after that PR.
+   **2026-11-26 evening:** #15229 deleted `labelFileName` and
+   `modelFileName` with their last other callers, so the export's sanitizer
+   is the only file-name rule left and nothing is collapsed. The
+   label-with-no-ASCII case still leaves `--` in the name.
 2. **The settings select row has no kit owner.** `@ui/wa/settingsSection.ts`
    owns the toggle and number rows; the select row's frame is written in
    `stateSettingRows.ts`, in the desktop theme row
@@ -60,6 +64,15 @@ These landed in the PR that adds this note:
    and Zotero tools: `pathExists` and `formatResultCount` once those PRs
    land. The texra `asToolError`
    (`packages/texra/src/tools/agentCli/agentCliShared.ts`) goes with #15230.
+   **2026-11-26 evening:** #15229 deleted `latexMedia.ts`,
+   `acceptedFileTarget.ts`, the document-task file actions and the arXiv and
+   Zotero tools; only `vendorPackages.ts` and `asToolError` remain, both in
+   the files #15230 deletes.
+   **Landed 2026-11-28:** #15230 closed without merging, so both stayed.
+   `binaryIfPresent` probes with `pathExists`, and the Codex and Claude
+   Code tools take the harness's `asToolError` from `./plugins`, which
+   passes a `ToolError` through instead of wrapping it in another; the
+   texra copy is gone.
 5. **Static manifest reads as JSON imports.**
    `packages/harness/scripts/bundle.mjs`, `packages/cli/scripts/build-bundle.mjs`,
    `scripts/code-sandbox-worker.mjs` and `scripts/vscode-host-e2e-runner.mjs`
@@ -72,6 +85,7 @@ These landed in the PR that adds this note:
    accepts the import (`vitest list` loads the config and lists the same
    250 suites). `packages/cli/scripts/build-bundle.mjs` is held by an open
    PR and still reads its manifest by hand.
+   **Landed 2026-11-27** for `build-bundle.mjs`.
 6. **`vitest.config.mjs` is the root's one importer of the `glob` package.**
    `globSync` from `node:fs` returns the same 250 suites on Linux; it has no
    `posix` option, so the Windows shards need the separators replaced.
@@ -81,6 +95,8 @@ These landed in the PR that adds this note:
    `/`, and `vitest list` assigns the same 250 suites to the same projects.
    The root `package.json`'s `glob` devDependency now has no importer; drop
    it with its `pnpm-lock.yaml` entry once the open PRs merge.
+   **Landed 2026-11-26 evening:** the devDependency and its lockfile entry
+   are gone.
 7. Items 1, 3 and 4 of the 2026-11-23 note (`ifCurrent` compared as JSON
    text, the home directory, one timestamp format twice) are unchanged.
 

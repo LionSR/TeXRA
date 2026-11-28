@@ -256,7 +256,7 @@ Whether `outcome` answers a request of `kind`: how a client reads an
 answer that crossed a process boundary.
 
 ```ts
-const isOutcomeOf: <K extends RuntimeCommand["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly status: "sent" | "queued"; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
+const isOutcomeOf: <K extends RuntimeCommand["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly status: "sent" | "queued"; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; }) => outcome is OutcomeOf<K>
 ```
 
 ## LaunchError
@@ -572,11 +572,12 @@ type RunEnd = typeof RunEndSchema.Type;
 ## RunFailure
 
 A run that failed on its own: an activation with no readable end.
-`cause` is exactly what the launch path threw.
+`cause` is what the launch path failed with, when something did; a run
+that ended without a stored end and no failure of its own has none.
 
 ```ts
 class RunFailure extends Schema.TaggedError<RunFailure>()('RunFailure', {
-  cause: Schema.Defect(),
+  cause: Schema.optional(Schema.Defect()),
   message: Schema.String,
 })
 ```

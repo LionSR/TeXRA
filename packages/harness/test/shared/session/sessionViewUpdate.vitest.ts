@@ -282,9 +282,7 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
   toolTurn.response,
   toolTurn.intent,
   toolTurn.result('call-a'),
-  toolTurn.result('call-b', {
-    disposition: 'duplicate',
-  }),
+  toolTurn.result('call-b'),
   toolTurn.delivery,
   {
     type: 'run.position',

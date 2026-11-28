@@ -22,9 +22,7 @@ const CHANNEL = 'SampleProjectCommands';
 
 /** Both entries report a failed creation the same way. */
 const reportFailure = (err: unknown) =>
-  showLoggedErrorMessage('Failed to create sample project', err).pipe(
-    Effect.asVoid,
-  );
+  showLoggedErrorMessage('Failed to create sample project', err);
 
 /**
  * No-workspace variant for the welcome view: ask where to put the sample,

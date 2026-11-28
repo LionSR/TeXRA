@@ -27,7 +27,7 @@ import { cliResult, emitCliResult } from '../runtime/platform/output';
 interface InitSummary {
   readonly path: string;
   readonly model: string;
-  readonly outputFormat: InitAnswers['outputFormat'];
+  readonly outputFormat: InitConfigShape['texra.outputFormat'];
   readonly config: InitConfigShape;
   readonly gitignore?: GitignoreOutcome;
   readonly warning?: {
@@ -39,14 +39,14 @@ interface InitSummary {
 }
 
 function initWarning(
-  answers: InitAnswers,
+  model: string,
   models: readonly ModelOptionData[],
 ): InitSummary['warning'] {
-  const chosen = models.find((model) => model.value === answers.model);
+  const chosen = models.find((option) => option.value === model);
   if (chosen !== undefined && isModelOptionAvailable(chosen)) return undefined;
   return {
-    model: answers.model,
-    message: `"${answers.model}" is not currently usable.`,
+    model,
+    message: `"${model}" is not currently usable.`,
     recovery: `${CLI_SETUP_RECOVERY} Run \`texra models list --all\` to inspect access.`,
   };
 }
@@ -84,16 +84,15 @@ function initTextSummary(summary: InitSummary): string {
 
 function emitInitSummary(
   filePath: string,
-  answers: InitAnswers,
   config: InitConfigShape,
   models: readonly ModelOptionData[],
   gitignore: GitignoreOutcome | undefined,
 ) {
-  const warning = initWarning(answers, models);
+  const warning = initWarning(config['texra.model'], models);
   const summary: InitSummary = {
     path: filePath,
-    model: answers.model,
-    outputFormat: answers.outputFormat,
+    model: config['texra.model'],
+    outputFormat: config['texra.outputFormat'],
     config,
     gitignore,
     warning,
@@ -169,7 +168,7 @@ const runInit = Effect.fn('runInit')(function* (
     ? yield* ensureTexraGitignored(context.cwd)
     : undefined;
 
-  yield* emitInitSummary(filePath, answers, config, models, gitignoreOutcome);
+  yield* emitInitSummary(filePath, config, models, gitignoreOutcome);
 });
 
 export const initCommand = cliCommand('init', {

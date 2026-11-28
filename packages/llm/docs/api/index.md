@@ -874,8 +874,9 @@ type ModelRoute =
     }
   /** No provider key can serve the model directly. */
   | { readonly kind: 'no-api-key' }
-  /** No route TeXRA reaches serves the model (see {@link isUnservedModel}). */
-  | { readonly kind: 'unserved' };
+  /** No route TeXRA reaches serves the model: `reason`, the clause after
+   *  its name, says why ({@link isUnservedModel}). */
+  | { readonly kind: 'unserved'; readonly reason: string };
 ```
 
 ## MODELS
@@ -884,6 +885,21 @@ All model references.
 
 ```ts
 const MODELS: ModelRef[]
+```
+
+## nearestEffort
+
+The accepted level nearest to `wanted`; a tie goes to the higher level, so
+a missing `medium` between `low` and `high` becomes `high`. Providers name
+different levels, so a level chosen on one model is carried to another by
+this rule: the run's own choice, and a picker moving a choice between
+models.
+
+```ts
+function nearestEffort(
+  accepted: readonly ReasoningEffort[],
+  wanted: ReasoningEffort,
+): ReasoningEffort | undefined
 ```
 
 ## originOf
@@ -1127,21 +1143,6 @@ declare function requestRates(model: ModelConfig | string, promptTokens: number,
 };
 ```
 
-## resolveCredential
-
-The one credential ladder: the persisted secret under `name`, else the
-first of `envNames` set in the environment, in order. Both are trimmed and
-a blank value reads as unset, so an empty variable does not mask anything.
-The environment comes from the ambient Effect `ConfigProvider`, the live
-process environment in production; tests replace it through a provider
-record rather than mutating `process.env`. API keys and the GitHub token
-both read through here, so the value and the origin a status surface
-reports can never disagree.
-
-```ts
-const resolveCredential: (store: Pick<CredentialStore, "get">, name: string, envNames: readonly string[]) => Effect<{ readonly value: string | undefined; readonly origin: "none" | "env" | "secret"; }, SecretsFailed, never>
-```
-
 ## ResolvedApiKey
 
 A provider's key, sealed, and its origin.
@@ -1198,6 +1199,19 @@ function routeConfig(
   config: ModelConfig,
   route: ModelRoute,
 ): ModelConfig
+```
+
+## routedApiKeyProvider
+
+The provider whose API key a secret-store entry holds, when a write to it
+can change which models route: `undefined` for an entry that is no API key
+and for the key of a provider this build does not know, which routes no
+model.
+
+```ts
+function routedApiKeyProvider(
+  key: string,
+): ApiKeyProviderId | undefined
 ```
 
 ## RouteFacts
@@ -1287,6 +1301,16 @@ The model and reasoning request a stored model string names, or `undefined` when
 
 ```ts
 function selectModel(id: string): SelectedModel | undefined
+```
+
+## takesImageInput
+
+Whether `protocol` takes an image of this MIME type as input. A caller
+asks before it offers a file as an image part: any other type fails the
+turn as `invalid-request`.
+
+```ts
+const takesImageInput: (protocol: "google-interactions" | "openai-responses" | "anthropic-messages", mimeType: string) => boolean
 ```
 
 ## turnCost

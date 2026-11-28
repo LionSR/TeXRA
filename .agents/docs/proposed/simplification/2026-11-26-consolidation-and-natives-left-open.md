@@ -44,6 +44,10 @@ These landed in the PR that adds this note:
    `packages/cli/scripts/validationAgent.mjs` owner for the key list, the
    child environment and the bundle build; `waitFor` returning what its
    check found; `projectStore(root, prefix)`.
+   **Landed 2026-11-27** across the package scan (`validationAgent.mjs`,
+   `loadPtySpawn`, `projectStore`, `waitFor`) and the consolidation audit
+   (`validationModelEnv`); the remaining provider-key drift and
+   `generate-golden-store.mjs` copies stay in the 2026-11-27 notes.
 2. **Tool inputs in files the open PRs hold.** `ZoteroAddTool.ts` (eleven
    fields) and `ZoteroCollectionsTool.ts` (two) write
    `Schema.optional(Schema.NullOr(S.annotate({ description })))` where
@@ -60,6 +64,8 @@ These landed in the PR that adds this note:
    function returning the message in `terminalRequirements.ts`; two of the
    three files are held. `resumeRun.ts` also writes the non-usage branch of
    its own `resumeFailureExit` inline twice.
+   **Landed 2026-11-26 evening:** `interactiveTerminalRejection` returns
+   the message, and both load failures take `resumeFailureExit`.
 5. **A forwarded `--` is handled three ways in scripts.** Six scripts drop
    every `--` from `process.argv`, two drop a leading one, and nine that
    call `parseArgs` handle none, so `pnpm run <script> -- --flag` reads the

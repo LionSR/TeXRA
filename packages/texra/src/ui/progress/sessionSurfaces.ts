@@ -39,7 +39,7 @@ import {
 import {
   PersistedState,
   type KeyValueStore,
-} from '@texra/shared/state/PersistedState';
+} from '@ui/progress/PersistedState';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { LAUNCH_FILE_LISTS } from '@ui/copy/fileSelectConfigs';
 
@@ -60,26 +60,6 @@ import type {
 type Outcome = typeof OutcomeSchema.Type;
 /** How a request ended: its outcome, or the error it failed with. */
 type Answer<A> = Result.Result<A, BridgeError>;
-
-/** A short beep for a run the host decided to chime for. Autoplay
- *  restrictions and a missing audio device are expected, not fatal, but the
- *  cause is logged so a regressing AudioContext path is not invisible. */
-function playCompletionSound(): void {
-  try {
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.value = 880;
-    osc.connect(ctx.destination);
-    osc.start();
-    setTimeout(() => {
-      osc.stop();
-      ctx.close();
-    }, 150);
-  } catch (error) {
-    console.warn('Failed to play completion sound:', error);
-  }
-}
 
 /** One open session as the root holds it: its three records as signals. */
 interface SessionSurface {
@@ -120,19 +100,12 @@ export interface SessionSurfaces {
   dispose(): void;
 }
 
-/** The launcher field a picker's paths return to. */
-const SINGLE_FILE_FIELDS = { base: 'baseFile', edited: 'editedFile' } as const;
-
 /** Where a picked path list lands on the launch surface. */
 function withPickedPaths(
   launch: Surface['launch'],
   fileType: Extract<HostCommand, { kind: 'useCurrentFile' }>['fileType'],
   paths: readonly string[],
 ): Partial<Surface['launch']> {
-  if (fileType === 'base' || fileType === 'edited') {
-    const path = paths[0];
-    return path === undefined ? {} : { [SINGLE_FILE_FIELDS[fileType]]: path };
-  }
   const field = LAUNCH_FILE_LISTS[fileType];
   return { [field]: [...new Set([...launch[field], ...paths])] };
 }
@@ -584,19 +557,13 @@ export function createSessionSurfaces(options: {
       });
       return;
     }
-    // Auto-approve is this launch's alone: the request carries it, and the
-    // request finishes only with the run, so the next task must not find it.
-    if (launch.approval !== 'policy')
-      act(entry, { kind: 'launch', patch: { approval: 'policy' } });
     hostRequestFor(entry, { kind: 'launch', launch, instruction });
   }
 
   transport.onSurfaceAction((key, action) => {
     const entry = held.get(key);
     if (!entry) return;
-    // The host already decided a chime's transition and chose this port.
-    if (action.kind === 'chime') playCompletionSound();
-    else if (action.kind === 'submit') submit(entry);
+    if (action.kind === 'submit') submit(entry);
     else if (action.kind === 'draft')
       act(entry, {
         kind: 'draft',

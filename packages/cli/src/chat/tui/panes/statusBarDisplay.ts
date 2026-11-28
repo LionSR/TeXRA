@@ -2,7 +2,6 @@ import { absurd, Predicate } from 'effect';
 import {
   runBypasses,
   type ContextStateData,
-  type RunId,
   type TokenUsageStats,
   type UsageRoute,
   formatCompactDuration,
@@ -26,8 +25,8 @@ import {
   truncateSummaryToWidth,
 } from '@cli/runtime/terminal/terminalText';
 import type {
+  PlanUsage,
   SubscriptionUsageProvider,
-  SubscriptionUsageSnapshot,
 } from '@texra/shared/model/subscriptionUsage';
 import {
   contextGaugeTone,
@@ -37,14 +36,12 @@ import {
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
 import {
+  limitingUsageWindow,
+  planUsageName,
   subscriptionQuotaTone,
   subscriptionQuotaUsed,
 } from '@ui/copy/subscriptionUsage';
 import { RUN_GRANT_TONE, runStatus, type RunTone } from '@ui/copy/runStatus';
-import {
-  approvalPolicyLabel,
-  approvalPolicyTone,
-} from '@ui/copy/approvalPolicy';
 import {
   AGENT_LIST,
   NESTED_AGENT,
@@ -55,9 +52,8 @@ import {
 import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
 import { taskCostStatus } from '../sessionStatus';
-import { formatResumeCommand } from '../state/resumeHint';
+import { formatResumeCommand } from '../../../runtime/resumeCommand';
 import { type TransientNotice } from '../state/cliState';
-import { runViewOf } from '../state/sessionView';
 import type {
   ApprovalPolicy,
   RequestKind,
@@ -156,12 +152,16 @@ interface StatusBarChrome {
   readonly commandName: string;
   readonly approvalDepth: number;
   readonly approvalKind: ApprovalQueueStatusKind;
+  /** The active model and its effective reasoning level (matching the desktop
+   *  composer chip), omitted when no model is known yet. */
+  readonly modelChip?: { readonly label: string; readonly compact: string };
   readonly modelAccess: UsageRoute | undefined;
   /** The prospective subscription route could not be resolved. */
   readonly subscriptionProbeFailed: boolean;
-  /** Latest quota snapshot for the subscription serving this model. */
-  readonly subscriptionQuota: SubscriptionUsageSnapshot | undefined;
-  /** Session approval policy; a non-default policy earns a segment. */
+  /** The usage of the plan serving this model, with the windows still
+   *  running (`currentUsageWindows`). */
+  readonly subscriptionQuota: PlanUsage | undefined;
+  /** Session approval policy, for the resume hint. */
   readonly approvalPolicy: ApprovalPolicy;
   /** Terminal width in columns. */
   readonly width: number;
@@ -171,12 +171,12 @@ interface StatusBarChrome {
   readonly locationLabel: string | undefined;
   /** Which surface currently owns input and global chat shortcuts: a
    *  foreground surface (approval, detail, form, slash palette, reverse
-   *  search) or the persistent child list. Neither active means the normal
-   *  chat shortcuts row (`shortcuts`) applies. */
-  readonly foreground: StatusBarForegroundInput;
+   *  search; `foregroundInputActive`) or the persistent child list. Neither
+   *  active means the normal chat shortcuts row (`shortcuts`) applies. */
+  readonly foregroundInputActive: boolean;
   readonly childList: StatusBarChildListInput;
   /** Availability/labels for the normal chat shortcuts row, shown when
-   *  neither `foreground` nor `childList` owns input. */
+   *  neither the foreground surface nor `childList` owns input. */
   readonly shortcuts: StatusBarShortcutsInput;
 }
 
@@ -190,11 +190,6 @@ interface StatusBarTurnInput {
    *  `loadingFrameAt`) shown ahead of the status label while a turn is
    *  active, so "running" reads as alive rather than a static word. */
   readonly runningFrame: string;
-}
-
-interface StatusBarForegroundInput {
-  /** True while a modal, form, palette, or search surface owns input. */
-  readonly inputActive: boolean;
 }
 
 interface StatusBarChildListInput {
@@ -242,18 +237,15 @@ function accessModeSegment(
 }
 
 function subscriptionQuotaSegment(
-  snapshot: SubscriptionUsageSnapshot | undefined,
+  usage: PlanUsage | undefined,
 ): StatusBarSegment | undefined {
-  if (snapshot?.state !== 'available') return undefined;
-  // The bar shows the window the plan runs out of first: the most used.
-  const limiting = snapshot.windows.toSorted(
-    (left, right) => right.percentUsed - left.percentUsed,
-  )[0];
+  if (usage === undefined) return undefined;
+  const limiting = limitingUsageWindow(usage.windows);
   if (!limiting) return undefined;
   const used = subscriptionQuotaUsed(limiting);
   const tone = subscriptionQuotaTone(limiting);
   return {
-    text: `${snapshot.planName} ${used}`,
+    text: `${planUsageName(usage)} ${used}`,
     compactText: used,
     ...(tone === undefined ? { dim: true } : { color: TONE_PAINT[tone].color }),
     priority: STATUS_BAR_PRIORITY.subscriptionQuota,
@@ -321,10 +313,10 @@ const STATUS_BAR_PRIORITY = {
   activeSubagent: 20,
   usage: 40,
   queuedFollowUp: 50,
-  approvalPolicy: 55,
   approvalDepth: 60,
   rootActive: 65,
   subscriptionQuota: 67,
+  modelChip: 68,
   elapsed: 70,
   accessMode: 72,
   location: 74,
@@ -520,51 +512,17 @@ function childListBindingsText(
   });
 }
 
-function approvalPolicySegment(
-  policy: ApprovalPolicy,
-): StatusBarSegment | undefined {
-  // A policy that blocks earns a segment, in its tone.
-  const tone = approvalPolicyTone(policy);
-  if (tone === undefined) return undefined;
-  // The label the /approval picker and every other surface uses for this
-  // policy — the bar is how users confirm their selection took effect.
-  return {
-    text: approvalPolicyLabel(policy),
-    color: TONE_PAINT[tone].color,
-    priority: STATUS_BAR_PRIORITY.approvalPolicy,
-    policy: 'drop',
-  };
-}
-
-interface StatusBarRunTarget {
-  readonly ctrlCAction: CtrlCAction;
-  readonly displayRunId: RunId | undefined;
-  readonly isChildRun: boolean;
-}
-
 /**
- * Which run the status bar describes (the active run when the view
- * holds it), and what Ctrl-C does there. `canStop` is the SIGINT handler's
- * own predicate (`canStopRootRun`), so the hint cannot disagree
- * with what the key does.
+ * What Ctrl-C does while the status bar describes `run`. `canStop` is the
+ * SIGINT handler's own predicate (`canStopRootRun`), so the hint cannot
+ * disagree with what the key does.
  */
-export function statusBarRunTarget({
-  activeRunId,
-  canStop,
-  view,
-}: {
-  readonly activeRunId: RunId | undefined;
-  readonly canStop: boolean;
-  readonly view: SessionView;
-}): StatusBarRunTarget {
-  const active = runViewOf(view, activeRunId);
-  let ctrlCAction: CtrlCAction = 'exit';
-  if (canStop) ctrlCAction = active?.parentId ? 'stop root' : 'stop';
-  return {
-    ctrlCAction,
-    displayRunId: active?.id,
-    isChildRun: active?.parentId != null,
-  };
+export function ctrlCActionFor(
+  run: RunView | undefined,
+  canStop: boolean,
+): CtrlCAction {
+  if (!canStop) return 'exit';
+  return run?.parentId ? 'stop root' : 'stop';
 }
 
 // Which text occupies the bindings row is a priority order, not a single
@@ -584,7 +542,7 @@ function resolveStatusBarBindings(input: StatusBarChrome): string {
 
   const maxColumns = statusBarInnerWidth(input.width);
   const { ctrlCAction } = input;
-  if (input.foreground.inputActive) {
+  if (input.foregroundInputActive) {
     // The surface above prints its own keys, Esc included; only Ctrl-C,
     // which works over every surface, is the bar's to name.
     return keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
@@ -596,7 +554,7 @@ function resolveStatusBarBindings(input: StatusBarChrome): string {
 }
 
 /**
- * The bar for the displayed run (`statusBarRunTarget`), read straight off
+ * The bar for the displayed run, read straight off
  * its `RunView` and the view's runs, around the chrome the TUI supplies.
  */
 export function buildStatusBarDisplay(
@@ -709,6 +667,15 @@ export function buildStatusBarDisplay(
               policy: 'drop',
             }
           : undefined,
+        input.modelChip !== undefined
+          ? {
+              text: input.modelChip.label,
+              compactText: input.modelChip.compact,
+              dim: true,
+              priority: STATUS_BAR_PRIORITY.modelChip,
+              policy: 'drop',
+            }
+          : undefined,
         input.subscriptionProbeFailed
           ? {
               text: 'subscription status unavailable',
@@ -719,7 +686,6 @@ export function buildStatusBarDisplay(
             }
           : accessModeSegment(input.modelAccess),
         subscriptionQuotaSegment(input.subscriptionQuota),
-        approvalPolicySegment(input.approvalPolicy),
         input.locationLabel !== undefined
           ? {
               text: input.locationLabel,

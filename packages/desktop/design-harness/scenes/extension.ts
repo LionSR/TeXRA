@@ -5,6 +5,8 @@
 import { Schema } from 'effect';
 import { html, type TemplateResult } from 'lit';
 
+import { ReasoningEffort as E } from '@texra-ai/llm';
+
 import {
   AgentConfigSchema,
   MESSAGE_TYPES,
@@ -33,7 +35,6 @@ import {
   withWaitingGrandchild,
 } from '@test/shared/session/fanOutScenario';
 import type { MissingTool } from '@texra/shared/session/hostSnapshot';
-import { DOCUMENTS_OUTPUT_KIND } from '@texra/shared/plugins/documents';
 import {
   emptyHostSnapshot,
   type HostSnapshot,
@@ -65,31 +66,44 @@ function host(): HostSnapshot {
       {
         value: 'gemini-3.8-flash',
         label: 'Gemini 3.8 Flash',
+        hint: 'Fast first response — good for quick replies',
+        context: '1M',
+        cost: '$0.30/$2.50',
         availability: 'provider-key',
       },
       {
         value: 'gpt-5.6',
         label: 'GPT 5.6',
+        hint: 'Strong general model for long, multi-step work.',
+        context: '400K',
+        cost: '$1.25/$10.00',
+        efforts: {
+          levels: [E.LOW, E.MEDIUM, E.HIGH],
+          sent: E.MEDIUM,
+        },
         availability: 'provider-key',
       },
       {
         value: 'claude-sonnet-5-5',
         label: 'Sonnet 5.5',
+        hint: 'Balanced model for writing, proofs and code.',
+        context: '1M',
+        cost: '$3.00/$15.00',
+        efforts: {
+          levels: [E.LOW, E.MEDIUM, E.HIGH, E.XHIGH, E.MAX],
+          sent: E.HIGH,
+        },
         availability: 'provider-key',
+      },
+      {
+        value: 'claude-opus-5-5',
+        label: 'Opus 5.5',
+        availability: 'missing-key',
+        unavailableReason:
+          'Model "claude-opus-5-5" requires your Anthropic API key. Provide it to continue.',
       },
     ],
     workspaceRoots: [{ value: '/paper', label: 'ldt-lean' }],
-    fileOptions: {
-      baseFile: ['main.tex', 'section2.tex', 'appendixB.tex'],
-      editedFile: ['main_polish.tex', 'main_review.tex'],
-      commit: [
-        'HEAD',
-        'HEAD~1',
-        'a1f3c2 Fix lemma B.3',
-        '9be0d4 Section 2 rewrite',
-      ],
-    },
-    isGitRepo: true,
   };
 }
 
@@ -103,8 +117,6 @@ function surface(view: SessionView, ...actions: SurfaceAction[]): Surface {
         inputFiles: ['main.tex'],
         contextFiles: ['library.bib'],
         model: 'gemini-3.8-flash',
-        baseFile: 'main.tex',
-        editedFile: 'main_polish.tex',
       },
     },
     { kind: 'expand', runId: ROOT, expanded: true },
@@ -353,6 +365,144 @@ function forkView(): SessionView {
   ]);
 }
 
+/** One conversation of two turns with the rows a real one has: thinking,
+ *  file and shell calls (one open), and a Markdown answer. */
+const TALK = runId('e1e1e1e1e1e1');
+function conversationView(): SessionView {
+  const log = new Log();
+  log.emit(TALK, T.root, {
+    type: 'run.start',
+    maxCostUsd: null,
+    identity: { kind: 'agent', agent: 'assistant' },
+    worktree: { workingDirectory: '/paper' },
+    parent: null,
+    provenance: null,
+    takesFollowUps: true,
+    grants: NO_GRANTS,
+  });
+  log.emit(TALK, T.root, { type: 'run.activate' });
+  log.emit(TALK, T.root, {
+    type: 'run.config',
+    config: Schema.decodeUnknownSync(AgentConfigSchema)({
+      label: 'assistant',
+      model: 'claude-sonnet-5-5',
+      instruction: 'Check Lemma B.3',
+    }),
+  });
+  log.emit(TALK, T.root, {
+    type: 'run.description',
+    description: 'Check Lemma B.3',
+    by: 'user',
+  });
+  const line = (
+    at: number,
+    messageType:
+      | typeof MESSAGE_TYPES.USER_MESSAGE
+      | typeof MESSAGE_TYPES.MODEL_RESPONSE
+      | typeof MESSAGE_TYPES.THINKING,
+    message: string,
+  ) => log.emit(TALK, at, { type: 'log', level: 'info', messageType, message });
+  let call = 0;
+  const tool = (
+    at: number,
+    toolName: string,
+    input: Record<string, string>,
+    output?: string,
+  ) => {
+    const logId = `talk-${(call += 1)}`;
+    log.emit(TALK, at, { type: 'tool.start', logId, toolName, input });
+    if (output !== undefined)
+      log.emit(TALK, at + 900, {
+        type: 'tool.end',
+        logId,
+        status: 'completed',
+        result: { status: 'executed', output },
+      });
+  };
+  let at = T.root;
+  const next = (ms: number) => (at += ms);
+  line(
+    next(0),
+    MESSAGE_TYPES.USER_MESSAGE,
+    'Lemma B.3 claims the bound holds for all n. Check the proof in appendixB.tex and fix it if the induction step is wrong.',
+  );
+  line(
+    next(2_000),
+    MESSAGE_TYPES.THINKING,
+    'The induction step uses the hypothesis at n-1 and n-2, so two base cases are needed.',
+  );
+  tool(
+    next(1_000),
+    'read_file',
+    { path: 'appendixB.tex' },
+    '\\begin{lemma}\n…',
+  );
+  tool(
+    next(2_000),
+    'grep',
+    { pattern: 'lem:bound', path: '.' },
+    'appendixB.tex:41\nmain.tex:212\nmain.tex:377',
+  );
+  tool(
+    next(2_000),
+    'edit_file',
+    {
+      path: 'appendixB.tex',
+      old_str: 'The case $n = 1$ is immediate.',
+      new_str: 'The cases $n = 1$ and $n = 2$ are immediate.',
+    },
+    'Edited appendixB.tex',
+  );
+  tool(
+    next(3_000),
+    'bash',
+    { command: 'latexmk -pdf main.tex' },
+    'Latexmk: All targets (main.pdf) are up-to-date',
+  );
+  line(
+    next(4_000),
+    MESSAGE_TYPES.MODEL_RESPONSE,
+    [
+      'The induction step was right, but the proof only checked one base case.',
+      '',
+      '- The step uses the hypothesis at $n-1$ **and** $n-2$, so it needs both $n = 1$ and $n = 2$.',
+      '- I added the second base case in `appendixB.tex`; the bound $a_n \\le 2^{n}$ is unchanged.',
+      '',
+      '```latex',
+      'The cases $n = 1$ and $n = 2$ are immediate.',
+      '```',
+      '',
+      'The paper compiles and the three references to the lemma still resolve.',
+    ].join('\n'),
+  );
+  log.emit(TALK, next(1_000), {
+    type: 'run.position',
+    payload: { at: 'waiting', turn: 1 },
+  });
+  line(
+    next(60_000),
+    MESSAGE_TYPES.USER_MESSAGE,
+    'Good. Does Theorem 4 still follow?',
+  );
+  log.emit(TALK, next(1_000), {
+    type: 'run.position',
+    payload: { at: 'turn.begin', turn: 2 },
+  });
+  tool(
+    next(1_000),
+    'read_file',
+    { path: 'main.tex' },
+    '\\section{Main result}\n…',
+  );
+  tool(next(2_000), 'bash', { command: 'lake build LDT.Theorem4' });
+  return viewOf([
+    subscribe(TALK),
+    ...log.events.map(tail),
+    log.drained(),
+    local({ runsHere: [TALK] }),
+  ]);
+}
+
 // ── scenes ──────────────────────────────────────────────────────────────
 
 export const extensionScenes: Record<string, () => TemplateResult> = {
@@ -380,6 +530,33 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   'desktop-placement': () => {
     const view = fanOutView();
     return desktopColumn(view, surface(view, { kind: 'select', runId: CHILD }));
+  },
+  // A conversation with the rows a real one has, in the desktop's column.
+  'desktop-conversation': () => {
+    const view = conversationView();
+    return desktopColumn(view, surface(view, { kind: 'select', runId: TALK }));
+  },
+  // The same conversation with its finished turn's work opened, and the
+  // calls inside it opened to their own lines.
+  'desktop-conversation-open': () => {
+    const view = conversationView();
+    const rows = view.runs.get(TALK)?.transcript.rows ?? [];
+    const first = (kind: string) => rows.find((row) => row.kind === kind)?.id;
+    return desktopColumn(
+      view,
+      surface(
+        view,
+        { kind: 'select', runId: TALK },
+        ...[`work:${first('user')}`, `tools:${first('thinking')}`].map(
+          (key): SurfaceAction => ({
+            kind: 'group',
+            runId: TALK,
+            key,
+            expanded: true,
+          }),
+        ),
+      ),
+    );
   },
   // Two run grants on: the header's read-only chips, each revocable.
   'ext-auto-approve': () => {
@@ -508,24 +685,12 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = fanOutView();
     return editorTab(view, surface(view, { kind: 'select', runId: CHILD }));
   },
-  // Real-ExtensionTools: the Tools sheet with the real latexdiffs-section.
-  'ext-tools': () => {
-    const view = fanOutView();
-    return sidebar(
-      view,
-      surface(
-        view,
-        { kind: 'select', runId: CHILD },
-        { kind: 'toolsSheet', open: true },
-      ),
-    );
-  },
   // Real-ExtensionProposal: the script's agent request on the root.
   'ext-proposal': () => {
     const view = withProposal();
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
-  // A proposed `edit` program on the child, in place of its bash request:
+  // A proposed `annotate` program on the child, in place of its bash request:
   // the card's model menu over the host's models.
   'ext-proposal-pickers': () => {
     const log = new Log();
@@ -538,15 +703,14 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
           requestId: 'req-task',
           runId: CHILD,
           task: true,
-          label: 'edit',
+          label: 'annotate',
           system: '',
           tools: [],
           model: 'gemini-3.8-flash',
-          instruction: 'Fix the typos and notation slips in Section 2.',
+          instruction: 'Referee the argument of Section 2.',
           inputFiles: ['/paper/section2.tex'],
           contextFiles: [],
           mediaFiles: [],
-          outputFiles: ['/paper/section2_edit.tex'],
         },
       },
       answeredBy: 'superYolo',
@@ -592,62 +756,6 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     );
     const view = viewOf([...events, ...priced, local({ runsHere: ALL_RUNS })]);
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
-  },
-  // A document task past its second revision: the header's "Revision 2 of
-  // 3" chip.
-  'ext-workflow-pass': () => {
-    const log = new Log();
-    log.emit(ROOT, T.root, {
-      type: 'run.start',
-      maxCostUsd: null,
-      identity: { kind: 'agent', agent: 'review' },
-      worktree: { workingDirectory: '/paper' },
-      parent: null,
-      provenance: null,
-      takesFollowUps: false,
-      grants: NO_GRANTS,
-    });
-    log.emit(ROOT, T.root, {
-      type: 'run.config',
-      config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent: 'review',
-        script: { kind: 'program', name: 'annotate', args: {} },
-      }),
-    });
-    log.emit(ROOT, T.root, { type: 'run.activate' });
-    log.emit(ROOT, T.root + 1, {
-      type: 'plugin.fact',
-      plugin: DOCUMENTS_OUTPUT_KIND.plugin,
-      kind: DOCUMENTS_OUTPUT_KIND.kind,
-      version: DOCUMENTS_OUTPUT_KIND.version,
-      value: {
-        task: {
-          intro: '',
-          requests: ['Revise.', 'Review.', 'Finish.'],
-          templates: [],
-          creates: false,
-        },
-        rounds: [0, 1].map((round) => ({
-          round,
-          outputs: [],
-          compileFailures: [],
-          missingOutputs: [],
-          latexdiffs: [],
-          reply: null,
-        })),
-      },
-    });
-    log.emit(ROOT, T.root + 2, {
-      type: 'run.position',
-      payload: { at: 'turn.begin', turn: 2 },
-    });
-    const view = viewOf([
-      subscribe(ROOT),
-      ...log.events.map(tail),
-      log.drained(),
-      local({ runsHere: ALL_RUNS }),
-    ]);
-    return editorTab(view, surface(view, { kind: 'select', runId: ROOT }));
   },
   // The background process stream: its command strip over its raw output.
   'ext-process': () => {

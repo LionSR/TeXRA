@@ -6,8 +6,8 @@
  */
 
 // Local imports
-import { agentTool } from '@agent/runtime/delegation/AgentTool';
-import { programTool } from '@agent/runtime/delegation/ProgramTool';
+import { AgentTool } from '@agent/runtime/delegation/AgentTool';
+import { ProgramTool } from '@agent/runtime/delegation/ProgramTool';
 import { GOAL_PLAN_KIND } from '@shared/schemas';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import { BashTool } from '@tools/bash';
@@ -26,19 +26,18 @@ import { ResourcesTool } from '@tools/ResourcesTool';
 import { WakeTool } from '@tools/WakeTool';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
 import { WebSearchTool } from '@tools/web/WebSearchTool';
-import { writeFileTool, type WriteFilter } from '@tools/WriteTool';
+import { WriteFileTool } from '@tools/WriteTool';
 
 import GOAL_MODULE from './plan/goal.js?raw';
 
-const fileTools = (writeFilter?: WriteFilter) =>
-  [
-    BashTool,
-    ReadFileTool,
-    writeFileTool(writeFilter),
-    EditFileTool,
-    GlobTool,
-    GrepTool,
-  ] as const;
+const FILE_TOOLS = [
+  BashTool,
+  ReadFileTool,
+  WriteFileTool,
+  EditFileTool,
+  GlobTool,
+  GrepTool,
+] as const;
 
 const SCRIPT_TOOLS = [ScriptTool, SelfTool] as const;
 
@@ -51,20 +50,16 @@ type AssertNever<T extends never> = T;
 type _CanonicalDisplayNamesAreBuiltIns = AssertNever<
   Exclude<
     CanonicalToolDisplayName,
-    | ReturnType<typeof fileTools>[number]['definition']['name']
+    | (typeof FILE_TOOLS)[number]['definition']['name']
     | (typeof SCRIPT_TOOLS)[number]['definition']['name']
   >
 >;
 
-/** Files and the shell: every agent needs them. An app passes the filter
- *  `write_file` applies to what it writes (its own content replacements). */
-export const fileOps = (
-  options: { readonly writeFilter?: WriteFilter } = {},
-): Plugin =>
-  definePlugin({
-    id: 'file-ops',
-    tools: fileTools(options.writeFilter),
-  });
+/** Files and the shell: every agent needs them. */
+export const fileOps: Plugin = definePlugin({
+  id: 'file-ops',
+  tools: FILE_TOOLS,
+});
 
 /** The web: `web_search` and `web_fetch`. */
 export const web: Plugin = definePlugin({
@@ -110,7 +105,7 @@ export const goal: Plugin = definePlugin({
 /** Child runs: the `agent` tool, and `program` for a registered program. */
 export const multiAgent: Plugin = definePlugin({
   id: 'multi-agent',
-  tools: [agentTool(), programTool()],
+  tools: [AgentTool, ProgramTool],
   toggle: 'on',
 });
 
@@ -134,7 +129,7 @@ export const codemode = definePlugin({
 
 /** Every built-in, with no app options. */
 export const harnessBuiltins: readonly Plugin[] = [
-  fileOps(),
+  fileOps,
   web,
   memoryWorkflow,
   goal,

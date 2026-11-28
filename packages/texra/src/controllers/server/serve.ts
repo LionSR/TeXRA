@@ -68,6 +68,7 @@ import {
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import {
   probeService,
+  serviceRecordUnreadable,
   ServiceUnavailable,
   WINDOWS_UNSUPPORTED,
 } from './client';
@@ -95,7 +96,7 @@ import {
 import type { HostWindows } from './hostWindows';
 
 /** A live service already answers on this storage root's socket. */
-export class ServiceAlreadyRunning extends Schema.TaggedError<ServiceAlreadyRunning>()(
+class ServiceAlreadyRunning extends Schema.TaggedError<ServiceAlreadyRunning>()(
   'ServiceAlreadyRunning',
   {
     info: ServiceInfoSchema,
@@ -415,11 +416,7 @@ export const serve = Effect.fn('server.serve')(function* (
   ).pipe(
     Effect.catchTags({
       DatabaseReadFailed: (error) =>
-        Effect.fail(
-          new ServiceUnavailable({
-            reason: `The service record could not be read: ${error.message}`,
-          }),
-        ),
+        Effect.fail(serviceRecordUnreadable(error)),
       DatabaseWriteFailed: (error) =>
         Effect.fail(
           new ServiceUnavailable({

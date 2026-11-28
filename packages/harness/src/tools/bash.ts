@@ -3,7 +3,7 @@ import { Clock, Duration, Effect, Schema, type Scope } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import { TOOL_RESULT_TRUNCATION } from '@shared/toolResultText';
+import { TOOL_RESULT_TRUNCATION } from '@tools/core/toolResultText';
 import { ToolContext } from '@tools/core/ToolTypes';
 import {
   noLaterTurn,
@@ -12,20 +12,17 @@ import {
 } from '@agent/runtime/RunCall';
 import {
   BACKGROUND_OUTPUT,
+  BASH_BACKGROUND_LOG_CAP_CHARS,
   bashErrorDelivery,
   bashResultDelivery,
   type BackgroundBashCall,
-} from '@agent/runtime/delegation/bashDelivery';
+} from '@tools/bashDelivery';
 import {
   launchProcessChild,
   type ProcessTurn,
 } from '@agent/runtime/processRun';
 import { SessionRoots } from '@platform/rootedFs';
-import {
-  BASH_BACKGROUND_LOG_CAP_CHARS,
-  BASH_TOOL_DEFAULT_TIMEOUT_MS,
-  elidedNote,
-} from '@shared/toolUse';
+import { BASH_TOOL_DEFAULT_TIMEOUT_MS, elidedNote } from '@shared/toolUse';
 import {
   processExit,
   ToolError,
@@ -58,12 +55,6 @@ import { headTail } from '@utils/text/appendTail';
 import { defineTool } from './core/definition';
 import { nullishWithDefault, optionalInput } from './core/inputSchema';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-
-const SHELL_BACKGROUNDING_PATTERN =
-  /(?:^|[\s;])nohup\b[^\n;]*(?<![>&])&(?![>&])/;
-const SHELL_BACKGROUNDING_MESSAGE =
-  'This command uses shell-level backgrounding (`nohup ... &`) inside a foreground bash tool call. ' +
-  'Do not emulate background execution inside the shell; call the bash tool again with `run_in_background: true` and the command without `nohup` or a trailing `&`.';
 
 /**
  * A foreground stream's first and last characters, kept as it arrives so a
@@ -103,6 +94,13 @@ function boundedOutput(streamName: 'stdout' | 'stderr') {
   };
 }
 
+/** The longest `timeout` a call may ask for (ms). */
+const BASH_TOOL_MAX_TIMEOUT_MS = 600_000;
+
+/** `ms` as the timeout description words it: `600,000 ms / 10 min`. */
+const timeoutWords = (ms: number) =>
+  `${formatCount(ms)} ms / ${ms / 60_000} min`;
+
 const BashInputSchema = Schema.Struct({
   command: Schema.String,
   description: optionalInput(
@@ -111,10 +109,10 @@ const BashInputSchema = Schema.Struct({
   ),
   timeout: nullishWithDefault(
     Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
-      Schema.isLessThanOrEqualTo(600_000),
+      Schema.isLessThanOrEqualTo(BASH_TOOL_MAX_TIMEOUT_MS),
     ),
     BASH_TOOL_DEFAULT_TIMEOUT_MS,
-    'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
+    `Timeout in milliseconds (max ${timeoutWords(BASH_TOOL_MAX_TIMEOUT_MS)}, default ${timeoutWords(BASH_TOOL_DEFAULT_TIMEOUT_MS)}).`,
   ),
   run_in_background: nullishWithDefault(
     Schema.Boolean,
@@ -260,13 +258,6 @@ const executeBashTool = Effect.fn('executeBashTool')(function* (
   input: BashInput,
 ) {
   const toolCall = yield* ToolContext;
-  if (
-    !input.run_in_background &&
-    SHELL_BACKGROUNDING_PATTERN.test(input.command)
-  ) {
-    return yield* new ToolError(SHELL_BACKGROUNDING_MESSAGE);
-  }
-
   const cwd = toolCall.env.workingDirectory ?? toolCall.env.roots.workspace;
 
   if (input.run_in_background) {
@@ -324,12 +315,6 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
     ];
     if (retainedStdout) parts.push(`<stdout>${retainedStdout}</stdout>`);
     if (retainedStderr) parts.push(`<stderr>${retainedStderr}</stderr>`);
-    parts.push(
-      `To fix, either:\n` +
-        `- Increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }\n` +
-        `- Set run_in_background: true to execute asynchronously: { "run_in_background": true }\n` +
-        `Do not use shell-level backgrounding such as \`nohup ... &\` inside a foreground call.`,
-    );
     return yield* new ToolError(parts.join('\n'));
   }
 
@@ -388,9 +373,9 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
     [
       `Command launched in background.`,
       `Run ID: ${runId}`,
-      'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
+      'Result arrives automatically as a follow-up message when complete.',
       `To read its output so far (works while it runs): executions tool with path=/executions/${runId}/output`,
-      `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${runId} action=wait`,
+      `To wait for it: executions tool with path=/executions/${runId} action=wait`,
     ].join('\n'),
     `Launched background: ${preview}`,
   );
@@ -402,11 +387,9 @@ export const BashTool = defineTool({
     'Execute shell commands in the working directory (the project root, or the worktree the run is rooted in). Available environment variables: $PROJECT_DIR (that directory), $PROJECT_NAME (project name). Returns stdout on success, throws error with stderr on failure. Use run_in_background for long-running commands, with `timeout` raised to what they need.',
   schema: BashInputSchema,
   // The command this call runs; the loop gets it approved before the body.
-  guard: {
-    command: {
-      text: (input: BashInput) => input.command,
-      grant: 'bash',
-    },
+  command: {
+    text: (input: BashInput) => input.command,
+    grant: 'bash',
   },
   execute: executeBashTool,
 });

@@ -33,13 +33,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 
 // Local file imports
-import type { ApprovalMeta, DelegatedChildApproval } from './subagentRun';
-
-const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
-  'No feedback provided.',
-  'Do not retry the same or equivalent delegation unless the user explicitly asks for it;',
-  'continue directly with available context, or ask the user a clarifying question.',
-].join(' ');
+import type { DelegatedChildApproval } from './subagentRun';
 
 /** Build a concise summary of proposal parameters for rejection echo. */
 function summarizeProposal(proposal: AgentProposal): string {
@@ -79,9 +73,7 @@ function proposalRefusalResult(
     }
     case 'reject': {
       const feedback = refusal.feedback?.trim();
-      const feedbackLine = feedback
-        ? `\nUser feedback: ${feedback}`
-        : `\n${DEFAULT_DELEGATION_REJECTION_FEEDBACK}`;
+      const feedbackLine = feedback ? `\nUser feedback: ${feedback}` : '';
       return errorResult(
         `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
         { summary: `User rejected delegation to '${agentName}'` },
@@ -116,9 +108,10 @@ const GRANTED_CHILD = {
   human: 'auto-approved',
 } as const;
 
-/** Request the shared proposal decision, honoring the run's bypass policy.
- *  `ask` presents it in place of this call's own proposal request: the
- *  calls of one script share one request (`agent`). */
+/** The decision on a delegation: approved unless the policy blocks it or a
+ *  hook asked a person, under the run's bypass grant where one holds.
+ *  `ask` presents a hook's question in place of this call's own proposal
+ *  request: the calls of one script share one request (`agent`). */
 const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   function* (
     proposal: AgentProposal,
@@ -140,6 +133,11 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     const answer = approvals.permission(runId, 'proposal', hook);
     if (answer !== 'allow' && answer !== 'ask')
       return { result: answer, childApproval: 'inherit' };
+    // Starting an agent is the model's call: where the policy would ask, the
+    // child starts unasked and inherits the policy, so its own commands and
+    // edits still ask. Only a hook that asked puts a delegation to a person.
+    if (answer === 'ask' && hook !== 'ask')
+      return { result: { action: 'approve' }, childApproval: 'inherit' };
     if (answer === 'allow') {
       // Under `yolo` alone the child inherits, so its bash and edits still
       // gate; the run's delegated-work grant approves them too.
@@ -182,7 +180,6 @@ function formEdits(
       instruction !== proposal.instruction && { instruction }),
     ...(changed(inputFiles, proposal.inputFiles) && {
       inputFiles: [...inputFiles],
-      outputFiles: [],
     }),
     ...(changed(contextFiles, proposal.contextFiles) && {
       contextFiles: [...contextFiles],
@@ -197,7 +194,9 @@ function formEdits(
  *  approval finished on, and how it was approved. */
 interface ApprovedDelegation {
   readonly proposal: AgentProposal;
-  readonly approvalMeta: ApprovalMeta;
+  /** How the child's own grants record the approval: `inherit` is a
+   *  person's approval, any other an approval bypass. */
+  readonly childApproval: DelegatedChildApproval;
 }
 
 /**
@@ -218,7 +217,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
     return {
       proposal,
-      approvalMeta: { childApproval: decision.childApproval },
+      childApproval: decision.childApproval,
     } satisfies ApprovedDelegation;
   }
 
@@ -262,11 +261,6 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
       ...edited,
       ...(modelOverride && { model: modelOverride }),
     },
-    approvalMeta: {
-      childApproval: 'inherit',
-      ...(modelOverride && {
-        model: { chosen: modelOverride, proposed: proposal.model },
-      }),
-    },
+    childApproval: 'inherit',
   } satisfies ApprovedDelegation;
 });

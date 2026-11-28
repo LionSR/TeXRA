@@ -34,14 +34,11 @@ interface TerminalPaneCallbacks {
 interface TerminalPane {
   elementFor(sessionId: string): HTMLElement;
   /**
-   * Shows `sessionId`, creating its terminal and pty on first use. `focus`
-   * (default `true`) moves keyboard focus into the terminal; pass `false`
-   * from layout passes, which must re-fit without stealing focus.
+   * Re-fits `sessionId`, creating its terminal and pty on first use, without
+   * moving keyboard focus. A terminal with no layout box is skipped unless
+   * `background`, which starts its pty while the project is not shown.
    */
-  activate(
-    sessionId: string,
-    options?: { focus?: boolean; background?: boolean },
-  ): void;
+  activate(sessionId: string, background: boolean): void;
   /** Feeds pty output into the matching terminal. */
   write(sessionId: string, data: string): void;
   /** Reports process exit in-band so the pane doesn't look merely idle,
@@ -199,7 +196,7 @@ export function createTerminalPane(
         terminal.options.theme = theme;
     },
 
-    activate(sessionId, { focus = true, background = false } = {}) {
+    activate(sessionId, background) {
       const session = sessions.get(sessionId) ?? createSession(sessionId);
       if (
         (!session.host.clientWidth || !session.host.clientHeight) &&
@@ -216,7 +213,6 @@ export function createTerminalPane(
         callbacks.start(sessionId, Math.max(cols, 20), Math.max(rows, 5));
         if (heldInput) callbacks.sendInput(sessionId, heldInput);
       }
-      if (focus) session.terminal.focus();
     },
 
     write(sessionId, data) {

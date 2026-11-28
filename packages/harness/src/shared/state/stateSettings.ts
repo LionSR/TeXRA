@@ -345,7 +345,6 @@ export const APPROVAL_POLICY_SETTING = {
     'Whether agents ask before running shell commands and editing files.',
   configTarget: 'local',
   choices: {
-    never: { label: 'Block' },
     ask: { label: 'Ask' },
     yolo: { label: 'Auto-approve' },
   },
@@ -413,20 +412,6 @@ export const GIT_AUTHOR_EMAIL_SETTING = {
     'Author and committer email used for agent-authored commits when commit marking is enabled.',
 } as const satisfies SettingRow<string | undefined>;
 
-// --- Agent coordination ---------------------------------------------
-// Both child-work policy toggles live in `globalState`: they describe how
-// *this user* wants child runs handled, not anything about a particular
-// checkout.
-
-export const ALLOW_ORCHESTRATOR_KILL_SETTING = {
-  key: 'allowOrchestratorKill',
-  slot: 'globalState',
-  schema: booleanWithDefault(true),
-  title: 'Let a task stop its agents',
-  description:
-    'Allow a task to stop the agents it started once they are no longer needed.',
-} as const satisfies SettingRow<boolean>;
-
 /** While on, a step with file tools is given the memory folders and shown
  *  their indexes (`openStep`, `agent/runtime/loop/step.ts`). */
 export const MEMORY_ENABLED_SETTING = {
@@ -478,19 +463,6 @@ export const GLM_CODING_PLAN_SETTING = {
     'Use your GLM API key with GLM Coding Plan quota tracking (ignored with a custom endpoint).',
 } as const satisfies SettingRow<boolean>;
 
-/**
- * Keep file-oriented tools inside the active working directory unless the
- * user explicitly grants them access to arbitrary filesystem paths.
- */
-export const TOOL_PATH_PROTECTION_SETTING = {
-  key: 'tools.restrictPathsToWorkingDirectory',
-  slot: 'workspaceState',
-  schema: booleanWithDefault(true),
-  title: 'Restrict tools to project folder',
-  description:
-    'Keep file read/edit, search, diagnostics, and PDF tools inside the current project folder. Turn off only if an agent needs outside files.',
-} as const satisfies SettingRow<boolean>;
-
 // ============================================================================
 // The catalog — the harness's rows followed by an app's
 // ============================================================================
@@ -515,7 +487,6 @@ const HARNESS_SETTINGS = [
   GIT_MARK_COMMITS_SETTING,
   GIT_AUTHOR_NAME_SETTING,
   GIT_AUTHOR_EMAIL_SETTING,
-  ALLOW_ORCHESTRATOR_KILL_SETTING,
   MEMORY_ENABLED_SETTING,
   WEBSOCKET_OPENAI_SETTING,
   ...PROVIDER_ENDPOINT_SETTINGS,
@@ -525,7 +496,6 @@ const HARNESS_SETTINGS = [
   GLM_CODING_PLAN_SETTING,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
-  TOOL_PATH_PROTECTION_SETTING,
 ] as const satisfies readonly SettingRow[];
 
 /** The key of each of the harness's rows: what an app's table of where it

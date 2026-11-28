@@ -32,6 +32,7 @@ import {
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { stageStatus } from '@ui/copy/runStatus';
+import { toolRunFailed, toolRunSentence, workedFor } from '@ui/copy/toolRun';
 import { designTokens } from '@ui/styles';
 
 // Side-effect imports - register Web Awesome components
@@ -40,6 +41,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { statusMark } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - progress view constants
@@ -52,6 +54,12 @@ import { logStyles } from '../styles/logStyles';
 import { formatLogEntry } from '../formatters';
 import { TIME_OF_DAY } from '../formatters/timestampUtils';
 import { dispatchDisclosureToggle } from './disclosureToggle';
+import {
+  turnLayout,
+  type LayoutItem,
+  type ToolRunItem,
+  type WorkItem,
+} from '../turnLayout';
 import type {
   RunView,
   SessionView,
@@ -69,6 +77,19 @@ const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
 const TIMELINE_ITEM_WINDOW_STEP = 120;
 const DEFAULT_STAGE_ROW_WINDOW = 400;
 const STAGE_ROW_WINDOW_STEP = 400;
+const WINDOW_TRIM_STEP = 40;
+
+/**
+ * How many of `count` items stay unrendered above a window of `size`: the
+ * excess, in whole steps. Removing the oldest item each time one arrives
+ * makes the browser restyle every item after it, tens of milliseconds per
+ * arrival on a long conversation, so a window lets up to a step more
+ * through and drops them together.
+ */
+function hiddenAbove(count: number, size: number): number {
+  const excess = Math.max(0, count - size);
+  return excess - (excess % WINDOW_TRIM_STEP);
+}
 
 const stageListStyles = css`
   /* Phase labels may come from workflow plans, so let long or untranslated
@@ -136,11 +157,12 @@ export class StageList extends LitElement {
   /** This is the run on screen; the others are cached hidden. */
   @property({ type: Boolean }) shown = false;
 
-  /** The transcript laid out for render (`transcriptTimeline`), rebuilt
-   *  when the transcript changes. */
-  private timeline: Entry[] = [];
+  /** The transcript laid out for render (`transcriptTimeline`, grouped by
+   *  `turnLayout`), rebuilt when the transcript or the run changes. */
+  private layout: LayoutItem[] = [];
 
-  /** Number of recent top-level timeline entries currently rendered. */
+  /** Number of recent top-level timeline entries rendered, before the
+   *  step {@link hiddenAbove} lets through. */
   @state() private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
 
   /** Number of recent rows rendered for each stage. Reassigned
@@ -215,8 +237,16 @@ export class StageList extends LitElement {
           : new Map();
     }
     const transcriptChanged = changedProperties.has('transcript');
-    if (this.terminal || !transcriptChanged) return;
-    this.timeline = this.transcript ? transcriptTimeline(this.transcript) : [];
+    if (this.terminal) return;
+    // Whether the last turn folds depends on the run still working.
+    if (transcriptChanged || changedProperties.has('run'))
+      this.layout = this.transcript
+        ? turnLayout(
+            transcriptTimeline(this.transcript),
+            this.run?.position === 'running',
+          )
+        : [];
+    if (!transcriptChanged) return;
     // The windows count from the tail; a transcript that shrank (a
     // replaced history) or a fresh mount no longer lines up with them.
     const previous = changedProperties.get('transcript');
@@ -261,7 +291,7 @@ export class StageList extends LitElement {
   ): TemplateResult {
     const windowSize =
       this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW;
-    const hiddenCount = Math.max(0, rows.length - windowSize);
+    const hiddenCount = hiddenAbove(rows.length, windowSize);
     const visibleRows = hiddenCount > 0 ? rows.slice(hiddenCount) : rows;
 
     return html`${
@@ -313,11 +343,112 @@ export class StageList extends LitElement {
     }
   }
 
-  private visibleTimelineEntries(): Entry[] {
-    const timeline = this.timeline;
-    return timeline.length <= this.timelineItemWindow
-      ? timeline
-      : timeline.slice(-this.timelineItemWindow);
+  private visibleLayoutItems(): LayoutItem[] {
+    const hiddenCount = hiddenAbove(
+      this.layout.length,
+      this.timelineItemWindow,
+    );
+    return hiddenCount > 0 ? this.layout.slice(hiddenCount) : this.layout;
+  }
+
+  /** One item of the layout; the key names its kind, since a script's
+   *  stage has its `script` card's id and a group has its first row's. */
+  private renderItems(items: readonly LayoutItem[]): TemplateResult {
+    return html`${repeat(
+      items,
+      (item) =>
+        item.kind === 'row'
+          ? `row:${item.row.id}`
+          : item.kind === 'stage'
+            ? `stage:${item.stage.id}`
+            : `${item.kind}:${item.id}`,
+      (item) => {
+        switch (item.kind) {
+          case 'row':
+            return this.renderLogEntry(item.row);
+          case 'stage':
+            return this.renderStage(item);
+          case 'toolRun':
+            return this.renderToolRun(item);
+          case 'work':
+            return this.renderWork(item);
+        }
+      },
+    )}`;
+  }
+
+  /** A group the conversation folds: closed until the person opens it,
+   *  and a closed one contributes no DOM for its content. */
+  private renderFold(
+    key: string,
+    className: string,
+    summary: TemplateResult,
+    body: () => TemplateResult,
+  ): TemplateResult {
+    const open = this.expanded?.get(key) === true;
+    const onToggle = (event: Event) =>
+      dispatchDisclosureToggle(this, event, this.runId, key);
+    return html`
+      <wa-details
+        appearance="plain"
+        icon-placement="end"
+        class="banner-details activity-row ${className}"
+        ?open=${open}
+        @wa-show=${onToggle}
+        @wa-hide=${onToggle}
+      >
+        <div slot="summary" class="details-summary">${summary}</div>
+        ${open ? body() : nothing}
+      </wa-details>
+    `;
+  }
+
+  /** Consecutive calls as one sentence, opening to their own lines. */
+  private renderToolRun(run: ToolRunItem): TemplateResult {
+    return this.renderFold(
+      `tools:${run.id}`,
+      'tool-run',
+      html`${waIcon('list-check', { className: 'icon' })}
+        <span class="label">${toolRunSentence(run.counts)}</span>
+        ${
+          run.failed > 0
+            ? html`<span class="tool-run-failed tone-danger"
+                >${toolRunFailed(run.failed)}</span
+              >`
+            : nothing
+        }`,
+      // Bounded like a stage's rows: the recent ones first, the rest
+      // behind the reveal control.
+      () => this.renderRowEntries(run.rows, `tools:${run.id}`),
+    );
+  }
+
+  /** A finished turn's work, behind the line that says how long it took. */
+  private renderWork(work: WorkItem): TemplateResult {
+    return this.renderFold(
+      `work:${work.id}`,
+      'work-fold',
+      html`<span class="label">${workedFor(work.durationMs)}</span>`,
+      () => {
+        // Bounded like a stage's rows: a long turn opens on its recent
+        // items, the rest behind the reveal control.
+        const scope = `work:${work.id}`;
+        const windowSize =
+          this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW;
+        const hiddenCount = hiddenAbove(work.items.length, windowSize);
+        return html`${
+          hiddenCount > 0
+            ? this.renderRevealButton({
+                hiddenCount,
+                step: STAGE_ROW_WINDOW_STEP,
+                scope,
+                kind: 'rows',
+                label: 'item',
+              })
+            : nothing
+        }${this.renderItems(work.items.slice(hiddenCount))}`;
+      },
+    );
   }
 
   /** Whether a stage is expanded. */
@@ -344,8 +475,12 @@ export class StageList extends LitElement {
 
     const status = stageStatus(stage, this.run);
     return html`
-      <span class="stage-status-icon">
-        ${waIcon(status.glyph, { label: status.word })}
+      <span
+        class="stage-status-icon tone-${status.tone}"
+        role="img"
+        aria-label=${status.word}
+      >
+        ${statusMark(status)}
       </span>
       <bdi class="stage-title">${stage.name}</bdi>
       <span class="stage-time">
@@ -368,26 +503,59 @@ export class StageList extends LitElement {
     `;
   }
 
-  /** Rows of a stage, in transcript order. A script stage leads with its
-   *  calls as the script-stage model reads them; the calls' own cards, with
-   *  their output, open below it from the card's Log. */
+  /** Rows of a stage, in transcript order. A script stage is its calls as
+   *  the script-stage model reads them: a call that launched a child is
+   *  that view's row, and any other call's own card is slotted in at its place
+   *  in the list, so its disclosure opens its output where its row is. A
+   *  row of the stage that is no call follows the list. */
   private renderStageBody(node: StageEntry): TemplateResult {
     const script = this.scripts.get(node.stage.id);
-    const rows = this.renderRowEntries(node.rows, `stage:${node.stage.id}`);
-    const callsKey = `calls:${node.stage.id}`;
-    const callsOpen = this.expanded?.get(callsKey) === true;
+    if (!script || !this.view || !this.surface)
+      return this.renderRowEntries(node.rows, `stage:${node.stage.id}`);
+    const cards = new Set(
+      script.calls.flatMap((call) =>
+        call.childRunId === undefined ? [call.id] : [],
+      ),
+    );
+    const calls = new Set(script.calls.map((call) => call.id));
+    // Bounded like any stage's rows: a card mounts its sections (a
+    // terminal, a diff) whether or not it is open, so a script with
+    // thousands of calls shows its recent cards and reveals the rest. An
+    // older call's place in the list stays, empty, until then.
+    const scope = `stage:${node.stage.id}`;
+    const cardRows = node.rows.filter((row) => cards.has(row.id));
+    const hiddenCount = Math.max(
+      0,
+      cardRows.length -
+        (this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW),
+    );
     return html`${
-      script && this.view && this.surface
-        ? html`<script-stage
-              .stage=${script}
-              .view=${this.view}
-              .surface=${this.surface}
-              .runId=${this.runId}
-              ?logOpen=${callsOpen}
-            ></script-stage>
-            ${callsOpen ? rows : nothing}`
-        : rows
-    }`;
+        hiddenCount > 0
+          ? this.renderRevealButton({
+              hiddenCount,
+              step: STAGE_ROW_WINDOW_STEP,
+              scope,
+              kind: 'rows',
+              label: 'call',
+            })
+          : nothing
+      }<script-stage
+        .stage=${script}
+        .view=${this.view}
+        .surface=${this.surface}
+        >${repeat(
+          cardRows.slice(hiddenCount),
+          (row) => row.id,
+          (row) =>
+            html`<div slot=${row.id} class="script-call">
+              ${this.renderLogEntry(row)}
+            </div>`,
+        )}</script-stage
+      >${repeat(
+        node.rows.filter((row) => !calls.has(row.id)),
+        (row) => row.id,
+        (row) => this.renderLogEntry(row),
+      )}`;
   }
 
   /** Render a stage: a script stage as a plain container, its script-stage
@@ -467,17 +635,17 @@ export class StageList extends LitElement {
       return this.renderTerminalOutput();
     }
 
-    // Rows no stage holds (user input, follow-ups, errors) and the stages,
-    // in transcript order. Large runs render a recent window first; older
-    // entries remain in memory and can be revealed from the top control.
-    const visibleTimeline = this.visibleTimelineEntries();
-    const hiddenTimelineCount = this.timeline.length - visibleTimeline.length;
+    // The conversation's items in transcript order. Large runs render a
+    // recent window first; older items remain in memory and can be revealed
+    // from the top control.
+    const visible = this.visibleLayoutItems();
+    const hiddenCount = this.layout.length - visible.length;
 
     return html`
       ${
-        hiddenTimelineCount > 0
+        hiddenCount > 0
           ? this.renderRevealButton({
-              hiddenCount: hiddenTimelineCount,
+              hiddenCount,
               step: TIMELINE_ITEM_WINDOW_STEP,
               scope: 'timeline',
               kind: 'timeline',
@@ -485,17 +653,7 @@ export class StageList extends LitElement {
             })
           : nothing
       }
-      ${repeat(
-        visibleTimeline,
-        // A script's stage has its `script` card's id, and the card is a
-        // row of the same list: the key names the kind too.
-        (item) =>
-          item.kind === 'row' ? `row:${item.row.id}` : `stage:${item.stage.id}`,
-        (item) =>
-          item.kind === 'row'
-            ? this.renderLogEntry(item.row)
-            : this.renderStage(item),
-      )}
+      ${this.renderItems(visible)}
     `;
   }
 }

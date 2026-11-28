@@ -7,7 +7,7 @@
 // parsed back here. This module intentionally has NO host imports (no
 // vscode, no Ink/React) so the browser-safe transcript entry can carry it.
 
-import { DELIVERY_FAMILY } from '@shared/deliveryTags';
+import { DELIVERY_ATTRIBUTE, DELIVERY_FAMILY } from '@shared/deliveryTags';
 import type {
   ChildRunDelivery,
   FollowUpMessageContent,
@@ -65,13 +65,7 @@ function formatScriptDeliverySummary(summary: ScriptDeliverySummary): string {
     formatCostUsd(summary.costUsd),
     formatCompactDuration(summary.durationMs),
   ];
-  const fileLines = summary.files.map((file) => {
-    const diffstat =
-      file.added != null && file.removed != null
-        ? ` (+${file.added} -${file.removed})`
-        : '';
-    return `  ${file.path}${diffstat}`;
-  });
+  const fileLines = summary.files.map((file) => `  ${file}`);
   return [
     joinFacts([`${marker} ${summary.name} ${summary.outcome}`, ...facts]),
     ...(summary.outcome === 'failed' && summary.errorCause
@@ -115,7 +109,7 @@ function deliverySummary(delivery: ChildRunDelivery): string {
     else if (exit?.code === null) outcome = 'no exit code';
     else if (exit !== undefined) outcome = `exit ${exit.code}`;
     const head = joinFacts([
-      `${failed ? '✗' : '✓'} ${label('description') || `$ ${label('command') || 'background command'}`}`,
+      `${failed ? '✗' : '✓'} ${label(DELIVERY_ATTRIBUTE.description) || `$ ${label(DELIVERY_ATTRIBUTE.command) || 'background command'}`}`,
       ...(failed && outcome !== undefined ? [outcome] : []),
       ...(message === undefined ? [] : ['failed']),
       wallTime,
@@ -125,10 +119,10 @@ function deliverySummary(delivery: ChildRunDelivery): string {
 
   // Results and errors share one shape across families (`formatDelivery`);
   // one without an `agent` attribute is named by its family.
-  const name = attribute('agent') ?? delivery.family;
+  const name = attribute(DELIVERY_ATTRIBUTE.agent) ?? delivery.family;
   const wall = wallTime ? `${FACT_SEPARATOR}${wallTime}` : '';
   if (message === undefined) {
-    const head = `✓ ${name} ${attribute('status') ?? 'completed'}${wall}`;
+    const head = `✓ ${name} ${attribute(DELIVERY_ATTRIBUTE.status) ?? 'completed'}${wall}`;
     const preview = truncatedResultResponsePreview(
       delivery.output?.response ?? delivery.response ?? '',
     );

@@ -3,18 +3,13 @@ import { Effect, Result, Stream } from 'effect';
 import {
   isInterrupted,
   planOf,
-  runBypasses,
   formatResultCount,
   type RunView,
 } from '@texra-ai/worldline/schemas';
 import { type Session } from '@texra-ai/worldline';
 import { compareByNewestCreationTime } from '@texra-ai/worldline/transcript';
-import { readModelOptions } from '@texra-ai/worldline/host';
-import { defaultShortcutModifierLabel } from '@cli/runtime/terminal/shortcutLabels';
-import {
-  formatCliSessionStatus,
-  taskCostStatus,
-} from '@cli/chat/tui/sessionStatus';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import {
   selectedRunId as selectedRunIdSignal,
   clearTransientNotice,
@@ -34,7 +29,6 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
-import { runStatus } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { formatSlashCommandHelp } from '../helpText';
@@ -48,7 +42,6 @@ export function showCliSlashCommandHelp(commands: SlashCommands): void {
   openInfoPane(
     '/help',
     formatSlashCommandHelp(commands.list, {
-      shortcutModifierLabel: defaultShortcutModifierLabel(),
       shiftEnterNewline: terminalCapabilities.get().kittyKeyboard,
     }),
   );
@@ -83,31 +76,19 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
       activeRunId === undefined
         ? []
         : yield* context.runSession.records(activeRunId).readSkills;
-    const [option] = yield* readModelOptions(context.stores, [model]);
+    const [option] = yield* loadModelOptions(context.stores, [model]);
     appendLocalNotice(
-      formatCliSessionStatus({
+      formatCliSessionStatus(view, run, {
         agent: meta.chat.label,
         model,
-        // A completed request's route cannot change, so it outranks the
-        // prospective one.
-        modelAccess: run?.usage.usageRoute ?? option?.usageRoute,
-        approvalBypasses:
-          activeRunId === undefined
-            ? undefined
-            : runBypasses(view, activeRunId),
-        statusLabel: run && runStatus(run).word,
-        activeChildSessions: run?.rollup.running,
+        modelReasoning: option?.reasoning,
+        modelAccess: option?.usageRoute,
         activeSkills,
         sessionId: run ? rootRunId.get() : undefined,
         commandName: context.cliContext.commandName,
         cwd: context.cliContext.cwd,
         processCwd: context.processCwd,
         approvalPolicy: context.getApprovalPolicy(),
-        queuedFollowUpMessages: (activeRunId === undefined
-          ? []
-          : (view.runs.get(activeRunId)?.queuedFollowUps ?? [])
-        ).map((followUp) => followUp.text),
-        cost: taskCostStatus(view, run),
       }),
     );
   },

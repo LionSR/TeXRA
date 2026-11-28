@@ -5,22 +5,26 @@ holds its rules; the values live in code.
 
 ## What the UI has to say
 
-TeXRA is an AI theorist that works with you. It proposes; you decide
-(`TEXRA_TAGLINE`, `copy/onboarding.ts`). Every surface serves one of those
-two halves:
+TeXRA is an AI theorist, and it is trusted to do the work. The interface
+is for the person: to follow what is happening and to step in, not to
+supervise each step. Every surface serves one of these:
 
-- **Capable.** Show the work: the diff, the derivation, the source. Do not
-  decorate it. Offer a concrete next step (one primary action) instead of
-  a blank box.
-- **Autonomous when asked.** One vocabulary, the approval policy's:
-  Ask / Block / Auto-approve. The composer's Approval chip follows the policy
-  by default, or auto-approves this task alone. That can only loosen Ask:
-  Block still blocks. The run header shows the switch for as long as the run
-  lives, and the user can turn it off mid-run. One state (the run's
-  delegated-work bypass), not a second autonomy system with its own words.
-- **In the loop.** Nothing lands without the user seeing it. Approval is a
-  visible choice, not a buried setting, and every failure the user must act on
-  is shown where it happened.
+- **Trust the model.** Commands and edits run without asking by default
+  (the approval policy's Auto-approve); a person narrows it to Ask.
+  Add no control whose job is to tune or second-guess what the model decides
+  for itself: which tool, which model for a sub-agent, how hard to think. A
+  request for a person is the exception, and it is shown where the
+  conversation ends.
+- **Results first.** A finished turn shows its message, what it changed and
+  its answer; how it got there is one click away. When the work is shown, it
+  is the work itself: the diff, the derivation, the source, undecorated.
+- **Made for the person.** The rail, the statuses and the usage meters
+  answer a person's questions: what is running, what needs me, what
+  finished, what it costs. Autonomy has one vocabulary, the approval
+  policy's: Ask / Auto-approve, set in Settings. Under Ask, a request card
+  grants a kind of work for the task, and the run header shows that grant
+  for as long as the run lives. Every failure the person must act on is shown where
+  it happened.
 
 ## Layers
 
@@ -48,9 +52,19 @@ two halves:
    `--panel-*` geometry and `--message-gap`; component files supply content layout.
    Transcript frames use a trailing gap only; the transcript owns its leading
    inset so margins do not stack across shadow roots.
-   `styles/messageHeaderStyles.ts` groups the author and short timestamp,
-   with Copy and collapse controls at the trailing edge. User, assistant and
-   error messages share this geometry; the full date remains in the time tooltip.
+   The transcript reads as a conversation, not a log. A person's message is
+   a bubble at the trailing edge and an answer is its text on the page, so
+   neither carries an author line; its time and its Copy and Fork actions
+   sit on the line under it, shown on hover or focus
+   (`messageMetaStyles` in `styles/messageHeaderStyles.ts`). A tool call or
+   a thought is one unframed line (icon, what it did, what to) that opens
+   in place. Only an error with details keeps a framed header.
+   Two groups keep a long run readable, both computed from the rows
+   (`progress/turnLayout.ts`) and closed until opened: consecutive finished
+   calls read as one sentence ("Read 3 files and ran 1 command"), and a
+   finished turn's work stands behind "Worked for 1m 3s", leaving the
+   message and its answer. The turn the run is working on stays open, and
+   so does a call still running.
 6. **Canvas widgets:** xterm.js and Monaco draw on a canvas and cannot read a
    CSS token. `wa/cssTokenColor.ts` is the one reading of a token as the color
    the host paints; `wa/xtermTheme.ts` and the desktop's
@@ -78,6 +92,14 @@ two halves:
   `triangle-exclamation` (`TONE_GLYPH`, `copy/runStatus.ts`). A log level's icon
   and word come from `copy/logLevels.ts`, a run status's from
   `copy/runStatus.ts`.
+- **Status badges.** A badge or tag that shows a status takes its variant
+  from the status's tone (`toneVariant`, `wa/waVariant.ts`) and its glyph
+  from `statusGlyph`; it names neither directly.
+- **File links.** A file path that opens its file is `buildFileLinkSpan`,
+  and the view's delegated click reads it with `fileLinkTarget`
+  (`progress/formatters/htmlBuilders.ts`).
+- **Fact separators.** Facts on one line are joined by `joinFacts` when they
+  are strings and by `factDot()` (`wa/factDot.ts`) when they are elements.
 - **Disclosure toggles.** A button that opens a section passes `expanded`
   and names no icon: the helper draws the chevron, which turns while open.
 - **Icons and menus.** `waIcon()` uses a square canvas. Dropdown items reserve

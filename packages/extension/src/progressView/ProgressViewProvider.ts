@@ -18,7 +18,6 @@ import { withLogChannel } from '@texra-ai/worldline/plugins';
 import {
   attentionOf,
   formatResultCount,
-  RUN_OUTCOME,
   type AgentConfig,
   type FileLocation,
   type RunId,
@@ -29,7 +28,6 @@ import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { eventStream } from '@frontend/vscode/vscodeEvents';
-import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import { sectionCountLabel } from '@ui/copy/runStatus';
 import {
   fromHost,
@@ -37,10 +35,9 @@ import {
   hostFailed,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
-import {
-  EXTENSION_CATEGORIES,
-  getFilterExtensions,
-} from '@texra/common/files/fileTypeUtils';
+import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
+import { DocumentFileTypeSchema } from '@texra/shared/launcher/fileTypes';
+import { commandCatalogById } from '@texra/shared/commands/catalog';
 import {
   PdfOpenFailed,
   type EditorCapabilities,
@@ -80,14 +77,7 @@ function launchNotice(config: AgentConfig): string {
   const inputName = primaryInput
     ? path.basename(primaryInput)
     : 'selected input';
-  const { outputFiles } = config;
-  let outputPart = '';
-  if (outputFiles.length > 1) {
-    outputPart = ` (to ${outputFiles.length} files)`;
-  } else if (outputFiles[0]) {
-    outputPart = ` (to ${path.basename(outputFiles[0])})`;
-  }
-  return `"${config.label}" is processing ${inputName} with ${config.model}${outputPart}.`;
+  return `"${config.label}" is processing ${inputName} with ${config.model}.`;
 }
 
 /** Focus the sidebar view. */
@@ -97,25 +87,6 @@ const showInSidebar: Effect.Effect<void, HostFailed> = executeVscodeCommand(
   Effect.asVoid,
   Effect.mapError((cause) => hostFailed('showInSidebar', cause)),
 );
-
-/**
- * After a run this window started completes, preview its final revised
- * output (which one is `selectAutoOpenFinalOutput`'s, in the shared run
- * actions) so the file does not seem to vanish into run storage, with a
- * status-bar hint that workflow mode is slow by design. A failure reaches
- * the run actions, which warn-log it.
- */
-const previewFinalOutput = (absolutePath: string) =>
-  fromHost('showTextDocument', async () => {
-    await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), {
-      preview: true,
-      preserveFocus: false,
-    });
-    vscode.window.setStatusBarMessage(
-      'Revised file opened in preview. Review or accept it in the Tasks panel.',
-      8000,
-    );
-  });
 
 /** One surface: a VS Code webview attached to the bridge as a port. */
 interface Surface<View extends vscode.WebviewView | vscode.WebviewPanel> {
@@ -232,8 +203,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // "Show a built file" for every caller in this window: a scheduled PDF
       // viewer opens in the view's scope, so a close of the view cancels an
       // open still waiting.
-      const showBuilt: ShowBuilt = (locations, options) =>
-        openBuilt(roots, locations, options).pipe(
+      const showBuilt: ShowBuilt = (location, preserveFocus) =>
+        openBuilt(roots, location, preserveFocus).pipe(
           Effect.provideService(Scope.Scope, scope),
         );
       const focusChanged = eventStream(
@@ -252,11 +223,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               label: folder.name,
               value: folder.uri.fsPath,
             })) ?? [],
-          shows: {
-            apiKeyBanner: true,
-            dependencyBanner: true,
-            gettingStarted: true,
-          },
+          setupNotices: true,
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the diff editor shows, for each tool edit the session
@@ -273,37 +240,31 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             : focusChanged,
         ),
         draftRequests,
-        host: createExtensionHostRequests({
-          roots,
-          showBuilt,
-          extensionPath: context.extensionPath,
-          extensionId: context.extension.id,
-          ...settings,
-          popOutToEditor: () => onView((view) => view.popOutToEditor()),
-          showInSidebar: () => showInSidebar,
-        }).pipe(
-          Effect.map((requests) => ({
-            ...requests,
-            // The open-and-build program takes this window's file services
-            // from the runtime's context, which the session that forks it
-            // does not carry.
-            openFile: (payload) =>
-              withProcessServices(
-                runtime,
-                showBuilt([payload.location], {
-                  preserveFocus: payload.preserveFocus,
-                }),
-              ),
-            window: editor,
-            runs: {
-              openFinalOutput: previewFinalOutput,
-              showRunView: () => onView((view) => view.showProgressView()),
-              // Or name the run in a toast when the list cannot be shown.
-              revealProgress: (config: AgentConfig) =>
-                onView((view) => view.revealProgress(config)),
-            },
-          })),
-        ),
+        host: {
+          ...createExtensionHostRequests({
+            roots,
+            extensionPath: context.extensionPath,
+            extensionId: context.extension.id,
+            ...settings,
+            popOutToEditor: () => onView((view) => view.popOutToEditor()),
+            showInSidebar: () => showInSidebar,
+          }),
+          // The open-and-build program takes this window's file services
+          // from the runtime's context, which the session that forks it
+          // does not carry.
+          openFile: (payload) =>
+            withProcessServices(
+              runtime,
+              showBuilt(payload.location, payload.preserveFocus),
+            ),
+          window: editor,
+          runs: {
+            showRunView: () => onView((view) => view.showProgressView()),
+            // Or name the run in a toast when the list cannot be shown.
+            revealProgress: (config: AgentConfig) =>
+              onView((view) => view.revealProgress(config)),
+          },
+        },
       });
       const view = new ProgressViewProvider({
         window: gui,
@@ -368,11 +329,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly followWorkspace = Effect.fn(
     'ProgressViewProvider.followWorkspace',
   )({ self: this }, function* () {
-    // Watch exactly the categories the launcher file lists are built from
-    // (fileListingRules), including user-configured extension overrides, so
-    // the watched set cannot drift from what the lists display.
+    // Watch exactly the file types the launcher file lists are built from
+    // (fileListingRules), so the watched set cannot drift from what the
+    // lists display.
     const extensions = new Set(
-      EXTENSION_CATEGORIES.flatMap(getFilterExtensions),
+      DocumentFileTypeSchema.literals.flatMap(getFilterExtensions),
     );
     const filePattern =
       extensions.size === 0 ? '**/*' : `**/*.{${[...extensions].join(',')}}`;
@@ -540,18 +501,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return undefined;
   }
 
-  /** The completion chime plays once per process, in the surface the user is
-   *  looking at. With none showing it still plays in a retained sidebar (or
-   *  a hidden tab), which is the case a chime is for: a run the user walked
-   *  away from. No port means no renderer to play it. */
-  private chime(): void {
-    const port =
-      this.visibleSurface() ??
-      this.surfaces.sidebar?.attached ??
-      this.surfaces.editor?.attached;
-    port?.surfaceAction({ kind: 'chime' });
-  }
-
   /** `texra.execute` with no configuration (Cmd+Alt+E): the composer's
    *  Send in the view the user is in, which is the visible surface and its
    *  own draft. With none showing, the sidebar, shown first so the action
@@ -590,9 +539,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Follow the session for the view's lifetime: the sidebar's badge counts
-   *  the requests this window can answer, a new one brings its run on
-   *  screen without taking focus, and a document task that completes, here
-   *  or in the service, plays the chime. The card stays the one place to
+   *  the requests this window can answer, and a new one brings its run on
+   *  screen without taking focus. The card stays the one place to
    *  answer; nothing here decides a request. */
   private followAttention(): Effect.Effect<void> {
     // Unseeded: the first view is what was already pending when the window
@@ -600,19 +548,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return Stream.runForEach(
       Stream.zipWithPrevious(this.runSession.view.changes),
       ([previous, view]) => {
-        const { requests, arrived, finished } = attentionOf(
+        const { requests, arrived } = attentionOf(
           view,
           Option.getOrUndefined(previous),
         );
         this.setBadge(requests.length);
-        // A failed or stopped task is no chime.
-        if (
-          finished.some(
-            (run) =>
-              isDocumentTaskRun(run) && run.outcome === RUN_OUTCOME.COMPLETED,
-          )
-        )
-          this.chime();
         const [first] = arrived;
         return first ? this.bringForward(first.runId) : Effect.void;
       },
@@ -677,7 +617,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // The toast is the delivered surface when the view cannot be made
     // visible, even if the user dismisses it without retrying the reveal.
     const selection = yield* vscodeUi.ask('info', launchNotice(config), {
-      items: ['Show Tasks'],
+      items: [commandCatalogById['texra.showProgressView'].title],
     });
     if (!selection) return;
     yield* this.showProgressView().pipe(

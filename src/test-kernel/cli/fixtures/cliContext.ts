@@ -23,7 +23,7 @@ const BASE_CLI_CONTEXT = {
   cwd: '/tmp/project',
   mode: 'headless',
   outputFormat: 'text',
-  approvalPolicy: 'never',
+  approvalPolicy: 'ask',
   minimumLogLevel: 'Info' as const,
   stdoutIsTty: false,
   termIsDumb: false,

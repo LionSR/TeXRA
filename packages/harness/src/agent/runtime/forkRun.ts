@@ -123,14 +123,10 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
     );
   }
   const found = cut.value;
-  // A child's fork is a root: the task its ancestors were given, and the
-  // structured result its parent's call asked for, are not its. It runs on
-  // the model its source was on at the cut, bound as it was.
-  const {
-    rootUserInstruction: _root,
-    outputSchema: _schema,
-    ...launched
-  } = config;
+  // A child's fork is a root: the structured result its parent's call asked
+  // for is not its. It runs on the model its source was on at the cut, bound
+  // as it was.
+  const { outputSchema: _schema, ...launched } = config;
   const record = { ...launched, model: found.state.modelId ?? launched.model };
   return { ...found, start, title: facts?.title ?? null, record };
 });
@@ -160,10 +156,7 @@ const viewRows = (
       aggregateId: runId,
       payload: {
         cause: 'fork',
-        trigger: null,
-        range: { from: 0, to: 0 },
         messages: copied.messages,
-        usage: null,
         input,
       },
       ...(copied.blobs.length > 0 && { blobs: copied.blobs }),

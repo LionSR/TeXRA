@@ -28,7 +28,7 @@ export type {
   AgentConfigPayload,
 } from '@shared/schemas/agentConfig';
 // A run's saved record: an agent's config or a task's,
-// and its JSON with the fields its category hides dropped.
+// and its JSON without the fields that do not apply to the run.
 export {
   serializeFilteredConfig,
   type RunRecord,
@@ -84,21 +84,17 @@ export type { RunStanding } from '@shared/session/runRowReads';
 // owners, run facts, tool definitions and results, log and transcript
 // payloads, follow-ups and requests.
 export type {
-  AgentConfigInput,
   CompactionActivityData,
   CompactionActivityOutcome,
   DeclinableUsageRoute,
   DispatchFacts,
   DisplayRow,
-  ExternalFileLocation,
-  FileListEntry,
   FileLocation,
   FinishedToolResult,
   FollowUpContent,
   FollowUpControl,
   FollowUpSender,
   HarnessInstructionKey,
-  LoadedMediaMetadata,
   LocalRuntimeState,
   LogLevel,
   MediaAttachmentKind,
@@ -128,7 +124,6 @@ export type {
   ToolDefinition,
   ToolEditContent,
   ToolEditRequest,
-  ToolFact,
   ToolUseLog,
   UsageRoute,
 } from '@shared/schemas';
@@ -148,7 +143,6 @@ export {
 // resolve against the policy.
 export {
   APPROVAL_BYPASS_KINDS,
-  launchPolicy,
   resolveBypass,
   runBypasses,
   type ApprovalBypasser,
@@ -194,11 +188,12 @@ export {
   TraceMissingSchema,
   type AssembleTraceResult,
   type TraceDocument,
-  type TraceFactKind,
 } from '@shared/schemas/traceDocument';
 // Path basics that hold in a browser: forward slashes, a path's base name,
-// its base name without the extension, and a case-free extension check.
+// its base name without the extension, a case-free extension check, and
+// the path a `file:` URL names.
 export {
+  filePathOfFileUrl,
   getBasename,
   getFileStem,
   hasExtension,
@@ -210,7 +205,6 @@ export {
 // from them and its own rows.
 export {
   AGENT_SKILLS_ENABLED_SETTING,
-  ALLOW_ORCHESTRATOR_KILL_SETTING,
   APPROVAL_POLICY_SETTING,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
@@ -235,7 +229,6 @@ export {
   SAVE_MODEL_IO_SETTING,
   XAI_PREFER_SUBSCRIPTION_SETTING,
   settingsCatalog,
-  TOOL_PATH_PROTECTION_SETTING,
   WEBSOCKET_OPENAI_SETTING,
   type HarnessRowKey,
   type SettingChoiceCopy,
@@ -275,6 +268,7 @@ export {
   formatCostUsd,
   formatResetDuration,
   formatResultCount,
+  formatUtcSecond,
   formatWallTime,
   formatWordList,
   joinFacts,
@@ -285,6 +279,8 @@ export {
   truncateSummary,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+// The last characters of a growing text, cut between characters.
+export { appendTail } from '@utils/text/appendTail';
 // How a host that prints log entries as text words one: its line and what
 // it carries beyond it.
 export { entryDetail, entryLine } from '@logger/logSink';
@@ -313,17 +309,12 @@ export {
   type ActiveSkillSourceScope,
   ActiveSkillSourceScopeSchema,
   AgentConfigSchema,
-  labelFileName,
   type AgentProposalRequest,
   type BashRequest,
   type ContextStateData,
   CredentialSwitchSchema,
-  type DiffStats,
-  DiffStatsSchema,
-  fileLocationAddressPath,
   fileLocationDisplayPath,
   FileLocationSchema,
-  fileLocationShortDisplayPath,
   // A fresh run id, for a caller that names a run before a session launches it.
   generateRunId,
   formatHunkLines,
@@ -381,7 +372,6 @@ export {
   type RunWorkspaceFile,
   AgentRunListingEntrySchema,
   type AgentRunListingEntry,
-  runStorageFilePath,
   type SkillDisplayIssue,
   SkillDisplayIssueSchema,
   type SkillDisplayItem,

@@ -19,18 +19,14 @@ export const APPROVAL_BYPASS_KINDS = Object.freeze([
 
 export type ApprovalBypassKind = (typeof APPROVAL_BYPASS_KINDS)[number];
 
-/** The policies a launch can narrow a run to: anything below Auto-approve,
- *  which is never stricter than a project's policy. */
-export const APPROVAL_POLICY_LIMITS = Object.freeze(['never', 'ask'] as const);
-export type ApprovalPolicyLimit = (typeof APPROVAL_POLICY_LIMITS)[number];
+/** The policy a launch can narrow a run to: Ask, the one below Auto-approve. */
+export const ApprovalPolicyLimitSchema = Schema.Literal('ask');
+export type ApprovalPolicyLimit = typeof ApprovalPolicyLimitSchema.Type;
 
 /** What a launch asks of its run's approvals: Auto-approve (its run starts
- *  with every bypass on, recorded on the run, never on the project), or a
- *  policy it narrows the run to. Absent, the run follows the project's. */
-export const LaunchApprovalSchema = Schema.Union([
-  Schema.Literal('autoApprove'),
-  Schema.Literals(APPROVAL_POLICY_LIMITS),
-]);
+ *  with every bypass on, recorded on the run, never on the project), or
+ *  Ask, which it narrows the run to. Absent, the run follows the project's. */
+export const LaunchApprovalSchema = Schema.Literals(['autoApprove', 'ask']);
 export type LaunchApproval = typeof LaunchApprovalSchema.Type;
 
 /** A run's own value for one kind: a human's `on` or `off`, or `parent`,
@@ -59,38 +55,9 @@ export const ApprovalGrantsSchema = Schema.Struct({
   /** The most permissive policy the run and its descendants run under: a
    *  launch that asked for a stricter policy than the project's narrows it
    *  for this run only, never widened (`policyLimit`). */
-  limit: Schema.optional(Schema.Literals(APPROVAL_POLICY_LIMITS)),
+  limit: Schema.optional(ApprovalPolicyLimitSchema),
 });
 export type ApprovalGrants = typeof ApprovalGrantsSchema.Type;
-
-const STRICTNESS: Readonly<Record<ApprovalPolicy, number>> = {
-  never: 0,
-  ask: 1,
-  yolo: 2,
-};
-
-/** The stricter of two policies (`never` < `ask` < `yolo`). */
-function stricterPolicy(a: ApprovalPolicy, b: ApprovalPolicy): ApprovalPolicy {
-  return STRICTNESS[a] <= STRICTNESS[b] ? a : b;
-}
-
-/**
- * The policy a launch's privileged actions (commands, edits, delegated
- * work) are decided under: the project's, narrowed by the limit the launch
- * asks for, or Auto-approve, which widens its own task but never over
- * Block. Auto-approve gets there by turning the run's grants on
- * (`rootLaunch`), not by changing the run's policy, which stays the
- * project's: a question or a retry still goes to a person where one can
- * answer it.
- */
-export function launchPolicy(
-  project: ApprovalPolicy,
-  approval: LaunchApproval | undefined,
-): ApprovalPolicy {
-  if (approval === undefined) return project;
-  if (approval === 'autoApprove') return project === 'never' ? 'never' : 'yolo';
-  return stricterPolicy(project, approval);
-}
 
 /** A run's policy: the project's (`project`), narrowed by the strictest
  *  launch limit on its ancestry; without a run, the project's. */
@@ -100,7 +67,7 @@ export function runPolicy(
   runId: RunId | undefined,
 ): ApprovalPolicy {
   const limit = runId === undefined ? undefined : policyLimit(source, runId);
-  return limit === undefined ? project : stricterPolicy(project, limit);
+  return limit ?? project;
 }
 
 /** `source` holding a run it has not applied yet with the parent edge and
@@ -116,19 +83,15 @@ export function withUnborn(
   return { runs: new Map(source.runs).set(runId, { parentId, grants }) };
 }
 
-/** The strictest launch limit on a run's ancestry while its edges stand,
- *  or undefined when no launch narrowed it. */
+/** The launch limit on a run's ancestry while its edges stand, or
+ *  undefined when no launch narrowed it. */
 function policyLimit(
   source: ApprovalGrantSource,
   runId: RunId,
 ): ApprovalPolicyLimit | undefined {
-  let limit: ApprovalPolicyLimit | undefined;
-  for (const grants of ancestry(source, runId)) {
-    const own = grants?.limit;
-    // Block is the strictest limit; any other is Ask.
-    if (own !== undefined && limit !== 'never') limit = own;
-  }
-  return limit;
+  for (const grants of ancestry(source, runId))
+    if (grants?.limit !== undefined) return grants.limit;
+  return undefined;
 }
 
 /** The grants of a run and each ancestor while its edges stand, the run

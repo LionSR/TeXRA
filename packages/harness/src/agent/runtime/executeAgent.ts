@@ -10,15 +10,12 @@
  */
 import { Clock, ConfigProvider, Effect, Layer, Record } from 'effect';
 
-import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import { runEventDraft } from '@agent/trace/TraceEmitter';
-import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
-import { SessionRoots } from '@platform/rootedFs';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import {
   runsScript,
@@ -53,7 +50,10 @@ export interface ExecuteAgentOptions {
    *  resumed, from the facts its resume read: its parent as its rows hold
    *  it (less one the store no longer lists) and its `run.start`. */
   readonly entry:
-    | { readonly kind: 'fresh'; readonly registration: RegisterRunOptions }
+    | {
+        readonly kind: 'fresh';
+        readonly registration: Omit<RegisterRunOptions, 'takesFollowUps'>;
+      }
     | {
         readonly kind: 'resume';
         readonly parentId: RunId | undefined;
@@ -113,10 +113,6 @@ const enterRun = Effect.fn('enterRun')(function* (
           // A child takes a message as its resume; a one-shot root none.
           takesFollowUps: !stopAfterCycle || parent !== null,
         });
-  if (registration !== null && registration.start === null)
-    return yield* new AgentError({
-      message: `Run ${runId} already exists; resume it.`,
-    });
   let held: AgentEvent[] | null = [];
   const publish = (event: AgentEvent) => log.publish(runId, event);
   const buffer = (event: AgentEvent) =>
@@ -152,13 +148,7 @@ const enterRun = Effect.fn('enterRun')(function* (
     entry: {
       parent,
       awaited,
-      fresh:
-        registration?.start == null
-          ? null
-          : {
-              registration: { ...registration, start: registration.start },
-              seed: asked?.seed,
-            },
+      fresh: registration === null ? null : { registration, seed: asked?.seed },
       enter,
     },
   };
@@ -183,26 +173,11 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     parseWorkingDirectory(config.workingDirectory),
   );
 
-  // The session is the fiber's: a delegated launch runs on its parent's
-  // session, and a root launch on the session it was started on.
-  const roots = yield* SessionRoots;
   const {
     logger: agentLogger,
     stopAfterCycle,
     entry,
   } = yield* enterRun(definition, runId, options);
-
-  // A resume renders nothing again: the run's rows hold its opening.
-  const opening =
-    entry.fresh === null
-      ? null
-      : buildTemplateInputs(config, {
-          // The session's own roots, handed to prompt assembly as data, so
-          // the working directory resolves in this project, not the
-          // calling fiber's.
-          workspaceRoot: roots.workspace,
-          workingDirectory,
-        });
 
   const launch: RunLaunch = {
     runId,
@@ -211,7 +186,6 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     config,
     toolPolicy: { stopAfterCycle },
     logger: agentLogger,
-    opening,
     entry,
   };
   return launch;
@@ -277,7 +251,6 @@ const openAgent = Effect.fn('executeAgent.open')(function* (
           agent: launch.config.label,
           model: launch.config.model,
           input: launch.config.inputFiles[0] ?? '(none)',
-          outputs: launch.config.outputFiles.length,
         },
       }),
       withLogChannel(CHANNEL),

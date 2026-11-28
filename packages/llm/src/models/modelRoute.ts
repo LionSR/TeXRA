@@ -114,8 +114,9 @@ export type ModelRoute =
     }
   /** No provider key can serve the model directly. */
   | { readonly kind: 'no-api-key' }
-  /** No route TeXRA reaches serves the model (see {@link isUnservedModel}). */
-  | { readonly kind: 'unserved' };
+  /** No route TeXRA reaches serves the model: `reason`, the clause after
+   *  its name, says why ({@link isUnservedModel}). */
+  | { readonly kind: 'unserved'; readonly reason: string };
 
 /** The routes that bill a credential: a key, or a session plan's sign-in. */
 export type CredentialRoute = Exclude<
@@ -124,18 +125,51 @@ export type CredentialRoute = Exclude<
 >;
 
 /**
- * How the Codex backend serves `model` on a ChatGPT subscription, or
- * `undefined` when it does not: the llm-zoo `codexSubscription` entry, which
- * records the backend's own model catalog and the input window it grants.
- * Serving status is a fact about the backend, so it lives in the registry
- * data; a retired model must drop the entry there.
+ * Baseline input window, in tokens, granted to a current OpenAI Responses
+ * model on a ChatGPT subscription when llm-zoo has not recorded a
+ * model-specific `codexSubscription` entry yet. Matches the Codex backend's
+ * conservative 272K floor so compaction never overstates the budget; a
+ * model-specific llm-zoo entry or `RouteFacts.chatgptContextWindow` overrides
+ * it.
+ */
+const DEFAULT_CHATGPT_SUBSCRIPTION_CONTEXT_WINDOW = 272_000;
+
+/**
+ * How the Codex / ChatGPT-subscription backend serves `model`, or `undefined`
+ * when it does not. Prefers llm-zoo's explicit `codexSubscription` entry
+ * (which carries model-specific windows such as 500K); when llm-zoo has not
+ * recorded one yet, current (non-retired, non-deprecated) OpenAI Responses
+ * models still qualify at the baseline subscription window so newly released
+ * OpenAI models work on a ChatGPT subscription without waiting for a catalog
+ * bump.
  */
 function codexSubscriptionOf(
   model: ModelConfig,
 ): ModelConfig['codexSubscription'] {
-  return model.provider === ModelProvider.OPENAI
-    ? model.codexSubscription
-    : undefined;
+  if (model.provider !== ModelProvider.OPENAI) return undefined;
+  if (model.codexSubscription !== undefined) return model.codexSubscription;
+  if (
+    model.requiresResponsesAPI === true &&
+    model.retired !== true &&
+    model.deprecated !== true
+  ) {
+    return { contextWindow: DEFAULT_CHATGPT_SUBSCRIPTION_CONTEXT_WINDOW };
+  }
+  return undefined;
+}
+
+/** Why TeXRA serves no run on `config` ({@link isUnservedModel}), as the
+ *  clause after the model's name, or undefined when it serves one. */
+function unservedReason(
+  config: Pick<ModelConfig, 'retired' | 'openRouterOnly' | 'capabilities'>,
+): string | undefined {
+  if (config.retired === true)
+    return 'is retired and no longer available from its provider';
+  if (config.openRouterOnly === true)
+    return 'is served only through OpenRouter or GitHub Copilot, which this build no longer supports';
+  if (!config.capabilities.supportsFunctionCalling)
+    return 'cannot call tools, which every run needs';
+  return undefined;
 }
 
 /**
@@ -146,11 +180,7 @@ function codexSubscriptionOf(
 export function isUnservedModel(
   config: Pick<ModelConfig, 'retired' | 'openRouterOnly' | 'capabilities'>,
 ): boolean {
-  return (
-    config.retired === true ||
-    config.openRouterOnly === true ||
-    !config.capabilities.supportsFunctionCalling
-  );
+  return unservedReason(config) !== undefined;
 }
 
 /** The largest input window, in tokens, the Codex backend grants any model on
@@ -337,7 +367,8 @@ export function decideModelRoute(
   config: ModelConfig,
   facts: RouteFacts,
 ): ModelRoute {
-  if (isUnservedModel(config)) return { kind: 'unserved' };
+  const reason = unservedReason(config);
+  if (reason !== undefined) return { kind: 'unserved', reason };
   const route = Arr.findFirst(Object.values(PLAN_DECISIONS), (decide) =>
     Option.fromNullishOr(decide(config, facts)),
   );

@@ -2,7 +2,7 @@
  * A run's questions to a person, as rows of the run. Every asker (a tool
  * call's request, the invoker's retry) opens through the run's cell at the one door
  * ({@link openRequest}): its `request.opened` and, when the session's
- * policy answers it (a `yolo` or `never` policy, a grant that covers it,
+ * policy answers it (a `yolo` policy, a grant that covers it,
  * nobody to ask), the `request.decided` beside it in the same batch, so no
  * surface ever lists it pending; otherwise the asker waits on the row
  * stream for the decision a surface lands, the one wait

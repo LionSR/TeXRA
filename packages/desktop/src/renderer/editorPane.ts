@@ -43,6 +43,7 @@ import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { WORKBENCH_KIND_META } from '../shared/desktopShellState';
 import { applyMonacoTheme } from './monacoTheme';
+import { unsavedDot } from './paneChrome';
 import { monacoPresentationOptions } from './monacoOptions';
 import { installMonacoCommandDescriptions } from './monacoCommandDescriptions';
 import { monacoLanguageForPath } from '@ui/highlighting/languageForPath';
@@ -332,7 +333,7 @@ export function createEditorPane(
     }
     return html`
       <div class="desktop-editor-tree-header">
-        <span>Files</span>
+        <span class="overline">Files</span>
         ${renderIconActionButton({
           id: 'editor-tree-refresh',
           icon: 'arrows-rotate',
@@ -486,7 +487,7 @@ export function createEditorPane(
           >${waIcon(WORKBENCH_KIND_META.editor.icon)}</span
         >
         <span class="desktop-editor-tree-label truncate">${node.name}</span>
-        ${dirty ? html`<span class="status-dot desktop-editor-dirty-dot" role="img" aria-label="Unsaved changes"></span>` : nothing}
+        ${dirty ? unsavedDot() : nothing}
       </wa-tree-item>
     `;
   }

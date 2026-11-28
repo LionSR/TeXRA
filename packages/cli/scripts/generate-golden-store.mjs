@@ -23,14 +23,8 @@
  *   is refused: a one-shot parent never reads a message. Headless
  *   delegation runs in band, so every row commits in one order.
  * - two entry-agent runs over the same notes: the context blobs they share.
- * - an `edit` program run with `--output`: the theory plugin's output
- *   fact, its diffs included, and the program's `run.end` with its documents
- *   as `output.structured`. Its documents have no `\documentclass` and no
- *   document environment, so its compile check and latexdiff run no TeX
- *   tool. The TeX tools it could run by name are stand-ins first on PATH,
- *   which fail the generation if run: what an installed TeX answers is the
- *   machine's. Leaving TeX off the PATH would not hide it: the CLI adds the
- *   usual TeX directories after the PATH it is given (`commandDirs`).
+ * - an `annotate` program run: a program's script run, the child its
+ *   round starts, and the files it reads to check that round.
  * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
  *   Codex switched on in `/plugins`, and a plugin's `PostToolUse` hooks on
  *   `plan` and `codex` enabled: a plan the user runs as a goal
@@ -87,7 +81,6 @@
  * value. Two generations on one tree give the same file.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import {
   cpSync,
@@ -112,8 +105,13 @@ import { parseArgs } from 'node:util';
 import { zstdDecompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
 
-import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
-import { splitValidationAgent } from './validationAgent.mjs';
+import { loadPtySpawn } from './nodePtySpawnHelper.mjs';
+import {
+  buildValidationCli,
+  splitValidationAgent,
+  VALIDATION_FAKE_API_KEY,
+  VALIDATION_PROVIDER_KEYS,
+} from './validationAgent.mjs';
 import { GOLDEN_AGENTS } from '../src/runtime/models/validationAgents.ts';
 import {
   VALIDATION_FLAG,
@@ -145,18 +143,6 @@ const effectPath = path.join(
   'golden-effect',
   'approved.txt',
 );
-const FAKE_KEY = 'texra-validation-fake-key';
-const PROVIDER_KEYS = [
-  'OPENAI_API_KEY',
-  'ANTHROPIC_API_KEY',
-  'GOOGLE_API_KEY',
-  'XAI_API_KEY',
-  'DEEPSEEK_API_KEY',
-  'MOONSHOT_API_KEY',
-  'DASHSCOPE_API_KEY',
-  'MINIMAX_API_KEY',
-  'GLM_API_KEY',
-];
 
 /** The processes a step starts, reaped however the generation ends. */
 const spawned = new Set();
@@ -185,29 +171,6 @@ function fail(message) {
   throw new Error(`[golden-store] ${message}`);
 }
 
-function build() {
-  for (const [script, env] of [
-    [
-      'bundle',
-      {
-        TEXRA_CLI_BUNDLE_OUTFILE: binaryPath,
-        TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
-      },
-    ],
-    [
-      'copy:resources',
-      { TEXRA_CLI_RESOURCES_OUTDIR: path.join(validationRoot, 'resources') },
-    ],
-  ]) {
-    const result = spawnSync('pnpm', ['run', script], {
-      cwd: cliRoot,
-      env: { ...process.env, ...env },
-      stdio: 'inherit',
-    });
-    if (result.status !== 0) fail(`pnpm run ${script} failed`);
-  }
-}
-
 // ---------------------------------------------------------------------------
 // The runs
 // ---------------------------------------------------------------------------
@@ -225,7 +188,7 @@ function scenario(root) {
   );
   writeFileSync(
     path.join(project, 'paper.tex'),
-    '\\section{Input}\nThe golden edit program revises this file.\n',
+    '\\section{Input}\nThe golden annotate program reviews this file.\n',
   );
   // The Codex CLI the Codex child runs: first on PATH, with an empty global
   // npm prefix so no installed Codex is found first. Its one turn answers
@@ -253,15 +216,15 @@ process.stdin.on('end', function answer() {
 `,
     { mode: 0o755 },
   );
-  // The TeX tools the edit program runs by name, also first on PATH: each
-  // only notes in `tex.ran`, beside the flag, that it ran, and the
-  // generation fails once its runs end.
-  for (const tool of ['latexmk', 'pdflatex', 'latexdiff', 'texcount'])
-    writeFileSync(
-      path.join(bin, tool),
-      `#!/bin/sh\necho ${tool} >> "$(dirname "$0")/../tex.ran"\n`,
-      { mode: 0o755 },
-    );
+  // A `wolframscript` that answers the Wolfram plugin's probe, so the
+  // plugin's prompt section stands from the first step on every machine:
+  // without one, the probe's "not found" lands between two steps of a run,
+  // at a point that depends on timing.
+  writeFileSync(
+    path.join(bin, 'wolframscript'),
+    '#!/bin/sh\necho "WolframScript 1.0.0"\n',
+    { mode: 0o755 },
+  );
   // A plugin whose \`PostToolUse\` hooks see each \`codex\` call and hold each
   // \`plan\` call until \`plan.release\` appears beside the project, the
   // hooks' working directory.
@@ -314,10 +277,10 @@ process.stdin.on('end', function answer() {
         ([name]) => !name.startsWith('TEXRA_') && name !== 'CI',
       ),
     ),
-    ...Object.fromEntries(PROVIDER_KEYS.map((name) => [name, ''])),
-    OPENAI_API_KEY: FAKE_KEY,
+    ...Object.fromEntries(VALIDATION_PROVIDER_KEYS.map((name) => [name, ''])),
+    OPENAI_API_KEY: VALIDATION_FAKE_API_KEY,
     // The helper model's provider: a run's session label (`run.description`).
-    DEEPSEEK_API_KEY: FAKE_KEY,
+    DEEPSEEK_API_KEY: VALIDATION_FAKE_API_KEY,
     PATH: [bin, process.env.PATH].join(path.delimiter),
     npm_config_prefix: path.join(root, 'npm'),
     ...testLaunchEnv(home),
@@ -357,9 +320,8 @@ process.stdin.on('end', function answer() {
   };
   // The interactive chat, on a PTY whose screen a headless terminal keeps.
   const chat = async (command) => {
-    ensureNodePtySpawnHelperExecutable();
+    const spawnPty = await loadPtySpawn();
     const require = createRequire(import.meta.url);
-    const { spawn: spawnPty } = require('node-pty');
     const { Terminal } = require('@xterm/headless');
     const cols = 100;
     const rows = 40;
@@ -578,25 +540,23 @@ async function generate(root) {
       '--context',
       'notes.tex',
       '--approval-policy',
-      'never',
+      'ask',
       '--output-format',
       'json',
       '--print',
     ]);
 
-  // The `edit` program through `texra run --output`: the theory plugin's
-  // output fact, diffs included, and the program's `run.end` (`structured`).
+  // The `annotate` program through `texra run`: a program's script run
+  // and its round's child.
   cli.run([
     'run',
-    'edit',
+    'annotate',
     '--model',
     'openai/gpt-5.6-sol',
     '--input',
     'paper.tex',
-    '--output',
-    'paper.polished.tex',
     '--approval-policy',
-    'never',
+    'ask',
     '--output-format',
     'json',
     '--print',
@@ -820,7 +780,7 @@ async function generate(root) {
     '--instruction',
     'Before the fork.',
     '--approval-policy',
-    'never',
+    'ask',
     '--output-format',
     'json',
     '--print',
@@ -937,7 +897,7 @@ async function generate(root) {
     '--instruction',
     'A run to delete.',
     '--approval-policy',
-    'never',
+    'ask',
     '--output-format',
     'json',
     '--print',
@@ -1034,13 +994,6 @@ async function generate(root) {
     client(['history', 'delete', doomed, '--yes', '--print']);
   });
 
-  // A TeX stand-in that ran: the store would hold what this machine's TeX
-  // answers.
-  const tex = path.join(root, 'tex.ran');
-  if (existsSync(tex))
-    fail(
-      `the scenario ran ${readFileSync(tex, 'utf8').trim().split('\n').join(', ')}, which an installed TeX answers differently on each machine`,
-    );
   return cli.store();
 }
 
@@ -1092,8 +1045,14 @@ const BASE_AT = Date.UTC(2026, 0, 1);
 const CHILD_CALLS = new Set(['agent', 'self']);
 
 async function normalize(file, root) {
-  const { decodeRow, encodeDraft, EVENT_COLUMNS, EVENT_FROM, sha256Hex } =
-    await loadRowCodec(root);
+  const {
+    callChildRunId,
+    decodeRow,
+    encodeDraft,
+    EVENT_COLUMNS,
+    EVENT_FROM,
+    sha256Hex,
+  } = await loadRowCodec(root);
   const db = new DatabaseSync(file);
   const events = db
     .prepare(
@@ -1162,11 +1121,8 @@ async function normalize(file, root) {
   // (`agentChildRunId`: its run, response, call and attempt), so a resume
   // finds it by deriving that name again. Such a child is renamed by the same derivation over
   // the normalized names, not by order, or no resume would find it.
-  const derive = (fields) =>
-    createHash('sha256')
-      .update(stableStringify(fields))
-      .digest('hex')
-      .slice(0, 24);
+  const derive = ({ parentRunId: parentId, ...call }) =>
+    callChildRunId({ parentId, ...call });
   const logicalOf = new Map(sequences.map((row) => [row.id, row.logical_id]));
   const children = new Map();
   for (const [index, row] of rows.entries()) {
@@ -1431,7 +1387,7 @@ async function generation() {
   }
 }
 
-if (!noBuild) build();
+if (!noBuild) buildValidationCli(binaryPath);
 if (!existsSync(binaryPath)) fail(`no validation bundle at ${binaryPath}`);
 const text = await generation();
 if (twice) {

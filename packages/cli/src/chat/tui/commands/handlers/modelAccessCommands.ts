@@ -3,11 +3,11 @@ import { Effect } from 'effect';
 import type { SettingsStores } from '@texra-ai/worldline/plugins';
 
 import { type ApiKeyProviderId } from '@texra-ai/llm';
-import { loadCliDetailedAccountStatusLines } from '@cli/runtime/models/apiStatus';
+import { loadCliDetailedAccountStatusLines } from '@cli/chat/tui/apiStatus';
 import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
 import { commitProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
 import { type CliModelAccessSelection } from '@cli/runtime/models/modelAccessRoute';
-import { updateCliModelAccess } from '@cli/runtime/models/modelAccessSelection';
+import { updateCliModelAccess } from '@cli/chat/tui/modelAccessSelection';
 
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import { planFallbackName } from '@ui/copy/modelAccess';

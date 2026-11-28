@@ -42,6 +42,7 @@ import {
   AgentConfigSchema,
   backgroundScriptOf,
   runsScript,
+  SELF_TOOL_NAME,
   ToolError,
 } from '@shared/schemas';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
@@ -149,7 +150,7 @@ const runSelf = Effect.fn('self.call')(function* (
     recoverAgentChild(call, { notify, timeoutMs: input.timeoutMs }),
   );
   if (Result.isFailure(recovered)) return failedResult(name, recovered.failure);
-  if (recovered.success.kind === 'ended')
+  if (recovered.success !== null)
     return yield* childResult(call, name, recovered.success, undefined);
 
   // A model the call names is chosen as `agent()` chooses one: it runs, or
@@ -160,7 +161,7 @@ const runSelf = Effect.fn('self.call')(function* (
   const limited = yield* countLaunch(script, name);
   if (limited !== null) return limited;
   const runId = agentChildRunId(call);
-  const { rootUserInstruction: _root, script: _script, ...launch } = config;
+  const { script: _script, ...launch } = config;
   // Forked, the child is born on the conversation's history; fresh, on its
   // framed prompt alone. Either way it is launched, never resumed, so it starts
   // with the grants its parent holds now.
@@ -181,8 +182,6 @@ const runSelf = Effect.fn('self.call')(function* (
           model: (yield* ScopedRef.get(run.model)).modelId,
           instruction: task,
           displayInstruction: input.prompt,
-          outputFiles: [],
-          launch: undefined,
         };
         return yield* executeSubagentInBand(
           call,
@@ -229,7 +228,7 @@ function selfTask(prompt: string, forked: boolean): string {
 
 /** The `self` function of a script. */
 export const SelfTool = defineTool({
-  name: 'self',
+  name: SELF_TOOL_NAME,
   // A resumed call finds the child its earlier attempt launched and takes
   // its result, or resumes it under its own id: it never launches a second one.
   replay: 'safe',

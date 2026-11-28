@@ -9,15 +9,6 @@ export function formatBytes(bytes: number): string {
   return prettyBytes(bytes, { binary: true });
 }
 
-/** A file that reached the model as media, by its kind and size
- *  (`[image, 1.2 MiB]`). */
-export function formatMediaLabel(media: {
-  readonly kind: string;
-  readonly sizeBytes: number;
-}): string {
-  return `[${media.kind}, ${formatBytes(media.sizeBytes)}]`;
-}
-
 /** A file's line range as a path suffix: `:5-9`, `:5` for one line or an
  *  open end, and nothing for a whole file. */
 export function formatLineRange(
@@ -91,7 +82,7 @@ export function formatRelativeTime(timestamp: number, nowMs: number): string {
       'month',
     );
   }
-  if (abs < YEAR_MS && quarters < 4)
+  if (abs < YEAR_MS && Math.abs(quarters) < 4)
     return relativeTimeFormat.format(quarters, 'quarter');
   return relativeTimeFormat.format(years, 'year');
 }

@@ -37,7 +37,7 @@ In the terminal client, `/plugins` lists the same integrations with their
 state and switches each one on or off. Install and sign in to each CLI with its
 own installer and sign-in command.
 
-Each integration's options live on its row and are scoped to the current project. Per-call approval prompts follow **Settings → General → Approval**: **Auto-approve** (default), **Ask**, or **Block**. Choose **Ask** to review each launch, or approve all agent work for the task on its first request card. When you approve a single launch, Codex runs in `workspace-write` mode and Claude Code in `acceptEdits`; under **Auto-approve** (or an all-agent-work grant), both run with full permissions. Codex never stops to ask on its own.
+Per-call approval prompts follow **Settings → General → Approval**: **Auto-approve** (default) or **Ask**. Choose **Ask** to review each launch, or approve all agent work for the task on its first request card. When you approve a single launch, Codex runs in `workspace-write` mode and Claude Code in `acceptEdits`; under **Auto-approve** (or an all-agent-work grant), both run with full permissions. Codex never stops to ask on its own.
 
 Both CLIs are installed once per machine and shared by VS Code, the desktop app, and the CLI. Neither ships inside TeXRA, so TeXRA uses whichever version is installed on your machine.
 
@@ -114,6 +114,14 @@ Both tools deliver their result as a follow-up message, so they are not availabl
 
 <DelegatedStreamHero />
 <p class="hero-caption">The delegated session streams live in its own Tasks view tab (reasoning, commands, file changes, and web searches), then shows <strong>Completed</strong> and hands its result back to the calling agent.</p>
+
+## GitHub activity
+
+The assistant follows a pull request's reviews and CI, an issue or a repository with the [`gh` command line](https://cli.github.com) in its shell, and comes back to check again by scheduling itself a later turn. The bundled `github` skill has the commands; the assistant reads it only while **Enable skills for agents** is on (**Settings → Agents → Skills**, or `texra.skills.enabled`; off by default).
+
+- Sign in with `gh auth login` in a terminal, or start TeXRA with `GH_TOKEN` set. TeXRA stores no GitHub token of its own.
+- Nothing polls in the background: each look is a turn the assistant scheduled, at least a minute after the last. A scheduled turn is kept by the running TeXRA process; if TeXRA is closed when one is due, it runs once, late, the next time the project is opened. Stopping the task cancels what it scheduled.
+- A one-shot run such as `texra run` cannot be continued later, so it can check once (or wait on `gh pr checks --watch`) but not follow over time.
 
 ## MCP servers
 

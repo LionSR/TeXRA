@@ -40,7 +40,6 @@ import {
   MESSAGE_TYPES,
   parseApprovalPolicy,
   RUN_OUTCOME,
-  runBypasses,
   RunIdSchema,
   toErrorMessage,
   type AgentProposalRequest,
@@ -70,8 +69,7 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { runStatus } from '@ui/copy/runStatus';
-import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { APPROVAL_POLICY_LINE } from '@ui/copy/approvalPolicy';
 // What no public entry serves: the session's own owners, which the fixtures
 // seed rows through, the leaves they build rows with (`toJsonValue` among
 // them), and the stored model selection's key (this file is an exemption in
@@ -114,6 +112,7 @@ import { blobAddress } from '@utils/core/idHash';
 import { App } from '../src/chat/tui/App';
 import { builtinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
 import type { SlashCommandContext } from '../src/chat/tui/commands/handlers/slashContext';
+import { APPROVAL_USAGE } from '../src/chat/tui/commands/handlers/approvalCommand';
 import { showCliWorkPlan } from '../src/chat/tui/commands/handlers/sessionCommands';
 import { formatSlashCommandHelp } from '../src/chat/tui/commands/helpText';
 import {
@@ -135,10 +134,7 @@ import {
   runViewOf,
 } from '../src/chat/tui/state/sessionView';
 import { TuiSession } from '../src/chat/tui/state/sessionRunState';
-import {
-  formatCliSessionStatus,
-  taskCostStatus,
-} from '../src/chat/tui/sessionStatus';
+import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { chatScrollback } from '../src/chat/tui/panes/staticTranscriptRing';
 import {
   EMPTY_DRAFT,
@@ -154,7 +150,6 @@ import {
   appendLocalUserTranscript,
 } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
-import { defaultShortcutModifierLabel } from '../src/runtime/terminal/shortcutLabels';
 import { makeCliProcessRuntime } from '../src/runtime/platform/cliProcessRuntime';
 import { cliPlatform } from '../src/runtime/platform/initPlatform';
 import { CliExitCode } from '../src/runtime/platform/exitCodes';
@@ -172,7 +167,6 @@ const SHOW_SCRIPT_RUNNING = process.env.HARNESS_SCRIPT_RUNNING === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_MULTI_AGENT_DISABLED =
   process.env.HARNESS_MULTI_AGENT_DISABLED === '1';
-const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const EDIT_APPROVAL_WRAPPED_CONTEXT =
@@ -1778,15 +1772,10 @@ function setHarnessApprovalPolicy(policy: ApprovalPolicy): void {
     ...sessionMeta.get(),
     approvalPolicy: policy,
   });
-  appendHarnessAssistantTranscript(
-    `Approval mode: ${formatApprovalPolicy(policy)}`,
-  );
+  appendHarnessAssistantTranscript(APPROVAL_POLICY_LINE.chat(policy));
 }
 
-function applyHarnessApprovalPolicySelection(
-  input: string,
-  usage: string,
-): void {
+function applyHarnessApprovalPolicySelection(input: string): void {
   const normalized = input.trim().toLowerCase();
   if (!normalized || normalized === 'status') {
     const approval = harnessCommands.find('approval');
@@ -1795,7 +1784,7 @@ function applyHarnessApprovalPolicySelection(
 
   const policy = parseApprovalPolicy(normalized);
   if (!policy) {
-    appendHarnessAssistantTranscript(usage);
+    appendHarnessAssistantTranscript(APPROVAL_USAGE);
     return;
   }
 
@@ -1827,21 +1816,14 @@ function appendHarnessStatus(): void {
   const runId = selectedRunId.get() ?? HARNESS_RUN_ID;
   const run = runViewOf(view, runId);
   appendHarnessAssistantTranscript(
-    formatCliSessionStatus({
+    formatCliSessionStatus(view, run, {
       commandName: HARNESS_CLI_CONTEXT.commandName,
       agent: meta.chat.label,
       model: meta.model,
-      modelAccess: run?.usage.usageRoute,
+      modelAccess: undefined,
       approvalPolicy: harnessApprovalPolicy(),
-      approvalBypasses: runBypasses(view, runId),
-      statusLabel: run && runStatus(run).word,
-      activeChildSessions: run?.rollup.running,
       // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
-      queuedFollowUpMessages: (view.runs.get(runId)?.queuedFollowUps ?? []).map(
-        (followUp) => followUp.text,
-      ),
-      cost: taskCostStatus(view, run),
     }),
   );
 }
@@ -1872,9 +1854,7 @@ function handleHarnessSlashCommand(line: string): boolean {
   switch (commandName) {
     case 'help':
       appendHarnessAssistantTranscript(
-        formatSlashCommandHelp(harnessCommands.list, {
-          shortcutModifierLabel: defaultShortcutModifierLabel(),
-        }),
+        formatSlashCommandHelp(harnessCommands.list),
       );
       return true;
     case 'resume':
@@ -1890,7 +1870,7 @@ function handleHarnessSlashCommand(line: string): boolean {
       resetHarnessForClear();
       return true;
     case 'approval':
-      applyHarnessApprovalPolicySelection(rest, HARNESS_APPROVAL_USAGE);
+      applyHarnessApprovalPolicySelection(rest);
       return true;
     default: {
       const command = harnessCommands.find(commandName);

@@ -39,10 +39,6 @@ import {
   missingLatexTools,
   PROBED_LATEX_TOOLS,
 } from '@texra/shared/constants/latexToolchain';
-import {
-  GITHUB_TOKEN_STORAGE_KEY,
-  resolveGitHubTokenSource,
-} from '@texra/tools/github/githubAuth';
 import { findCommand } from '@texra/utils/system/binaryResolver';
 import { detectPackageManager } from '@texra/utils/system/toolChecks';
 
@@ -138,6 +134,25 @@ const locateTool = Effect.fn('locateTool')(function* (
   return { name, installed: found !== null, path: found?.resolvedPath };
 });
 
+/** The names the report gives `missing` tools: the interchangeable image
+ *  tools as one entry, since either one satisfies the image capability. */
+const reportedNames = (
+  missing: readonly {
+    readonly name: string;
+    readonly interchangeable: boolean;
+  }[],
+): string[] => [
+  ...missing.filter((tool) => !tool.interchangeable).map((tool) => tool.name),
+  ...(missing.some((tool) => tool.interchangeable) ? [IMAGE_TOOL_LABEL] : []),
+];
+
+/** Every probed tool, as the report names it when all are missing. */
+const PROBED_TOOL_NAMES = reportedNames(
+  missingLatexTools(
+    PROBED_LATEX_TOOLS.map((name) => ({ name, installed: false })),
+  ),
+).join(', ');
+
 /** OS, arch and shell; the shell comes from the ambient ConfigProvider. */
 const readHostInfo = Effect.map(
   Effect.all([
@@ -212,7 +227,6 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     optionalTools,
     apiKeys,
     hasAnyUsableCredential,
-    githubToken,
     chatGptStatus,
     storedKeys,
   ] = yield* Effect.all(
@@ -243,16 +257,6 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
           ).pipe(withLogChannel(CHANNEL), Effect.as('unknown' as const)),
         ),
       ),
-      resolveGitHubTokenSource(secrets).pipe(
-        // A store the host cannot read is neither a token nor its absence:
-        // report it unknown (as a provider key's origin is) and log why, so
-        // an unreadable token is never listed as a blank, stale entry.
-        Effect.catch((failure) =>
-          Effect.logWarning(
-            `GitHub token check failed; reporting it unknown: ${failure.message}`,
-          ).pipe(withLogChannel(CHANNEL), Effect.as('unknown' as const)),
-        ),
-      ),
       getChatGptSubscriptionStatus(roots).pipe(
         // A probe that fails is not the fact "signed out"; setup advice built
         // on it would tell a signed-in user to sign in.
@@ -275,12 +279,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     { concurrency: 'unbounded' },
   );
 
-  const missing = missingLatexTools(coreTools);
-  // One entry for the image capability: either tool satisfies it.
-  const missingCore = [
-    ...missing.filter((tool) => !tool.interchangeable).map((tool) => tool.name),
-    ...(missing.some((tool) => tool.interchangeable) ? [IMAGE_TOOL_LABEL] : []),
-  ];
+  const missingCore = reportedNames(missingLatexTools(coreTools));
   const latexWorkshopInstalled = editor?.installed(LATEX_WORKSHOP_EXT_ID);
 
   const summary = {
@@ -316,11 +315,10 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
       hasAnyUsableCredential,
       apiKeys,
       chatGptSubscription: chatGptStatus,
-      githubToken,
       // Stored entries the fields above do not name. `staleSecrets` lists,
       // by raw key name, every stored credential entry that is not counted as
       // a saved credential: an `apiKey.*` entry for no known provider, or a
-      // known provider's key or the GitHub token whose stored value is blank
+      // known provider's key whose stored value is blank
       // (its origin then reads env or none, yet the store still holds it).
       // The rest is a count, since those names may carry user-derived
       // identifiers.
@@ -329,9 +327,6 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
           ? storedKeys
           : {
               staleSecrets: storedKeys.filter((key) => {
-                if (key === GITHUB_TOKEN_STORAGE_KEY) {
-                  return githubToken === 'env' || githubToken === 'none';
-                }
                 const provider = apiKeyEntry(key);
                 if (provider === undefined) return false;
                 if (provider === 'unknown') return true;
@@ -341,9 +336,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
                 return origin === 'env' || origin === 'none';
               }),
               otherRedactedCount: storedKeys.filter(
-                (key) =>
-                  apiKeyEntry(key) === undefined &&
-                  key !== GITHUB_TOKEN_STORAGE_KEY,
+                (key) => apiKeyEntry(key) === undefined,
               ).length,
             },
     },
@@ -371,7 +364,6 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     chatGptEnabled && 'ChatGPT subscription enabled',
     credentials.chatGptSubscription === 'unknown' &&
       'ChatGPT subscription status unavailable',
-    credentials.githubToken === 'unknown' && 'GitHub token status unavailable',
     credentials.hasAnyUsableCredential === 'unknown' &&
       'credential status unavailable',
     credentials.hasAnyUsableCredential === true &&
@@ -404,8 +396,10 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
  */
 export const ProbeEnvironmentTool = defineTool({
   name: 'probe_environment',
+  // A function of scripts: offered with the script tool, never sent.
+  scriptGlobal: { positional: 'tool', withScript: true },
   replay: 'safe',
-  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, ${IMAGE_TOOL_LABEL}, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and the rest of TeXRA's persisted credential store (\`storedSecrets\`: \`staleSecrets\`, the stored credential entries that do not count as a saved credential (an \`apiKey.*\` entry for an unknown provider, or a known provider's key or the GitHub token whose stored value is blank), by raw key name, and a redacted count of other secret names; \`"unavailable"\` when the store cannot be read). Recognised providers' keys can be removed with unset_api_key, the GitHub token through the host's GitHub token setting, and other entries only through the current host's credential-management surface. With {"tool": "<name>"}, re-checks only that tool on PATH and answers in one line (use after an install command to confirm it worked). Read-only, no approval required. Call this first in any setup session to decide what to do next, and again as the final check.`,
+  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (${PROBED_TOOL_NAMES}), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and the rest of TeXRA's persisted credential store (\`storedSecrets\`: \`staleSecrets\`, the stored credential entries that do not count as a saved credential (an \`apiKey.*\` entry for an unknown provider, or a known provider's key whose stored value is blank), by raw key name, and a redacted count of other secret names; \`"unavailable"\` when the store cannot be read). Recognised providers' keys can be removed with unset_api_key, and other entries only through the current host's credential-management surface. With {"tool": "<name>"}, re-checks only that tool on PATH and answers in one line (use after an install command to confirm it worked). Read-only, no approval required. Call this first in any setup session to decide what to do next, and again as the final check.`,
   schema: ProbeEnvironmentInputSchema,
   execute: probe,
 });

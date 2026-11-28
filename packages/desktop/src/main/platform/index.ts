@@ -18,7 +18,7 @@ import {
 // Local file imports
 import { withLogChannel } from '@texra-ai/worldline/plugins';
 import { adoptLoginShellEnvironment } from '@texra/platform/defaults/loginShellEnvironment';
-import { desktopLayout, type DesktopLayout } from './paths.js';
+import { desktopLayout } from './paths.js';
 import type { ConfigStore } from '@texra-ai/worldline/node';
 interface ElectronPlatformInitResult {
   /**
@@ -35,14 +35,6 @@ interface ElectronPlatformInitResult {
   /** What opening the global config file and the no-workspace roots found
    *  wrong, to show once a window exists. */
   configWarnings: readonly string[];
-  /**
-   * Desktop's memory/history/executions data root, the CLI's `~/.texra`.
-   * Threaded out so the project registry gets it from one owner instead of
-   * re-resolving it — this root no longer lives under `userData` (#7987).
-   */
-  dataRoot: string;
-  /** Where this build's files are. */
-  layout: DesktopLayout;
 }
 
 export const initializeElectronPlatform = Effect.fn(
@@ -115,13 +107,7 @@ export const initializeElectronPlatform = Effect.fn(
       undefined,
       warn,
     ).pipe(Scope.provide(processScope));
-    return {
-      processRoots,
-      globalConfigStore,
-      configWarnings,
-      dataRoot,
-      layout,
-    };
+    return { processRoots, globalConfigStore, configWarnings };
   });
-  return { runtime, processScope, initialize };
+  return { runtime, processScope, initialize, dataRoot, layout };
 });

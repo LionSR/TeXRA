@@ -2,42 +2,28 @@ import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
 import { joinFacts } from '@texra-ai/worldline/schemas';
-import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
+import type { PlanUsage } from '@texra/shared/model/subscriptionUsage';
 import {
+  currentUsageWindows,
   formatSubscriptionUsageReset,
   formatSubscriptionUsageUpdated,
-  subscriptionQuotaTone,
+  planUsageName,
   subscriptionQuotaUsed,
+  subscriptionUsageUnavailable,
   subscriptionUsageWindowLabel,
 } from '@ui/copy/subscriptionUsage';
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
-
-type UnavailableReason = Extract<
-  SubscriptionUsageSnapshot,
-  { state: 'unavailable' }
->['reason'];
-
-function unavailableDetail(reason: UnavailableReason): string {
-  switch (reason) {
-    case 'invalid_credentials':
-      return 'The provider rejected the configured credentials.';
-    case 'malformed_response':
-      return 'The provider returned usage data TeXRA could not read.';
-    case 'missing_credentials':
-    case 'request_failed':
-      return 'The provider usage request failed. Try refreshing again shortly.';
-  }
-}
+import { quotaBarStyles, renderQuotaBar } from '@ui/wa/quotaBar';
 
 @customElement('subscription-usage-row')
 export class SubscriptionUsageRow extends TexraElement {
   static override styles = [
     TexraElement.styles,
     toneStyles,
+    quotaBarStyles,
     css`
       :host {
         display: contents;
@@ -73,13 +59,7 @@ export class SubscriptionUsageRow extends TexraElement {
       }
 
       wa-progress-bar {
-        --track-height: 0.45rem;
-        --indicator-color: var(--wa-color-progress-bg);
         width: 100%;
-      }
-
-      wa-progress-bar:is(.tone-warning, .tone-danger) {
-        --indicator-color: var(--tone-color);
       }
 
       .usage-window,
@@ -124,17 +104,15 @@ export class SubscriptionUsageRow extends TexraElement {
     `,
   ];
 
-  @property({ attribute: false }) snapshot: SubscriptionUsageSnapshot | null =
-    null;
+  @property({ attribute: false }) snapshot: PlanUsage | null = null;
   @property({ attribute: false }) now = 0;
 
   override render(): TemplateResult | typeof nothing {
     const snapshot = this.snapshot;
     if (!snapshot) return nothing;
-    if (snapshot.state === 'unavailable') {
-      if (snapshot.reason === 'missing_credentials') {
-        return nothing;
-      }
+    // A plan with no credential has no usage to show; its key row says so.
+    if (snapshot.unknown === 'missing_credentials') return nothing;
+    if (snapshot.unknown !== undefined) {
       return html`
         <div class="settings-row subscription-usage-row">
           <div class="settings-row-text">
@@ -143,7 +121,7 @@ export class SubscriptionUsageRow extends TexraElement {
               summary=${joinFacts(['Plan usage', 'unavailable'])}
             >
               <span class="usage-unavailable-detail">
-                ${unavailableDetail(snapshot.reason)}
+                ${subscriptionUsageUnavailable(snapshot.unknown)}
               </span>
             </wa-details>
           </div>
@@ -151,41 +129,41 @@ export class SubscriptionUsageRow extends TexraElement {
       `;
     }
 
+    const planName = planUsageName(snapshot);
     return html`
       <div class="settings-row subscription-usage-row">
         <div class="settings-row-text">
           <div class="usage-card">
             <span class="usage-plan"
-              ><bdi dir="auto">${snapshot.planName}</bdi> usage</span
+              ><bdi dir="auto">${planName}</bdi> usage</span
             >
-            ${snapshot.windows.map((window) => {
+            ${currentUsageWindows(snapshot, this.now).map((window) => {
               const label = subscriptionUsageWindowLabel(window);
               const percent = subscriptionQuotaUsed(window);
               const reset = formatSubscriptionUsageReset(
                 window.resetAt,
                 this.now,
               );
-              const tone = subscriptionQuotaTone(window);
               return html`
                 <div class="usage-window">
                   <span class="usage-summary"
                     ><bdi dir="auto">${label}</bdi>:
                     <bdi dir="auto">${percent}</bdi></span
                   >
-                  <wa-progress-bar
-                    class=${tone === undefined ? '' : `tone-${tone}`}
-                    value=${window.percentUsed}
-                    label="${snapshot.providerName} ${label} usage"
-                  ></wa-progress-bar>
+                  ${renderQuotaBar(window, `${planName} ${label} usage`)}
                   <span class="usage-reset"
                     ><bdi dir="auto">${reset ?? ''}</bdi></span
                   >
                 </div>
               `;
             })}
-            <span class="usage-updated">
-              ${formatSubscriptionUsageUpdated(snapshot.fetchedAt, this.now)}
-            </span>
+            ${
+              snapshot.at === undefined
+                ? nothing
+                : html`<span class="usage-updated">
+                    ${formatSubscriptionUsageUpdated(snapshot.at, this.now)}
+                  </span>`
+            }
           </div>
         </div>
       </div>

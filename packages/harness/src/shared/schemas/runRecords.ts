@@ -47,40 +47,24 @@ export function isAgentRunRecord(record: RunRecord): record is AgentConfig {
 }
 
 /**
- * Per-category config-field exclusions: a conversation (`agent`) hides the
- * task's file fields, a `task` hides its program's source. Unknown
- * categories get no filtering.
+ * Serialize a run record to pretty JSON for `/executions/{id}/config` and
+ * `texra history show`, leaving out the agent-config fields that do not
+ * apply to the run: a program's run hides its program's source, and any
+ * other agent record (a conversation or a background script) hides a task's
+ * file fields. A task's record serializes unchanged.
  */
-const HIDDEN_CONFIG_FIELDS_BY_CATEGORY: Readonly<
-  Record<string, ReadonlySet<string>>
-> = {
-  agent: new Set(['inputFiles', 'contextFiles', 'outputFiles']),
-  task: new Set(['script']),
-};
-
-/**
- * Serialize a run record to pretty JSON for `/executions/{id}/config`,
- * dropping agent-config fields irrelevant to the resolved display category
- * so the serialized config the orchestrator reads stays relevant. Records
- * without an agent execution mode are honest by construction and serialize
- * unchanged.
- */
-export function serializeFilteredConfig(
-  record: RunRecord,
-  category: string | undefined,
-): string {
-  const excludeSet = category
-    ? HIDDEN_CONFIG_FIELDS_BY_CATEGORY[category]
-    : undefined;
-  if (!excludeSet) {
-    return JSON.stringify(record, null, 2);
-  }
+export function serializeFilteredConfig(record: RunRecord): string {
+  if (!isAgentRunRecord(record)) return JSON.stringify(record, null, 2);
+  const hidden: ReadonlySet<string> =
+    programOf(record) === null
+      ? new Set(['inputFiles', 'contextFiles'])
+      : new Set(['script']);
   const fields: Readonly<Record<string, unknown>> = record;
-  const filtered = EffectRecord.filter(
-    fields,
-    (_, key) => !excludeSet.has(key),
+  return JSON.stringify(
+    EffectRecord.filter(fields, (_, key) => !hidden.has(key)),
+    null,
+    2,
   );
-  return JSON.stringify(filtered, null, 2);
 }
 
 /** Whether the run is a script's (`config.script`, a background script or a
@@ -125,17 +109,16 @@ export type ProgramOrigin = 'listed' | 'installed' | 'own';
  * Where the program `name` comes from, which decides what its launch
  * grants its run:
  *
- * | origin      | name              | its tools            | what it starts         | a child's prompt, files |
- * | ----------- | ----------------- | -------------------- | ---------------------- | ----------------------- |
- * | `listed`    | `<name>`          | fixed past switches  | approved by its launch | passed as written       |
- * | `installed` | `<plugin>:<name>` | through the switches | approved by the review | handed off, resolved    |
- * | `own`       | `own:<name>`      | through the switches | asked about            | handed off, resolved    |
+ * | origin      | name              | its tools            | what it starts         | a child's files   |
+ * | ----------- | ----------------- | -------------------- | ---------------------- | ----------------- |
+ * | `listed`    | `<name>`          | fixed past switches  | approved by its launch | passed as written |
+ * | `installed` | `<plugin>:<name>` | through the switches | approved by the review | resolved          |
+ * | `own`       | `own:<name>`      | through the switches | asked about            | resolved          |
  *
  * A `listed` program is one the app's plugin list registers: the app wrote
  * it. An `installed` one is read from an installed plugin's file, whose
  * programs a person reviewed when they enabled it, but whose text is not
- * the app's: its tools pass the user's switches, the prompt a child gets
- * is handed off with the caller's instruction, and the files it hands that
+ * the app's: its tools pass the user's switches, and the files it hands a
  * child are resolved as a model's script's are. An `own` one is a file the
  * agent wrote into its memory, which nobody reviewed: beside that, what it
  * starts is asked about under the approval policy as a model's own

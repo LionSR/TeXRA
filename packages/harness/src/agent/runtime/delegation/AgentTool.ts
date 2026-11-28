@@ -15,13 +15,14 @@
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
-import { programLaunch, readProgramResult } from '@agent/runtime/programRun';
+import { programLaunch } from '@agent/runtime/programRun';
 import { capReached } from '@agent/runtime/spendCap';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
+import { sourceLocationUnder } from '@common/storage/storageLayout';
 import {
   runEndErrorMessage,
   AgentConfigSchema,
@@ -29,12 +30,11 @@ import {
   AgentProposalSchema,
   type AgentProposal,
   toJsonValue,
-  type RunEnd,
-  type RunId,
   type ToolResult,
   programGrants,
   RUN_OUTCOME,
   AGENT_TOOL_NAME,
+  SKIPPED_RESULT_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -59,13 +59,12 @@ import {
   withinTime,
 } from './agentChild';
 import { selectAvailableDelegationModel } from './delegationAvailability';
-import { executeSubagentInBand } from './childLaunch';
+import { executeSubagentInBand, type ChildRunEnd } from './childLaunch';
 import {
   CALL_FIELDS,
   fileList,
   rejectUnusableWorkingDirectory,
   resolveInvocationFileList,
-  withToolUseSubagentHandoffInstruction,
 } from './inputFields';
 import { pluginAgent } from './pluginAgents';
 import { AgentRequest, decideDelegation } from './proposalFlow';
@@ -118,13 +117,13 @@ type AgentInput = typeof AgentInputSchema.Type;
 type ChildLaunch = {
   readonly prompt: string;
   readonly model: string | null | undefined;
-  readonly workingDirectory: string | null | undefined;
+  readonly workingDirectory: string | undefined;
   readonly id: string | null | undefined;
   readonly background: boolean | null | undefined;
   /** How long an awaited call waits for the child (`withinTime`). */
-  readonly timeoutMs?: number | null | undefined;
+  readonly timeoutMs: number | null | undefined;
   /** The child's spend cap, recorded on its run (`run.start.maxCostUsd`). */
-  readonly maxCostUsd?: number | null | undefined;
+  readonly maxCostUsd: number | null | undefined;
 } & (
   | {
       readonly program: null;
@@ -144,12 +143,11 @@ type ChildLaunch = {
     }
 );
 
-/** The four lists of files a child is handed. */
+/** The three lists of files a child is handed. */
 type ChildFiles = {
   readonly inputFiles: readonly string[];
   readonly contextFiles: readonly string[];
   readonly mediaFiles: readonly string[];
-  readonly outputFiles: readonly string[];
 };
 
 /**
@@ -211,7 +209,7 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
 export const childResult = Effect.fn('AgentTool.childResult')(function* (
   call: RunToolCall,
   agentName: string,
-  { runId, result }: { readonly runId: RunId; readonly result: RunEnd },
+  { runId, result }: ChildRunEnd,
   key: string | undefined,
 ) {
   if (result.outcome === RUN_OUTCOME.CANCELLED) {
@@ -228,7 +226,7 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
     return errorResult(
       `The agent run ${runId} for '${agentName}' was stopped, so this call was skipped.`,
       {
-        name: 'Skipped',
+        name: SKIPPED_RESULT_NAME,
         summary: `Skipped '${agentName}'`,
       },
     );
@@ -246,14 +244,11 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
     return yield* Effect.die(
       new Error(`The agent run ${runId} completed without a report.`),
     );
-  const config = yield* records.readConfig();
   const view = yield* (yield* SessionViewAccess).read([]);
-  const program = yield* readProgramResult(config, runId, call.env.roots);
   return {
     ...executed(report, `Completed '${agentName}'`),
     value: toJsonValue({
       ...result.output,
-      ...(program !== undefined && { changes: program.changes }),
       runId,
       outcome: result.outcome,
       cost: treeCostOf(view, runId),
@@ -318,7 +313,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const { program } = launch;
   // What the child is, decided once, the one place a chat and a program
   // differ in it. A program's child is the program's own run, named for it,
-  // over the program's four lists; a name no plugin registers fails here,
+  // over the program's three lists; a name no plugin registers fails here,
   // before anyone is asked to approve it. A chat's is what the call wrote,
   // or an installed plugin's agent read now, so the child's config holds
   // its system text and tools and a resume reads no file; its files are the
@@ -335,7 +330,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   if (launch.program !== null) {
     const { name, args } = launch.program;
     const known = yield* Effect.result(
-      programLaunch(name, args, launch.files, call.env.roots),
+      programLaunch(name, args, call.env.roots),
     );
     if (Result.isFailure(known)) return errorResult(known.failure.message);
     child = { agent: { name, system: '', tools: [] }, files: launch.files };
@@ -344,7 +339,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       inputFiles: [],
       contextFiles: [],
       mediaFiles: launch.mediaFiles,
-      outputFiles: [],
     };
     if (launch.agentName != null) {
       if (launch.system != null || launch.tools != null)
@@ -372,15 +366,15 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   }
   const { agent, files } = child;
   const unusable = yield* rejectUnusableWorkingDirectory(
-    launch.workingDirectory ?? undefined,
+    launch.workingDirectory,
   );
   if (unusable) return unusable;
   const outputSchema = yield* childOutputSchema(
     launch.program === null ? launch.schema : null,
   );
   // The call's files, the program's file arguments among them: a
-  // run-storage file must be this run's own or a declared output of a
-  // completed child of it; a listed program's files pass as named, those
+  // run-storage file must be this run's own; a listed program's files pass
+  // as named, those
   // of a program read from a file are resolved like a model's.
   const verbatim = programGrants(run.config).appAuthored;
   const resolved = yield* Effect.result(
@@ -391,7 +385,13 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         ['Media file', files.mediaFiles] as const,
       ].map(([label, list]) =>
         verbatim
-          ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
+          ? Effect.succeed(
+              list.map((file) => ({
+                file,
+                absolutePath: sourceLocationUnder(call.env.roots, file)
+                  .absolutePath,
+              })),
+            )
           : resolveInvocationFileList(parentId, label, list),
       ),
       { concurrency: 'unbounded' },
@@ -414,10 +414,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     return errorResult(
       '`timeoutMs` limits how long a call waits for its child, and this call runs in the background. Call it from a script without `background: true`, or drop the limit; `maxCostUsd` holds for a background child too.',
     );
-  // A program's launch, a structured call and a call from a listed program
-  // reach the child verbatim; any other is handed off with the parent's
-  // instruction.
-  const handsOff = program === null && outputSchema === undefined && !verbatim;
   // A completed call with the same prompt, options and file bytes is reused.
   // The requested model, not the one availability resolves to, so a reuse
   // does not depend on which credentials are configured now. The call's
@@ -427,7 +423,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     awaited && script !== undefined
       ? sha256({
           prompt: launch.prompt,
-          ...(handsOff && { handoff: call.instruction ?? null }),
           agent: agent.name,
           system: agent.system,
           tools: agent.tools,
@@ -470,9 +465,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     );
     if (Result.isFailure(recovered))
       return failedResult(agent.name, recovered.failure);
-    const settled = recovered.success;
-    if (settled.kind === 'ended')
-      return yield* childResult(call, agent.name, settled, key);
+    const ended = recovered.success;
+    if (ended !== null) return yield* childResult(call, agent.name, ended, key);
   }
 
   const model = yield* childModel(call, launch.model);
@@ -486,16 +480,12 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       model,
       ...(workingDirectory !== undefined && { workingDirectory }),
       task: program !== null,
-      instruction: handsOff
-        ? withToolUseSubagentHandoffInstruction(launch.prompt, call.instruction)
-        : launch.prompt,
+      instruction: launch.prompt,
       inputFiles: inputs.map(({ file }) => file),
       contextFiles,
       mediaFiles: media.map(({ file }) => file),
-      outputFiles: files.outputFiles,
       // The arguments, shown as the proposal's options.
       ...(program !== null && { options: program.args }),
-      ...(program === null && { rootUserInstruction: call.instruction }),
     },
   );
 
@@ -522,12 +512,12 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     program === null
       ? null
       : yield* Effect.result(
-          programLaunch(program.name, program.args, approved, call.env.roots),
+          programLaunch(program.name, program.args, call.env.roots),
         );
   if (relaunched !== null && Result.isFailure(relaunched))
     return errorResult(relaunched.failure.message);
   const programConfig = relaunched?.success ?? null;
-  const grants = delegatedChildGrants(decided.approvalMeta.childApproval);
+  const grants = delegatedChildGrants(decided.childApproval);
   const config = Schema.decodeUnknownSync(AgentConfigSchema)({
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),
@@ -543,7 +533,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       runId,
       config,
       registration,
-      decided.approvalMeta,
+      decided.childApproval,
+      model,
     );
     // What a script's `await` gets for a child sent to the background.
     return { ...receipt, value: { runId } };
@@ -559,7 +550,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     : yield* childResult(call, approved.label, launched.success, key);
 });
 
-export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
+export const AgentTool: DefinedTool<AgentInput, PluginToolServices> =
   defineTool({
     name: AGENT_TOOL_NAME,
     requiresApproval: 'inBody',

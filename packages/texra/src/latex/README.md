@@ -8,8 +8,8 @@ testable.
 ## Effect-native
 
 The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
-`latexdiff/`, the extractors, `overleafClone.ts`, `arxivProcessor.ts`,
-`latexMedia.ts`) returns `Effect` programs:
+`latexdiff/`, `overleafClone.ts`, `arxivProcessor.ts`) returns `Effect`
+programs:
 
 - **Nothing here runs a fiber.** The caller runs the program at its boundary
   (a tool's `execute()`, a VS Code command, a desktop handler, a CLI command).
@@ -22,7 +22,6 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   `withLogChannel`; tests assert on the sink's entries
   (`@test/support/logSinkCapture`). `Debug` entries below the host's
   `MinimumLogLevel` are dropped (the CLI shows them with `--verbose`).
-  `latexMedia.ts`'s `AgentTrace` is the run's product trace, not logging.
 
 ## Files
 
@@ -30,25 +29,19 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   `latexToolchain.ts` (the one probe over the tools the
   `@texra/shared/constants/latexToolchain` catalog lists, and the tools the
   dependency banner names as missing); `latexLogging.ts` (the shared channel for
-  `texcount.ts`, `formatter/` and the GUI hosts' latexdiff verbs; other
-  `latexdiff` callers name their own with `withLogChannel`).
-- **Extraction**: `extractFigure.ts` (figure paths);
-  `extractFileDependencies.ts` (`\input`, `\include`, bibliography targets and
-  local `.sty` files, for `latexMedia.ts` to mirror);
-  `latexParsingUtils.ts` (comment stripping and bibliography-directive
-  matching shared by the extractors; put new shared parsing here);
-  `labelSearch.ts` (`\label{}` lookup); `criticismParser.ts` (the
-  `\criticize` annotations: their positions, for the editor's inline
-  decorations, and their removal before a file is accepted).
-- **Output**: `texcount.ts` (word counts); `latexdiff.ts` (`latexdiff` and
-  `latexdiffAgainstCommit`: one run of the tool, its `--flatten` fallback and
+  `texcount.ts` and `formatter/`; `latexdiff` callers name their own with
+  `withLogChannel`).
+- **Parsing**: `latexParsingUtils.ts` (comment stripping, the packages and
+  class a file loads); `labelSearch.ts` (`\\label{}` lookup);
+  `criticismParser.ts` (the positions of the `\\criticize` annotations, for
+  the editor's inline decorations, over the brace-balanced macro scanner in
+  `braceBalancedMacro.ts`).
+- **Output**: `texcount.ts` (word counts); `latexdiff.ts` (`latexdiff`:
+  one run of the tool, its `--flatten` fallback and
   the clean-up of its output, which restores bibliography directives and
   sanitizes `\DIFadd`/`\DIFdel`; it succeeds with the diff's path or fails
   with a typed error).
-- **Media and files**: `latexMedia.ts` (`processInputFiles`: compiles PDFs
-  and mirrors figure dependencies into run storage); `tikzPictures.ts`
-  (standalone TikZ rendering); `acceptedFileTarget.ts` (where an accepted file
-  lands, and the write).
+- **Figures**: `tikzPictures.ts` (standalone TikZ rendering).
 - **Remote sources**: `arxivIdentifier.ts` and `arxivProcessor.ts` (arXiv IDs
   and source archives); `overleafProject.ts` (pure parsing and URL and
   credential derivation for an Overleaf remote; I/O-free Overleaf logic goes
@@ -60,10 +53,6 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
 - **`formatter/`**: `latexindentpt.ts` (`latexindent`) and `texfmt.ts`
   (`tex-fmt`) backends, `texFormatter.ts` (picks one from the workspace
   setting), `indentDirectory.ts` (a whole directory).
-- **`latexdiff/`**: the diffs of a document task's rounds around
-  `latexdiff`. `diffOperations.ts` (`latexdiffPairs`) is the one pairing of a
-  round's outputs, which the run's `document_diff` pass
-  (`agent/output/revisionLatexdiffs.ts`) and the hosts' verb share. The GUI
-  hosts' latexdiff verbs over them are window code
-  (`controllers/session/latexdiffVerbs.ts`). `diffFileNameManager.ts` names
-  outputs.
+- **`latexdiff.ts`, `latexdiff/`**: one `latexdiff` of two files and the
+  name of the diff it writes, for the approval preview of a `.tex` edit
+  (`controllers/approval/latexPreview.ts`).

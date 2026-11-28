@@ -27,9 +27,6 @@ export const noopTrace: AgentTrace = {
   error: NOOP,
   output: NOOP,
 
-  stage(_label, use) {
-    return use(this);
-  },
   openStream() {
     return new NoopStreamHandle(crypto.randomUUID());
   },

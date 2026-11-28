@@ -39,7 +39,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { spawnSync } from 'node:child_process';
 import { parseArgs as parseNodeArgs } from 'node:util';
 
-import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
+import { loadPtySpawn } from './nodePtySpawnHelper.mjs';
 import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
 
 // Every harness this script starts resolves `~/.texra` in a temporary home.
@@ -589,7 +589,8 @@ const SCENARIOS = [
       'Sign in or out, and choose subscri…',
       '/models',
       'Enable or disable models in pickers',
-      '… 9 more rows',
+      '/effort',
+      '… 10 more rows',
     ],
     unexpect: [
       '/ap  Switch',
@@ -771,6 +772,20 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'model-form-resize-and-confirm-effort',
+    smoke: true,
+    env: {
+      HARNESS_CAN_SELECT_MODEL: '1',
+      HARNESS_VISIBLE_MODELS: 'openai/gpt-6.2-sol||openai/gpt-6.2-astra',
+      OPENAI_API_KEY: 'harness-openai-key',
+    },
+    keys: [...MODEL_PICKER_KEYS, DOWN],
+    resizes: [{ cols: 100, rows: 12 }],
+    // Enter in the same input burst must commit the draft on the focused row.
+    keysAfterResize: [RIGHT + '\r'],
+    expect: ['Model switched to openai/gpt-6.2-astra@high.'],
+  },
+  {
     name: 'model-form-buffered-hotkey',
     env: {
       HARNESS_CAN_SELECT_MODEL: '1',
@@ -808,12 +823,11 @@ const SCENARIOS = [
   {
     name: 'config-form',
     env: { HARNESS_ENTRIES: '4' },
-    keys: [...CONFIG_FORM_KEYS, DOWN, DOWN, '\r'],
+    keys: [...CONFIG_FORM_KEYS, DOWN, '\r'],
     frame: 'viewport',
     expect: [
       '/config · Tasks and agents',
       'Agents at once',
-      'Let a task stop its agents',
       '↑/↓ navigate',
       'Enter toggle / edit / open',
       'Esc back',
@@ -831,16 +845,15 @@ const SCENARIOS = [
     name: 'config-category-back-responsive',
     env: { HARNESS_ENTRIES: '4' },
     // Reuses the shared Select instance across linked form -> list ->
-    // category. `/config` leads with two action rows ("API keys", "GitHub
-    // token") before the setting categories, and "Git" is the
-    // fourth category, so it is the sixth row (index 5). The keystrokes walk
+    // category. `/config` leads with one action row ("API keys") before the
+    // setting categories, and "Git" is the fourth category, so it is the
+    // fifth row (index 4). The keystrokes walk
     // the list with ↑/↓ so the scenario does not depend on which hotkey a row
     // happens to get.
     keys: [
       ...CONFIG_FORM_KEYS,
-      { input: '\r', until: 'Add provider API key' },
+      { input: '\r', until: 'Add a provider API key' },
       ESC,
-      DOWN,
       DOWN,
       DOWN,
       DOWN,
@@ -858,7 +871,7 @@ const SCENARIOS = [
       'Esc back',
     ],
     unexpect: [
-      'Add provider API key',
+      'Add a provider API key',
       'No configurable settings are available here yet.',
       'Platform not initialized',
       '/config · error',
@@ -875,9 +888,8 @@ const SCENARIOS = [
       '/approval',
       'Choose when commands and edits ask first. Press a on a',
       'Ask',
-      'Block',
       'Auto-approve',
-      '1-3/Enter select',
+      '1-2/Enter select',
       'Esc cancel',
     ],
     unexpect: ['Goal: approve all work', 'Stop auto-approving'],
@@ -894,23 +906,23 @@ const SCENARIOS = [
       HARNESS_ROOT_WAITING: '1',
     },
     bootExpect: ' Ctrl-C ',
-    keys: ['a', '/approval', '\r', '4'],
+    keys: ['a', '/approval', '\r', '3'],
     expect: ['Auto-approving commands: off'],
     unexpect: ['AUTO: COMMANDS', 'Run a command'],
   },
   {
-    name: 'approval-policy-status-bar',
+    name: 'approval-policy-status',
     frame: 'scrollback',
     env: { HARNESS_ENTRIES: '4' },
-    keys: ['/approval never', '\r', '/status', '\r'],
+    keys: ['/approval yolo', '\r', '/status', '\r'],
     expect: [
-      'Approval mode: Block shell commands and file edits.',
+      'Approval mode: Allow shell commands and file edits without asking.',
       'API keys',
-      // The bar names the policy by its one user-facing label.
-      '◆ Ready Block',
+      // `/status` names the policy by its one user-facing description.
+      'approval: Allow shell commands and file edits without asking.',
       '/ commands',
     ],
-    unexpect: ['keys deny', 'approval: deny privileged actions', 'Ready never'],
+    unexpect: ['Usage: /approval', 'Ready yolo'],
   },
   {
     // The status bar is the single owner of active-run liveness. The harness
@@ -950,7 +962,7 @@ const SCENARIOS = [
     // The row's hotkey is its place in the list: wait for the list to show
     // it on that key before pressing it, so a reordered list fails here
     // instead of switching another plugin.
-    keys: ['/plugins', { input: '\r', until: 'a. Multi-Agent Workflow' }, 'a'],
+    keys: ['/plugins', { input: '\r', until: '8. Multi-Agent Workflow' }, '8'],
     frame: 'viewport',
     expect: ['/plugins', 'Multi-Agent Workflow — on · TeXRA plugin · 2 tools'],
     unexpect: ['Multi-Agent Workflow — off'],
@@ -1015,7 +1027,8 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      'Available models',
+      'Reasoning level:',
+      '[Medium]',
       '+1 more',
       '↑/↓ navigate',
       'Enter close',
@@ -1046,7 +1059,7 @@ const SCENARIOS = [
     keys: ['/key', '\r'],
     frame: 'viewport',
     expect: [
-      'Add provider API key',
+      'Add a provider API key',
       'Choose the service that issued the key.',
       'GLM API/GLM Coding Plan',
       'Kimi Code',
@@ -1094,7 +1107,7 @@ const SCENARIOS = [
       '/approval',
       'Ask',
       '↑/↓ navigate',
-      '1-3/Enter select',
+      '1-2/Enter select',
       'Esc cancel',
     ],
     unexpect: [
@@ -1128,9 +1141,9 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       '… 5 previous rows',
-      "› /plan      Read the focused agent's work plan",
+      '› /status    Show task details and cost',
       '/plugins',
-      '… 5 more rows',
+      '… 6 more rows',
       'Esc close',
     ],
   },
@@ -2845,13 +2858,11 @@ if (useExistingHarness) {
 let ptySpawn;
 let Terminal;
 try {
-  ensureNodePtySpawnHelperExecutable();
-  const ptyMod = await import('node-pty');
-  ptySpawn = ptyMod.spawn ?? ptyMod.default?.spawn;
+  ptySpawn = await loadPtySpawn();
   const xtermMod = await import('@xterm/headless');
   Terminal = xtermMod.Terminal ?? xtermMod.default?.Terminal;
-  if (typeof ptySpawn !== 'function' || typeof Terminal !== 'function') {
-    throw new Error('node-pty/@xterm/headless did not expose the expected API');
+  if (typeof Terminal !== 'function') {
+    throw new Error('@xterm/headless did not expose Terminal');
   }
 } catch (err) {
   console.error(

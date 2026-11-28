@@ -79,14 +79,12 @@ import {
 } from './rows';
 import { dispatchPendingResponse } from './toolUseDispatch';
 import { hooksOf } from './hooks';
-import { dispatchTools, stepFor } from './step';
+import { activatedSkills, dispatchTools, stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { RunRegistry, type AgentRunServices } from '../runRegistry';
 import type { RunControls } from '../runs';
 import type { RunReport } from '../runReport';
 
-const BLANK_TOOL_RESULT_CONTINUATION =
-  'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 
 /** What {@link openToolUse} committed: the run's cell and the commit of
@@ -95,12 +93,6 @@ export interface ToolUseOpening {
   readonly cell: RunCell;
   readonly activation: CommitOrdinal;
 }
-
-/** A user message the loop appends itself. */
-const nudge = (text: string) => ({
-  role: 'user' as const,
-  content: [{ kind: 'text' as const, text }],
-});
 
 /** A failed handed-down call answers with its error and a script that
  *  returned text with that text; otherwise the turn's response rows supply
@@ -197,8 +189,7 @@ const openRun = Effect.fn('toolUse.openRun')(function* (
             // request still open: after the `run.activate`, so the call that
             // asked reads it as not yet seen and takes it (`resumedAttempt`).
             const answered: SessionRowDraft[] = [];
-            for (const [requestId, decision] of runs.heldAnswers(runId)) {
-              runs.dropAnswer(runId, requestId);
+            for (const [requestId, decision] of runs.takeAnswers(runId)) {
               if (state.requests[requestId]?.decided !== null) continue;
               answered.push({
                 type: 'request.decided',
@@ -264,10 +255,10 @@ const finishRun =
 type TurnServices = AgentRun | AgentRunServices | ModelAccess;
 
 /**
- * The policy a committed text-only response runs: a blank turn after a tool
- * result (a message delivered at the request may sit between them) asks once
- * more, the terminal tool gets one forced turn per turn, else the turn ends
- * with this text. Each step is a row (a resume finds it); `done` ends the turn.
+ * The policy a committed text-only response runs: its text is the answer
+ * shown as final, the terminal tool gets one forced turn per turn, else the
+ * turn ends with this text. Each step is a row (a resume finds it); `done`
+ * ends the turn.
  */
 const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
   cell: RunCell,
@@ -279,18 +270,6 @@ const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
   AgentRun | RunHistory
 > {
   const { runId, finalToolName } = yield* AgentRun;
-  if (
-    !text.trim() &&
-    at.messages.findLast(
-      (message, index, history) =>
-        index < history.length - 1 && message.role !== 'user',
-    )?.role === 'tool'
-  ) {
-    const row = appendRow(runId, [nudge(BLANK_TOOL_RESULT_CONTINUATION)], {
-      reason: 'blank-continuation',
-    });
-    return { state: yield* cell.append([row]), done: false };
-  }
   if (text && !at.answerFinalized)
     at = yield* cell.append(finalizedRows(runId, text, at.lastTurn));
   if (
@@ -298,9 +277,16 @@ const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
     at.finalTool?.turn !== at.turn &&
     at.structured === null
   ) {
-    const row = appendRow(runId, [nudge(FINAL_TOOL_INSTRUCTION)], {
-      reason: 'final-tool',
-    });
+    const row = appendRow(
+      runId,
+      [
+        {
+          role: 'user',
+          content: [{ kind: 'text', text: FINAL_TOOL_INSTRUCTION }],
+        },
+      ],
+      { reason: 'final-tool' },
+    );
     return { state: yield* cell.append([row]), done: false };
   }
   return { state: at, done: true };
@@ -328,9 +314,15 @@ export const openToolUse = Effect.fn('toolUse.open')(
     // A fresh run's transcript opens with the user's instruction, with the
     // kinds of the media its opening inserts (a conversation's; a fork's
     // history or a script's call inserts none).
+    // A child's instruction is its parent's message, not the person's.
+    const { parent } = run.entry;
     const echo = (attachments: readonly MediaAttachmentKind[] = []) => {
       const text = getDisplayedInstruction(run.config);
-      if (text) logUserMessage(logger, text, { attachments });
+      if (text)
+        logUserMessage(logger, text, {
+          ...(parent !== null && { from: { kind: 'run', runId: parent } }),
+          attachments,
+        });
     };
     const bound = yield* ScopedRef.get(run.model);
     // The state its first step opens on: what the opening batch records.
@@ -369,12 +361,14 @@ export const openToolUse = Effect.fn('toolUse.open')(
           const handed = [yield* handedDown(run, script)];
           return { content, offered: step.rows, handed };
         }
-        const inputs =
-          run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`)));
+        // A resume renders nothing again: the run's rows hold its opening.
+        if (run.entry.fresh === null)
+          return yield* Effect.die(new Error(`${runId}: no opening`));
         // The first step renders the prompt over the tools it offers, and
         // stores its base text.
         const step = yield* stepFor(run, opening, false, (offered, memory) =>
-          buildOpeningSystemPrompt(run.config.system, inputs, {
+          buildOpeningSystemPrompt(run.config.system, {
+            cwd: run.workingDirectory ?? roots.workspace ?? '.',
             roots,
             textOnly: bound.textOnly,
             offered,
@@ -416,7 +410,7 @@ export const openToolUse = Effect.fn('toolUse.open')(
         return { content, offered: [...step.rows, ...hooked.rows], handed: [] };
       }),
     );
-    const { activated = [] } = run.opening ?? {};
+    const activated = activatedSkills(run.config);
     const input = {
       ...(openingSystem !== undefined && { system: sha256(openingSystem) }),
       ...(activated.length > 0 && { activated: [...activated] }),
@@ -694,12 +688,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     output: {
       response: turnResponse(at),
       files: [...at.edited],
-      // A program's return value, which its registration reads (`Program.result`).
+      // A script's return value, or the answer a schema asked for.
       ...(at.structured?.value !== undefined && {
         structured: at.structured.value,
       }),
     },
-    runId,
     ...(outcome === RUN_OUTCOME.FAILED && at.lastError !== null
       ? { failure: { kind: 'model' as const, failure: at.lastError } }
       : {}),

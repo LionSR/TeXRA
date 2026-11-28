@@ -24,7 +24,7 @@
  *   [`CompactionActivityRow`](#compactionactivityrow),
  *   [`ContextManagementRow`](#contextmanagementrow),
  *   [`WebSearchRow`](#websearchrow), [`ErrorRow`](#errorrow),
- *   [`FileListRow`](#filelistrow), [`LogRow`](#logrow), and
+ *   [`LogRow`](#logrow), and
  *   [`ProgressStatusRow`](#progressstatusrow).
  * - **Structured tool cards**: [`ToolRowModel`](#toolrowmodel) and
  *   [`ToolSection`](#toolsection) (`ToolStatusSection`, `ToolBadgesSection`,
@@ -75,8 +75,8 @@ export type {
   ErrorDetailKey,
   ErrorRow,
   ErrorRowDetail,
-  FileListRow,
   LogRow,
+  MessageSender,
   ProgressStatusRow,
   StatItem,
   StreamingTextRow,
@@ -117,7 +117,11 @@ export type {
   ToolStatusSection,
   ToolTextSection,
 } from '@shared/transcript/toolRowModel';
-export { toolDisplayKind, type ToolDisplayKind } from '@shared/tools/toolKind';
+export {
+  isEditLikeToolName,
+  toolDisplayKind,
+  type ToolDisplayKind,
+} from '@shared/tools/toolKind';
 export {
   buildMcpToolName,
   isMcpToolName,

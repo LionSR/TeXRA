@@ -107,7 +107,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
           <div class="tc-body">
             <div class="tc-row">
               <span class="tc-k">Program</span><code class="tc-code">edit</code
-              ><span class="tc-model">(google/gemini-4-argon)</span>
+              ><span class="tc-model">(google/gemini-4-neon)</span>
             </div>
             <div class="tc-row">
               <span class="tc-k">Instruction</span

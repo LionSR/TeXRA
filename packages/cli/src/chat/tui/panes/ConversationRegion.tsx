@@ -86,12 +86,12 @@ export function ConversationRegion({
   const activeRun = runViewOf(view, activeRunId);
   // Which scrollback the transcript paints: the root's history, or a focused
   // child's own history while that child owns the scrollback.
-  const scopedTranscript =
-    activeRunId !== undefined && activeRun?.parentId != null;
+  const scopedRunId = activeRun?.parentId != null ? activeRunId : undefined;
+  const scopedTranscript = scopedRunId !== undefined;
   const scrollbackTarget = staticScrollbackTarget({
     activeRunId,
     rootRunId,
-    scopedTranscript,
+    scopedRunId,
   });
 
   const activePlan = activeRun ? planOf(activeRun) : null;
@@ -139,7 +139,6 @@ export function ConversationRegion({
   const planContentRows =
     activePlan !== null && !foregroundOpen && !childListFocused ? 1 : 0;
   const {
-    bottomPanelRows: bottomPanelBudget,
     conversationRows,
     sessionPanelRows: subagentRows,
     planRows,
@@ -150,6 +149,7 @@ export function ConversationRegion({
     planContentRows,
     transcriptRows,
   });
+  const bottomPanelRows = subagentRows + planRows;
   const childListVisible = subagentRows > 0;
   // The list's rows are a layout fact: a focused list the layout leaves no
   // row for hands the keys back to the input.
@@ -173,7 +173,6 @@ export function ConversationRegion({
         <Box flexDirection="column" overflowY="hidden">
           {conversationRows > 0 ? (
             <ConversationPane
-              availableWidth={columns}
               width={transcriptWidth}
               maxRows={conversationRows}
             />
@@ -200,7 +199,7 @@ export function ConversationRegion({
           />
         ) : null}
         {renderFooterChrome()}
-        {bottomPanelBudget > 0 ? (
+        {bottomPanelRows > 0 ? (
           <Box flexDirection="column" overflowY="hidden">
             <SubagentList
               keyboardActive={childListFocused && childListVisible}

@@ -15,14 +15,14 @@ it.effect('fails naming the origin when VS Code declines to open a link', () =>
       (spy) => Effect.sync(() => spy.mockRestore()),
     );
     // cast: the link binding reads none of the window's options.
-    const { bindings } = yield* createExtensionHostRequests({
+    const host = createExtensionHostRequests({
       roots: {},
       snapshot: {},
       extensionPath: '',
     } as unknown as Parameters<typeof createExtensionHostRequests>[0]);
 
     // cast: opening a link needs none of the services a host verb may use.
-    const open = bindings.openExternal(
+    const open = host.openExternal(
       'https://texra.ai/guide/custom-agents',
     ) as unknown as Effect.Effect<void, Error>;
     const error = yield* Effect.flip(open);

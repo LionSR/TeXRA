@@ -11,6 +11,7 @@ import { dockTab } from '@desktop/renderer/dockControls';
 import { createPdfPane } from '@desktop/renderer/pdfPane.js';
 import {
   shellSidebarTemplate,
+  shellStatusBarTemplate,
   type RailProject,
 } from '@desktop/renderer/desktopShell.js';
 import type { WorkbenchTab } from '@desktop/shared/desktopShellState.js';
@@ -32,6 +33,7 @@ import {
   ALL_RUNS,
   tail,
 } from '@test/shared/session/fanOutScenario';
+import type { PlanUsage } from '@texra/shared/model/subscriptionUsage';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import { emptySurface, type Surface } from '@texra/shared/session/surface';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -143,6 +145,7 @@ const sidebarCallbacks = {
   onOpenRecent: noop,
   onSelectProject: noop,
   onProjectAction: noop,
+  onToggleProject: noop,
   onOpenSettings: noop,
 };
 // ── real chrome over the fixtures ─────────────────────────────────────────
@@ -153,7 +156,6 @@ const rail = (projects: readonly RailProject[], shell: Shell) =>
       projects,
       recent: [],
       shell,
-      commandsLabel: 'Commands',
       commandsTitle: 'Commands - ⌘K',
     },
     sidebarCallbacks,
@@ -274,9 +276,32 @@ const workbench = (
 };
 
 const desktopFrame = (cols: string, ...panes: TemplateResult[]) =>
-  html`<div class="h-desktop" id="frame" style="grid-template-columns:${cols}">
+  html`<div
+    class="h-desktop"
+    id="frame"
+    style="grid-template-columns:${cols};grid-template-rows:minmax(0,1fr) auto"
+  >
     ${panes}
   </div>`;
+
+/** Two plans' quotas as a host snapshot carries them: one near its limit. */
+const PLAN_USAGE: PlanUsage[] = [
+  {
+    plan: 'chatgpt-subscription',
+    at: BOARD_NOW - 40_000,
+    windows: [
+      { name: 'five_hour', percentUsed: 82, resetAt: BOARD_NOW + 5_400_000 },
+      { name: 'weekly', percentUsed: 31, resetAt: BOARD_NOW + 400_000_000 },
+    ],
+  },
+  {
+    plan: 'kimi-code-subscription',
+    at: BOARD_NOW - 200_000,
+    windows: [
+      { name: 'weekly', percentUsed: 12, resetAt: BOARD_NOW + 500_000_000 },
+    ],
+  },
+];
 
 // ── scenes ────────────────────────────────────────────────────────────────
 
@@ -300,6 +325,12 @@ function sceneDesktopProjects(): TemplateResult {
     rail(projects, shellOf('LP', ['LP', 'CT', 'TN'])),
     conversationPane(lp, run, run ? transcriptBody(lp, run) : nothing),
     workbench(lp.display.key, tabs, tabs[0].id, pdfPane.elementFor(tabs[0])),
+    html`<div style="grid-column:1/-1">
+      ${shellStatusBarTemplate({
+        active: lp.display.key,
+        planUsage: PLAN_USAGE,
+      })}
+    </div>`,
   );
 }
 

@@ -13,6 +13,7 @@
  */
 import { Predicate } from 'effect';
 import {
+  EXECUTIONS_TOOL_NAME,
   TOOL_CALL_STATUS,
   type ProposalFileGroup,
   type ToolCallLog,
@@ -228,10 +229,9 @@ function headerSummaryText(summary: string): string {
 /**
  * The header preview both hosts show, and the only statement of its
  * precedence: a `bash`-kind call is named by the model's description, else its
- * command (the input preview), else its summary; a `script` by its title, else
- * "Script"; every other tool reports its
- * own summary first and falls back to the input preview while it is still in
- * flight. An
+ * command (the input preview), else its summary; a `script` by its title, and
+ * by nothing when it has none; every other tool reports its own summary first
+ * and falls back to the input preview while it is still in flight. An
  * `executions` call names its child runs by label: the session fold passes
  * its runs as `runLabels`, so the label lands in the row once, for every host.
  */
@@ -242,7 +242,7 @@ function toolHeaderPreview(
   ctx: ToolRowModelContext,
 ): string {
   const labeled =
-    normalizeToolName(toolName) === 'executions' && ctx.runLabels
+    normalizeToolName(toolName) === EXECUTIONS_TOOL_NAME && ctx.runLabels
       ? executionsSubagentSummary(input, ctx.runLabels)
       : undefined;
   const inputPreview =
@@ -331,7 +331,7 @@ const TOOL_DEFAULT_TIMEOUTS: Readonly<
   Record<string, { readonly ms: number; readonly action?: string }>
 > = {
   bash: { ms: BASH_TOOL_DEFAULT_TIMEOUT_MS },
-  executions: {
+  [EXECUTIONS_TOOL_NAME]: {
     ms: EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS * 1000,
     action: 'wait',
   },
@@ -345,7 +345,7 @@ function toolTimeoutMs(toolName: string, input: unknown): number | undefined {
   if (spec.action && input.action !== spec.action) return undefined;
   // A background call returns at once: the limit is not what it waits on.
   if (input.run_in_background === true) return undefined;
-  if (toolName === 'executions') {
+  if (toolName === EXECUTIONS_TOOL_NAME) {
     return executionsWaitTimeoutSeconds(input.timeout) * 1000;
   }
   return typeof input.timeout === 'number' ? input.timeout : spec.ms;

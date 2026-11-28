@@ -17,11 +17,9 @@ export {
   ToolRegistry,
   type NativePlugin,
   type Program,
-  type ProgramResult,
   type PluginLayerServices,
   type ProcessPluginLayer,
   type PromptSection,
-  type ProgramChange,
   type SessionPluginLayer,
   type ToolTable,
 } from '@tools/toolTable';
@@ -43,23 +41,20 @@ export {
   type ToolProbeServices,
 } from '@tools/toolProbes';
 // What a tool's body reads from its call: the run, its roots and its
-// requests (`ToolContext`), and the guard that may refuse a call first.
+// requests (`ToolContext`), and the command it must get approved first.
 export {
   ToolContext,
   type CallRequests,
   type ToolContextShape,
   type ToolEnv,
-  type ToolGuard,
+  type ToolCommand,
 } from '@tools/core/ToolTypes';
 export { errorResult, executed } from '@tools/core/result';
-// A listing's output text: its header over its lines, or a note for none.
-export { formatToolOutput } from '@tools/formatting';
 // The workspace's ignore policy.
 export { getGitignoreMatcher, type GitignoreMatcher } from '@tools/gitignore';
-// Asking the person for an edit, the result a refusal returns, and the
-// write of the approved content (a conflict is the value, not a failure).
+// Asking the person for an edit, and the write of the approved content (a
+// conflict is the value, not a failure).
 export {
-  buildApprovalRejectedResult,
   requestToolEditApproval,
   type ToolEditApprovalResult,
   type ToolEditProposal,
@@ -69,13 +64,12 @@ export {
   type ApprovedEditConflictError,
 } from '@tools/approval/approvedWrite';
 // The diff engine behind every edit card's counts and diff body: a change's
-// unified-diff hunks, their line counts and text, and the warning a diff
-// that ran past its bound logs.
+// unified-diff hunks, their line counts, and the warning a diff that ran
+// past its bound logs.
 export {
   buildDiffHunks,
   countLineChanges,
   reportDiffTimeout,
-  unifiedDiffText,
   type DiffHunks,
   type Hunk,
 } from '@tools/unifiedDiff';
@@ -91,15 +85,17 @@ export {
 // What a request of each kind is answered with, and the three ways any
 // request is declined.
 export type { DecisionOf, RefusalDecision } from '@shared/schemas';
-export { ToolError, type EditRecord } from '@shared/schemas';
-export { nullishWithDefault, optionalInput } from '@tools/core/inputSchema';
+export { asToolError, ToolError } from '@shared/schemas';
+export {
+  describedString,
+  nullishWithDefault,
+  optionalInput,
+} from '@tools/core/inputSchema';
 export {
   assertNoParentTraversal,
-  parseWorkingDirectory,
   resolveToolPath,
   type ToolPathCall,
   type ToolPathResolution,
-  type WorkspacePathResolution,
 } from '@tools/pathResolution';
 // An agent's memory folders, for a host that opens them outside a run.
 export { memoryFolders, type MemoryFolder } from '@agent/memory/memoryLayout';
@@ -180,13 +176,10 @@ export type { InboxItem } from '@agent/followUp/Inbox';
 export type { DraftBlob } from '@shared/session/historyTurns';
 export type { CellError, RunHistoryRefused } from '@shared/session/runHistory';
 export type { RunHistoryInconsistent } from '@shared/session/runState';
-export type { StepRoot } from '@utils/files/externalRoots';
 // The run a plugin's tool reads (`ToolRun`) and the pieces it names: its
 // policy, trace and stages, model binding and run files.
 export type { ToolRun } from '@tools/core/ToolTypes';
 export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
-// Renders a prompt template (Nunjucks) with its variables.
-export { PromptRenderFailed, renderPrompt } from '@agent/prompt/promptRender';
 export type {
   AgentTrace,
   StreamHandle,
@@ -199,32 +192,24 @@ export type {
   ModelRetryGate,
   RoutePolicy,
 } from '@agent/runtime/ModelRetryGate';
-// A run's directory under a storage root, one entry of it read without
-// following a link, and where a path a run reads from lives (run storage
-// keeps its run's provenance).
+// A run's directory under a storage root, and one entry of it read without
+// following a link.
 export {
   runDirUnder,
   runEntryUnder,
   type RunStorageEntry,
-  sourceLocationUnder,
 } from '@common/storage/storageLayout';
 // A path's `FileLocation` against the workspace root a caller holds: workspace
 // or external.
 export { pathToLocationIn } from '@common/storage/fileLocation';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
-// The harness's retry policy: which HTTP statuses are worth retrying, the
-// randomized exponential backoff `Schedule` its fetches retry on, and the
-// capped, jittered delay a caller that sleeps for itself waits.
+// The randomized exponential backoff `Schedule` the harness's fetches retry on.
+export { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
+// A tool's requests: which HTTP statuses are worth retrying, one attempt
+// under a deadline, the transient-failure retry, and the scoped clients an
+// attempt's scope aborts.
 export {
-  jitteredExponentialBackoffMs,
-  randomizedExponentialBackoff,
-} from '@utils/core/backoffSchedule';
-export { isTransientHttpStatus } from '@utils/core/httpStatus';
-// A tool's requests: one attempt under a deadline, the transient-failure
-// retry, the scoped clients an attempt's scope aborts, and whether a failure
-// got no answer at all.
-export {
-  isTransportReason,
+  isTransientHttpStatus,
   retryTransientFetch,
   scopedClient,
   type RetryTransientFetchOptions,

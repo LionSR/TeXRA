@@ -26,7 +26,7 @@ import { consumedRow } from '@shared/session/runFacts';
 import type { ModelMessagePayload } from '@shared/session/historyTurns';
 import { controlOf, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import { dispatchFactsFor } from '../run/tools';
+import { dispatchFact } from '../run/tools';
 import { addressedMessages, type AppendedMessage } from '../providerMessages';
 import type { TurnResult } from '@texra-ai/llm';
 
@@ -126,7 +126,7 @@ export function configRow(
  * Committed once, in the run's opening batch.
  */
 export const handedDown = Effect.fn('rows.handedDown')(function* (
-  run: Pick<AgentRunShape, 'steps' | 'logger' | 'runId'>,
+  run: Pick<AgentRunShape, 'steps' | 'runId'>,
   call: {
     readonly code: string;
     readonly title: string;
@@ -139,13 +139,10 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
     title: call.title,
     ...(call.timeoutMs != null && { timeoutMs: call.timeoutMs }),
   });
-  const [facts] = dispatchFactsFor(
-    [{ callId: SCRIPT_CALL_ID, name: SCRIPT_TOOL_NAME, argumentsText }],
+  const facts = dispatchFact(
+    { callId: SCRIPT_CALL_ID, name: SCRIPT_TOOL_NAME },
     (yield* ScopedRef.get(run.steps))?.tools.registry,
-    run.logger,
   );
-  if (facts === undefined)
-    return yield* Effect.die(new Error('One call in, one dispatch fact out.'));
   return {
     type: 'model.message',
     aggregateId: runId,

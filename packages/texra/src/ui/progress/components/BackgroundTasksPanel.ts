@@ -43,12 +43,12 @@ import {
   runStatusLook,
   sectionCountLabel,
   statusGlyph,
-  type RunTone,
 } from '@ui/copy/runStatus';
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
-import type { WaVariant } from '@ui/wa/waVariant';
 import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import { statusMark } from '@ui/wa/statusIcons';
+import { toneVariant } from '@ui/wa/waVariant';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, nestedCountsLabel } from '@ui/copy/nestedRuns';
 import { TIME_OF_DAY } from '../formatters/timestampUtils';
@@ -58,14 +58,6 @@ import type { SessionView, RunView } from '@texra-ai/worldline/schemas';
 /** The card's key in `RunSurface.disclosures` for its run. */
 const DISPATCH_GROUP_KEY = 'dispatch';
 
-/** The `wa-badge` variant that paints a tone in the summary. */
-const TONE_BADGE: Readonly<Record<RunTone, WaVariant>> = Object.freeze({
-  running: 'success',
-  success: 'success',
-  danger: 'danger',
-  warning: 'warning',
-  neutral: 'neutral',
-});
 const RUNNING = runStatusLook('running');
 const WAITING = runStatusLook('waitingOnUser');
 
@@ -241,14 +233,14 @@ export class BackgroundTasksPanel extends TexraElement {
     const summary = html`${waIcon('diagram-project')}
     ${dispatchSummary(counts)}${
       rollup.running > 0
-        ? html`<wa-badge variant=${TONE_BADGE[RUNNING.tone]} pill
+        ? html`<wa-badge variant=${toneVariant(RUNNING.tone)} pill
             >${sectionCountLabel('running', String(rollup.running))}</wa-badge
           >`
         : nothing
     }${
       approval
         ? html`<wa-badge
-            variant=${TONE_BADGE[WAITING.tone]}
+            variant=${toneVariant(WAITING.tone)}
             pill
             role="img"
             aria-label=${runStatusLabel('waitingOnUser')}
@@ -307,7 +299,9 @@ export class BackgroundTasksPanel extends TexraElement {
 
   private renderChildRow(child: RunView, depth: number): TemplateResult {
     const status = runStatus(child);
-    const latest = child.latestLine ?? child.description ?? '';
+    // A run with nothing to say beyond its name is its name once.
+    const said = child.latestLine ?? child.description ?? '';
+    const latest = said === child.label ? '' : said;
     const label = `Open ${child.label}: ${status.word}`;
     return html`
       <button
@@ -322,7 +316,7 @@ export class BackgroundTasksPanel extends TexraElement {
         aria-label=${label}
         @click=${() => this.navigateToRun(child.id)}
       >
-        ${waIcon(status.glyph, { className: 'task-icon' })}
+        ${statusMark(status, 'task-icon')}
         <span class="task-name">${child.label}</span>
         ${latest ? html`<span class="task-latest">${latest}</span>` : nothing}
         ${renderClock(child, child.approval === 'own', this._ticker.now)}

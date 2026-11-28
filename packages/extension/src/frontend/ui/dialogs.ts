@@ -64,18 +64,18 @@ export const openFilesDialog: OpenFilesDialog = (options) =>
 interface FolderDialogOptions {
   /** Label for the open button */
   openLabel: string;
-  /** Optional dialog title */
-  title?: string;
+  /** Dialog title */
+  title: string;
 }
 
 /**
  * Generic helper to show a folder-picker dialog and return the selected
- * absolute path. It needs no workspace, so it's safe to call before a
- * workspace is available.
+ * absolute path, or `undefined` when the user cancels. It needs no
+ * workspace, so it's safe to call before a workspace is available.
  */
 export function selectFolder(
   options: FolderDialogOptions,
-): Effect.Effect<string | null, HostFailed> {
+): Effect.Effect<string | undefined, HostFailed> {
   return fromHost('selectFolder', async () =>
     vscode.window.showOpenDialog({
       canSelectFiles: false,
@@ -84,5 +84,5 @@ export function selectFolder(
       openLabel: options.openLabel,
       title: options.title,
     }),
-  ).pipe(Effect.map((folders) => folders?.[0]?.fsPath ?? null));
+  ).pipe(Effect.map((folders) => folders?.[0]?.fsPath));
 }

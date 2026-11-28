@@ -15,7 +15,6 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postToHost } from '@ui/settings/messageDispatcher';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
-import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   PLUGINS_PAGE,
   pluginRowKey,
@@ -27,14 +26,9 @@ import {
 import { TexraSignalElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderLoadingState } from '@ui/wa/loadingState';
-import { readSelectValue } from '@ui/wa/selectTemplates';
 
-import {
-  catalogEnumChoices,
-  postStateSetting,
-} from '../components/shared/stateSettingRows';
 import { catalogDetailStyles } from '../components/shared/catalogDetailStyles';
-import { settingSignal, type PluginsPageData } from '../settingsState';
+import { type PluginsPageData } from '../settingsState';
 
 import '../components/plugins/PluginCard';
 import '../components/shared/SettingsCatalog';
@@ -56,11 +50,6 @@ export class PluginsTab extends TexraSignalElement {
         margin: 0 0 var(--wa-space-xs);
         overflow-wrap: anywhere;
       }
-
-      .setting-select {
-        min-width: 10rem;
-        max-width: 14rem;
-      }
     `,
   ];
 
@@ -68,61 +57,6 @@ export class PluginsTab extends TexraSignalElement {
 
   /** Null until the host's first rows arrive. */
   @property({ attribute: false }) page: PluginsPageData | null = null;
-
-  /**
-   * One catalog-backed select row: the allowed values, their labels, and the
-   * help text all come from the catalog row the host names by `key`, and the
-   * change handler writes that same row. Only the row label is passed in:
-   * inside a plugin card it reads bare ('Reasoning effort') where the
-   * catalog title has to disambiguate in a flat list.
-   */
-  private renderSelectRow(label: string, key: string): TemplateResult {
-    const entry = TEXRA_SETTINGS.settingsViewByKey(key);
-    if (!entry) {
-      throw new Error(`No settings-view catalog row for setting "${key}"`);
-    }
-    const options = catalogEnumChoices(entry);
-    if (options.length === 0) {
-      throw new Error(`Inline setting "${key}" is not an enum catalog row`);
-    }
-    const controlId = `plugin-setting-${key.replaceAll('.', '-')}`;
-    return html`
-      <div class="settings-row">
-        <div class="settings-row-text">
-          <label class="settings-row-label" for=${controlId}>${label}</label>
-          <span class="settings-row-help">${entry.description}</span>
-        </div>
-        <div class="settings-row-control">
-          <wa-select
-            class="setting-select"
-            id=${controlId}
-            .value=${settingSignal(entry).get()}
-            @change=${(e: Event) => {
-              const selected = readSelectValue(e);
-              if (selected) postStateSetting(key, selected);
-            }}
-          >
-            ${options.map(
-              (opt) => html`
-                <wa-option value=${opt.value}>${opt.label}</wa-option>
-              `,
-            )}
-          </wa-select>
-        </div>
-      </div>
-    `;
-  }
-
-  private renderRowSettings(row: PluginRow): TemplateResult | typeof nothing {
-    if (row.kind !== 'texra' || !row.item.settings?.length) return nothing;
-    return html`
-      <div slot="details" class="settings-section">
-        ${row.item.settings.map(([key, label]) =>
-          this.renderSelectRow(label, key),
-        )}
-      </div>
-    `;
-  }
 
   private renderToolbar(): TemplateResult {
     return html`
@@ -163,9 +97,7 @@ export class PluginsTab extends TexraSignalElement {
     const row =
       rows.find((row) => pluginRowKey(row) === this.selectedKey) ?? rows[0];
     return row
-      ? html`<plugin-card slot="detail" .row=${row}
-          >${this.renderRowSettings(row)}</plugin-card
-        >`
+      ? html`<plugin-card slot="detail" .row=${row}></plugin-card>`
       : nothing;
   }
 

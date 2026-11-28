@@ -11,18 +11,17 @@ import {
   SUBSCRIPTION_AUTH_PROVIDERS,
 } from '@texra-ai/worldline/schemas';
 import {
-  shouldUseSubscriptionDeviceCode,
+  resolveLoginTransport,
   signInCliSubscription,
   signOutCliSubscription,
   subscriptionSignOutPreferenceMessage,
-  type CliSubscriptionLoginTransportInit,
 } from '@cli/runtime/models/subscriptionLogin';
-import { loadCliModelAccessOverview } from '@cli/runtime/models/apiStatus';
+import { loadCliModelAccessOverview } from '@cli/chat/tui/apiStatus';
 import {
-  hasLoginTransportConflict,
   LOGIN_TRANSPORT_CONFLICT_MESSAGE,
   parseChatLoginSlashArgs,
   type CliLoginSlashArgs,
+  type LoginTransport,
   type CliLogoutTarget,
 } from '@cli/runtime/models/loginOptions';
 import {
@@ -47,9 +46,14 @@ const CHAT_LOGIN_USAGE = [
 
 export function loginStartMessage(args: CliLoginSlashArgs): string {
   const copy = SUBSCRIPTION_AUTH_COPY[args.target];
-  if (args.device) return copy.startingDevice;
-  if (args.noBrowser) return copy.startingNoBrowser;
-  return copy.startingBrowser;
+  switch (args.transport) {
+    case 'device':
+      return copy.startingDevice;
+    case 'no-browser':
+      return copy.startingNoBrowser;
+    case 'auto':
+      return copy.startingBrowser;
+  }
 }
 
 /**
@@ -61,10 +65,10 @@ export function loginStartMessage(args: CliLoginSlashArgs): string {
 const loginToSubscription = Effect.fn('loginToSubscription')(function* (
   stores: SettingsStores,
   providerId: SubscriptionProviderId,
-  args: CliSubscriptionLoginTransportInit,
+  transport: LoginTransport,
   output: SlashCommandOutput,
 ) {
-  const account = yield* signInCliSubscription(stores, providerId, args, {
+  const account = yield* signInCliSubscription(stores, providerId, transport, {
     writeProgress: output.writeProgress,
   });
   const { displayName, modelFamily } = subscriptionProvider(providerId);
@@ -84,24 +88,14 @@ export const loginFromChat = Effect.fn('loginFromChat')(function* (
     return;
   }
 
-  // Reject `--device` + `--no-browser` from the user's parsed flags before
-  // the subscription path can auto-resolve `device`.
-  if (hasLoginTransportConflict(args)) {
+  if (args === 'conflict') {
     output.setNotice(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
     return;
   }
 
-  const loginArgs = {
-    ...args,
-    device: shouldUseSubscriptionDeviceCode(context.cliContext, args),
-  };
-  output.writeProgress(loginStartMessage(loginArgs));
-  yield* loginToSubscription(
-    context.stores,
-    loginArgs.target,
-    loginArgs,
-    output,
-  );
+  const transport = resolveLoginTransport(context.cliContext, args.transport);
+  output.writeProgress(loginStartMessage({ target: args.target, transport }));
+  yield* loginToSubscription(context.stores, args.target, transport, output);
 });
 
 /**

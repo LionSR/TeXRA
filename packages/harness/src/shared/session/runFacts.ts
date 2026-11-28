@@ -61,9 +61,6 @@ export type RunFacts = {
   };
   /** The workspace files the run's calls edited, first edit first. */
   readonly edited: readonly string[];
-  /** The files the run's calls read (an edited file counts), first read first,
-   *  as the results spell them: what editing an existing file requires. */
-  readonly read: readonly string[];
   /** Results `executed` or `failed`: tool bodies and script host answers. */
   readonly toolCalls: number;
   /** The result value of a `submit_output` call, whether the response or
@@ -103,7 +100,6 @@ export const NO_FACTS: RunFacts = Object.freeze({
   answer: '',
   input: Object.freeze({}),
   edited: Object.freeze([]),
-  read: Object.freeze([]),
   toolCalls: 0,
   structured: null,
   handedDown: null,
@@ -144,12 +140,10 @@ export function resultFacts(
   const fresh = (paths: readonly string[], known: readonly string[]) =>
     [...new Set(paths)].filter((path) => path !== '' && !known.includes(path));
   const edited = fresh(edits, facts.edited);
-  const read = fresh([...(executed?.reads ?? []), ...edits], facts.read);
   const output = outputOf(pending, p.callId);
   const value = executed?.value;
   return {
     edited: edited.length === 0 ? facts.edited : [...facts.edited, ...edited],
-    read: read.length === 0 ? facts.read : [...facts.read, ...read],
     toolCalls: facts.toolCalls + (ran ? 1 : 0),
     structured:
       output !== null && value !== undefined ? { value } : facts.structured,
@@ -158,7 +152,7 @@ export function resultFacts(
 }
 
 /** A replacement the agent asked for (`ContextReplaceSchema`). */
-export type ContextReplace = typeof ContextReplaceSchema.Type;
+type ContextReplace = typeof ContextReplaceSchema.Type;
 
 /** The tool `callId` of `pending` names: its `script.call`'s for a call a
  *  script issued, else the response's own call's. */
@@ -169,7 +163,7 @@ const toolOf = (pending: PendingResponse, callId: string): string | undefined =>
 /**
  * The replacements waiting once `p` finished its call of `pending`: an
  * executed `replace` of the `context` tool adds its own, in range order,
- * highest first. A duplicate copies its primary's result, not its request.
+ * highest first.
  */
 export function requestedEdits(
   facts: RunFacts,
@@ -252,8 +246,10 @@ export interface RegisterRunOptions {
   readonly parent?: Omit<RunParent, 'uid'>;
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
-  /** Runtime behavior declared by the launch source, not UI visibility. */
-  readonly takesFollowUps?: boolean;
+  /** Whether a message reaches the run (a child's is its resume): the
+   *  run's runtime decides it (`executeAgent`, a process child's launch, a
+   *  fork), so a launch site's registration leaves it out. */
+  readonly takesFollowUps: boolean;
   /** The run's `run.description`, durable at birth: a child's
    *  task label; a root's summary comes later as a second row. */
   readonly description?: string;

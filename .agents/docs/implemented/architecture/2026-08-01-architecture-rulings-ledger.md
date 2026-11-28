@@ -747,7 +747,7 @@ scheme no proxy variable covers) gets the resolver check.
 
 **Reopen.** A signed or trusted-project mechanism exists that D6 can defer to.
 For D7, a concrete exfiltration incident through `web_fetch`; any prompt then
-belongs to a network guard kind on `ToolGuard` (D8) under the existing approval
+belongs to a network guard kind on the tool contract (D8) under the existing approval
 policy, not to a per-host grant of its own.
 
 ### The `defineTool` freeze admits guard kinds (D8)
@@ -860,7 +860,7 @@ notes cite the rules by number; this is their text.
 
 ## Service scopes: ExternalRoots stays a module (ruled 2026-09-20)
 
-`ExternalRoots` (`packages/harness/src/utils/files/externalRoots.ts`) is not
+`ExternalRoots` (`packages/harness/src/utils/files/canonicalPath.ts`) is not
 made a standalone service: one writer, four readers, keyed by kind, a sound
 freeze rule; a service is +4 signatures for 0 deletions. Reopen when a
 consumer needs it to be scoped per session. Pinned by

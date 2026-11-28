@@ -33,6 +33,7 @@ import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots, StorageFs } from '@platform/rootedFs';
 import {
+  EXECUTIONS_TOOL_NAME,
   isRunId,
   ToolError,
   type RunId,
@@ -67,7 +68,6 @@ import {
 } from './executionFormatters';
 import { defineTool } from './core/definition';
 import { formatFileView, type LineRange } from './formatting';
-import { orchestratorKillDenial } from './executions/killPolicy';
 import { queryHistory } from './executions/queryAction';
 import { showOutput } from './executions/processOutput';
 import { listRunGeneratedFiles } from './executions/runGeneratedFiles';
@@ -483,12 +483,6 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
     );
   }
 
-  // The permission gate: off, or a stored value that fails its schema, denies.
-  const killDenial = yield* orchestratorKillDenial(yield* SessionRoots);
-  if (killDenial !== undefined) {
-    return yield* new ToolError(killDenial);
-  }
-
   // Its children follow the session's stop policy (`RunRegistry.stop`).
   const success = yield* runs.stop(runId, 'user').pipe(Effect.uninterruptible);
   if (success) return executed(`Run ${runId} terminated.`);
@@ -533,17 +527,7 @@ const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
     return yield* new ToolError(`Config not found for run: ${runId}.`);
   }
 
-  // Filter out fields irrelevant to this run's display category, which
-  // the fold decides from the stamped identity. Read from the fold's
-  // listing tier rather than the live view, so a run no port holds is
-  // filtered by the same rule as one that is.
-  const run = (yield* (yield* SessionViewAccess).read([])).runs.get(runId);
-  return executed(
-    serializeFilteredConfig(
-      record,
-      run === undefined ? undefined : runDisplayCategory(run),
-    ),
-  );
+  return executed(serializeFilteredConfig(record));
 });
 
 const showConversation = Effect.fn('ExecutionsTool.showConversation')(
@@ -554,33 +538,12 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
       yield* SessionRoots,
     );
 
-    if (conversation.length === 0) {
-      // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
-      // the run's aggregate.
-      if (!(yield* records.exists())) {
-        return yield* new ToolError(`Run not found: ${runId}`);
-      }
-      return executed(
-        formatConversation([], {
-          totalMessages: 0,
-          metadata: ['Returned message interval: [0, 0)', 'Next offset: none'],
-        }),
-      );
+    // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
+    // the run's aggregate.
+    if (conversation.length === 0 && !(yield* records.exists())) {
+      return yield* new ToolError(`Run not found: ${runId}`);
     }
-
-    const pageStart = Math.min(offset, conversation.length);
-    const page = conversation.slice(pageStart, pageStart + limit);
-    const pageEnd = pageStart + page.length;
-    const output = formatConversation(page, {
-      offset: pageStart,
-      totalMessages: conversation.length,
-      metadata: [
-        `Returned message interval: [${pageStart}, ${pageEnd})`,
-        `Next offset: ${pageEnd < conversation.length ? pageEnd : 'none'}`,
-      ],
-    });
-
-    return executed(output);
+    return executed(formatConversation(conversation, offset, limit));
   },
 );
 
@@ -696,7 +659,7 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
 );
 
 export const ExecutionsTool = defineTool({
-  name: 'executions',
+  name: EXECUTIONS_TOOL_NAME,
   scriptReturns:
     '{ columns: string[]; rows: (string | number | null)[][]; more: boolean } | ToolOutput',
   description: `View run history and manage live runs.
@@ -713,7 +676,7 @@ Use action: "kill" on /executions/{id} to terminate a live run.
 Use action: "send" with message on /executions/{id} to message any other run in this project: your subagent (a follow-up it continues from), your orchestrator, a sibling, or any other run. It reads the message after its current turn; an idle or ended run wakes to read it. A run that takes none (a headless one-shot run, a background command, an agent-CLI turn) refuses it.
 Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). In a script, query returns { columns, rows, more }; other actions return { output, summary }. Queries return at most ${HISTORY_QUERY_ROW_CAP} rows and refuse a JSON page larger than ${HISTORY_QUERY_PAGE_LIMIT_BYTES / (1024 * 1024)} MiB; use LIMIT or substr() to narrow it. Children: SELECT * FROM runs WHERE parent_id = ?. Views:
 ${HISTORY_VIEW_SUMMARY}
-Delegated subagent and document task results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
+The result of a run you launched is delivered automatically as a follow-up message.`,
   schema: ExecutionsToolInputSchema,
   execute: (input: ExecutionsToolInput) =>
     inRunSession((call) => executeExecutionsTool(call, input)),

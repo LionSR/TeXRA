@@ -1,10 +1,7 @@
 import { Effect } from 'effect';
 import { Command } from 'effect/cli';
 
-import {
-  formatInteractiveTerminalFailure,
-  interactiveTerminalFailure,
-} from '../runtime/terminal/terminalRequirements';
+import { interactiveTerminalRejection } from '../runtime/terminal/terminalRequirements';
 
 import { cliCommand } from './_helpers/cliCommand';
 import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
@@ -12,16 +9,12 @@ import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 /** The command's program builder; the command's `run` is its only caller. */
 function runSetup(context: CliContext) {
   // Refused before the runtime is built (see `cliCommand`).
-  const terminalFailure = interactiveTerminalFailure(context);
-  if (terminalFailure) {
-    throw new CliUsageError({
-      message: formatInteractiveTerminalFailure(terminalFailure, {
-        headlessMessage:
-          'texra setup requires an interactive terminal (TTY stdin and stdout). For scripting, set a provider API key env var (e.g. ANTHROPIC_API_KEY) or run `texra auth chatgpt login`.',
-        dumbTerminalCommand: 'setup',
-      }),
-    });
-  }
+  const terminalRejection = interactiveTerminalRejection(context, 'setup', {
+    headlessMessage:
+      'texra setup requires an interactive terminal (TTY stdin and stdout). For scripting, set a provider API key env var (e.g. ANTHROPIC_API_KEY) or run `texra auth chatgpt login`.',
+  });
+  if (terminalRejection)
+    throw new CliUsageError({ message: terminalRejection });
 
   // The setup conversation owns the session: environment checks and the
   // first task. Same chat startup path as `texra chat`, started with the

@@ -4,6 +4,7 @@
  * without circular dependencies.
  */
 import { Schema } from 'effect';
+import { ReasoningEffortSchema } from '@texra-ai/llm';
 import {
   DeclinableUsageRouteSchema,
   ModelAvailabilityKindSchema,
@@ -36,6 +37,15 @@ export const ModelOptionDataSchema = Schema.Struct({
   hint: Schema.optional(Schema.String),
   /** Current reasoning setting, including default or fixed-mode context. */
   reasoning: Schema.optional(Schema.String),
+  /** The reasoning levels the model's route can carry, low to high, where
+   *  it offers a choice, and the one a run sends now. */
+  efforts: Schema.optional(
+    Schema.Struct({
+      levels: Schema.Array(ReasoningEffortSchema),
+      sent: Schema.optional(ReasoningEffortSchema),
+      fallback: Schema.optional(ReasoningEffortSchema),
+    }),
+  ),
   ...ModelAvailabilityFieldsSchema.fields,
 });
 export type ModelOptionData = typeof ModelOptionDataSchema.Type;

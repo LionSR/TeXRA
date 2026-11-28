@@ -8,7 +8,6 @@ import Anthropic, {
   toFile,
 } from '@anthropic-ai/sdk';
 import {
-  Clock,
   DateTime,
   Effect,
   Record,
@@ -29,7 +28,7 @@ import {
 import { assembleTurn } from './assembleTurn.js';
 import { boundTurn, resolveTurn } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
-import { originOf, sameModelOrigin } from '../protocol.js';
+import { ImageMimeTypeSchema, originOf, sameModelOrigin } from '../protocol.js';
 import {
   ModelError,
   fillModelError,
@@ -37,10 +36,9 @@ import {
   sdkModelError,
 } from '../errors.js';
 import {
-  decodeWireOrFail,
+  decodeStreamEvent,
   parseOutboundToolArguments,
   refuseAmbientHeaders,
-  refuseUnknownEvent,
   sdkStream,
   wireFail as fail,
 } from './transport.js';
@@ -51,17 +49,12 @@ import {
 } from './uploadCache.js';
 import {
   BlockSchema,
-  EVENT_TYPES,
   EventSchema,
   StopSchema,
   UsageSchema,
 } from './anthropicMessagesWire.js';
 import { messageThreads, type SdkSource } from './anthropicThreads.js';
-import {
-  ImageMimeTypeSchema,
-  type InputPart,
-  type PartEvent,
-} from './parts.js';
+import { type InputPart, type PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 import type {
   ContentBlockParam,
@@ -134,9 +127,9 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
         'Anthropic manual thinking requires a budget below the output limit.',
     });
   }
-  const nowMs = yield* Clock.currentTimeMillis;
+  const fileIdFor = yield* uploads.fileIds;
   const lowerPart = (part: Parameters<typeof inputPart>[0]) =>
-    inputPart(part, (base64) => uploads.fileIdFor(base64, nowMs));
+    inputPart(part, fileIdFor);
   const messages: MessageParam[] = [];
   const history = yield* replayableHistory(turn.messages, origin);
   for (const [index, message] of history.entries()) {
@@ -380,8 +373,8 @@ function anthropicWire() {
   const parts = Effect.fnUntraced(function* (
     raw: unknown,
   ): Effect.fn.Return<PartEvent[], ModelError> {
-    yield* refuseUnknownEvent('Anthropic', 'type', EVENT_TYPES, raw);
-    const event = yield* decodeWireOrFail(
+    const event = yield* decodeStreamEvent(
+      'Anthropic',
       EventSchema,
       'Anthropic returned a malformed stream event.',
       raw,
@@ -441,7 +434,7 @@ function anthropicWire() {
       stopped = true;
       return [
         { kind: 'usage', usage: canonicalUsage(usage) },
-        { kind: 'finish', finish: { finishReason: FINISH[reason] } },
+        { kind: 'finish', finishReason: FINISH[reason] },
       ];
     }
     if (stop.stop_reason != null)

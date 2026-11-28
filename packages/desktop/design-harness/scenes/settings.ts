@@ -16,12 +16,7 @@ const ROWS: PluginRow[] = [
       name: 'Lean 4 Proof Assistant',
       description:
         'Interact with Lean 4 projects: check diagnostics, inspect terms, and manage files.',
-      tools: [
-        { name: 'lean_diagnostics' },
-        { name: 'lean_file' },
-        { name: 'lean_project' },
-        { name: 'lean_inspect' },
-      ],
+      tools: ['lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect'],
       setup: { status: 'available', installActions: [] },
       switch: 'always-on',
     },
@@ -29,27 +24,20 @@ const ROWS: PluginRow[] = [
   {
     kind: 'texra',
     item: {
-      id: 'zotero',
-      name: 'Zotero Integration',
+      id: 'wolfram',
+      name: 'Wolfram Language',
       description:
-        'Search, add items to, and export citations from your Zotero library.',
-      tools: [
-        { name: 'zotero_collections' },
-        { name: 'zotero_search' },
-        { name: 'zotero_add' },
-      ],
+        'Wolfram Language through wolframscript, which agents run from the shell.',
+      tools: [],
       setup: {
         status: 'not-found',
-        statusLabel: 'Needs Zotero running',
+        statusLabel: 'Needs wolframscript',
         installActions: [
           {
             kind: 'guide',
-            text: 'Requires Zotero with the Better BibTeX plugin installed.',
+            text: 'Requires the "wolframscript" command-line tool.',
           },
-          {
-            kind: 'url',
-            url: 'https://retorque.re/zotero-better-bibtex/installation/',
-          },
+          { kind: 'url', url: 'https://www.wolfram.com/engine/' },
         ],
       },
       switch: 'off',

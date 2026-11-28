@@ -72,8 +72,7 @@ Add an API key in **Settings → Models** (or `texra auth chatgpt login` /
 ```sh
 texra setup                                 # guided setup and first task
 texra chat                                  # interactive chat
-texra run edit --input paper.tex            # revise LaTeX with compiled diffs
-texra run review --input paper.tex --print  # audit derivations and math
+texra run annotate --input paper.tex        # mark what a referee would question
 texra run prove --input Proofs/Basic.lean   # complete proofs with Lean diagnostics
 ```
 
@@ -86,11 +85,10 @@ All three apps share credentials, settings, and task history. See the
 Ask the assistant in plain words or run `texra run <program> --input <file>`
 ([full catalog](https://texra.ai/guide/programs)):
 
-| Family       | Programs                                                                                                                 | What it returns                                               |
-| :----------- | :----------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------ |
-| **Document** | `edit`, `annotate`, `enhance`, `apply`, `transcribe`, `slides`, `poster`                                                 | Compiled LaTeX and `latexdiff` PDFs                           |
-| **Task**     | `review`, `search`, `derive`, `solve`, `experiment`, `code`, `review-code`, `simplify`, `test`, `fix-latex`, `latexdiff` | Research report or verified project edits                     |
-| **Lean 4**   | `prove`, `lean-simplify`, `blueprint`, `lean-search`                                                                     | Proofs verified with zero errors, zero `sorry`, no new axioms |
+| Family     | Programs                                             | What it returns                                               |
+| :--------- | :--------------------------------------------------- | :------------------------------------------------------------ |
+| **LaTeX**  | `annotate`, `transcribe`                             | Referee comments checked to change nothing else; a transcript |
+| **Lean 4** | `prove`, `lean-simplify`, `blueprint`, `lean-search` | Proofs verified with zero errors, zero `sorry`, no new axioms |
 
 ## Models
 

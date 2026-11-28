@@ -3,7 +3,7 @@
  * reset and freshness, as the settings view and the CLI status print them.
  */
 import type {
-  SubscriptionUsageSnapshot,
+  PlanUsage,
   SubscriptionUsageWindow,
 } from '@texra/shared/model/subscriptionUsage';
 import {
@@ -12,9 +12,35 @@ import {
   joinFacts,
 } from '@texra-ai/worldline/schemas';
 import { formatRelativeTime } from '@ui/copy/format';
+import { modelAvailabilityLabel } from '@ui/copy/modelAccess';
 import type { RunTone } from '@ui/copy/runStatus';
 
 const STALE_AFTER_MS = 2 * 60_000;
+
+/** The plan as its provider names its tier, else as TeXRA names the plan. */
+export const planUsageName = (usage: PlanUsage): string =>
+  usage.planName ??
+  modelAvailabilityLabel({
+    availability: 'subscription-access',
+    usageRoute: usage.plan,
+  });
+
+/** A plan's windows still running at `now`: a figure learned before its
+ *  window reset says nothing about the window that followed. */
+export const currentUsageWindows = (
+  usage: PlanUsage,
+  now: number,
+): readonly SubscriptionUsageWindow[] =>
+  usage.windows.filter(
+    (window) => window.resetAt === undefined || window.resetAt > now,
+  );
+
+/** The window a one-figure meter stands for: the one the plan runs out of
+ *  first, the most used, whichever windows the plan has. */
+export const limitingUsageWindow = (
+  windows: readonly SubscriptionUsageWindow[],
+): SubscriptionUsageWindow | undefined =>
+  windows.toSorted((a, b) => b.percentUsed - a.percentUsed).at(0);
 
 /** Convert provider wire names into compact, stable labels. */
 export function subscriptionUsageWindowLabel(
@@ -54,14 +80,13 @@ export function subscriptionQuotaUsed(
   return `${rounded}% used`;
 }
 
+/** When a window still running at `now` (`currentUsageWindows`) resets. */
 export function formatSubscriptionUsageReset(
   resetAt: number | undefined,
   now: number,
 ): string | undefined {
   if (resetAt === undefined) return undefined;
-  const remaining = resetAt - now;
-  if (remaining <= 0) return 'reset due';
-  return `resets in ${formatResetDuration(remaining)}`;
+  return `resets in ${formatResetDuration(resetAt - now)}`;
 }
 
 export function formatSubscriptionUsageUpdated(
@@ -73,23 +98,40 @@ export function formatSubscriptionUsageUpdated(
     : 'updated just now';
 }
 
-/** Compact provider usage text shared by settings and the detailed CLI status. */
+/** Why a plan shows no windows, as the settings page and the status bar
+ *  both say it. */
+export function subscriptionUsageUnavailable(
+  reason: NonNullable<PlanUsage['unknown']>,
+): string {
+  switch (reason) {
+    case 'unobserved':
+      return 'Usage shows after the next reply on this plan.';
+    case 'invalid_credentials':
+      return 'The provider rejected the configured credentials.';
+    case 'malformed_response':
+      return 'The provider returned usage data TeXRA could not read.';
+    case 'missing_credentials':
+    case 'request_failed':
+      return 'The provider usage request failed. Try refreshing again shortly.';
+  }
+}
+
+/** Compact provider usage text for the detailed CLI status. */
 export function formatSubscriptionUsageSummary(
-  snapshot: SubscriptionUsageSnapshot,
+  usage: PlanUsage,
   now: number,
 ): string | undefined {
-  if (snapshot.state === 'unavailable') {
-    return snapshot.reason === 'missing_credentials'
-      ? undefined
-      : 'usage unavailable';
-  }
-  return snapshot.windows
-    .map((window) => {
-      const reset = formatSubscriptionUsageReset(window.resetAt, now);
-      return joinFacts([
-        `${subscriptionUsageWindowLabel(window)}: ${subscriptionQuotaUsed(window)}`,
-        reset,
-      ]);
-    })
-    .join(FACT_SEPARATOR);
+  if (usage.unknown === 'missing_credentials') return undefined;
+  if (usage.unknown !== undefined) return 'usage unavailable';
+  return (
+    currentUsageWindows(usage, now)
+      .map((window) => {
+        const reset = formatSubscriptionUsageReset(window.resetAt, now);
+        return joinFacts([
+          `${subscriptionUsageWindowLabel(window)}: ${subscriptionQuotaUsed(window)}`,
+          reset,
+        ]);
+      })
+      .join(FACT_SEPARATOR) || undefined
+  );
 }

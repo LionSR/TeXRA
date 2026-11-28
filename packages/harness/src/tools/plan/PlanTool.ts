@@ -293,7 +293,7 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
 export const PlanTool = defineTool({
   name: PLAN,
   requiresApproval: 'inBody',
-  description: `Propose or replace the plan: \`objective\` is a plain document stating what to achieve, the intended approach, and a verifiable stopping condition. Every proposal is presented to the user, who may approve it, run it as a goal (a goal run then works on it in rounds until it verifies the stopping condition), or reject it. Propose a new plan only when the objective or approach genuinely changes.`,
+  description: `Propose or replace the plan: \`objective\` is a plain document stating what to achieve, the intended approach, and a verifiable stopping condition. Where the user's approval settings ask, the user may approve it, run it as a goal (a goal run then works on it in rounds until it verifies the stopping condition), or reject it; otherwise it is approved as proposed. Propose a new plan only when the objective or approach genuinely changes.`,
   schema: PlanToolInputSchema,
   execute: (input: PlanToolInput) =>
     inRunSession((call) => executeUpdate(call, { objective: input.objective })),

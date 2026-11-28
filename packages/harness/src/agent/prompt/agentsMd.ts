@@ -1,9 +1,8 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 
-import { PromptRenderFailed } from '@agent/prompt/promptRender';
 import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -13,6 +12,12 @@ import { meansAbsent, entryExists } from '@utils/files/fsEntryExists';
 const CHANNEL = 'agentsMd';
 
 const AGENTS_FILE = 'AGENTS.md';
+
+/** An `AGENTS.md` that is there and could not be read. */
+class AgentsMdUnread extends Schema.TaggedError<AgentsMdUnread>()(
+  'AgentsMdUnread',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
 
 /**
  * Load the instructions every agent follows: the person's own `AGENTS.md`
@@ -33,7 +38,7 @@ const AGENTS_FILE = 'AGENTS.md';
 export const loadAgentsMd = Effect.fn('agentsMd.loadAgentsMd')(function* (
   workspace: string | undefined,
   storageRoot: string,
-): Effect.fn.Return<string, PromptRenderFailed, FileSystem.FileSystem> {
+): Effect.fn.Return<string, AgentsMdUnread, FileSystem.FileSystem> {
   const fs = yield* FileSystem.FileSystem;
   const read = Effect.fn(function* (root: string, source: string) {
     const file = path.join(root, AGENTS_FILE);
@@ -45,7 +50,7 @@ export const loadAgentsMd = Effect.fn('agentsMd.loadAgentsMd')(function* (
       Effect.catchIf(meansAbsent, () => Effect.succeed('')),
       Effect.mapError(
         (error) =>
-          new PromptRenderFailed({
+          new AgentsMdUnread({
             message: `Failed to load ${file}: ${toErrorMessage(error)}`,
             cause: error,
           }),

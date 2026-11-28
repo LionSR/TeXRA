@@ -20,15 +20,11 @@ import {
   SUBSCRIPTION_AUTH_COPY,
 } from '@ui/copy/accountAuth';
 
+import type { LoginTransport } from './loginOptions';
 import { presentCliSignInUrl, type CliSignInProgress } from './signInUrl';
 import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
 import { cliEnvValue, type CliContext } from '../platform/cliContext';
 import type { SettingsStores } from '@texra-ai/worldline/plugins';
-
-export interface CliSubscriptionLoginTransportInit {
-  readonly device: boolean;
-  readonly noBrowser: boolean;
-}
 
 /** Progress sink shared by every provider login. */
 export interface CliSubscriptionLoginOptions {
@@ -36,26 +32,25 @@ export interface CliSubscriptionLoginOptions {
 }
 
 /**
- * Device-code is the right default when the browser callback is likely
- * unreachable: remote shells, non-text output, non-TTY/headless/dumb terminals,
- * or `--no-input`. An explicit `--no-browser` keeps the loopback flow but
- * prints the URL to paste.
+ * The transport a sign-in runs on. A request that names one keeps it; `auto`
+ * becomes a device code when the browser callback is likely unreachable:
+ * remote shells, non-text output, non-TTY/headless/dumb terminals, or
+ * `--no-input`.
  */
-export function shouldUseSubscriptionDeviceCode(
+export function resolveLoginTransport(
   context: CliContext,
-  init: CliSubscriptionLoginTransportInit,
-): boolean {
-  if (init.device) return true;
-  if (init.noBrowser) return false;
-  return (
+  requested: LoginTransport,
+): LoginTransport {
+  if (requested !== 'auto') return requested;
+  const unreachable =
     context.outputFormat !== 'text' ||
     interactiveTerminalFailure(context) !== undefined ||
     // An SSH session (one of these set) probably cannot open a local
     // browser or receive a loopback callback.
     ['SSH_CONNECTION', 'SSH_CLIENT', 'SSH_TTY'].some((name) =>
       Boolean(cliEnvValue(name)),
-    )
-  );
+    );
+  return unreachable ? 'device' : 'auto';
 }
 
 /** A sign-out whose preference write failed carries the reason. */
@@ -73,7 +68,7 @@ export const signInCliSubscription = Effect.fn(
 )(function* (
   stores: SettingsStores,
   providerId: SubscriptionProviderId,
-  init: CliSubscriptionLoginTransportInit,
+  transport: LoginTransport,
   options: CliSubscriptionLoginOptions,
 ) {
   const provider = subscriptionProvider(providerId);
@@ -108,7 +103,7 @@ export const signInCliSubscription = Effect.fn(
         displayName,
         sessionName,
         url,
-        noBrowser: init.noBrowser || init.device,
+        openBrowser: transport === 'auto',
       }).pipe(Effect.provideService(ChildProcessSpawner, spawner)),
   };
 
@@ -116,7 +111,7 @@ export const signInCliSubscription = Effect.fn(
     // `auto` tries the browser callback and drops to a device code when its
     // ports are taken or no browser is reachable, so the user is never left
     // with a bare bind error and no link.
-    transport: init.device ? 'device' : 'auto',
+    transport: transport === 'device' ? 'device' : 'auto',
     present,
     stores,
   });

@@ -26,7 +26,7 @@ The Tasks view shares the **TeXRA view** with the New task screen. Select the Te
 
 - **Automatic**: Opens automatically when you start a task.
 - **Manual**: Run **TeXRA: Show Tasks** (`Ctrl+Alt+P` / `Cmd+Option+P`).
-- **Editor tab**: Run **TeXRA: Open Tasks in Editor**, or pick **Open tasks in editor** from the panel's **⋯** menu.
+- **Editor tab**: Run **TeXRA: Open Tasks in Editor**, or pick **Open Tasks in Editor** from the panel's **⋯** menu.
 
 <GuideIntroHero />
 
@@ -64,27 +64,20 @@ The header summarizes and controls the selected task:
 <p class="hero-caption">The status dot: green while running or completed, yellow while waiting on you or interrupted, gray when ready for your next message or stopped, red on error.</p>
 
 - **Token and cost summary**: A footer below the log shows the task's input and output token counts and its estimated cost, including the agents it started.
-- **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time (plus **Revision 2 of 3** for a multi-revision program run), **Stop** while running (cancels the active request immediately where the provider supports it, or stops after the current API call finishes), **New task**, and the **Task actions** menu (`⋯`).
+- **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time, **Stop** while running (cancels the active request immediately where the provider supports it, or stops after the current API call finishes), **New task**, and the **Task actions** menu (`⋯`).
 - **Task actions menu (`⋯`)**:
   - **All tasks**:
     - **Rename…**: Change the task title.
     - **Fork**: Branch the conversation into a new task (when the task can be forked), plus a link to each fork already made from it.
     - **Open task folder**: Reveal the run folder in run storage (`executions/<run-id>/`) to inspect generated files, compile logs, mirrored dependencies, and intermediate artifacts.
     - **Export conversation…**: Save the transcript as Markdown, HTML, or PDF.
-    - **Copy diagnostics**: Copy the task's title, agent, model, status, task ID, output paths, and compile failures as plain text for bug reports or follow-up tasks.
+    - **Copy diagnostics**: Copy the task's title, agent, model, status and task ID as plain text for bug reports or follow-up tasks.
     - **Delete task**: Remove the task once stopped.
-  - **Program runs**:
-    - **Run latexdiff on the outputs**: Compare the original input `.tex` file(s) with the generated output `.tex` file(s) using `latexdiff` (read the [LaTeX Diff guide](./latex-diff.md)).
-    - **Archive outputs to History**: Copy the run folder (outputs, logs, mirrored dependencies) into a timestamped folder under `History/` (read the [file management guide](./file-management.md)).
-    - **Delete output files**: Remove the task's run folder.
   - **Chat tasks**:
     - **Compact conversation**: Summarize earlier turns.
     - **Run again…**: Open the New task form prefilled with the chat's model, instruction, skills, and images to start a fresh task.
-  - **Global**: **Open tasks in editor** (or **Back to sidebar**) and **latexdiff…**.
-- **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation up to its last finished turn, leaving the original untouched) and, for interrupted tasks or program runs with saved outputs, **Resume** (continues from saved outputs instead of starting over). Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
-
-Reviewed outputs are accepted per file: each row under **Generated files** has
-an **Accept** action that copies the edited version into your project.
+  - **Global**: **Open Tasks in Editor** (or **Back to sidebar**).
+- **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation up to its last finished turn, leaving the original untouched) and, for interrupted tasks, **Resume** (continues from where the task stopped instead of starting over). Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
 
 ### Checking a launch
 
@@ -111,13 +104,9 @@ A **Context** gauge next to the token count shows how full the model's context w
 
 ### After a program run
 
-To follow up on a finished program run in chat, use **Copy diagnostics** in the
-header menu to put the task's output paths and compile failures on the
-clipboard, then start a chat with **New task** and paste that text
-into the instruction box.
-
-When a run recorded a compile failure, **Fix compile errors** still appears under
-**Generated files** and starts a repair chat from those logs.
+A program's answer is its last message in the log: the check's verdict and
+what the helper agent reported. To follow up in chat, start a **New task**
+and name the files.
 
 ### Memory
 
@@ -127,7 +116,7 @@ Agents can remember things between sessions. When memory is enabled (toggle in t
 
 This scrollable area displays the detailed, timestamped logs for the selected agent run.
 
-- **Structure**: Logs are organized into expandable groups (e.g., `Revision 1`). Response cycles are logged within the corresponding revision group. Select the arrow next to a group name to expand or collapse it.
+- **Structure**: Logs are organized into expandable groups (e.g., `Round 1`). Response cycles are logged within the corresponding group. Select the arrow next to a group name to expand or collapse it.
 - **Log levels**: Each line carries an icon for its severity. Debug-level lines and their extra detail are only shown when `texra.logger.debugMode` is set to `true` in `<project>/.texra/config.json` or `~/.texra/v1/global-storage/config.json`; TeXRA does not read VS Code settings.
 - **Agent thinking**: Model reasoning appears in shaded **Thinking** blocks, so you can spot when the model is exploring ideas.
 - **Errors**: Errors are highlighted and often show what went wrong.

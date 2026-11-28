@@ -25,7 +25,7 @@ import {
   type RunId,
   type AgentConfig,
   type ApprovalPolicy,
-  RUN_OUTCOME,
+  attentionOf,
   toErrorMessage,
 } from '@texra-ai/worldline/schemas';
 import { isWorking } from '@texra-ai/worldline/schemas';
@@ -35,7 +35,6 @@ import {
 } from '@texra-ai/worldline/plugins';
 import {
   effectiveApprovalPolicy,
-  launchApprovalNotice,
   projectApprovalPolicy,
   type CliContext,
 } from '@cli/runtime/platform/cliContext';
@@ -54,7 +53,7 @@ import {
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { APPROVAL_POLICY_LINE } from '@ui/copy/approvalPolicy';
 import {
   runsHereOnlyMessage,
   sessionStoreMovedAsideMessage,
@@ -65,9 +64,9 @@ import {
   type ChatSessionController,
 } from '../chatSessionController';
 import { App } from './App';
-import { setupAgent } from '@texra/agent/entryAgent';
+import { entryAgent, SETUP_AGENT_NAME } from '@texra/agent/entryAgent';
 import { type ChatLaunch, chatOf } from '@texra/shared/session/surface';
-import { cliEntryAgent, withoutEditorTools } from '@cli/runtime/cliEntryAgent';
+import { cliEntryAgent } from '@cli/runtime/cliEntryAgent';
 import { type SlashCommandContext } from './commands/handlers/slashContext';
 import { builtinSlashCommands } from './commands/registerBuiltins';
 import { handleTuiSlashCommand } from './commands/handleSlashCommand';
@@ -162,11 +161,6 @@ export async function runChat(
       // This chat's requests are decided under the project's persisted
       // policy, here or in the service; what this invocation asked for rides
       // each launch (`launchApproval`).
-      const refused = launchApprovalNotice(
-        context.requestedApprovalPolicy,
-        projectApprovalPolicy(services.roots.config),
-      );
-      if (refused !== undefined) startupNotices.push(refused);
       if (Result.isFailure(service)) {
         // A store this process moved aside at open is said in the
         // transcript, not on stderr before Ink mounts, where it would sit
@@ -196,7 +190,7 @@ export async function runChat(
       const chat: ChatLaunch =
         resumed === undefined
           ? init.setup
-            ? withoutEditorTools(setupAgent())
+            ? entryAgent(SETUP_AGENT_NAME)
             : yield* cliEntryAgent
           : chatOf(resumed);
       const modelSelectionExit = yield* Effect.exit(
@@ -289,8 +283,6 @@ export async function runChat(
   // a stricter policy lowers a live run's limit at once, even below the
   // project's.
   const setApprovalPolicy = (policy: ApprovalPolicy): Effect.Effect<void> => {
-    // What the chat asked for, not the effective policy: a yolo under a
-    // Block project left a grant that a later Ask project would honour.
     const leaving = chatPolicy === 'yolo' && policy !== 'yolo';
     chatPolicy = policy;
     patchSessionMeta({ approvalPolicy: getApprovalPolicy() });
@@ -374,9 +366,7 @@ export async function runChat(
           patchSessionMeta({
             approvalPolicy: effectiveApprovalPolicy(chatPolicy, policy),
           });
-          appendLocalNotice(
-            `Project approval policy: ${formatApprovalPolicy(policy)}`,
-          );
+          appendLocalNotice(APPROVAL_POLICY_LINE.project(policy));
         }),
         // The value is written: a failed repaint leaves the line as it was.
         Effect.ignore({
@@ -639,29 +629,18 @@ export async function runChat(
     untilShutdown.fork(chatController.resume(initialResume.id));
   }
 
-  // The one turn-finished notification: the root run's turn finishes,
-  // at WAITING ("your turn", alongside the StatusBar pill) or at its outcome.
-  // A run that ends after waiting was already announced, and a stop the user
-  // asked for is not news. A turn end, not `attentionOf`'s `finished`: a
-  // conversation's turn ends at WAITING with no outcome.
-  const rootStandingNow = () => runViewOf(currentView(), rootRunId.get());
-  let rootStanding = rootStandingNow();
+  // The one turn-finished notification: the root run's turn finishes, as
+  // every host reads it (`attentionOf`), alongside the StatusBar pill.
+  let shownView = currentView();
   onChatClose(
     subscribeToSignalChanges([sessionView()], () => {
-      const previous = rootStanding;
-      rootStanding = rootStandingNow();
-      if (rootStanding === undefined) return;
-      const { outcome } = rootStanding;
-      if (
-        previous?.position !== 'waiting' &&
-        (rootStanding.position === 'waiting' ||
-          (outcome !== null &&
-            outcome !== previous?.outcome &&
-            // A stop ends the run cancelled: no "finished" bell for it.
-            outcome !== RUN_OUTCOME.CANCELLED))
-      ) {
-        notify(runAttentionLine(rootStanding, runStatus(rootStanding).key));
-      }
+      const previous = shownView;
+      shownView = currentView();
+      const root = attentionOf(shownView, previous).finished.find(
+        (run) => run.id === rootRunId.get(),
+      );
+      if (root !== undefined)
+        notify(runAttentionLine(root, runStatus(root).key));
     }),
   );
 

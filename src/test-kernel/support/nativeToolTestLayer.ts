@@ -63,17 +63,14 @@ export function nativeToolTestLayer(
     Partial<Pick<ToolContextShape, 'callId' | 'emit'>> & {
       run?: TestCallRun;
       origin?: Partial<
-        Pick<
-          RunCallShape,
-          'responseId' | 'instruction' | 'attempt' | 'logId' | 'script'
-        >
+        Pick<RunCallShape, 'responseId' | 'attempt' | 'logId' | 'script'>
       >;
     } = {},
 ) {
   return Layer.unwrap(
     Effect.gen(function* () {
       const roots = options.roots ?? (yield* FakeHost).roots;
-      const { origin, workingDirectory, stepRoots } = options;
+      const { origin, workingDirectory } = options;
       const run =
         options.run ??
         (yield* Effect.gen(function* () {
@@ -118,7 +115,6 @@ export function nativeToolTestLayer(
       const runCall: RunCallShape = {
         run: toolRun,
         responseId: 'test-response',
-        instruction: undefined,
         attempt: 1,
         logId: `log-${callId}`,
         // The run's rows as the store holds them: what a case seeds
@@ -158,7 +154,6 @@ export function nativeToolTestLayer(
           env: {
             roots,
             ...(workingDirectory !== undefined && { workingDirectory }),
-            ...(stepRoots !== undefined && { stepRoots }),
             run: runCall.run,
           },
           emit: options.emit ?? (() => undefined),

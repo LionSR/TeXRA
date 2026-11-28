@@ -34,7 +34,7 @@ export interface SessionHandleInit {
    *  host is attached. */
   readonly interactions?: HostInteractions;
   /** Absent, the project's database; ephemeral, a throwaway one. */
-  readonly transcriptMode?: { readonly kind: 'ephemeral' };
+  readonly ephemeral?: true;
 }
 
 /**

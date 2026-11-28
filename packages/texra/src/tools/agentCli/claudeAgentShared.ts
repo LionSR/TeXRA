@@ -16,13 +16,7 @@ import {
   selectAgentCliModel,
   type AgentCliModelRule,
 } from './agentCliModel';
-import {
-  type ToolError,
-  withLogChannel,
-  Settings,
-  type SettingsStores,
-  type StateReadFailed,
-} from '@texra-ai/worldline/plugins';
+import { type ToolError, withLogChannel } from '@texra-ai/worldline/plugins';
 import { isClaudeCodeModel, type ModelConfig } from '@texra-ai/llm';
 
 import type {
@@ -31,10 +25,7 @@ import type {
   SDKResultMessage,
   ThinkingConfig,
 } from '@anthropic-ai/claude-agent-sdk';
-import {
-  CLAUDE_AGENT_EFFORT_SETTING,
-  CLAUDE_AGENT_MODEL_SETTING,
-} from '@texra/shared/settings/integrationSettings';
+import { CLAUDE_AGENT_DEFAULT_MODEL } from '@texra/shared/agentCliSettings';
 
 /**
  * Compile-time guard: the agent CLI effort vocabulary in `@shared` (the one
@@ -95,14 +86,13 @@ function claudeCodeThinking(
 const claudeCodeRun = Effect.fn('claudeAgent.claudeCodeRun')(function* (
   modelString: string,
   effort: AgentCliEffort | undefined,
-  userEffort: AgentCliEffort,
 ): Effect.fn.Return<ClaudeCodeRun, ToolError> {
   const selection = yield* selectAgentCliModel(
     modelString,
     CLAUDE_CODE_MODEL_RULE,
   );
   const { config } = selection;
-  const resolved = yield* agentCliReasoning(selection, effort, { userEffort });
+  const resolved = yield* agentCliReasoning(selection, effort, {});
   return {
     ref: config.ref,
     model: config.id,
@@ -114,23 +104,16 @@ const claudeCodeRun = Effect.fn('claudeAgent.claudeCodeRun')(function* (
 
 /**
  * The run a Claude Code call asks for: its own model and effort, else the
- * user's settings. A snapped effort's note goes to the log.
+ * defaults. A snapped effort's note goes to the log.
  */
 export const readClaudeCodeRun = Effect.fn('claudeAgent.readClaudeCodeRun')(
-  function* (
-    stores: SettingsStores,
-    input: {
-      readonly model?: string | null;
-      readonly effort?: AgentCliEffort | null;
-    },
-  ): Effect.fn.Return<ClaudeCodeRun, ToolError | StateReadFailed> {
-    const modelString =
-      input.model ?? (yield* Settings.get(stores, CLAUDE_AGENT_MODEL_SETTING));
-    const userEffort = yield* Settings.get(stores, CLAUDE_AGENT_EFFORT_SETTING);
+  function* (input: {
+    readonly model?: string | null;
+    readonly effort?: AgentCliEffort | null;
+  }): Effect.fn.Return<ClaudeCodeRun, ToolError> {
     const run = yield* claudeCodeRun(
-      modelString,
+      input.model ?? CLAUDE_AGENT_DEFAULT_MODEL,
       input.effort ?? undefined,
-      userEffort,
     );
     if (run.note) {
       yield* Effect.logInfo(run.note).pipe(withLogChannel(CLAUDE_AGENT_NAME));

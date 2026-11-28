@@ -54,7 +54,7 @@ Formatting does not run on its own after agent execution. The selected formatter
 
 ## <wa-icon library="texra" name="diff-single"></wa-icon> Version comparison with `latexdiff`
 
-`latexdiff` produces a compiled PDF comparing two versions of a `.tex` document, with additions underlined in blue and deletions struck through in red. TeXRA runs it automatically after a program's run, or on demand against another file or a Git commit (`latexdiff-vc` via the <wa-icon library="texra" name="git-commit"></wa-icon> **Commit** dropdown). Read the [LaTeX Diff guide](./latex-diff.md) for the full workflow.
+`latexdiff` produces a compiled PDF comparing two versions of a `.tex` document, with additions underlined in blue and deletions struck through in red. TeXRA shows one as the preview of a `.tex` edit awaiting your approval, and the assistant runs it in the shell when you ask for a diff against another file or a Git commit. Read the [LaTeX Diff guide](./latex-diff.md) for both.
 
 ## <wa-icon library="texra" name="symbol-numeric"></wa-icon> Document statistics with `texcount`
 
@@ -77,11 +77,11 @@ TeXRA extracts figures from your LaTeX so vision-capable models can see them.
 
 ### Standard figures
 
-A program attaches the images its input files include with `\includegraphics` when an agent starts it with `args: { autoExtractFigure: true }`. In a chat, an agent opens a figure file with `read_file`, which returns it as an attachment. Read the [figures guide](./working-with-figures.md).
+An agent opens a figure file with `read_file`, which returns it as an attachment. Read the [figures guide](./working-with-figures.md).
 
 ### TikZ figures
 
-A program started with `args: { autoExtractTikzFigure: true }` finds the `tikzpicture` environments of its input files, compiles each to a standalone PDF, and attaches the rendered output. It compiles with `pdflatex` and rasterizes with Ghostscript plus GraphicsMagick or ImageMagick. The Plugins page does not list these; **Settings → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick), each with a setup guide when it is missing. `texra doctor` reports the compiler rows (`latexmk`, `pdflatex`) but not the image tools:
+**TeXRA: Compile TikZ Figures from Current File** wraps each `tikzpicture` of the open file in a standalone document and compiles it with `pdflatex`; in a chat, the assistant compiles a picture in the shell and reads the PDF. For a model without native PDF support, reading a PDF rasterizes it with Ghostscript plus GraphicsMagick or ImageMagick. The Plugins page does not list these; **Settings → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick), each with a setup guide when it is missing. `texra doctor` reports the compiler rows (`latexmk`, `pdflatex`) but not the image tools:
 
 <TikzDepsHero />
 

@@ -11,13 +11,12 @@
 
 // Local imports - shared webview
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
-import { html, type TemplateResult } from 'lit';
+import type { TemplateResult } from 'lit';
 
 import {
   settingSignal,
   settingsSnapshotRevisions,
 } from '@ui/settings/settingsState';
-import type { SettingEnumChoice } from '@texra/shared/settingsView/settingRows';
 import {
   settingEnumChoices,
   settingNumberBounds,
@@ -27,16 +26,12 @@ import { postToHost } from '@ui/settings/messageDispatcher';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import type { StateSettingValue } from '@texra/shared/settingsView/settingsViewMessages';
 import { DETAIL_SEPARATOR, type SettingRow } from '@texra-ai/worldline/schemas';
-import { readSelectValue } from '@ui/wa/selectTemplates';
 import {
   renderSettingsNumberRow,
+  renderSettingsSelectRow,
   renderSettingsToggleRow,
   type SettingsNumberRowOptions,
 } from '@ui/wa/settingsSection';
-
-// Third-party imports
-import '@awesome.me/webawesome/dist/components/select/select.js';
-import '@awesome.me/webawesome/dist/components/option/option.js';
 
 /**
  * Write one catalog row by its wire key. `null` clears it back to the catalog
@@ -50,19 +45,6 @@ export function postStateSetting(key: string, value: StateSettingValue): void {
     key,
     value,
   });
-}
-
-/**
- * Enum values for a catalog row, paired with the catalog's display metadata.
- * The allowed values come from the row's `Schema.Literals` schema, so a
- * settings UI never hand-lists them. Non-enum rows yield an empty list; a row
- * with no settings-view placement is a defect and throws, like
- * {@link renderStateSettingToggleRow}.
- */
-export function catalogEnumChoices(
-  row: SettingRow,
-): readonly SettingEnumChoice[] {
-  return settingEnumChoices(placedRow(row)) ?? [];
 }
 
 /**
@@ -148,35 +130,16 @@ export function renderStateSettingSelectRow(
   row: SettingRow<string>,
 ): TemplateResult {
   const entry = placedRow(row);
-  const id = `settings-select-${row.key.replaceAll('.', '-')}`;
-  return html`
-    <div class="settings-row">
-      <div class="settings-row-text">
-        <label class="settings-row-label" for=${id}>${entry.title}</label>
-        <span class="settings-row-help">${entry.description}</span>
-      </div>
-      <div class="settings-row-control">
-        <wa-select
-          id=${id}
-          .value=${settingSignal(row).get()}
-          @change=${(event: Event) => {
-            const selected = readSelectValue(event);
-            if (selected) postStateSetting(row.key, selected);
-          }}
-        >
-          ${catalogEnumChoices(row).map(
-            (choice) => html`
-              <wa-option value=${choice.value}
-                >${
-                  choice.description
-                    ? `${choice.label}${DETAIL_SEPARATOR}${choice.description}`
-                    : choice.label
-                }</wa-option
-              >
-            `,
-          )}
-        </wa-select>
-      </div>
-    </div>
-  `;
+  return renderSettingsSelectRow({
+    label: entry.title,
+    description: entry.description,
+    value: settingSignal(row).get(),
+    choices: (settingEnumChoices(entry) ?? []).map((choice) => ({
+      value: choice.value,
+      label: choice.description
+        ? `${choice.label}${DETAIL_SEPARATOR}${choice.description}`
+        : choice.label,
+    })),
+    onChange: (selected) => postStateSetting(row.key, selected),
+  });
 }

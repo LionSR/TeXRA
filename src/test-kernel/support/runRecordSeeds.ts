@@ -64,7 +64,6 @@ export const seedEditedFiles = (
             toolName: 'write_file',
             lane: 'barrier',
             replay: 'unsafe',
-            duplicateOf: null,
             logId: callId,
           },
           argumentsText: '{}',

@@ -73,6 +73,8 @@ export function formatToolUseTemplate(
   // A card wears its tool's icon unless its state has something to say:
   // the user's feedback, an interruption or a failure.
   let iconName: IconName;
+  // Whether the row's icon is the tool's own, so it names the tool.
+  let iconNamesTool = false;
   if (
     look !== undefined &&
     (model.userInstruction !== undefined || stopped || showAsError)
@@ -80,19 +82,20 @@ export function formatToolUseTemplate(
     iconName = statusGlyph(look);
   } else {
     const icon = tools.icons[normalizedToolName];
-    iconName =
-      (icon === undefined ? undefined : DRAWN_ICONS.get(icon)) ?? 'wrench';
+    const own = icon === undefined ? undefined : DRAWN_ICONS.get(icon);
+    iconNamesTool = own !== undefined;
+    iconName = own ?? 'wrench';
   }
 
   const headerPreview = truncateWithEllipsis(
     model.headerPreview,
     HEADER_PREVIEW_MAX_CHARS,
   );
-  const titleText = headerPreview
-    ? `${model.headerLabel}: ${headerPreview}`
-    : model.headerLabel;
 
-  const sections: TemplateResult[] = renderToolSections(model.sections);
+  const sections: TemplateResult[] = renderToolSections(
+    model.sections,
+    model.headerPreview,
+  );
 
   // Output is shown unless the model suppressed it (empty, already said by
   // the header, the error, or the sections above).
@@ -137,7 +140,9 @@ export function formatToolUseTemplate(
     sections.push(html`<div class="tool-use-section tool-no-output">(no output)</div>`);
   }
 
-  const shouldOpen = running;
+  // A running call shows its live output, and an edit its diff: the change
+  // is what a person reads, so it is not behind a click.
+  const shouldOpen = running || displayKind === 'edit';
 
   // Live timer for in-progress tools, with timeout limit when available
   // prettier-ignore
@@ -148,11 +153,24 @@ export function formatToolUseTemplate(
   // prettier-ignore
   const extraContent = html`${timerTemplate}${stoppedTemplate}`;
 
+  // A row says what its call did once. Beside the tool's own icon, the
+  // sentence the call reports ("Read notes.tex") needs no "read_file" before
+  // it; the name is spelled out where no icon of the tool's stands for it
+  // (a generic or a state icon, a spinner) or the row has nothing else to say.
+  // Nor is it spelled out before a sentence that opens with it ("plan Plan
+  // approved").
+  const opensWithName = headerPreview
+    .toLowerCase()
+    .startsWith(model.headerLabel.toLowerCase());
+  const named =
+    headerPreview === '' || (!opensWithName && (!iconNamesTool || running));
   return buildToolUseDetails({
     row,
     iconName,
     running: running && model.userInstruction === undefined,
-    label: titleText,
+    label: named ? model.headerLabel : '',
+    title: named ? undefined : model.headerLabel,
+    detail: headerPreview || undefined,
     isError: showAsError,
     content: html`${sections}`,
     defaultOpen: shouldOpen,

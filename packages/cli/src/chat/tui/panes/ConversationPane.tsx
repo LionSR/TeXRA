@@ -1,10 +1,5 @@
 import { Box } from 'ink';
 
-import {
-  documentRoundsOf,
-  isDocumentTaskRun,
-} from '@texra/shared/plugins/documents';
-
 import { selectedRunId as selectedRunIdSignal } from '../state/cliState';
 import { sessionView, runViewOf } from '../state/sessionView';
 import {
@@ -15,31 +10,22 @@ import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { LiveTranscriptEntry } from './TranscriptEntry';
 import { pendingTranscriptEntries } from './transcriptEntries';
-import {
-  estimateLiveTranscriptEntryRows,
-  selectTranscriptEntriesForViewport,
-} from './transcriptViewport';
-import {
-  selectDocumentTaskRunDetailLines,
-  DocumentTaskRunDetails,
-} from './DocumentTaskRunDetails';
+import { selectTranscriptEntriesForViewport } from './transcriptViewport';
 import { isWorking } from '@texra-ai/worldline/schemas';
 
-const DEFAULT_TRANSCRIPT_ROWS = 24;
-
 interface ConversationPaneProps {
-  readonly width?: number;
-  readonly availableWidth?: number;
-  readonly maxRows?: number;
+  readonly width: number;
+  readonly maxRows: number;
 }
 
 /**
  * The live tail of the active conversation: the rows the scrollback has not
  * finished yet, read from the session view and joined with this TUI's local notices.
  */
-export function ConversationPane(
-  props: ConversationPaneProps = {},
-): React.JSX.Element {
+export function ConversationPane({
+  maxRows,
+  width,
+}: ConversationPaneProps): React.JSX.Element {
   const activeRunId = useSignal(selectedRunIdSignal);
   const view = useSignal(sessionView());
   const allNotices = useSignal(noticesSignal);
@@ -50,49 +36,19 @@ export function ConversationPane(
     merged.finalRows,
     stream != null && isWorking(stream),
   );
-  const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
-  const metadataWidth =
-    props.availableWidth !== undefined && props.width !== undefined
-      ? Math.min(props.availableWidth, props.width)
-      : (props.availableWidth ?? props.width);
-  const newestPendingEntry = displayEntries.at(-1);
-  const pendingRowReserve = newestPendingEntry
-    ? Math.min(
-        Math.max(0, maxRows),
-        estimateLiveTranscriptEntryRows(newestPendingEntry, props.width),
-      )
-    : 0;
-  const detailCapacity = Math.max(0, maxRows - pendingRowReserve);
-  const documentTaskFacts =
-    stream && isDocumentTaskRun(stream)
-      ? {
-          stages: stream.transcript.stages,
-          run: stream,
-          rounds: documentRoundsOf(stream),
-        }
-      : undefined;
-  const visibleDocumentTaskDetails = selectDocumentTaskRunDetailLines(
-    documentTaskFacts,
-    detailCapacity,
-  );
-  const detailRows = visibleDocumentTaskDetails.length;
   const visibleEntries = selectTranscriptEntriesForViewport(
     displayEntries,
-    Math.max(0, maxRows - detailRows),
-    props.width,
+    Math.max(0, maxRows),
+    width,
   );
   return (
     <Box flexDirection="column" maxHeight={maxRows} overflowY="hidden">
-      <DocumentTaskRunDetails
-        lines={visibleDocumentTaskDetails}
-        width={metadataWidth}
-      />
       {visibleEntries.entries.map((entry) => (
         <EntryErrorBoundary key={entry.id} label={entry.kind}>
           <LiveTranscriptEntry
             entry={entry}
             maxRows={visibleEntries.rowLimits.get(entry.id)}
-            width={props.width}
+            width={width}
           />
         </EntryErrorBoundary>
       ))}

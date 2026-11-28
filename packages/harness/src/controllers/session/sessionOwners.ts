@@ -21,6 +21,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
+import * as path from 'node:path';
 
 import { Inbox, SessionInbox } from '@agent/followUp/Inbox';
 import {
@@ -38,7 +39,10 @@ import {
   Interactions,
   presentTerminalResult,
 } from '@agent/runtime/HostInteractions';
-import { HistoryQueryStore } from '@agent/runtime/historyQuery/HistoryQuery';
+import {
+  HistoryQuery,
+  HistoryQueryStore,
+} from '@agent/runtime/historyQuery/HistoryQuery';
 import { sessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { SessionRequests, sessionPermission } from '@agent/runtime/requests';
 import { ProjectTools } from '@agent/runtime/loop/step';
@@ -53,20 +57,19 @@ import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
 import { logFailure } from '@logger/effectLog';
+import { emitAppSignal } from '@platform/appSignals';
 import { SessionRoots, sessionFsLayer } from '@platform/rootedFs';
 import type { RunId, SessionCloseReport } from '@shared/schemas';
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import {
   Approvals,
-  HistoryQuery,
   RunHistory,
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
 import type { SessionEvents } from '@shared/session/sessionEvents';
 import { ToolCatalogOwner } from '@tools/liveTools';
-import { announceWrites } from '@tools/plugins';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { deletionCollector } from './deletionCleanup';
@@ -310,16 +313,35 @@ export const sessionOwnersLayer = (
       // note an earlier process left pending, the deletion pass at open,
       // and the dependency probes, held for its life and probed beside the
       // open (the gate withholds nothing until they answer).
-      const plugins = yield* ToolRegistry;
-      // The one reader of the rows the view has applied: a fact that wrote
-      // workspace files is announced, and a run's end is presented to the
-      // host, each once the view holds the row. `log.drained` waits for
-      // this reader.
-      const announce = announceWrites(plugins.factKinds);
+      // The one reader of the rows the view has applied: the files a tool
+      // call edited are announced (`workspaceFilesWritten`), so a window
+      // hears a background service task's write as it hears its own, and a
+      // run's end is presented to the host, each once the view holds the
+      // row. `log.drained` waits for this reader.
       yield* Stream.runForEach(
         store.applied,
         Effect.fnUntraced(function* (event) {
-          yield* announce(event);
+          if (
+            event.type === 'tool.end' &&
+            event.result?.status === 'executed'
+          ) {
+            // An edit names its file as its call resolved it: relative to
+            // the run's working directory when it has one and to the project
+            // otherwise, absolute outside both.
+            const base =
+              view.run(event.aggregateId)?.worktree?.workingDirectory ??
+              roots.workspace;
+            const absolutePaths = (event.result.edits ?? []).flatMap(
+              ({ path: edited }) =>
+                path.isAbsolute(edited)
+                  ? [edited]
+                  : base === undefined
+                    ? []
+                    : [path.join(base, edited)],
+            );
+            if (absolutePaths.length > 0)
+              yield* emitAppSignal('workspaceFilesWritten', { absolutePaths });
+          }
           if (store.closed()) return;
           yield* presentTerminalResult(event).pipe(
             Effect.provide(session),

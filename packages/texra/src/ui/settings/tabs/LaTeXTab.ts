@@ -2,8 +2,6 @@
  *  diff, formatting and review, and recommended VS Code settings. */
 
 import { Predicate, Struct } from 'effect';
-import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { html, nothing, type TemplateResult } from 'lit';
@@ -35,33 +33,39 @@ import {
 
 // Local imports - shared webview toolkit
 import { settingsBannerStyles } from '@ui/styles';
+import { PLUGINS_PAGE } from '@ui/copy/plugins';
 import { TexraSignalElement } from '@ui/litBase';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { renderSettingsBanner } from '@ui/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
-import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
+import {
+  renderSetStatusIcon,
+  renderStatusBadge,
+  statusCheckIconStyles,
+} from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+// Registers <copy-button>, the one Copy every view draws.
+import '@ui/wa/CopyButton';
 
 // Local imports - catalog-driven settings rows
 import {
   renderStateSettingSelectRow,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
-import { settingSignal } from '../settingsState';
 import { latexTabStyles } from './LaTeXTab.styles';
 import {
   INLINE_CRITICISM_SETTING,
   LATEX_FORMATTER_SETTING,
 } from '@texra/shared/settings/texraSettings';
 import {
-  LATEXDIFF_BETWEEN_ROUNDS_SETTING,
   LATEXDIFF_CHANGES_ONLY_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
-  DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
-  DOCUMENTS_OPEN_PDF_SETTING,
-  DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
-} from '@texra/shared/settings/documentsSettings';
+} from '@texra/shared/settings/latexdiffSettings';
+
+/** The Copy action beside an install command, wherever one is shown; the
+ *  action that runs it is worded as the Plugins page words its own. */
+const COPY_INSTALL_COMMAND = 'Copy install command';
 
 /** What the Dependencies section says of one dependency: the toolchain's
  *  dependencies, and LaTeX Workshop, which installs through a VS Code
@@ -206,15 +210,16 @@ export class LaTeXTab extends TexraSignalElement {
           }),
       });
     } else {
-      actionSlot = html`<wa-tag class="setting-badge" variant="neutral" size="s"
-        >Not found</wa-tag
-      >`;
+      actionSlot = renderStatusBadge({
+        label: 'Not found',
+        className: 'setting-badge',
+      });
     }
 
     return html`
       <div class="dependency-card">
         <div class="dependency-row">
-          ${waIcon(installed ? 'check' : 'triangle-exclamation', {
+          ${waIcon(installed ? 'check' : 'circle-exclamation', {
             className: `dependency-icon ${installed ? 'installed' : 'missing'}`,
           })}
           <div class="dependency-info">
@@ -235,13 +240,13 @@ export class LaTeXTab extends TexraSignalElement {
           installCmd
             ? html`
                 <div class="dependency-install-actions">
-                  <wa-copy-button
-                    value=${installCmd.command}
-                    copy-label="Copy install command"
-                  ></wa-copy-button>
+                  <copy-button
+                    .text=${installCmd.command}
+                    .label=${COPY_INSTALL_COMMAND}
+                  ></copy-button>
                   ${renderLabeledActionButton({
                     icon: 'terminal',
-                    text: 'Run in Terminal',
+                    text: PLUGINS_PAGE.installInTerminal,
                     title: `Run: ${installCmd.command}`,
                     kind: 'secondary',
                     onClick: () => this.handleRunInTerminal(installCmd.command),
@@ -312,13 +317,13 @@ export class LaTeXTab extends TexraSignalElement {
       description,
       actions: html`
         <code class="install-command-text" dir="ltr">${installCommand}</code>
-        <wa-copy-button
-          value=${installCommand}
-          copy-label="Copy install command"
-        ></wa-copy-button>
+        <copy-button
+          .text=${installCommand}
+          .label=${COPY_INSTALL_COMMAND}
+        ></copy-button>
         ${renderLabeledActionButton({
           icon: 'terminal',
-          text: 'Run in Terminal',
+          text: PLUGINS_PAGE.installInTerminal,
           kind: 'secondary',
           title: `Run ${pmName} installer in a terminal`,
           onClick: () => this.handleRunInTerminal(installCommand),
@@ -443,28 +448,16 @@ export class LaTeXTab extends TexraSignalElement {
   }
 
   private renderCompileDiffSettings(): TemplateResult {
-    const autoCompile = settingSignal(
-      DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
-    ).get();
     return html`
       <div class="settings-section">
         ${renderSettingsSectionHeading({
-          title: 'Compile and diff',
+          title: 'Edit previews',
           description:
-            'What TeXRA does with LaTeX files an agent writes in this project.',
+            'How the latexdiff preview of a LaTeX edit awaiting approval is drawn.',
           icon: 'bolt',
         })}
-        ${renderStateSettingToggleRow(DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING)}
-        ${renderStateSettingToggleRow(DOCUMENTS_OPEN_PDF_SETTING, {
-          disabled: !autoCompile,
-        })}
-        ${renderStateSettingToggleRow(
-          DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
-          { disabled: !autoCompile },
-        )}
         ${renderStateSettingToggleRow(LATEXDIFF_CHANGES_ONLY_SETTING)}
         ${renderStateSettingSelectRow(LATEXDIFF_MATH_MARKUP_SETTING)}
-        ${renderStateSettingToggleRow(LATEXDIFF_BETWEEN_ROUNDS_SETTING)}
       </div>
     `;
   }

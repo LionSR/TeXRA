@@ -12,6 +12,7 @@ import {
   type TurnResult,
 } from '../turn.js';
 import type { ModelError } from '../errors.js';
+import { anchorResponseId } from './continuation.js';
 import type { Stream } from '@anthropic-ai/sdk/core/streaming';
 import type {
   MessageCreateParamsStreaming,
@@ -175,13 +176,8 @@ export function messageThreads(options: {
     result: TurnResult,
     mode: Mode,
   ) {
-    const responseId = result.providerResponseId;
-    if (
-      !supported ||
-      responseId === null ||
-      (result.finishReason !== 'stop' && result.finishReason !== 'tool-calls')
-    )
-      return result;
+    const responseId = anchorResponseId(result);
+    if (!supported || responseId === null) return result;
     // The full request with the response lowered as its last message.
     const held = yield* options.lower({
       ...turn,

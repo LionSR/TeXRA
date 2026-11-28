@@ -10,16 +10,16 @@
  * density (one-liner or expanded card) is a paint-time choice; it is never
  * expressed by withholding a row.
  */
-import { Array as Arr } from 'effect';
 import {
   MESSAGE_TYPES,
   type ErrorLogData,
+  type FollowUpSender,
   modelFailureMessage,
   reasonPhrase,
-  type FileListEntry,
   type LogPayload,
   type ToolCallLog,
 } from '@shared/schemas';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
@@ -34,6 +34,7 @@ import {
   type ErrorRow,
   type ErrorRowDetail,
   type LogRow,
+  type MessageSender,
   type StatItem,
   type StreamingTextRow,
   type ToolRow,
@@ -149,25 +150,6 @@ function errorRow(
 }
 
 // ---------------------------------------------------------------------------
-// Attachments
-// ---------------------------------------------------------------------------
-
-function fileListSummary(files: readonly FileListEntry[]): string {
-  const loaded = Arr.countBy(files, (file) => file.ok);
-  const failed = files.length - loaded;
-  const failedSuffix = failed > 0 ? `, ${failed} not found` : '';
-  return `Files (${loaded}/${files.length} loaded${failedSuffix})`;
-}
-
-/** The entries as a host lists them: a file that did not load, or names no
- *  path, shows no media label. */
-function listedFiles(files: readonly FileListEntry[]): FileListEntry[] {
-  return files.map(({ media, ...file }) =>
-    file.ok && media && file.path.trim() ? { ...file, media } : file,
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Context management
 // ---------------------------------------------------------------------------
 
@@ -234,17 +216,39 @@ export type LogRowPayload = Exclude<
   }
 >;
 
+/** A user message's sender as its row carries it: nobody for the person,
+ *  and a run with its label in the session, when it has one. */
+function messageSender(
+  from: FollowUpSender | undefined,
+  runLabels: RunLabels | undefined,
+): MessageSender | undefined {
+  if (from === undefined || from.kind === 'user') return undefined;
+  if (from.kind === 'self') return { kind: 'self' };
+  if (from.kind === 'notification') return from;
+  const run = runLabels?.get(from.runId);
+  const label = run?.label.trim();
+  return {
+    kind: 'run',
+    runId: from.runId,
+    ...(label && label !== from.runId ? { label } : {}),
+    inSession: run !== undefined,
+  };
+}
+
 export function logPayloadRow(
   base: TranscriptRowBase,
   text: string,
   payload: LogRowPayload,
   forkAt?: number,
+  runLabels?: RunLabels,
 ): TranscriptRow | undefined {
   switch (payload.messageType) {
     case MESSAGE_TYPES.USER_MESSAGE: {
+      const sender = messageSender(payload.data?.from, runLabels);
       return {
         ...base,
         kind: 'user',
+        ...(sender === undefined ? {} : { sender }),
         text: transcriptText(text),
         ...(payload.data?.scriptSummary
           ? { scriptSummary: payload.data.scriptSummary }
@@ -264,17 +268,6 @@ export function logPayloadRow(
         ...base,
         kind: 'webSearch',
         ...(query !== undefined ? { query } : {}),
-      };
-    }
-
-    case MESSAGE_TYPES.FILE_LIST: {
-      const files = payload.data;
-      if (files.length === 0) return undefined;
-      return {
-        ...base,
-        kind: 'fileList',
-        files: listedFiles(files),
-        summary: fileListSummary(files),
       };
     }
 

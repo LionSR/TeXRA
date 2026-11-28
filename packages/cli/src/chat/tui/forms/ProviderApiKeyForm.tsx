@@ -8,7 +8,7 @@ import {
 } from '@texra-ai/llm';
 import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
-import { credentialOriginLabel } from '@ui/copy/credentials';
+import { credentialOriginLabel, PROVIDER_KEY_COPY } from '@ui/copy/credentials';
 
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';
 import { ListForm } from './_shared/ListForm';
@@ -29,7 +29,7 @@ function providerApiKeyStatusLabel(
   status: CredentialOrigin | undefined,
   view: ResourceStatus<ProviderApiKeyStatuses>,
 ): string {
-  if (status !== undefined) return credentialOriginLabel(status, 'key');
+  if (status !== undefined) return credentialOriginLabel(status);
   if (view.loading && view.error === undefined) return 'Checking status';
   return 'Status unavailable';
 }
@@ -100,7 +100,7 @@ export function ProviderApiKeyForm(
   if (provider === undefined) {
     return (
       <ListForm
-        title="Add provider API key"
+        title={PROVIDER_KEY_COPY.add}
         availableRows={props.availableRows}
         items={buildProviderApiKeyItems(props.status)}
         description="Choose the service that issued the key."

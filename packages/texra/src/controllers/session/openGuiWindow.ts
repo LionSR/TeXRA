@@ -3,19 +3,17 @@
  * bridge its surfaces subscribe to, its host snapshot, its tool-edit view,
  * its attachment as the project's window, its run actions, its file actions,
  * its transcript export, and the `host.request` body both hosts answer
- * through: one switch, one case order, one wire contract, over a binding
- * table each host fills with the verbs it actually performs. The policy (the
- * order, the guards, the refusal wording, the guide pages) lives here once,
- * and the difference between the hosts is the table.
- *
- * A host answers its own way only the kinds `OWN_REQUEST_LABEL` lists
- * ({@link OwnHostCommand}: its tab pop-out, its getting-started commands),
- * so its switch stays exhaustive and the compiler still names a kind it
- * forgot.
+ * through: one switch, one case order, one wire contract, over a table each
+ * host fills with the verbs it actually performs ({@link GuiWindowHost}). The
+ * policy (the order, the guards, the refusal wording, the guide pages) lives
+ * here once, and the difference between the hosts is the table. A verb only
+ * some hosts have (the editor's files, the tab pop-out, the getting-started
+ * commands) is an optional member, and the body refuses a request for one a
+ * host leaves out.
  */
 import * as path from 'node:path';
 
-import { Effect, Exit, Layer, Scope, Stream } from 'effect';
+import { Effect, Exit, FileSystem, Layer, Scope, Stream } from 'effect';
 
 import type {
   Session,
@@ -24,24 +22,32 @@ import type {
   RuntimePresentationEventPayloads,
 } from '@texra-ai/worldline';
 import {
+  PlanQuotas,
   presenterOn,
   sessionFsLayer,
   workspaceEnvironmentLayer,
   type PresentationEventHandlers,
   type ProcessServices,
 } from '@texra-ai/worldline/host';
-import { commitExists, workspaceRelativePath } from '@texra-ai/worldline/node';
+import { workspaceRelativePath } from '@texra-ai/worldline/node';
 import {
   AppSignals,
-  pathToLocationIn,
+  emitAppSignal,
   Secrets,
   ToolRegistry,
   type StorageFs,
   WorkspaceFs,
+  runDirUnder,
 } from '@texra-ai/worldline/plugins';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
-import type { HostCommand } from '@texra/shared/session/hostRequest';
-import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
+import type {
+  GettingStartedAction,
+  HostCommand,
+} from '@texra/shared/session/hostRequest';
+import type {
+  HostSnapshot,
+  ProjectDisplay,
+} from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import type { Dialogs, ExternalOpener } from '@texra/hosts/uiHosts';
@@ -55,7 +61,6 @@ import {
   fieldTakes,
 } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
-  launchApprovalOptions,
   launchFormOf,
   prepareSurfaceLaunch,
 } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
@@ -63,10 +68,6 @@ import {
   exportRunTranscript,
   type TranscriptExportHost,
 } from '@texra/controllers/progressView/exportTranscript';
-import {
-  ProgressDocumentTaskFileActionsController,
-  type ProgressDocumentTaskFileActionsHost,
-} from '@texra/controllers/progressView/ProgressDocumentTaskFileActionsController';
 import {
   ApiKeyPromptFailed,
   ProgressApiKeyRetryController,
@@ -77,10 +78,8 @@ import {
   type WindowClient,
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
-import { documentRoundsOf } from '@texra/shared/plugins/documents';
-import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
+import { setReasoningLevel } from '@texra/controllers/settingsView/modelSelection';
 import { texraGuideUrl } from '@ui/copy/guide';
-import { latexdiffVerbs, type LatexdiffHost } from './latexdiffVerbs';
 import { pickLauncherFiles, type OpenFilesDialog } from './launcherFilePicker';
 import {
   createHostRunActions,
@@ -94,6 +93,7 @@ import { answerWorkspaceFile } from './workspaceFileRequest';
 import type { WriteProjectFile } from '@texra/common/files/projectFileWrite';
 import type { RunId } from '@texra-ai/worldline/schemas';
 import {
+  toErrorMessage,
   formatResultCount,
   Cancelled,
   Rejected,
@@ -106,7 +106,6 @@ import {
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
 import { openWindowSetup } from '@texra/controllers/onboarding/setupLaunch';
-import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
 import {
   hostFailure,
   openLink,
@@ -130,36 +129,13 @@ export interface GuiSession {
   readonly writeFile: WriteProjectFile;
 }
 
-/** The kinds a host answers its own way, and what the refusal of one a
- *  host lacks names; the shared body answers every other kind. */
-const OWN_REQUEST_LABEL = {
-  popOut: 'Pop-out to editor',
-  popBack: 'Pop-out to editor',
-  gettingStarted: 'Starting a project',
-} as const satisfies Partial<Record<HostCommand['kind'], string>>;
-
-/** The refusal of a request this host has no verb for. */
-const notInThisApp = (label: string) =>
-  new Rejected({ reason: `${label} is not available in this app.` });
-
-/** The requests a host answers its own way. */
-type OwnHostCommand = Extract<
-  HostCommand,
-  { kind: keyof typeof OWN_REQUEST_LABEL }
->;
-
-type SharedHostCommand = Exclude<HostCommand, OwnHostCommand>;
-
-const isOwnHostCommand = (request: HostCommand): request is OwnHostCommand =>
-  Object.hasOwn(OWN_REQUEST_LABEL, request.kind);
-
-/** The handlers a host answers its own way, by kind. A kind a host leaves
- *  out is refused by the shared router, worded once for both hosts. */
-export type OwnHostHandlers = {
-  readonly [K in OwnHostCommand['kind']]?: (
-    request: Extract<OwnHostCommand, { kind: K }>,
-  ) => HostVerb<HostOutcome>;
-};
+/** A host's optional verb, or the refusal naming what it would have done. */
+const bound = <A>(verb: A | undefined, label: string) =>
+  verb === undefined
+    ? Effect.fail(
+        new Rejected({ reason: `${label} is not available in this app.` }),
+      )
+    : Effect.succeed(verb);
 
 /** A verb a host binds: it runs on the fiber the window's dispatch owns, and
  *  its failure is the value the case answers with. */
@@ -170,18 +146,23 @@ type HostVerb<A> = Effect.Effect<
 >;
 
 /**
- * The verbs behind the shared handlers. Every member is a capability the host
- * performs; nothing here decides anything, which is the point: the decision
- * -- the order, the guard, the refusal wording -- is in the one body below.
+ * What a host does for its window: the verbs behind the `host.request` body,
+ * and what its notices, run view, file actions and transcript export do.
+ * Every member is a capability the host performs; nothing here decides
+ * anything, which is the point: the decision -- the order, the guard, the
+ * refusal wording -- is in the one body below.
  */
-export interface SharedHostCommandBindings {
+export interface GuiWindowHost {
+  /** The window's notices. */
+  readonly notify: Dialogs['notify'];
+  /** A notice with one button per label, behind the failure and
+   *  instruction notices the body words and wires. */
+  readonly ask: AskNotice;
   /** Open a file by its absolute path, at a line when one is named. */
   openPath(absolutePath: string, line: number | undefined): HostVerb<void>;
   /** The host's native dialog that opens several files, behind the
    *  launcher's file picker. */
   readonly openFiles: OpenFilesDialog;
-  /** How a generated diff opens and a diff run shows its progress. */
-  readonly latexdiff: LatexdiffHost;
   /** Settings at a target, or where it was last left without one. */
   openSettings(target: SettingsTarget | undefined): HostVerb<void>;
   /** Ask for a provider API key, `provider`'s when a retry names one: a
@@ -195,7 +176,7 @@ export interface SharedHostCommandBindings {
    *  body below, as a rejection naming the address. */
   readonly openExternal: ExternalOpener['openExternal'];
   /** The onboarding card's verbs a host performs. "Set an API key" is
-   *  {@link SharedHostCommandBindings.setApiKey}, the same verb the banner
+   *  {@link GuiWindowHost.setApiKey}, the same verb the banner
    *  takes, the two skips write the funnel's flags and Run Setup launches
    *  the window's setup conversation in the body below. */
   readonly onboarding: {
@@ -211,19 +192,15 @@ export interface SharedHostCommandBindings {
     /** Every file the editor has open. */
     readonly openedFiles: HostVerb<readonly string[]>;
   };
-}
-
-/** What a host does for its window: the shared body's verbs, the requests
- *  it answers its own way, and what its editor, run view, file actions and
- *  transcript export do. */
-export interface GuiWindowHost {
-  /** The window's notices. */
-  readonly notify: Dialogs['notify'];
-  /** A notice with one button per label, behind the failure and
-   *  instruction notices the body words and wires. */
-  readonly ask: AskNotice;
-  readonly bindings: SharedHostCommandBindings;
-  readonly own: OwnHostHandlers;
+  /** Move the window's run view between its places, where the host has
+   *  two: its editor tab (`popOut`) and its sidebar (`popBack`). */
+  readonly placement?: {
+    readonly popOut: HostVerb<void>;
+    readonly popBack: HostVerb<void>;
+  };
+  /** Start a project from the getting-started card (a sample, an Overleaf
+   *  clone, an arXiv download). A host without it shows no card. */
+  readonly gettingStarted?: (action: GettingStartedAction) => HostVerb<void>;
   /** Show a file a run asks to be opened, built when it is a document. */
   openFile(
     payload: RuntimePresentationEventPayloads['openFile'],
@@ -232,15 +209,14 @@ export interface GuiWindowHost {
    *  service. Announcing the files a service task wrote is the same on
    *  every host, so the window's opening adds it. */
   readonly window: Omit<WindowHost, 'filesWritten' | 'emit'>;
-  readonly runs: Pick<
-    HostRunActionPorts,
-    'openFinalOutput' | 'revealProgress'
-  > & {
+
+  readonly runs: Pick<HostRunActionPorts, 'revealProgress'> & {
     /** Bring the window's run view into view, so a selection reaches the
      *  surface that brings up. */
     showRunView(): Effect.Effect<void, Error>;
   };
-  readonly files: Omit<ProgressDocumentTaskFileActionsHost, 'showInfo'>;
+  /** Show a directory in the host's file manager. */
+  openDirectory(directory: string): HostVerb<void>;
   /** The transcript export's format picker and opener. */
   readonly export: TranscriptExportHost;
 }
@@ -250,31 +226,22 @@ interface GuiWindowPorts {
   readonly roots: WorkspaceRoots;
   readonly project: ProjectDisplay;
   /** The snapshot reads only this host answers. */
-  readonly snapshot: Omit<
-    Parameters<typeof openHostSnapshotSource>[0],
-    'project' | 'tools' | 'root' | 'stores'
-  >;
+  readonly snapshot: {
+    workspaceRoots(): HostSnapshot['workspaceRoots'];
+    /** Whether this host shows the setup notices (see
+     *  `openHostSnapshotSource`); a host with its own setup surfaces, and
+     *  no {@link GuiWindowHost.gettingStarted}, shows none. */
+    readonly setupNotices: boolean;
+  };
   readonly toolEdits: ToolEditApprovalHost;
   /** Emits when the window gains focus, so the project's calls come here
    *  first. */
   readonly focused: Stream.Stream<void>;
   /** The one process recorder. */
   readonly draftRequests: HostDraftRequests;
-  /** The host's half of the window, built for the window's scope once the
-   *  bridge and the snapshot are up. */
-  readonly host: Effect.Effect<
-    GuiWindowHost,
-    never,
-    Scope.Scope | ProcessServices
-  >;
+  /** The host's half of the window. */
+  readonly host: GuiWindowHost;
 }
-
-/** The settings body's verbs on a window's runs: its own session's, never
- *  those of another project its host happens to show. */
-export type GuiWindowSettingsRuns = Pick<
-  SettingsHostBindings,
-  'revealRun' | 'runLabel'
->;
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
@@ -290,7 +257,7 @@ const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   ports: GuiWindowPorts,
 ) {
-  const { runs, roots } = ports;
+  const { runs, roots, host } = ports;
   const { session } = runs;
   // The project's `.env` over the process's: what this window asks about its
   // project (model options, a polish's helper model) answers from it, as the
@@ -326,7 +293,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     handleHostCommand: handle,
     onPortClosed: draftRequests.closePort,
   }).pipe(Scope.provide(bridgeScope));
-  const host = yield* ports.host;
 
   // The window is its project's window wherever its runs run: here,
   // through this process's own windows, or in the service, whose runs ask
@@ -335,7 +301,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   const workspace = roots.workspace ?? roots.storage;
   const signals = yield* AppSignals;
   const secrets = yield* Secrets;
-  const { bindings } = host;
   // A notice's buttons run the verbs the window's requests run. The session
   // forks a notice outside any request, so the key store the set-key verb
   // reads is handed over here.
@@ -346,13 +311,11 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     openFile: host.openFile,
     ...windowNotices({
       ask: host.ask,
-      setApiKey: bindings
-        .setApiKey()
-        .pipe(Effect.provideService(Secrets, secrets)),
+      setApiKey: host.setApiKey().pipe(Effect.provideService(Secrets, secrets)),
       // The button was pressed, so a guide that does not open is said in
       // the window.
       openGuide: (page) =>
-        bindings
+        host
           .openExternal(texraGuideUrl(page))
           .pipe(
             Effect.tapError((failed) => host.notify('error', failed.message)),
@@ -415,10 +378,8 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           cursor: run.activation,
         }),
       ),
-    roots,
     present,
     session,
-    notify: host.notify,
   });
   const runSetup = yield* openWindowSetup({
     session,
@@ -443,35 +404,11 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       ),
     ),
   });
-  const latexdiff = latexdiffVerbs({
-    host: bindings.latexdiff,
-    roots,
-    session,
-    notify: host.notify,
-  });
-  const documentTaskFileActions = new ProgressDocumentTaskFileActionsController(
-    {
-      rounds: (runId) => {
-        const run = session.view.current().runs.get(runId);
-        return run === undefined ? [] : documentRoundsOf(run);
-      },
-      storageRoot: roots.storage,
-      workspace: roots.workspace,
-      host: {
-        ...host.files,
-        showInfo: (message) => host.notify('info', message),
-      },
-      runs: runActions,
-      latexdiff: latexdiff.file,
-      writeFile: runs.writeFile,
-    },
-  );
-
   const apiKeyRetry = new ProgressApiKeyRetryController({
     // The set-key verb either runs or faults, so its failure is the one
     // failure, as `ApiKeyPromptFailed`.
     promptForApiKey: (provider) =>
-      bindings.setApiKey(provider).pipe(
+      host.setApiKey(provider).pipe(
         Effect.provide(requestLayer),
         Effect.mapError(
           (failure) =>
@@ -492,27 +429,19 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       roots,
       session,
     });
-  /** The host's editor, or the refusal naming what it would have answered. */
-  const editor = (label: string) =>
-    bindings.editor === undefined
-      ? Effect.fail(notInThisApp(label))
-      : Effect.succeed(bindings.editor);
   /**
-   * One program per shared request, as a host's own handlers are: it runs on the
-   * fiber the window's dispatch already owns and finishes nothing, so its
-   * failure reaches the bridge's view as the value the port carried.
+   * One program per request: it runs on the fiber the window's dispatch
+   * already owns and finishes nothing, so its failure reaches the bridge's
+   * view as the value the port carried.
    */
-  function shared(
-    request: SharedHostCommand,
-    port: string,
-  ): HostVerb<HostOutcome> {
+  function answer(request: HostCommand, port: string): HostVerb<HostOutcome> {
     return Effect.gen(function* () {
       switch (request.kind) {
         case 'pickFiles': {
           const paths = yield* pickLauncherFiles(
             roots.workspace,
             request.fileType,
-            bindings.openFiles,
+            host.openFiles,
           );
           if (paths === null) return yield* new Cancelled();
           return { kind: 'files', paths } satisfies HostOutcome;
@@ -527,7 +456,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
                 .pipe(
                   Effect.mapError((cause) => hostFailure('openFile', cause)),
                 );
-          yield* bindings.openPath(absolutePath, request.line);
+          yield* host.openPath(absolutePath, request.line);
           return done;
         }
         case 'workspaceFile':
@@ -537,7 +466,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           const opened = yield* findLabelInWorkspace(
             roots.workspace,
             request.label,
-            (absolutePath, line) => bindings.openPath(absolutePath, line),
+            (absolutePath, line) => host.openPath(absolutePath, line),
           );
           if (!opened) {
             return yield* new Rejected({
@@ -547,7 +476,8 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return done;
         }
         case 'useCurrentFile': {
-          const currentPath = yield* (yield* editor(
+          const currentPath = yield* (yield* bound(
+            host.editor,
             "The editor's current file",
           )).currentFile;
           if (!currentPath)
@@ -558,45 +488,13 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           // Project-relative inside the project, absolute outside it or
           // with no folder open.
           const current = workspaceRelativePath(roots.workspace, currentPath);
-          // A latexdiff artifact (`paper-diff1234abcd.tex`) taken as the base
-          // file selects the file it was derived from instead, when that
-          // file is still on disk, and its commit rides onto the launcher.
-          const parsed =
-            request.fileType === 'base'
-              ? parseVersionControlDiffFilename(current)
-              : null;
-          if (parsed) {
-            const found =
-              roots.workspace !== undefined &&
-              (yield* commitExists(roots.workspace, parsed.commitHash));
-            if (found)
-              bridge.surfaceAction({
-                kind: 'launch',
-                patch: { commit: parsed.commitHash },
-              });
-            else
-              yield* host.notify(
-                'info',
-                `The commit ${parsed.commitHash} referenced by ${path.basename(current)} was not found in the repository history.`,
-              );
-            const source = pathToLocationIn(roots.workspace, parsed.sourcePath);
-            if (
-              source.kind === 'workspace' &&
-              (yield* (yield* WorkspaceFs).exists(source.relativePath))
-            ) {
-              yield* snapshot.refreshFiles;
-              return { kind: 'files', paths: [parsed.sourcePath] };
-            }
-            yield* host.notify(
-              'info',
-              `The base file ${parsed.sourcePath} could not be found. Keeping ${current} selected.`,
-            );
-          }
           return { kind: 'files', paths: [current] };
         }
         case 'addOpenedFiles': {
-          const opened = yield* (yield* editor("The editor's open files"))
-            .openedFiles;
+          const opened = yield* (yield* bound(
+            host.editor,
+            "The editor's open files",
+          )).openedFiles;
           // A file open in two tabs is listed once.
           const paths = new Set(
             opened.map((file) => workspaceRelativePath(roots.workspace, file)),
@@ -608,19 +506,31 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             ),
           };
         }
-        case 'openRunStorage':
-          yield* documentTaskFileActions.openRunStorage(request.runId);
+        case 'openRunStorage': {
+          const runDirectory = runDirUnder(roots.storage, request.runId);
+          yield* (yield* FileSystem.FileSystem)
+            .makeDirectory(runDirectory, { recursive: true })
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new Rejected({
+                    reason: `Failed to open run folder: ${toErrorMessage(cause)}`,
+                  }),
+              ),
+            );
+          yield* host.openDirectory(runDirectory);
           return done;
+        }
         case 'attachDroppedFiles': {
           const attached = yield* attachDroppedFiles(
             roots.workspace,
             request.paths,
             getIncludedExtensions(request.category),
           );
-          if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
+          if (attached.paths.length > 0 && attached.rejectedCount > 0) {
             yield* host.notify(
               'info',
-              `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-project item')}.`,
+              `Attached ${formatResultCount(attached.paths.length, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-project item')}.`,
             );
           }
           return { kind: 'files', paths: attached.paths };
@@ -651,7 +561,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           // `Cancelled` is the answer the form shows nothing for, and it keeps
           // the instruction to send again.
           yield* runActions
-            .runValidated(config, launchApprovalOptions(request))
+            .runValidated(config)
             .pipe(Effect.mapError(() => new Cancelled()));
           return done;
         }
@@ -690,9 +600,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           bridge.surfaceAction({ kind: 'select', runId: forked });
           return done;
         }
-        case 'runCompileFixer':
-          yield* runActions.runCompileFixer(request.runId);
-          return done;
         case 'useOwnApiKey':
           yield* apiKeyRetry.useOwnApiKey(request);
           return done;
@@ -700,20 +607,16 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'polish':
         case 'savePastedImage':
           return yield* draftRequests.handle(request, port);
-        case 'refreshCommits':
-          yield* snapshot.refreshCommits;
-          return done;
-        case 'refreshFiles':
-          yield* snapshot.refreshFiles;
+        case 'refreshUsage':
+          if (request.force)
+            yield* PlanQuotas.use((quotas) => quotas.invalidate());
+          yield* snapshot.refreshUsage;
           return done;
         case 'dismissBanner':
           yield* snapshot.dismissBanner(request.banner);
           return done;
         case 'toolEdit':
           yield* toolEditApprovals.handleAction(request);
-          return done;
-        case 'fileAction':
-          yield* documentTaskFileActions.handle(request);
           return done;
         case 'exportTranscript':
           if (!session.view.current().runs.has(request.runId))
@@ -723,31 +626,33 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             });
           yield* exportTranscript(request.runId);
           return done;
-        case 'latexdiff':
-          yield* latexdiff.run(request.runId);
-          return done;
-        case 'pack':
-        case 'clean':
-          yield* runActions.documentTaskFileOperation(
-            request.runId,
-            request.kind,
-          );
-          return done;
-        case 'latexdiffCommit':
-          yield* latexdiff.againstCommit(
-            request.action,
-            request.baseFile ?? '',
-            request.commit ?? 'HEAD',
-          );
-          return done;
         case 'openSettings':
-          yield* bindings.openSettings(request.target);
+          yield* host.openSettings(request.target);
+          return done;
+        case 'popOut':
+          yield* (yield* bound(host.placement, 'Pop-out to editor')).popOut;
+          return done;
+        case 'popBack':
+          yield* (yield* bound(host.placement, 'Pop-out to editor')).popBack;
+          return done;
+        case 'gettingStarted':
+          yield* (yield* bound(host.gettingStarted, 'Starting a project'))(
+            request.action,
+          );
+          return done;
+        case 'setReasoningLevel':
+          yield* setReasoningLevel(roots.globalState, {
+            modelName: request.model,
+            level: request.level,
+          });
+          // The rows name the level a run sends: reload them in every window.
+          yield* emitAppSignal('modelAccessChanged', undefined);
           return done;
         case 'apiKeyBanner':
           yield* request.action === 'set'
-            ? bindings.setApiKey()
+            ? host.setApiKey()
             : openLink(
-                bindings.openExternal,
+                host.openExternal,
                 texraGuideUrl('installation', 'setting-up-api-keys'),
               );
           return done;
@@ -757,15 +662,15 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'openInstallGuide':
           // Every dependency the banner lists installs from the one guide
           // page.
-          yield* openLink(bindings.openExternal, texraGuideUrl('installation'));
+          yield* openLink(host.openExternal, texraGuideUrl('installation'));
           return done;
         case 'onboarding':
           switch (request.action) {
             case 'signInChatGpt':
-              yield* bindings.onboarding.signInChatGpt;
+              yield* host.onboarding.signInChatGpt;
               return done;
             case 'setApiKey':
-              yield* bindings.setApiKey();
+              yield* host.setApiKey();
               return done;
             case 'skip':
               yield* setOnboardingDeclined(roots.globalState, true);
@@ -777,56 +682,24 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
               yield* setFirstRunDone(roots.globalState);
               return done;
             case 'openGettingStarted':
-              yield* bindings.onboarding.openGettingStarted;
+              yield* host.onboarding.openGettingStarted;
               return done;
           }
           return done;
       }
     });
   }
-  /** An own kind the host binds runs its handler; one it leaves out is
-   *  refused, worded here for both hosts. */
-  const own = (request: OwnHostCommand): HostVerb<HostOutcome> => {
-    const handler = host.own[request.kind];
-    if (handler === undefined)
-      return Effect.fail(notInThisApp(OWN_REQUEST_LABEL[request.kind]));
-    // cast: the handler bound under `request.kind` takes a request of that kind.
-    return (handler as (request: OwnHostCommand) => HostVerb<HostOutcome>)(
-      request,
-    );
-  };
   function handle(
     request: HostCommand,
     port: string,
   ): Effect.Effect<HostOutcome, HostCommandFailure, ProcessServices> {
-    return Effect.provide(
-      isOwnHostCommand(request) ? own(request) : shared(request, port),
-      requestLayer,
-    );
+    return Effect.provide(answer(request, port), requestLayer);
   }
-
-  const settingsRuns: GuiWindowSettingsRuns = {
-    revealRun: (runId) =>
-      session.view.current().runs.has(runId)
-        ? host.runs
-            .showRunView()
-            .pipe(
-              Effect.andThen(
-                Effect.sync(() =>
-                  bridge.surfaceAction({ kind: 'select', runId }),
-                ),
-              ),
-              Effect.as('revealed' as const),
-            )
-        : Effect.succeed('missing' as const),
-    runLabel: (runId) => session.view.current().runs.get(runId)?.label,
-  };
 
   return {
     bridge,
     snapshot,
     runValidated: runActions.runValidated,
     runSetup,
-    settingsRuns,
   };
 });

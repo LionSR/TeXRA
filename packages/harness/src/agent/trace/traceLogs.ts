@@ -26,6 +26,7 @@ import {
   type ContextManagementData,
   type ErrorContext,
   type ErrorLogData,
+  type FollowUpSender,
   type MediaAttachmentKind,
   type ModelFailure,
   type ScriptDeliverySummary,
@@ -149,16 +150,20 @@ export function logUserMessage(
   trace: AgentTrace,
   message: string,
   {
+    from,
     attachments,
     media,
     scriptSummary,
   }: {
+    /** Who sent it; the person when absent. */
+    readonly from?: FollowUpSender;
     readonly attachments?: readonly MediaAttachmentKind[];
     readonly media?: readonly StoredMedia[];
     readonly scriptSummary?: ScriptDeliverySummary;
   } = {},
 ): void {
   const data = {
+    ...(from !== undefined && from.kind !== 'user' ? { from } : {}),
     ...(attachments?.length ? { attachments } : {}),
     ...(media?.length ? { media } : {}),
     ...(scriptSummary ? { scriptSummary } : {}),

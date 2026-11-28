@@ -1,4 +1,4 @@
-import { Array as Arr, Effect, FileSystem, Iterable, Result } from 'effect';
+import { Array as Arr, Effect, FileSystem, Result } from 'effect';
 
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { pathExists } from '@texra-ai/worldline/node';
@@ -22,9 +22,6 @@ const CHINESE_PACKAGES = [
   'ctexbook',
 ];
 
-/** texcount runs one subprocess per file, so bound the fan-out. */
-const COUNT_CONCURRENCY = 4;
-
 const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
   absolutePath: string,
 ) {
@@ -43,15 +40,6 @@ const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
 });
 
 export type TexcountMode = 'separate' | 'include';
-
-interface TexcountOptions {
-  mode?: TexcountMode;
-}
-
-interface TexcountResult {
-  output: string | null;
-  errors: string[];
-}
 
 /** Returns why the file cannot be counted, or null when it is countable. */
 const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
@@ -75,141 +63,70 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
 });
 
 /**
- * Invoke `texcount`. The subprocess is cancelled by the fiber's own
- * interruption, which `runTool` carries into the spawn, so no caller threads
- * a signal in. A missing texcount is the caller's `ToolMissing`.
+ * Count the words in one workspace-relative LaTeX file with `texcount`,
+ * succeeding with texcount's raw report or failing with the sentence to show.
+ * The subprocess is cancelled by the fiber's own interruption, which
+ * `runTool` carries into the spawn, so no caller threads a signal in.
  */
-const runTexcount = Effect.fn('texcount.runTexcount')(function* (
-  workspaceRoot: string | undefined,
-  args: string[],
-  context: string,
-): Effect.fn.Return<
-  { stdout: string | null; error?: string },
-  Error,
-  ChildProcessSpawner
-> {
-  const result = yield* runTool('texcount', args, {
-    // The file arguments are workspace-relative, so the root the caller
-    // counted for is also the directory texcount resolves them against.
-    cwd: workspaceRoot,
-  });
-
-  if (result.success && result.stdout) {
-    yield* Effect.logDebug(`Successfully counted ${context}`);
-    return { stdout: result.stdout };
-  }
-
-  yield* Effect.logError(`Error getting tex count for ${context}`);
-  if (result.stdout) {
-    yield* Effect.logError(`Stdout: ${result.stdout}`);
-  }
-  if (result.stderr) {
-    yield* Effect.logError(`Stderr: ${result.stderr}`);
-  }
-
-  return {
-    stdout: null,
-    error:
-      `texcount failed while processing ${context}.` +
-      (result.stderr ? ` Details: ${result.stderr}` : ''),
-  };
-});
-
-const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
-  function* (
-    workspaceRoot: string | undefined,
-    paths: readonly string[],
-    includeReferenced: boolean,
-  ) {
-    const results = yield* Effect.forEach(
-      paths,
-      Effect.fnUntraced(function* (filePath) {
-        const absolutePath = pathToLocationIn(
-          workspaceRoot,
-          filePath,
-        ).absolutePath;
-        const reason = yield* rejectionReason(absolutePath);
-        if (reason) {
-          return { output: null, error: reason };
-        }
-
-        const args: string[] = [];
-        if (includeReferenced) {
-          args.push('-inc');
-        }
-        if (yield* hasChinesePackages(absolutePath)) {
-          args.push('-ch-only');
-        }
-        args.push(filePath);
-
-        const { stdout, error } = yield* runTexcount(
-          workspaceRoot,
-          args,
-          filePath,
-        );
-        return {
-          output: stdout
-            ? `TeX Count Results for ${filePath}:\n${stdout}`
-            : null,
-          error,
-        };
-      }),
-      { concurrency: COUNT_CONCURRENCY },
-    );
-
-    return {
-      outputs: [...Iterable.flatMapNullishOr(results, ({ output }) => output)],
-      errors: [...Iterable.flatMapNullishOr(results, ({ error }) => error)],
-    };
-  },
-);
-
 export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
   workspaceRoot: string | undefined,
-  filePaths: string | string[],
-  { mode = 'separate' }: TexcountOptions = {},
+  filePath: string,
+  mode: TexcountMode,
 ): Effect.fn.Return<
-  TexcountResult,
+  Result.Result<string, string>,
   never,
   FileSystem.FileSystem | ChildProcessSpawner
 > {
   const counted = Effect.gen(function* () {
-    const trimmedPaths = Arr.ensure(filePaths)
-      .map((filePath) => filePath.trim())
-      .filter((filePath) => filePath.length > 0);
-
-    if (trimmedPaths.length === 0) {
-      const message = 'No LaTeX files provided for texcount.';
-      yield* Effect.logWarning(message);
-      return { output: null, errors: [message] };
+    const absolutePath = pathToLocationIn(workspaceRoot, filePath).absolutePath;
+    const reason = yield* rejectionReason(absolutePath);
+    if (reason) {
+      return Result.fail(reason);
     }
 
-    const { outputs, errors } = yield* getIndividualCounts(
-      workspaceRoot,
-      trimmedPaths,
-      mode === 'include',
+    const args: string[] = [];
+    if (mode === 'include') {
+      args.push('-inc');
+    }
+    if (yield* hasChinesePackages(absolutePath)) {
+      args.push('-ch-only');
+    }
+    args.push(filePath);
+
+    const result = yield* runTool('texcount', args, {
+      // The file argument is workspace-relative, so the root the caller
+      // counted for is also the directory texcount resolves it against.
+      cwd: workspaceRoot,
+    });
+
+    if (result.success && result.stdout) {
+      yield* Effect.logInfo(
+        `TeX Count Results for ${filePath}:\n${result.stdout}`,
+      );
+      return Result.succeed(result.stdout);
+    }
+
+    yield* Effect.logError(`Error getting tex count for ${filePath}`);
+    if (result.stdout) {
+      yield* Effect.logError(`Stdout: ${result.stdout}`);
+    }
+    if (result.stderr) {
+      yield* Effect.logError(`Stderr: ${result.stderr}`);
+    }
+    return Result.fail(
+      `texcount failed while processing ${filePath}.` +
+        (result.stderr ? ` Details: ${result.stderr}` : ''),
     );
-    if (outputs.length === 0) {
-      if (errors.length === 0) {
-        errors.push('texcount did not return output for the requested files.');
-      }
-      return { output: null, errors };
-    }
-
-    const combinedOutput = outputs.join('\n\n');
-    yield* Effect.logInfo(`Combined TeX Count Results:\n${combinedOutput}`);
-    return { output: combinedOutput, errors };
   });
 
-  // Every failure below is a counting failure, reported in `errors` rather
-  // than raised: a caller asking for a word count wants the partial answer
-  // and the reason, not a thrown run.
+  // Every failure below is a counting failure, returned rather than raised:
+  // a caller asking for a word count wants the reason, not a thrown run.
   return yield* counted.pipe(
     Effect.catch((err) =>
       Effect.suspend(() => {
         const errorMessage = `Error in getTeXCount: ${toErrorMessage(err)}`;
         return Effect.logError(errorMessage).pipe(
-          Effect.as<TexcountResult>({ output: null, errors: [errorMessage] }),
+          Effect.as(Result.fail(errorMessage)),
         );
       }),
     ),
@@ -241,12 +158,3 @@ export function parseTeXCountStats(output: string): TeXCountStat[] {
       : Result.failVoid;
   });
 }
-
-export const getTeXCountStats = Effect.fn('texcount.getTeXCountStats')(
-  function* (workspaceRoot: string | undefined, filePaths: string | string[]) {
-    const { output } = yield* getTeXCount(workspaceRoot, filePaths);
-    return output
-      ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`
-      : null;
-  },
-);

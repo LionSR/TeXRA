@@ -13,9 +13,7 @@ lists in `Sessions.layer({ platform, plugins, client })` beside its own.
 
 - **Every built-in**: [`harnessBuiltins`](#harnessbuiltins), each with no
   app options.
-- **One by one**: [`codemode`](#codemode), [`fileOps`](#fileops) (with the
-  [`WriteFilter`](#writefilter) an app applies to what `write_file`
-  writes), [`goal`](#goal), [`memoryWorkflow`](#memoryworkflow),
+- **One by one**: [`codemode`](#codemode), [`fileOps`](#fileops), [`goal`](#goal), [`memoryWorkflow`](#memoryworkflow),
   [`multiAgent`](#multiagent) (the `agent` tool,
   [`AGENT_TOOL_NAME`](#agent_tool_name), and the `program` tool), and
   [`web`](#web).
@@ -50,11 +48,10 @@ const codemode: Plugin
 
 ## fileOps
 
-Files and the shell: every agent needs them. An app passes the filter
-`write_file` applies to what it writes (its own content replacements).
+Files and the shell: every agent needs them.
 
 ```ts
-const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) => Plugin
+const fileOps: Plugin
 ```
 
 ## goal
@@ -105,18 +102,4 @@ The web: `web_search` and `web_fetch`.
 
 ```ts
 const web: Plugin
-```
-
-## WriteFilter
-
-What an app does to the content `write_file` is given before it proposes
-it, by path, under the call's workspace configuration (text replacements
-for a file type, say). The harness's `write_file` writes what it is given.
-
-```ts
-type WriteFilter = (
-  path: string,
-  content: string,
-  config: ConfigProvider,
-) => Effect.Effect<string>;
 ```

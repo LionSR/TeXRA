@@ -1,5 +1,5 @@
-// Main-process IPC for the workspace shell surfaces: terminal pty sessions
-// and embedded browser tabs. Both are renderer-driven, and the sandboxed
+// Main-process IPC for the workspace shell surfaces: terminal pty sessions.
+// They are renderer-driven, and the sandboxed
 // renderer has no node integration, so every request lands here, validated
 // against its schema at the boundary. The editor pane's file I/O is the app's
 // `workspaceFile` request (`workspaceFileRequest.ts`), answered by the
@@ -12,23 +12,14 @@ import type { HostFailed } from '@texra/hosts/uiHosts';
 
 import {
   DESKTOP_WORKSPACE_COMMANDS,
-  type DesktopBrowserBounds,
   type DesktopWorkspaceInboundMessage,
   type DesktopWorkspaceReply,
 } from '../shared/desktopWorkspaceMessages.js';
 import type { ProcessServices } from '@texra-ai/worldline/host';
 import type { DesktopPtyHost } from './desktopPtyHost.js';
-import type { DesktopBrowserViews } from './desktopBrowserViews.js';
 
 interface DesktopWorkspaceIpcOptions {
   ptyHost: DesktopPtyHost;
-  browserViews: DesktopBrowserViews;
-  /**
-   * Translates renderer-reported CSS pixel bounds into window coordinates.
-   * A WebContentsView is positioned in device-independent window space, which
-   * differs from the renderer's own coordinates under display zoom.
-   */
-  toWindowBounds(bounds: DesktopBrowserBounds): DesktopBrowserBounds;
 }
 
 interface DesktopWorkspaceIpc {
@@ -40,17 +31,17 @@ interface DesktopWorkspaceIpc {
   /**
    * Releases resources owned by the current renderer document.
    *
-   * Renderer reload creates a new terminal-id namespace and a new browser-tab
-   * layout, so neither resource may survive across that boundary.
+   * Renderer reload creates a new terminal-id namespace, so no terminal
+   * may survive across that boundary.
    */
   disposeRendererResources(): void;
 
   /**
    * Tells the renderer to re-list its file tree. The project's binding runs
    * it on each write TeXRA makes inside the project (the host snapshot's
-   * `filesWritten`): accepted outputs and diffs write straight to disk, past
-   * the editor's own write path, and the tree caches its listing with no
-   * watcher behind it.
+   * `filesWritten`): a tool's edits and a service task's files go straight
+   * to disk, past the editor's own write path, and the tree caches its
+   * listing with no watcher behind it.
    */
   readonly filesChanged: Effect.Effect<void>;
 }
@@ -103,7 +94,6 @@ export function createDesktopWorkspaceIpc(
   return {
     disposeRendererResources() {
       options.ptyHost.disposeAll();
-      options.browserViews.disposeAll();
     },
 
     filesChanged,
@@ -128,26 +118,6 @@ export function createDesktopWorkspaceIpc(
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE:
           return Effect.sync(() => {
             options.ptyHost.get(data.sessionId)?.dispose();
-          });
-
-        case DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN:
-          return Effect.sync(() => {
-            options.browserViews.open(data.tabId, data.url);
-          });
-        case DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS:
-          return Effect.sync(() => {
-            options.browserViews.show(
-              data.tabId,
-              options.toWindowBounds(data.bounds),
-            );
-          });
-        case DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE:
-          return Effect.sync(() => {
-            options.browserViews.hideAll();
-          });
-        case DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE:
-          return Effect.sync(() => {
-            options.browserViews.close(data.tabId);
           });
       }
     },

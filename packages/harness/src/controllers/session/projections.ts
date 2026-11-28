@@ -85,7 +85,6 @@ interface Projector {
   readonly unread?: (
     aggregate: RunId,
     commit: number,
-    prior: string | undefined,
   ) => readonly ProjectionOp[];
 }
 
@@ -116,7 +115,7 @@ function pricedUsage(event: SessionRow): TokenUsageStats | null {
         priced = event.payload.usage;
       break;
     case 'context.edit':
-      priced = event.payload.usage;
+      if (event.payload.cause === 'compaction') priced = event.payload.usage;
       break;
     case 'run.description':
       priced = event.usage;
@@ -370,8 +369,7 @@ export function projectionUpkeep(
           const aggregate = Schema.decodeUnknownSync(RunIdSchema)(
             row.logicalId,
           );
-          const prior = yield* priorOf(projector, aggregate);
-          for (const op of projector.unread?.(aggregate, commit, prior) ?? [])
+          for (const op of projector.unread?.(aggregate, commit) ?? [])
             yield* exec(...opStatement(op));
         }
         const reached =

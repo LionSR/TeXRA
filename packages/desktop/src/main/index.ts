@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit, Scope } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Scope } from 'effect';
 import { app, BrowserWindow, session } from 'electron';
 
 import { Sessions } from '@texra-ai/worldline';
@@ -91,6 +91,13 @@ function installContentSecurityPolicy(): void {
  * does not.
  */
 export const startDesktop = (mainDir: string): void => {
+  // A startup that fails, or that a quit ends, closes the window it had
+  // opened. That close must not quit the app: the failure's report does,
+  // after it has been shown, and a quit is already under way.
+  let startupAbandoned = false;
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin' && !startupAbandoned) app.quit();
+  });
   void Effect.runPromise(
     Effect.gen(function* () {
       // A rejection is a defect: nothing recovers it, and the fatal report
@@ -101,7 +108,7 @@ export const startDesktop = (mainDir: string): void => {
       let projects: DesktopProjectRegistry | undefined;
       // The shutdown handlers, the startup program, and every surface they
       // wire run on the process runtime the platform builds.
-      const { runtime, processScope, initialize } =
+      const { runtime, processScope, initialize, dataRoot, layout } =
         yield* initializeElectronPlatform(mainDir);
       // The process's shutdown is this scope's close. Its finalizers run in
       // the reverse of their registration: the window releases everything it
@@ -142,9 +149,66 @@ export const startDesktop = (mainDir: string): void => {
       // Once this program completes, the lifecycle owns that cleanup. The
       // original failure is re-raised, not wrapped: the fatal report below
       // prints `error.stack` from the `Cause.squash`'d error.
+      const quitAsked = yield* Deferred.make<void>();
+      const startupOver = yield* Deferred.make<void>();
       yield* withProcessServices(
         runtime,
         Effect.gen(function* () {
+          // The window opens first and loads its page while everything
+          // below runs; it shows the projects once the registry is here.
+          installContentSecurityPolicy();
+          const opened = yield* Deferred.make<DesktopProjectRegistry>();
+          const windows = createDesktopWindows({
+            runtime,
+            open: (hooks) =>
+              openDesktopWindow(
+                {
+                  projects: Deferred.await(opened),
+                  draftRequests,
+                  layout,
+                  runtime,
+                },
+                hooks,
+              ),
+          });
+          yield* Scope.addFinalizer(shutdownScope, windows.released);
+          // This process holds the single-instance lock (`bootstrap.ts`): a
+          // second launch focuses the running window and quits itself.
+          app.on('second-instance', () => windows.focus());
+          // Both are heard from here on, while the projects still open: a
+          // window closed in that time is reopened as one closed later is.
+          app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0) windows.reopen();
+          });
+          // Ask the renderer to close before draining process services. A dirty
+          // editor can veto that close and remain fully operational. Once the
+          // window really closes, its handler calls app.quit() again and this
+          // listener proceeds with the ordinary shutdown chain. Installed
+          // before the window opens: a quit while the projects still open
+          // ends the startup first, then runs the same shutdown.
+          installDesktopBeforeQuitWiring({
+            app,
+            getMainWindow: windows.window,
+            shutdown: Deferred.succeed(quitAsked, undefined).pipe(
+              Effect.andThen(Deferred.await(startupOver)),
+              Effect.andThen(shutdown),
+            ),
+            continueAfterWindowClose: windows.continueQuitAfterClose,
+          });
+          // A startup that fails or is quit closes this scope, and the
+          // opening window with it, before the shutdown runs.
+          const opening = yield* Effect.forkScoped(windows.open);
+          // The app is a client of the one background service, so a
+          // folder's tasks keep running when it quits and other windows and
+          // terminals see them. An app that cannot reach it runs them here,
+          // and each folder's window says so (`openProjectSession`). A
+          // service that has to start takes about a second, so it is asked
+          // for before the login shell and the config are read; it reads
+          // its own environment and takes none of this process's.
+          const reaching = yield* reachBundledService(
+            dataRoot,
+            layout.serviceRoot,
+          ).pipe(Scope.provide(processScope), Effect.result, Effect.forkScoped);
           const platformInit = yield* initialize;
           const projectRecords = openDesktopProjectRecords(yield* GlobalValues);
           // Reopen every folder left open last time and show the one shown
@@ -154,17 +218,10 @@ export const startDesktop = (mainDir: string): void => {
           const remembered = yield* readRememberedDesktopProjects().pipe(
             Effect.provideService(DesktopProjectRecords, projectRecords),
           );
-          // The app is a client of the one background service, so a
-          // folder's tasks keep running when it quits and other windows and
-          // terminals see them. An app that cannot reach it runs them here,
-          // and each folder's window says so (`openProjectSession`).
-          const service = yield* reachBundledService(
-            platformInit.dataRoot,
-            platformInit.layout.serviceRoot,
-          ).pipe(Scope.provide(processScope), Effect.result);
+          const service = yield* Fiber.join(reaching);
           const registry = yield* openDesktopProjectRegistry({
             service,
-            dataRoot: platformInit.dataRoot,
+            dataRoot,
             processRoots: platformInit.processRoots,
             processScope,
             globalConfigStore: platformInit.globalConfigStore,
@@ -192,36 +249,8 @@ export const startDesktop = (mainDir: string): void => {
           );
           yield* registry.activate(registry.list().at(-1)?.roots.workspace);
 
-          installContentSecurityPolicy();
-          const windows = createDesktopWindows({
-            runtime,
-            open: (hooks) =>
-              openDesktopWindow(
-                {
-                  projects: registry,
-                  draftRequests,
-                  layout: platformInit.layout,
-                  runtime,
-                },
-                hooks,
-              ),
-          });
-          yield* Scope.addFinalizer(shutdownScope, windows.released);
-          // This process holds the single-instance lock (`bootstrap.ts`): a
-          // second launch focuses the running window and quits itself. One
-          // that lands before the windows exist has nothing to focus.
-          app.on('second-instance', () => windows.focus());
-          // Ask the renderer to close before draining process services. A dirty
-          // editor can veto that close and remain fully operational. Once the
-          // window really closes, its handler calls app.quit() again and this
-          // listener proceeds with the ordinary shutdown chain.
-          installDesktopBeforeQuitWiring({
-            app,
-            getMainWindow: windows.window,
-            shutdown,
-            continueAfterWindowClose: windows.continueQuitAfterClose,
-          });
-          yield* windows.open;
+          yield* Deferred.succeed(opened, registry);
+          yield* Fiber.join(opening);
           // The one-time telemetry notice, shown once the window exists.
           const notice = yield* telemetryNoticeIfDue(
             platformInit.processRoots.config,
@@ -234,9 +263,6 @@ export const startDesktop = (mainDir: string): void => {
             (message) => noticeIn(processScope)('warning', message),
             { discard: true },
           );
-          app.on('activate', () => {
-            if (BrowserWindow.getAllWindows().length === 0) windows.reopen();
-          });
           // For the process lifetime: the fallback project's scope is the
           // last the shutdown releases.
           yield* followDesktopAttention(
@@ -263,8 +289,21 @@ export const startDesktop = (mainDir: string): void => {
               `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
             );
           }
-        }),
-      ).pipe(Effect.onError(() => shutdown));
+        }).pipe(
+          Effect.onError(() =>
+            Effect.sync(() => {
+              startupAbandoned = true;
+            }),
+          ),
+          Effect.scoped,
+        ),
+      ).pipe(
+        // A quit asked for meanwhile interrupts the startup, which releases
+        // what it had opened; the quit's own handler then shuts down.
+        Effect.raceFirst(Deferred.await(quitAsked)),
+        Effect.onError(() => shutdown),
+        Effect.ensuring(Deferred.succeed(startupOver, undefined)),
+      );
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.sync(() => reportFatalStartupError(Cause.squash(cause))),
@@ -272,7 +311,3 @@ export const startDesktop = (mainDir: string): void => {
     ),
   );
 };
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});

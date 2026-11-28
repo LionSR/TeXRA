@@ -5,7 +5,7 @@
 }
 .desktop-app {
   display: grid;
-  grid-template-rows: var(--height-header) minmax(0, 1fr);
+  grid-template-rows: var(--height-header) minmax(0, 1fr) auto;
   height: 100vh;
   overflow: hidden;
 }
@@ -31,7 +31,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   position: absolute;
   right: 0;
   top: 0;
-  --dot-color: var(--tone-color);
   pointer-events: none;
 }
 .shell-workspace-project {
@@ -102,7 +101,15 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   background: var(--wa-color-surface-lowered);
 }
 .shell-sidebar-primary {
-  padding: var(--wa-space-s) var(--wa-space-s) var(--wa-space-2xs);
+  display: grid;
+  gap: var(--wa-space-3xs);
+  padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-2xs);
+}
+/* Search reads as a field: it opens the palette, where typing happens. */
+.shell-sidebar-search::part(base) {
+  justify-content: flex-start;
+  background: var(--wa-color-surface-raised);
+  color: var(--color-text-secondary);
 }
 .shell-sidebar-scroll {
   min-height: 0;
@@ -117,31 +124,20 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 36px;
+  min-height: var(--row-height);
   gap: var(--wa-space-xs);
   padding-inline: var(--wa-space-xs) var(--wa-space-2xs);
 }
-.shell-sidebar-section-label {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  letter-spacing: 0.02em;
-}
-.shell-history-section {
-  margin-top: var(--wa-space-m);
-}
 .shell-project-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) repeat(2, var(--height-control-compact));
+  grid-template-columns:
+    var(--height-control-compact) minmax(0, 1fr)
+    var(--height-control-compact);
   gap: var(--wa-space-2xs);
   align-items: center;
-  min-height: 34px;
+  min-height: var(--row-height);
   padding-inline-end: var(--wa-space-2xs);
-  margin-block: var(--wa-space-3xs);
   border-radius: var(--row-radius);
-}
-.shell-project-item.is-active {
-  background: var(--wa-color-surface-raised);
 }
 .shell-project-item:hover {
   background: var(--surface-hover);
@@ -152,19 +148,14 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-project-name {
   display: block;
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-semibold);
 }
-.shell-project-status {
-  grid-column: 2;
-  justify-self: center;
-  --dot-color: var(--tone-color);
-}
-.shell-project-status.tone-unseen {
-  --tone-color: var(--wa-color-brand-fill-loud);
+/* A row's menu shows once the row is pointed at, focused or open. */
+.shell-project-item:not(:hover, :focus-within) .shell-project-menu {
+  opacity: 0;
 }
 .shell-project-menu {
   display: block;
-  grid-column: 3;
   width: var(--height-control-compact);
   height: var(--height-control-compact);
   color: var(--color-text-secondary);
@@ -173,14 +164,40 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   margin-inline-start: var(--wa-space-2xs);
   width: calc(100% - var(--wa-space-2xs));
 }
+.shell-project-toggle {
+  color: var(--color-text-secondary);
+}
+/* A project's tasks sit under its row. A task row leads with its status,
+   in the column the project's folder stands in, then its title and when it
+   last moved; the agents it started sit under it. The task on screen is
+   one raised card, its shown row tinted. */
 .shell-project-runs {
   --run-tab-padding-inline-start: var(--wa-space-xs);
-  --run-tab-row-gap: var(--wa-space-3xs);
+  --run-tab-row-gap: 0;
   --run-tab-radius: var(--row-radius);
   --run-tab-meta-display: none;
   --run-tab-detail-display: none;
+  --run-tab-rollup-display: none;
+  --run-tab-time-display: inline;
   --run-tab-status-width: var(--height-control-compact);
+  --run-tab-status-order: -1;
+  --run-tab-idle-status-display: inline-flex;
   --run-tab-status-label-display: none;
+  --run-tab-nested-icon-display: none;
+  --run-tab-expand-order: 1;
+  --run-tab-child-indent: 0;
+  --run-tab-child-margin: var(--wa-space-s);
+  --wa-color-list-active-bg: var(--surface-hover);
+  --wa-color-list-active-fg: var(--wa-color-text-normal);
+  --run-node-shown-background: var(--wa-color-surface-raised);
+  --run-node-shown-border: var(--wa-color-surface-border);
+  margin-block-end: var(--wa-space-xs);
+}
+/* One task reads as shown in the rail: the shown project's. */
+.shell-project-runs:not(.is-active) {
+  --wa-color-list-active-bg: transparent;
+  --run-node-shown-background: transparent;
+  --run-node-shown-border: transparent;
 }
 .shell-sidebar-sessions > run-tabs {
   display: flex;
@@ -189,7 +206,8 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   --color-border: transparent;
 }
 .shell-sidebar-footer {
-  padding: var(--wa-space-xs) var(--wa-space-s);
+  display: flex;
+  padding: var(--wa-space-2xs) var(--wa-space-s);
 }
 
 /* Task reading surface. The transcript owns its one bounded content column. */
@@ -206,11 +224,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-files {
   align-content: start;
   padding: var(--wa-space-xs);
-}
-.shell-files .desktop-editor-tree-header > span {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
 }
 .shell-files .desktop-editor-tree-list {
   display: block;
@@ -271,4 +284,21 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   .shell-workspace-toolbar {
     gap: var(--wa-space-xs);
   }
+}
+
+/* The window's status line: quiet text on the rail's surface. */
+.shell-statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--wa-space-s);
+  min-width: 0;
+  height: var(--height-control-compact);
+  padding: 0 var(--wa-space-s);
+  border-top: var(--border-thin) solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-lowered);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+.shell-statusbar plan-usage-meters {
+  height: 100%;
 }

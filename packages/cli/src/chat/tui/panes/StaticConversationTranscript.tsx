@@ -82,7 +82,7 @@ function SessionHeaderBlock({
   readonly compact: boolean;
   readonly identityLine: string;
   readonly meta: SessionMeta;
-  readonly width?: number;
+  readonly width: number;
 }): React.JSX.Element {
   const columns = transcriptColumns(width);
   if (compact) {
@@ -182,7 +182,7 @@ export function StaticConversationTranscript({
   readonly ownerKey: string;
   readonly scrollback: ChatScrollback;
   readonly scrollbackRunId: RunId | undefined;
-  readonly width?: number;
+  readonly width: number;
 }): React.JSX.Element {
   const normalizedWidth = transcriptColumns(width);
   const view = useSignal(sessionView());
@@ -192,10 +192,7 @@ export function StaticConversationTranscript({
     const stream = runViewOf(view, scrollbackRunId);
     const merged = conversationRows(stream, allNotices, scrollbackRunId);
     return {
-      entries:
-        stream === undefined && merged.rows.length === 0
-          ? undefined
-          : merged.rows,
+      entries: merged.rows,
       finalRows: merged.finalRows,
       working: stream != null && isWorking(stream),
       waitingForChildIdentity:

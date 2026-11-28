@@ -119,7 +119,7 @@ interface DisclosureGlyph {
   readonly icon?: undefined;
 }
 
-export type IconActionButtonOptions = ActionButtonCommon &
+type IconActionButtonOptions = ActionButtonCommon &
   ActionButtonTooltip &
   (
     | { readonly icon: IconName; readonly expanded?: undefined }
@@ -140,7 +140,7 @@ export type IconActionButtonOptions = ActionButtonCommon &
     readonly splitMain?: boolean;
   };
 
-export type LabeledActionButtonOptions = ActionButtonCommon &
+type LabeledActionButtonOptions = ActionButtonCommon &
   ActionButtonTooltip &
   (
     | { readonly icon?: IconName; readonly expanded?: undefined }

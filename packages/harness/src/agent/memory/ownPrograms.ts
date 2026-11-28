@@ -21,14 +21,12 @@ import type { Effect, FileSystem } from 'effect';
 
 // Local imports
 import {
+  PROGRAMS_DIRECTORY,
   readPrograms,
   type PluginPrograms,
 } from '@common/plugins/pluginPrograms';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { OWN_PROGRAM_PREFIX } from '@shared/schemas';
-
-/** The directory of a project's memory folder that holds them. */
-export const OWN_PROGRAMS_DIRECTORY = 'programs';
 
 /**
  * How many of them a step lists to its model. The list is sent with every
@@ -47,7 +45,7 @@ export const readOwnPrograms = (
   const root = path.join(
     storage,
     WORKSPACE_STORAGE_LAYOUT.memory,
-    OWN_PROGRAMS_DIRECTORY,
+    PROGRAMS_DIRECTORY,
   );
   return readPrograms({
     root,

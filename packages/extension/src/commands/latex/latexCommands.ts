@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Option } from 'effect';
+import { Effect, Option, Result } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -19,13 +19,16 @@ import {
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { entryAgent } from '@texra/agent/entryAgent';
-import { COMPILE_FIX_RULES } from '@texra/agent/output/compileFixer';
-import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 import type { WorkspaceRoots } from '@texra-ai/worldline';
 import type { ProcessServices } from '@texra-ai/worldline/host';
+
+/** How a compile fix is done, said in the instruction the command starts
+ *  its conversation with. */
+const COMPILE_FIX_RULES =
+  'Keep edits minimal and in place: never rewrite or replace a workspace file wholesale, never change the mathematical content, never delete content to silence an error, and never invent a reference. Compile with `latexmk -pdf -interaction=nonstopmode <file>` to get a log (many undefined-reference and rerun messages need only a full rebuild), fix one issue at a time and recompile to confirm: errors first, then references, citations and hyperlinks, then warnings and bad boxes. If the failure comes from how the compile was invoked (working directory, `TEXINPUTS`, a file missing where it compiles) and not from the source, report that and stop. When done, summarize what changed.';
 
 export function handleFixCompilation(
   roots: WorkspaceRoots,
@@ -39,16 +42,12 @@ export function handleFixCompilation(
       saveDocument: true,
       errorMessage: 'Error launching LaTeX compilation fixer',
     },
-    Effect.fnUntraced(function* ({ editor, relativePath }) {
+    Effect.fnUntraced(function* ({ relativePath }) {
       yield* Effect.logInfo(
         `Launching agent to fix compilation for: ${relativePath}`,
       );
 
-      const instruction = yield* buildLatexdiffAwareFixInstruction(
-        `Fix the LaTeX compilation errors in ${relativePath}. ${COMPILE_FIX_RULES}`,
-        editor.document.fileName,
-        roots.workspace,
-      );
+      const instruction = `Fix the LaTeX compilation errors in ${relativePath}. ${COMPILE_FIX_RULES}`;
 
       // The command starts the fix on the default
       // model and `helperModel` swaps in the helper model, which is checked
@@ -148,19 +147,18 @@ export function handleGetTeXCount(
         Effect.fnUntraced(function* (progress) {
           progress.report({ message: 'Running texcount…' });
 
-          const { output, errors } = yield* getTeXCount(
+          const count = yield* getTeXCount(
             roots.workspace,
             relativePath,
-            { mode: countingMode.value },
+            countingMode.value,
           );
 
-          if (!output) {
-            const message = errors[0] ?? 'Could not count words in this file.';
-            yield* showLoggedMessage(message);
+          if (Result.isFailure(count)) {
+            yield* showLoggedMessage(count.failure);
             return;
           }
 
-          const stats = parseTeXCountStats(output);
+          const stats = parseTeXCountStats(count.success);
 
           yield* quickPick(stats, {
             placeHolder: 'Word count results (press Esc to dismiss)',

@@ -62,7 +62,6 @@ const PURE_DIRS = [
   'llm',
   'logger',
   'model',
-  'replacement',
   'schemas',
   'scripts',
   'shared',

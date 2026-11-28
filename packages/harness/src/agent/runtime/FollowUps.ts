@@ -133,7 +133,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
     followUps: readonly QueuedMessage[],
   ) {
-    const { capabilities } = (yield* ScopedRef.get(run.model)).config;
+    const bound = yield* ScopedRef.get(run.model);
     const parts: (InputPart | StoredInputPart)[] = [];
     const kinds: (readonly MediaAttachmentKind[])[] = [];
     const now = yield* Clock.currentTimeMillis;
@@ -152,14 +152,14 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       });
       const badges: MediaAttachmentKind[] = [];
       for (const { name, mimeType, digest } of content.media ?? []) {
-        const part = storedMediaPart(mimeType, digest, capabilities);
+        const part = storedMediaPart(mimeType, digest, bound);
         if (part !== null) {
           parts.push(part);
           if (part.kind === 'image' || part.kind === 'document')
             badges.push(part.kind);
         } else if (
           mimeType === 'application/pdf' &&
-          capabilities.supportsVision
+          bound.config.capabilities.supportsVision
         ) {
           const base64 = (yield* log.blobs([digest]))(digest);
           const pages = yield* Effect.result(storedPdfPages(name, base64));
@@ -186,7 +186,12 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       const { text, scriptSummary } = followUpDisplay(content);
       const media = 'delivery' in content ? undefined : content.media;
       const attachments = kinds[i];
-      logUserMessage(logger, text, { attachments, media, scriptSummary });
+      logUserMessage(logger, text, {
+        from: content.from,
+        attachments,
+        media,
+        scriptSummary,
+      });
     }
   };
 

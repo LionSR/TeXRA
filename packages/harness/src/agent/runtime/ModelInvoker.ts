@@ -47,8 +47,6 @@ import {
   MESSAGE_TYPES,
   type StepAfterFailure,
   type InvocationRef,
-  type ModelFailure,
-  type NormalizedUsage,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { HistoryMessage } from '@shared/session/historyTurns';
@@ -71,6 +69,7 @@ import {
 import type { StateReadFailed } from '@shared/config/settings';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog } from '@shared/usageLog';
+import { appendTail } from '@utils/text/appendTail';
 
 import { resendDelayMs, RouteAnswered, RouteRetries } from './ModelRetryGate';
 import { decisionOf, openRequest } from './requests';
@@ -87,7 +86,7 @@ import {
   type InvokeRequest,
 } from './run/recordedRequest';
 import { providerMessages } from './providerMessages';
-import { dispatchFactsFor, localCallsOf } from './run/tools';
+import { dispatchFact, localCallsOf } from './run/tools';
 import { configRow } from './loop/rows';
 import type { SessionServices } from './rootLaunch';
 
@@ -272,9 +271,11 @@ export const modelInvokerLayer = (): Layer.Layer<
                   trace.output.append(event.text);
                   // Kept for the failure path only: a completed turn reports
                   // its own text, so this tail is read when the stream dies.
-                  completed.streamedText = (
-                    completed.streamedText + event.text
-                  ).slice(-PARTIAL_TEXT_TAIL_MAX);
+                  completed.streamedText = appendTail(
+                    completed.streamedText,
+                    event.text,
+                    PARTIAL_TEXT_TAIL_MAX,
+                  );
                 }
                 return;
               case 'completed':
@@ -326,10 +327,9 @@ export const modelInvokerLayer = (): Layer.Layer<
         yield* saveDebug(turn, 'response', invocation, bound);
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs);
         const responseId = randomUUID();
-        const calls = dispatchFactsFor(
-          localCallsOf(turn.content),
-          (yield* ScopedRef.get(run.steps))?.tools.registry,
-          logger,
+        const registry = (yield* ScopedRef.get(run.steps))?.tools.registry;
+        const calls = localCallsOf(turn.content).map((call) =>
+          dispatchFact(call, registry),
         );
         // The completed turn, committed once before any local tool runs; it
         // closes the invocation and retires its failure in the fold.
@@ -540,63 +540,43 @@ export const modelInvokerLayer = (): Layer.Layer<
           ),
         );
 
-      /**
-       * Commit the batch that ends attempt `ref` as `failed` with `error`.
-       * One that asks opens its retry request at the request door
-       * (`openRequest`), its `failed` row beside it, with the credential
-       * step a used-up `quota` offers and, where the policy answers at once,
-       * that answer, so no surface lists it pending.
-       */
-      const commitFailed = Effect.fn('ModelInvoker.commitFailed')(function* (
-        cell: RunCell,
-        ref: InvocationRef,
-        error: ModelFailure,
-        next: StepAfterFailure,
-        bound: BoundModel,
-        usage: NormalizedUsage | null,
-      ): Effect.fn.Return<void, CellError, SessionServices> {
-        const failedRow: RunHistoryDraft = {
-          type: 'model.message',
-          aggregateId,
-          payload: {
-            kind: 'failed',
-            invocation: ref,
-            error,
-            next,
-            ...(usage === null ? {} : { usage }),
-          },
-        };
-        if (next.kind !== 'ask')
-          return yield* Effect.asVoid(cell.append([failedRow]));
-        const { requestId } = next;
-        yield* openRequest(
-          { runId, append: (rows) => cell.append(rows) },
-          {
-            kind: 'retry',
-            data: {
-              requestId,
-              runId,
-              operation: 'Model request',
-              model: bound.modelId,
-              failure: error,
-              credentialSwitch: credentialSwitch(
-                bound,
-                error.source === 'model' ? error.quota : undefined,
-              ),
-            },
-          },
-          { beside: [failedRow] },
-        );
-      });
-
-      /** Record the failure of attempt `ref` and the step after it. */
+      /** Record the failure of attempt `ref` (`observed`: an observation's)
+       *  and the step after it, read off the attempts before it, llm's
+       *  verdict and the budget of `retries`; answers that step. */
       const recordFailure = Effect.fn('ModelInvoker.failed')(function* (
         cell: RunCell,
         ref: InvocationRef,
-        { error }: AttemptFailure,
-        next: StepAfterFailure,
+        { error, unsent }: AttemptFailure,
+        observed: boolean,
+        retries: number,
         bound: BoundModel,
-      ): Effect.fn.Return<void, InvokeError, SessionServices> {
+      ): Effect.fn.Return<StepAfterFailure, InvokeError, SessionServices> {
+        const next = failedNext(
+          failuresBefore((yield* cell.current).invocation, ref),
+          {
+            // A failed observation is never resubmitted unasked: the work
+            // it watched was already billed.
+            unchain:
+              !observed &&
+              error instanceof ModelError &&
+              error.kind === 'continuation-gone',
+            automatic:
+              !observed &&
+              !unsent &&
+              error instanceof ModelError &&
+              error.retryable,
+            // A person is offered a retry whenever llm says the same
+            // request can succeed, and after a used-up quota, whose retry
+            // carries the switch onto their own credential; a missing
+            // route is fixed outside the run.
+            offered:
+              !unsent &&
+              error instanceof ModelError &&
+              (error.retryable || error.quota !== undefined),
+          },
+          retries,
+          `retry-${randomUUID()}`,
+        );
         const failure = modelFailureOf(error, bound.config.provider);
         if (next.kind !== 'retry' && next.kind !== 'unchain')
           yield* logProviderError(
@@ -632,46 +612,46 @@ export const modelInvokerLayer = (): Layer.Layer<
             attribution,
             roots,
           );
-        yield* commitFailed(cell, ref, failure, next, bound, usage);
-      });
-
-      /** The step after `failure` of attempt `ref`, read off the attempts
-       *  before it, llm's verdict and the budget. */
-      const moveAfter = (
-        cell: RunCell,
-        { error, unsent }: AttemptFailure,
-        ref: InvocationRef,
-        observed: boolean,
-        retries: number,
-      ): Effect.Effect<StepAfterFailure> =>
-        Effect.map(cell.current, ({ invocation }) =>
-          failedNext(
-            failuresBefore(invocation, ref),
-            {
-              // A failed observation is never resubmitted unasked: the work
-              // it watched was already billed.
-              unchain:
-                !observed &&
-                error instanceof ModelError &&
-                error.kind === 'continuation-gone',
-              automatic:
-                !observed &&
-                !unsent &&
-                error instanceof ModelError &&
-                error.retryable,
-              // A person is offered a retry whenever llm says the same
-              // request can succeed, and after a used-up quota, whose retry
-              // carries the switch onto their own credential; a missing
-              // route is fixed outside the run.
-              offered:
-                !unsent &&
-                error instanceof ModelError &&
-                (error.retryable || error.quota !== undefined),
+        // The batch that ends the attempt: its `failed` row, or, for one
+        // that asks, its retry request opened at the request door with the
+        // row beside it, the credential step a used-up `quota` offers, and,
+        // where the policy answers at once, that answer, so no surface lists
+        // it pending.
+        const failedRow: RunHistoryDraft = {
+          type: 'model.message',
+          aggregateId,
+          payload: {
+            kind: 'failed',
+            invocation: ref,
+            error: failure,
+            next,
+            ...(usage === null ? {} : { usage }),
+          },
+        };
+        if (next.kind !== 'ask') {
+          yield* cell.append([failedRow]);
+          return next;
+        }
+        yield* openRequest(
+          { runId, append: (rows) => cell.append(rows) },
+          {
+            kind: 'retry',
+            data: {
+              requestId: next.requestId,
+              runId,
+              operation: 'Model request',
+              model: bound.modelId,
+              failure,
+              credentialSwitch: credentialSwitch(
+                bound,
+                failure.source === 'model' ? failure.quota : undefined,
+              ),
             },
-            retries,
-            `retry-${randomUUID()}`,
-          ),
+          },
+          { beside: [failedRow] },
         );
+        return next;
+      });
 
       /**
        * Make the attempt `step` names on `bound`: a send under the process's
@@ -778,8 +758,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             );
             if (Result.isFailure(rebound)) {
               const failure = { error: rebound.failure, unsent: true };
-              const next = yield* moveAfter(cell, failure, ref, false, retries);
-              yield* recordFailure(cell, ref, failure, next, bound);
+              yield* recordFailure(cell, ref, failure, false, retries, bound);
               continue;
             }
             // The binding the retry is sent on, with the routes it declines,
@@ -797,14 +776,14 @@ export const modelInvokerLayer = (): Layer.Layer<
           const tried = yield* tryAttempt(cell, request, step, ref, bound);
           if ('ok' in tried) return tried.ok;
           const failure = tried;
-          const next = yield* moveAfter(
+          const next = yield* recordFailure(
             cell,
-            failure,
             ref,
+            failure,
             step.kind === 'observe',
             retries,
+            bound,
           );
-          yield* recordFailure(cell, ref, failure, next, bound);
           if (next.kind === 'stop') return yield* endedAs(cell, 'failed');
           if (next.kind !== 'retry' && next.kind !== 'unchain') continue;
           // The pause before an automatic resend, unchained or not.

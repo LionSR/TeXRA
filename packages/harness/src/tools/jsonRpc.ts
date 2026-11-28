@@ -43,7 +43,7 @@ import type { ChildProcessSpawner } from 'effect/process';
 
 import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { appendTail } from '@utils/text/appendTail';
+import { appendHead, appendTail } from '@utils/text/appendTail';
 
 const CHANNEL = 'JsonRpcConnection';
 
@@ -99,7 +99,7 @@ export interface JsonRpcConnectionOptions {
   ) => Effect.Effect<void>;
   /**
    * The result of a request the peer sends us, or `undefined` to refuse it
-   * with `MethodNotFound`.
+   * with JSON-RPC's method-not-found error (`-32601`).
    */
   readonly onRequest?: (
     method: string,
@@ -228,7 +228,7 @@ const parseBody = (
     Effect.mapError(
       (error) =>
         new JsonRpcFrameError({
-          message: `Frame body is not a JSON-RPC message: ${body.slice(0, 200)}\n${error.message}`,
+          message: `Frame body is not a JSON-RPC message: ${appendHead('', body, 200)}\n${error.message}`,
         }),
     ),
   );

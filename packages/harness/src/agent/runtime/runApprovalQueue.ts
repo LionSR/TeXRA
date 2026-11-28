@@ -295,13 +295,7 @@ const policyEdit = (
   change: PolicyChange,
 ): ((grants: ApprovalGrants) => ApprovalGrants) =>
   change.field === 'limit'
-    ? (grants) => ({
-        ...grants,
-        limit:
-          grants.limit === 'never' || change.limit === 'never'
-            ? 'never'
-            : 'ask',
-      })
+    ? (grants) => ({ ...grants, limit: change.limit })
     : humanGrant(
         change.bypass === 'superYolo' ? APPROVAL_BYPASS_KINDS : [change.bypass],
         change.enabled,

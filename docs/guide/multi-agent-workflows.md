@@ -102,9 +102,8 @@ you, or the spend cap is reached.
    carries on or stops, depending on how it handles failures. A skipped call
    is not retried for you; ask the assistant if you want it redone.
 5. **A result when it finishes.** The assistant receives the script's return
-   value and its last log lines. A program's outputs land in run storage; the
-   assistant reviews them and brings them into the project with your
-   approval.
+   value and its last log lines. A program edits the project's files in
+   place and answers with what it checked.
 
 <CliSubagentsHero />
 
@@ -183,5 +182,5 @@ it; a failed call is not reused, so sending the script again retries it.
 ## Next steps
 
 - [The assistant and programs](./programs.md): the programs a script can start
-- [Programs: how they work](./agent-architecture.md): what one document program does
+- [Programs: how they work](./agent-architecture.md): what one program does
 - [Agent integrations](./agent-integrations.md): Codex, Claude Code and MCP servers

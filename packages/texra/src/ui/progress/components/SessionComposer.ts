@@ -49,9 +49,11 @@ import {
 } from '@ui/wa/actionButtons';
 import { isCommitEnter } from '@ui/wa/keyActivation';
 import { selectedItemValue } from '@ui/wa/selectTemplates';
+import { factDot } from '@ui/wa/factDot';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import './QueuedFollowUps';
 import { launcherChipMenus, type ChipMenu } from './composerChipMenus';
+import { chipTriggerStyles } from './ModelPicker';
 import {
   isUnreadable,
   type SessionView,
@@ -64,6 +66,7 @@ import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js
 export class SessionComposer extends TexraElement {
   static override styles = [
     TexraElement.styles,
+    chipTriggerStyles,
     css`
       :host {
         display: block;
@@ -113,7 +116,7 @@ export class SessionComposer extends TexraElement {
       /* Follow-ups keep a writing area above the same action row as launch.
          Controls never move into the text line or appear only on focus. */
       .composer.is-compact textarea {
-        --textarea-min-height: calc(3lh + 2 * var(--wa-space-2xs));
+        --textarea-min-height: calc(2lh + 2 * var(--wa-space-2xs));
         --textarea-max-height: clamp(var(--textarea-min-height), 24vh, 200px);
       }
       .composer.is-compact .row {
@@ -170,9 +173,6 @@ export class SessionComposer extends TexraElement {
         flex: 0 0 auto;
         gap: var(--wa-space-3xs);
       }
-      .row .spacer {
-        flex: 1 1 auto;
-      }
       .chips {
         display: flex;
         flex-wrap: wrap;
@@ -180,26 +180,6 @@ export class SessionComposer extends TexraElement {
         gap: var(--wa-space-2xs);
         min-width: 0;
         flex: 1 1 auto;
-      }
-      .chip-trigger {
-        flex: none;
-        max-width: 100%;
-      }
-      .chip-trigger::part(label) {
-        min-width: 0;
-      }
-      .chip-trigger::part(base) {
-        gap: var(--wa-space-2xs);
-        padding-inline: var(--wa-space-xs);
-        font-size: var(--font-size-sm);
-        border-radius: var(--field-radius);
-      }
-      .chip-trigger wa-icon {
-        flex: none;
-        font-size: var(--font-size-sm);
-      }
-      .chip-trigger::part(caret) {
-        flex: none;
       }
       .menu-choice {
         display: grid;
@@ -211,11 +191,6 @@ export class SessionComposer extends TexraElement {
         font-size: var(--font-size-xs);
         line-height: var(--line-height-normal);
         color: var(--color-text-secondary);
-      }
-      .chip-label {
-        display: block;
-        max-width: 14ch;
-        ${truncateDeclarations}
       }
       .recording::part(base) {
         color: var(--color-error);
@@ -452,22 +427,45 @@ export class SessionComposer extends TexraElement {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'launch', patch }));
   }
 
+  /** The launcher's chips beside its model; a follow-up has none, since its
+   *  run's directory is set. Open on a proposal, the form approves another
+   *  run's launch, so that run's directory applies and only the model is
+   *  offered. */
   private chipMenus(): ChipMenu[] {
     const launch = this.surface?.launch;
     const host = this.host;
-    if (!launch || !host) return [];
-    return launcherChipMenus(
-      launch,
-      host,
-      {
-        setLaunch: (patch) => this.setLaunch(patch),
-        openSettings: (target) =>
+    if (this.run || !launch || !host) return [];
+    if (this.surface?.shown._tag === 'Proposal') return [];
+    return launcherChipMenus(launch, host, {
+      setLaunch: (patch) => this.setLaunch(patch),
+    });
+  }
+
+  /**
+   * The model choice: the launch's, or the run's own, which a pick changes
+   * from the run's next model call. A run with no model of its own (a
+   * process) has none to choose.
+   */
+  private renderModelPicker(): TemplateResult | typeof nothing {
+    const host = this.host;
+    const run = this.run;
+    const selected = run ? run.model : this.surface?.launch.model;
+    if (!host || selected == null) return nothing;
+    return html`<model-picker
+      .options=${host.modelOptions}
+      .selected=${selected}
+      @model-pick=${(event: CustomEvent<string>) => {
+        if (run === null) this.setLaunch({ model: event.detail });
+        else
           this.dispatchEvent(
-            SessionUiEvents.host({ kind: 'openSettings', target }),
-          ),
-      },
-      this.surface?.shown._tag === 'Proposal',
-    );
+            SessionUiEvents.runtime({
+              kind: 'run.model',
+              runId: run.id,
+              model: event.detail,
+            }),
+          );
+      }}
+    ></model-picker>`;
   }
 
   private renderChip(menu: ChipMenu): TemplateResult {
@@ -493,6 +491,7 @@ export class SessionComposer extends TexraElement {
 
   private renderChips(): TemplateResult {
     return html`<div class="chips">
+      ${this.renderModelPicker()}
       ${this.chipMenus().map((menu) => this.renderChip(menu))}
     </div>`;
   }
@@ -509,7 +508,7 @@ export class SessionComposer extends TexraElement {
     return html`<div class="routing">
       ${waIcon('code-branch')}
       <span class="routing-target">Your message goes to ${run.label}</span>
-      <span aria-hidden="true">·</span>
+      ${factDot()}
       ${renderLabeledActionButton({
         text: `reply to ${parent.label} instead`,
         kind: 'link',
@@ -572,7 +571,7 @@ export class SessionComposer extends TexraElement {
           attach them.
         </div>
         <div class="row">
-          ${compact ? html`<span class="spacer"></span>` : this.renderChips()}
+          ${this.renderChips()}
           <span class="tools"
             >${renderIconActionButton({
               id: 'composer-polish',

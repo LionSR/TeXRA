@@ -1,11 +1,10 @@
 // Third-party imports
-import { Array as Arr, Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 
 // Local imports - common
 import { ToolContext } from '@tools/core/ToolTypes';
 
 // Local imports - shared schemas
-import { requireFileReadForEdit } from '@agent/runtime/RunCall';
 import type { AppSignals } from '@platform/appSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
@@ -14,9 +13,9 @@ import { resolveToolPath } from '@tools/pathResolution';
 // Local imports - tools
 import {
   appendApprovalDiffNote,
-  buildApprovalRejectedResult,
   requestToolEditApproval,
 } from '@tools/approval/toolEditApproval';
+import { refusalResult } from '@tools/approval/refusalCopy';
 import { writeApprovedContent } from '@tools/approval/approvedWrite';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -30,92 +29,40 @@ function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
-/**
- * 1-indexed line numbers of every line that contains `needle`. Used to build
- * the "not unique — found in lines X, Y" guidance when a search string matches
- * more than once.
- */
-function findOccurrenceLineNumbers(content: string, needle: string): number[] {
-  if (needle.length === 0) {
-    return [];
-  }
-  return Arr.filterMap(content.split('\n'), (line, index) =>
-    line.includes(needle) ? Result.succeed(index + 1) : Result.failVoid,
-  );
-}
-
+/** A file an edit tool may rewrite, with the content it holds now. */
 interface WritableFileTarget {
   path: string;
   displayPath: string;
-  exists: boolean;
-  originalContent: string;
+  /** The file's content; null when there is no file yet. */
+  original: string | null;
 }
 
-type WritableTargetPreparation =
-  | { blocked: ToolResult }
-  | { target: WritableFileTarget };
-
-interface ResolveWritableTargetOptions {
-  /** Load a missing file as empty content instead of reading (and failing) on
-   *  it; defaults to false, so a missing file is an error. */
-  allowMissing?: boolean;
-}
-
-/**
- * Resolve, read-gate, and load a workspace file for editing. Writability is
- * not asked here: the write tools declare their target as a loop-side guard,
- * so a read-only external root is already refused before this runs.
- */
+/** Resolve and load a file for editing. */
 export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
   function* (
     inputPath: string,
-    options: ResolveWritableTargetOptions = {},
   ): Effect.fn.Return<
-    WritableTargetPreparation,
+    WritableFileTarget,
     Error,
     ToolContext | FileSystem.FileSystem
   > {
     const call = yield* ToolContext;
-    // The resolution answered for the call's own workspace, so its absolute
-    // form is the one the process filesystem reads — including a path under a
-    // registered external root, which the workspace facade reached the same
-    // way.
     const {
       fsPath: path,
       absolute: absolutePath,
       display: displayPath,
     } = yield* resolveToolPath(call.env, inputPath);
 
-    // Shared read-before-edit gate (lstat semantics), then the current
-    // content. The gate keys on the display path, the spelling the result's
-    // `edits` and a read's `reads` give a file.
     const fs = yield* FileSystem.FileSystem;
     const exists = yield* entryExists(fs, absolutePath);
-    const blocked = yield* requireFileReadForEdit(displayPath, exists);
-    if (blocked) {
-      return { blocked };
-    }
-
-    const originalContent =
-      exists || !(options.allowMissing ?? false)
-        ? yield* readNormalizedFile(fs, absolutePath)
-        : '';
 
     return {
-      target: {
-        path,
-        displayPath,
-        exists,
-        originalContent,
-      },
+      path,
+      displayPath,
+      original: exists ? yield* readNormalizedFile(fs, absolutePath) : null,
     };
   },
 );
-
-interface LiteralMatchContext {
-  count: number;
-  lineNumbers: number[];
-}
 
 interface LiteralReplacementRequest {
   content: string;
@@ -125,7 +72,7 @@ interface LiteralReplacementRequest {
    *  not unique. */
   replaceAll: boolean;
   notFoundError: () => string;
-  multipleMatchesError?: (context: LiteralMatchContext) => string;
+  multipleMatchesError: (count: number) => string;
 }
 
 interface LiteralReplacement {
@@ -148,15 +95,7 @@ export function replaceLiteralMatches({
   }
 
   if (!replaceAll && count > 1) {
-    // Only ambiguous matches need the per-line guidance, so the scan over the
-    // whole file stays out of the common single-match path.
-    const lineNumbers = findOccurrenceLineNumbers(content, search);
-    return Result.fail(
-      new ToolError(
-        multipleMatchesError?.({ count, lineNumbers }) ??
-          'The text to replace must be unique.',
-      ),
-    );
+    return Result.fail(new ToolError(multipleMatchesError(count)));
   }
 
   // A function replacer inserts its result verbatim: dollar patterns in prose
@@ -170,24 +109,17 @@ export function replaceLiteralMatches({
   });
 }
 
-interface AppliedFileEdit {
-  appliedContent: string;
-}
-
 interface FileEditPresentation {
   summary: string;
   output: string;
 }
 
 interface ApprovedFileEditRequest {
-  path: string;
-  displayPath: string;
-  /** Whether the file existed when the edit was proposed. */
-  exists: boolean;
-  originalContent: string;
+  target: WritableFileTarget;
   proposedContent: string;
   sourceTool: string;
-  present: (edit: AppliedFileEdit) => FileEditPresentation;
+  /** Words the result from the text that was written. */
+  present: (appliedContent: string) => FileEditPresentation;
 }
 
 /**
@@ -198,10 +130,7 @@ interface ApprovedFileEditRequest {
  */
 export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   function* ({
-    path,
-    displayPath,
-    exists,
-    originalContent,
+    target: { path, displayPath, original },
     proposedContent,
     sourceTool,
     present,
@@ -212,25 +141,28 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   > {
     const approval = yield* requestToolEditApproval({
       path,
-      originalContent: exists ? originalContent : null,
+      originalContent: original,
       proposedContent,
       sourceTool,
     });
     if (approval.action !== 'apply') {
-      return buildApprovalRejectedResult(displayPath, sourceTool, approval);
+      return refusalResult('Tool edit', approval, {
+        rejected: `User rejected ${sourceTool} for ${displayPath}.`,
+        target: `${sourceTool} for ${displayPath}.`,
+      });
     }
 
-    const written = yield* writeApprovedContent(
+    const appliedContent = yield* writeApprovedContent(
       path,
       approval.originalContent,
       approval.appliedContent,
     );
-    const presentation = present(written);
+    const presentation = present(appliedContent);
     const output = yield* appendApprovalDiffNote(
       presentation.output,
       displayPath,
       approval.proposedContent,
-      written.appliedContent,
+      appliedContent,
     );
 
     return {

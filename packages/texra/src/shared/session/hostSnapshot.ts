@@ -7,11 +7,8 @@
  * harness passes literals. A schema because it crosses the bridge.
  */
 import { Schema } from 'effect';
-import {
-  getBasename,
-  ApprovalPolicySchema,
-  APPROVAL_POLICY_DEFAULT,
-} from '@texra-ai/worldline/schemas';
+import { getBasename } from '@texra-ai/worldline/schemas';
+import { PlanUsageSchema } from '@texra/shared/model/subscriptionUsage';
 import { ModelOptionDataSchema } from '@texra/shared/pickerOptions';
 
 /** Open workspace folder offered as a run working directory. */
@@ -33,13 +30,6 @@ const MissingToolSchema = Schema.Struct({
   usedFor: Schema.String,
 });
 export type MissingTool = typeof MissingToolSchema.Type;
-
-const FileOptionsSchema = Schema.Struct({
-  baseFile: Schema.Array(Schema.String),
-  editedFile: Schema.Array(Schema.String),
-  commit: Schema.Array(Schema.String),
-});
-export type FileOptions = typeof FileOptionsSchema.Type;
 
 /** How a project is named in a rail row, a chip, and the hero title. */
 const ProjectDisplaySchema = Schema.Struct({
@@ -79,6 +69,9 @@ export type OnboardingFunnelState = typeof OnboardingFunnelStateSchema.Type;
 export const HostSnapshotSchema = Schema.Struct({
   project: ProjectDisplaySchema,
   modelOptions: Schema.Array(ModelOptionDataSchema),
+  /** The quota of each subscription plan a listed model bills, for the
+   *  status bar's meters; a plan nothing states the quota of is left out. */
+  planUsage: Schema.Array(PlanUsageSchema),
   /** How a tool call is painted, from what the process's plugins declare
    *  (`TexraPlugin`): its icon by normalized tool name, and the tools whose
    *  output reads as a terminal session. */
@@ -87,10 +80,6 @@ export const HostSnapshotSchema = Schema.Struct({
     terminalOutput: Schema.Array(Schema.String),
   }),
   workspaceRoots: Schema.Array(WorkspaceRootOptionDataSchema),
-  /** The project's configured policy, shown before a task is launched. */
-  approvalPolicy: ApprovalPolicySchema,
-  fileOptions: FileOptionsSchema,
-  isGitRepo: Schema.Boolean,
   /** The one recorder per process and where its take is going. */
   recording: Schema.NullOr(
     Schema.Struct({ session: Schema.String, target: Schema.String }),
@@ -111,13 +100,10 @@ export const HostSnapshotSchema = Schema.Struct({
      *  service was out of reach when it opened. Null while a service
      *  window's service is reached, and for a window with no folder. */
     service: Schema.NullOr(
-      Schema.Union([
-        Schema.Struct({
-          kind: Schema.Literal('offline'),
-          reason: Schema.String,
-        }),
-        Schema.Struct({ kind: Schema.Literal('local'), reason: Schema.String }),
-      ]),
+      Schema.Struct({
+        kind: Schema.Literals(['offline', 'local']),
+        reason: Schema.String,
+      }),
     ),
   }),
   onboarding: OnboardingFunnelStateSchema,
@@ -128,11 +114,9 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
   return {
     project,
     modelOptions: [],
+    planUsage: [],
     tools: { icons: {}, terminalOutput: [] },
     workspaceRoots: [],
-    approvalPolicy: APPROVAL_POLICY_DEFAULT,
-    fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
-    isGitRepo: false,
     recording: null,
     banners: {
       apiKey: false,

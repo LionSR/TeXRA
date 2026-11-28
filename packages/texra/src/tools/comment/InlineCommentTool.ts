@@ -6,6 +6,7 @@ import { ToolContext } from '@texra-ai/worldline/plugins';
 import { toErrorMessage, formatResultCount } from '@texra-ai/worldline/schemas';
 import {
   resolveToolPath,
+  describedString,
   executed,
   ToolError,
   defineTool,
@@ -99,11 +100,9 @@ const InlineCommentInputSchema = Schema.Union([
     command: Schema.Literal('add').annotate({
       description: 'Open a new comment thread on a file range.',
     }),
-    // Described on the encoded side, the one the model's JSON Schema shows.
-    path: Schema.String.annotate({
-      description:
-        'File the comment anchors to. Workspace-relative or absolute.',
-    }).pipe(Schema.decodeTo(Schema.Trim.check(Schema.isMinLength(1)))),
+    path: describedString(
+      'File the comment anchors to. Workspace-relative or absolute.',
+    ),
     line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
       description: '1-based start line the comment anchors to.',
     }),
@@ -266,13 +265,7 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
   const absolutePath =
     input.path == null
       ? undefined
-      : (yield* resolveToolPath(call.env, input.path ?? undefined).pipe(
-          Effect.mapError((error) =>
-            error instanceof ToolError
-              ? error
-              : new ToolError(error.message, { cause: error }),
-          ),
-        )).absolute;
+      : (yield* resolveToolPath(call.env, input.path ?? undefined)).absolute;
   const threads = (yield* requireProvider).list({ absolutePath });
   if (threads.length === 0) {
     return executed(

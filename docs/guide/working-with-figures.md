@@ -17,7 +17,7 @@ and `.bib` sources, not images.)
 ## <wa-icon library="texra" name="rocket"></wa-icon> Quick task: add a figure caption
 
 1. Open a new task in the TeXRA panel.
-2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>), for example `openai/gpt-6.1-sol`, `anthropic/claude-sonnet-5-5`, or `google/gemini-4-argon`.
+2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>), for example `openai/gpt-6.2-sol`, `anthropic/claude-sonnet-5-5`, or `google/gemini-4-neon`.
 3. Select **Attach** (<wa-icon library="texra" name="file-media"></wa-icon>) in the instruction box and pick your figure, or paste it.
 4. Type the instruction: "Write a detailed caption for this figure."
 5. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>, the arrow button at the end of the composer).
@@ -88,14 +88,6 @@ PDFs use native multimodal support when the provider offers it; otherwise TeXRA 
 
 Paste any copied image directly into the instruction box with `Ctrl+V` / `Cmd+V`. TeXRA saves it as `pasted_<timestamp>_<random>.<ext>`, attaches it, and cleans up temporary pasted files after 3 days.
 
-## <wa-icon library="texra" name="wand"></wa-icon> Automatic figure extraction
-
-A program can attach the figures of its input files itself. An agent switches this on with the `args` of its `program` call; ask for it in plain words ("attach the paper's figures"):
-
-- `autoExtractFigure`: attaches the images that `\includegraphics` commands include.
-- `autoExtractTikzFigure`: extracts `tikzpicture` environments as standalone `.tex` files, compiles them and attaches the result.
-- `autoCompileInputPdf`: compiles each input file and attaches its PDF.
-
 ## <wa-icon library="texra" name="tools"></wa-icon> Figures in a chat
 
 A chat agent has no dedicated extraction tool. It finds the figures a document includes by searching the source for `\includegraphics`, and opens each file with `read_file`, which returns an image or a PDF as an attachment a multimodal model can read. For a `tikzpicture` it compiles the picture in the shell and reads the PDF; for a citation it searches the project's `.bib` files for the key. Ask for it in plain words ("look at Figure 3 and check the caption against it").
@@ -104,14 +96,14 @@ A chat agent has no dedicated extraction tool. It finds the figures a document i
 
 When you provide media files, they are handed to the model according to its capabilities:
 
-- **Vision models** (GPT-6.1 Sol, Claude Fable 5.1 / Opus 5.5 / Sonnet 5.5, Gemini 4 Argon, …): images are encoded and attached to the prompt.
+- **Vision models** (GPT-6.2 Sol, Claude Fable 5.2 / Opus 5.5 / Sonnet 5.5, Gemini 4 Neon, …): images are encoded and attached to the prompt.
 - **Audio models**: audio files are uploaded for transcription.
 - **Non-multimodal models**: only filenames are passed as context.
 
 Common use cases:
 
-- <wa-icon library="texra" name="pencil"></wa-icon> Write captions for images (a chat agent, or the `edit` program)
-- <wa-icon library="texra" name="check"></wa-icon> Verify text matches figures (the `review` or `annotate` program)
+- <wa-icon library="texra" name="pencil"></wa-icon> Write captions for images (ask the assistant)
+- <wa-icon library="texra" name="check"></wa-icon> Verify text matches figures (ask the assistant, or run the `annotate` program)
 - <wa-icon library="texra" name="file-text"></wa-icon> Turn handwriting or scans into LaTeX (the `transcribe` program)
 - <wa-icon library="texra" name="unmute"></wa-icon> Transcribe audio (the `transcribe` program)
 

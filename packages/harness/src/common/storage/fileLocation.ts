@@ -2,20 +2,12 @@ import type { FileLocation } from '@shared/schemas';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 
 /**
- * Convert a string path to a FileLocation against the workspace root its
- * caller holds as data: `undefined` with no folder open, which resolves every
- * path as external.
- *
- * NOT run-storage aware — it can only create workspace or external locations.
- * For run-storage awareness, use `sourceLocationUnder`.
- *
- * Path normalization is handled internally - you can pass paths with either
- * forward slashes or backslashes. It's safe to pass already-normalized paths
- * (path.normalize() is idempotent).
- *
- * @param workspaceRoot - The session's workspace root
- * @param target - Absolute or workspace-relative path
- * @returns FileLocation (workspace or external, never runStorage)
+ * A path's `FileLocation` against the workspace root its caller holds:
+ * `workspace` when it lies inside `workspaceRoot` (an absolute path by its
+ * symlink-aware relative form, a relative one read against the root with
+ * either separator), `external` otherwise, never `runStorage`. With no folder
+ * open (`workspaceRoot` undefined) every path is external, a relative one
+ * resolved against the process's working directory, and an empty one throws.
  */
 export function pathToLocationIn(
   workspaceRoot: string | undefined,

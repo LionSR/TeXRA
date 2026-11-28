@@ -74,7 +74,7 @@ interface TextInputProps {
      *  input owns the one run, under the timeout below. */
     readonly probe: () => Effect.Effect<string | null, Error, ProcessServices>;
     readonly pastes: ImagePastes;
-    readonly onError?: (error: unknown) => void;
+    readonly onError: (error: unknown) => void;
   };
   /** Optional parent-owned value ref for same-tick programmatic draft changes. */
   readonly readLatestValue?: () => string;
@@ -356,7 +356,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
               onFailure: (cause) => {
                 if (Cause.hasInterrupts(cause)) return;
                 const error = Cause.squash(cause);
-                imagePaste.onError?.(
+                imagePaste.onError(
                   Cause.isTimeoutError(error)
                     ? new Error('Image paste timed out.')
                     : error,

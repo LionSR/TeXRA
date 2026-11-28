@@ -13,6 +13,7 @@ import {
 import {
   RUN_OUTCOME,
   type RunId,
+  type AgentConfig,
   type AgentConfigPayload,
   generateRunId,
   ensureError,
@@ -24,7 +25,6 @@ import {
   RunFailure,
   type Run,
   type Session,
-  type StartInput,
 } from '@texra-ai/worldline';
 import {
   presentRunFailure,
@@ -51,18 +51,10 @@ import {
   CliUsageError,
   isQuiet,
   launchApproval,
-  launchApprovalNotice,
-  projectApprovalPolicy,
   type CliContext,
   type CliInvocation,
 } from '../platform/cliContext';
 import type { LocalSession, SessionOpenError } from '@texra-ai/worldline';
-
-/** What a headless run starts: a host's whole configuration (the
- *  `StartInput` case a host launches with), under the id the CLI minted. */
-type CliRunRequest = Required<
-  Pick<Extract<StartInput, { readonly config: unknown }>, 'config' | 'runId'>
->;
 
 export interface CliExecuteOptions {
   /** The `CliPlatform` services the run uses, from the command that
@@ -78,11 +70,6 @@ export interface CliExecuteOptions {
    *  a shutdown that leaves the run resumable then prints no resume
    *  command, as nothing could resume it. */
   readonly recoveryInputIsDurable: boolean;
-  /** What the command does with the run once its end is committed (a
-   *  document task's output copy and result record), with its committed
-   *  outcome: part of the finalization a shutdown waits for, so a signal
-   *  never cuts it short. Its failure fails the finalization. */
-  readonly afterRun?: (result: CliRunResult) => Effect.Effect<void, Error>;
   /** The persisted run `texra resume` continues through the session's
    *  resume; unset, the run starts fresh under a minted id. */
   readonly runId?: RunId;
@@ -106,7 +93,8 @@ type CliConfigExecuteResult =
  *  long: neither is `interactive`. */
 function launchOn(
   session: Session,
-  request: CliRunRequest,
+  launchConfig: AgentConfig,
+  runId: RunId,
   runContext: CliContext,
   options: CliExecuteOptions,
 ): Effect.Effect<Run, Error> {
@@ -119,8 +107,8 @@ function launchOn(
         ),
       );
   return session.start({
-    config: request.config,
-    runId: request.runId,
+    config: launchConfig,
+    runId,
     approval: launchApproval(runContext.requestedApprovalPolicy),
   });
 }
@@ -129,7 +117,7 @@ function launchOn(
  * Validate a headless CLI run's configuration and run it: stand up a runtime
  * host, run the request, always close the host, and resolve the terminal
  * outcome. Command handlers own command-specific config construction; this
- * owns the common request lifecycle, so document task and chat runs
+ * owns the common request lifecycle, so program and chat runs
  * cannot drift on validation, run ids, host lifecycle or outcome handling.
  *
  * A run that opened never fails its launch: its end is its `run.end` row's,
@@ -163,19 +151,12 @@ export const executeCliConfig: (
     }
     // The run id is decided before launch, so a shutdown that cuts the
     // launch can still name the run it leaves behind.
-    const request: CliRunRequest = {
-      config: parsed.success,
-      runId: options.runId ?? generateRunId(),
-    };
+    const launchConfig = parsed.success;
+    const runId = options.runId ?? generateRunId();
     const session = yield* options.services.session;
     const plugins = yield* readCliPluginPins(session.roots);
     // The run follows the project's setting, read at each decision, with
     // what this invocation asked for riding its launch (`launchApproval`).
-    const refused = launchApprovalNotice(
-      runContext.requestedApprovalPolicy,
-      projectApprovalPolicy(session.roots.config),
-    );
-    if (refused !== undefined) writeTextStderr(refused);
     // Everything the run attaches to the session for its output: closed once,
     // after the last result read, so the last line is on the wire before the
     // result record. The caller's scope also closes it on partial startup.
@@ -188,7 +169,7 @@ export const executeCliConfig: (
     const renderPlainProgress =
       runContext.outputFormat === 'text' && shouldRenderRunProgress(runContext);
     yield* presentationHost
-      .attachRunProgressRenderer(session, request.runId)
+      .attachRunProgressRenderer(session, runId)
       .pipe(Scope.provide(presentationScope));
     const host = yield* createHeadlessCliHostInteractions(session, {
       prompting: () => presentationHost.holdForPrompt(),
@@ -228,12 +209,11 @@ export const executeCliConfig: (
     }
     if (renderPlainProgress) {
       yield* attachScriptPlainOutput(session, {
-        runId: request.runId,
+        runId,
         beforeWrite: () => presentationHost.prepareInteractivePrompt(),
         writeLine: writeTextStderr,
       }).pipe(Scope.provide(presentationScope));
     }
-    const launchRunId = request.runId;
     // A shutdown step that fails changes what the exit waits for, so it is
     // said on stderr unless the user passed `--quiet`.
     const sayShutdownFailure = (
@@ -252,11 +232,10 @@ export const executeCliConfig: (
      *  left as its rows stand. */
     const launched = yield* Effect.forkChild(
       Effect.suspend(() =>
-        launchOn(session, request, runContext, options),
+        launchOn(session, launchConfig, runId, runContext, options),
       ).pipe(
         Effect.flatMap((run) =>
-          // The run's whole result, built once: what the command emits and
-          // what its `afterRun` finalizes.
+          // The run's whole result, built once: what the command emits.
           Effect.map(run.result, (end) => ({
             ...end,
             runId: run.runId,
@@ -297,7 +276,7 @@ export const executeCliConfig: (
           orElse: () =>
             sayShutdownFailure(
               `Task did not finish stopping within ${Duration.format(Duration.millis(SESSION_CLOSE_DEADLINE_MS))}`,
-              `saved progress for ${launchRunId} is intact; check \`${runContext.commandName} history show ${launchRunId}\` to see if it can be resumed`,
+              `saved progress for ${runId} is intact; check \`${runContext.commandName} history show ${runId}\` to see if it can be resumed`,
             ),
         }),
         Effect.catchCause((cause) =>
@@ -309,9 +288,7 @@ export const executeCliConfig: (
       ),
     );
 
-    let runResult:
-      | { readonly ok: true; readonly result: CliRunResult }
-      | { readonly ok: false } = { ok: false };
+    let runResult: CliRunResult | undefined;
     let primaryRunFailure: { readonly error: unknown } | undefined;
     let refusal: CliUsageError | undefined;
     const exit = yield* Fiber.await(launched);
@@ -320,12 +297,14 @@ export const executeCliConfig: (
     const interrupted =
       shutdown && Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause);
     if (Exit.isSuccess(exit)) {
-      runResult = { ok: true as const, result: exit.value };
+      runResult = exit.value;
     } else if (!interrupted) {
       const failure = Cause.squash(exit.cause);
       // The session words a launch's failure as a `RunFailure` (what it
-      // failed with is its cause), or a refused one as `LaunchRefused`.
-      const err = failure instanceof RunFailure ? failure.cause : failure;
+      // failed with is its cause, when it has one), or a refused one as
+      // `LaunchRefused`.
+      const err =
+        failure instanceof RunFailure ? (failure.cause ?? failure) : failure;
       // Only a refused resume, a refused launch or a classified AgentError
       // resolves to a non-zero exit code here; anything else is unexpected
       // and keeps propagating to the crash handler.
@@ -358,13 +337,13 @@ export const executeCliConfig: (
         if (
           interrupted &&
           options.recoveryInputIsDurable &&
-          (yield* session.records(launchRunId).readContinues)
+          (yield* session.records(runId).readContinues)
         )
           yield* writeTextStderrAndWait(
             formatInterruptedResumeHint(
               runContext,
-              launchRunId,
-              programOf(request.config) === null ? 'session' : 'program',
+              runId,
+              programOf(launchConfig) === null ? 'session' : 'program',
               config.workingDirectory || runContext.cwd,
               recoveryProcessCwd,
             ),
@@ -373,8 +352,6 @@ export const executeCliConfig: (
         // presenter, which `settled` waits for: the presentation host stays
         // attached until it has.
         yield* session.drained;
-        if (runResult.ok && options.afterRun)
-          yield* options.afterRun(runResult.result);
       }),
     );
     // Done only now: a signal during the finalization waits for it, and the
@@ -387,14 +364,14 @@ export const executeCliConfig: (
         primaryRunFailure
           ? new AggregateError(
               [primaryRunFailure.error, finalization.failure],
-              'CLI run failed and its final artifacts could not be persisted',
+              'CLI run failed and its finalization failed',
             )
           : finalization.failure,
       );
     }
     if (primaryRunFailure) return yield* Effect.die(primaryRunFailure.error);
     if (refusal) return yield* refusal;
-    if (!runResult.ok) {
+    if (runResult === undefined) {
       return {
         ok: false as const,
         exitCode: interrupted
@@ -404,8 +381,9 @@ export const executeCliConfig: (
     }
 
     return {
-      ...runResult,
-      exitCode: runOutcomeExitCode(runResult.result.outcome),
+      ok: true as const,
+      result: runResult,
+      exitCode: runOutcomeExitCode(runResult.outcome),
     };
   },
   Effect.scoped,

@@ -43,14 +43,12 @@ import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
 import { LeanLanguageServices } from '../leanLanguageServices';
 import {
-  LeanFileCommandFailed,
+  LEAN_INSPECTIONS,
   LeanFileUnreadable,
   LeanUnavailable,
-  LspHoverSchema,
-  PlainGoalSchema,
-  PlainTermGoalSchema,
+  type LeanInspection,
+  type LeanInspectionReply,
   type LeanProjectCommand,
-  type LspResult,
 } from '../leanTypes';
 import type { LeanServerInfo } from '../leanServerInfo';
 
@@ -75,20 +73,6 @@ const SERVER_ENDED = [
   'LeanSessionNotRunning',
   'JsonRpcConnectionDisposed',
 ] as const;
-
-/** The root's server ended under the call: it was stopped or crashed. */
-const serverStopped = (error: Error): LeanUnavailable =>
-  new LeanUnavailable({
-    message: `The Lean server stopped: ${error.message}`,
-    cause: error,
-  });
-
-/** No `lake env lean --server` could be started for the root. */
-const noToolchain = (error: LeanStartError): LeanUnavailable =>
-  new LeanUnavailable({
-    message: `${error.message}\n\nInstall elan so that \`lake\` is on PATH (https://leanprover-community.github.io/install/).`,
-    cause: error,
-  });
 
 /** A project command could not run or reported failure. */
 class LeanProjectCommandError extends Schema.TaggedError<LeanProjectCommandError>()(
@@ -208,6 +192,11 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
     return root;
   });
 
+  /**
+   * Run `use` on the file's server, held for the call and in the caller's
+   * scope. The server ending under the call (a stop or a crash) and no
+   * server starting at all (with the setup advice) are `LeanUnavailable`.
+   */
   const withServer = <A, E>(
     filePath: string,
     use: (server: LeanServer['Service']) => Effect.Effect<A, E>,
@@ -216,7 +205,24 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
       const owner = yield* Scope.Scope;
       const root = yield* requireRoot(filePath);
       return yield* Effect.scoped(Effect.flatMap(lease(root, owner), use));
-    });
+    }).pipe(
+      Effect.catchTag(SERVER_ENDED, (error) =>
+        Effect.fail(
+          new LeanUnavailable({
+            message: `The Lean server stopped: ${error.message}`,
+            cause: error,
+          }),
+        ),
+      ),
+      Effect.catchTag('LeanStartError', (error) =>
+        Effect.fail(
+          new LeanUnavailable({
+            message: `${error.message}\n\nInstall elan so that \`lake\` is on PATH (https://leanprover-community.github.io/install/).`,
+            cause: error,
+          }),
+        ),
+      ),
+    );
 
   const runLake = Effect.fn('LeanServerPool.runLake')(function* (
     roots: ReadonlyArray<string>,
@@ -309,12 +315,6 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
 
   const fetchDiagnosticsForFile = (file: string) =>
     withServer(file, (server) => server.diagnostics(file)).pipe(
-      Effect.catchTag(SERVER_ENDED, (error) =>
-        Effect.fail(serverStopped(error)),
-      ),
-      Effect.catchTag('LeanStartError', (error) =>
-        Effect.fail(noToolchain(error)),
-      ),
       // Reading the folders above the file for its project failed (e.g.
       // ENOENT): the file is the problem, so the tool keeps its "could not
       // open file" framing, as a failed read of the file itself does.
@@ -323,9 +323,6 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
           new LeanFileUnreadable({ message: error.message, cause: error }),
         ),
       ),
-      // Diagnostics only send notifications, so no request can be refused:
-      // a request error here is a defect, never a file's verdict.
-      Effect.catchTag('JsonRpcRequestError', (error) => Effect.die(error)),
       Effect.tapError((error) =>
         Effect.logWarning(
           `fetchDiagnosticsForFile: no diagnostics for ${file}: ${error.message}`,
@@ -337,52 +334,41 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
   // Drop the cached open state and re-open with fresh contents.
   const restartFile = (filePath: string) =>
     withServer(filePath, (server) => server.restartFile(filePath)).pipe(
-      Effect.catchTag(SERVER_ENDED, (error) =>
-        Effect.fail(serverStopped(error)),
-      ),
-      Effect.catchTag('LeanStartError', (error) =>
-        Effect.fail(noToolchain(error)),
-      ),
-      Effect.catchTag(
-        ['LeanFileUnreadable', 'PlatformError', 'JsonRpcRequestError'],
-        (error) =>
-          Effect.fail(
-            new LeanFileCommandFailed({
-              message: error.message,
-              cause: error,
-            }),
-          ),
+      // As for diagnostics: the folders above the file could not be read.
+      Effect.catchTag('PlatformError', (error) =>
+        Effect.fail(
+          new LeanFileUnreadable({ message: error.message, cause: error }),
+        ),
       ),
       Effect.withSpan('LeanServerPool.restartFile'),
     );
 
-  /** `reply` decodes Lean's non-null answer; a mismatch is the result's error. */
-  const positionRequest = <T>(
+  const inspect = <K extends LeanInspection>(
+    kind: K,
     filePath: string,
     line: number,
     column: number,
-    method: string,
-    reply: Schema.Codec<T, unknown>,
-  ) =>
-    withServer(filePath, (server) =>
+  ) => {
+    const { method, reply } = LEAN_INSPECTIONS[kind];
+    return withServer(filePath, (server) =>
       server.requestElaborated(filePath, line, column, method),
     ).pipe(
       Effect.flatMap(Schema.decodeUnknownEffect(Schema.NullOr(reply))),
-      Effect.map((data): LspResult<T> =>
+      Effect.map((data): Result.Result<LeanInspectionReply<K>, string> =>
         data
-          ? { data }
-          : { data: null, error: 'Lean returned no data for this position.' },
+          ? Result.succeed(data)
+          : Result.fail('Lean returned no data for this position.'),
       ),
       Effect.catch((error) =>
-        Effect.succeed<LspResult<T>>({
-          data: null,
-          error: toErrorMessage(error),
-        }),
+        Effect.succeed<Result.Result<LeanInspectionReply<K>, string>>(
+          Result.fail(toErrorMessage(error)),
+        ),
       ),
-      Effect.withSpan('LeanServerPool.positionRequest', {
+      Effect.withSpan('LeanServerPool.inspect', {
         attributes: { method },
       }),
     );
+  };
 
   const listServers = Effect.flatMap(heldRoots, (held) =>
     Effect.forEach(held, ({ root, start }): Effect.Effect<LeanServerInfo> => {
@@ -406,30 +392,7 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
     fetchDiagnosticsForFile,
     restartFile,
     executeProjectCommand,
-    getGoalState: (filePath, line, column) =>
-      positionRequest(
-        filePath,
-        line,
-        column,
-        '$/lean/plainGoal',
-        PlainGoalSchema,
-      ),
-    getTermGoal: (filePath, line, column) =>
-      positionRequest(
-        filePath,
-        line,
-        column,
-        '$/lean/plainTermGoal',
-        PlainTermGoalSchema,
-      ),
-    getHoverInfo: (filePath, line, column) =>
-      positionRequest(
-        filePath,
-        line,
-        column,
-        'textDocument/hover',
-        LspHoverSchema,
-      ),
+    inspect,
   });
 });
 

@@ -11,14 +11,12 @@
  * Every event reaches the one sink the trace was built with, until it
  * closes; a sink that throws is logged and does not break the run.
  */
-import { Effect, Exit, Result, Schema, Stream } from 'effect';
+import { Result, Schema, Stream } from 'effect';
 
 import { raisedBy } from '@logger/formatLogData';
 import { writeLogLine } from '@logger/logSink';
 import {
   MESSAGE_TYPES,
-  outcomeFromCause,
-  RUN_OUTCOME,
   ToolCardEndSchema,
   formatIssuesForDiagnostics,
   toJsonValue,
@@ -113,44 +111,6 @@ export class TraceEmitter implements AgentTrace {
         : { data: toJsonValue(raisedBy(options.data)) }),
       messageType: options.messageType,
     });
-  }
-
-  // ─── Stages ────────────────────────────────────────────────────────
-
-  stage<A, E, R>(
-    label: string,
-    use: (trace: AgentTrace) => Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, R> {
-    return Effect.acquireUseRelease(
-      Effect.sync(() => {
-        const id = crypto.randomUUID();
-        this.emit({ type: 'stage.start', id, label });
-        return id;
-      }),
-      // A chunk is transient text on its row's id, which carries the stage;
-      // an event a nested stage stamped keeps its own (a nested stage's
-      // `stage.start`/`stage.end` carry this one's id, their parent).
-      (id) =>
-        use(
-          new TraceEmitter((event) =>
-            this.emit(
-              event.type === 'stream.chunk' || event.stageId !== undefined
-                ? event
-                : { ...event, stageId: id },
-            ),
-          ),
-        ),
-      (id, exit) =>
-        Effect.sync(() =>
-          this.emit({
-            type: 'stage.end',
-            id,
-            status: Exit.isSuccess(exit)
-              ? RUN_OUTCOME.COMPLETED
-              : outcomeFromCause(exit.cause),
-          }),
-        ),
-    );
   }
 
   // ─── Streams ───────────────────────────────────────────────────────

@@ -55,7 +55,7 @@ export function writeProgressRow(
  *
  * It reads `view.events(view.head())` directly: every event
  * above the store's head in commit order, never the view, so a
- * `stage.start` no surface subscribed to still becomes its line and two
+ * `log` no surface subscribed to still becomes its line and two
  * same-type updates never collapse.
  *
  * The one record that is not an event is `run.children`, a parent's live

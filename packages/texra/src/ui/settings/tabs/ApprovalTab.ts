@@ -1,6 +1,6 @@
 /**
- * General › Approval: when agents pause for approval before acting, the
- * working-directory path protection, and the goal spend cap. The task-start
+ * General › Approval: when agents pause for approval before acting, and
+ * the goal spend cap. The task-start
  * policy a task begins under; a grant made on a request card lasts for that
  * task only and is not set here.
  */
@@ -14,7 +14,6 @@ import {
   GOAL_MAX_COST_SETTING,
   parseApprovalPolicy,
   APPROVAL_POLICY_SETTING,
-  TOOL_PATH_PROTECTION_SETTING,
 } from '@texra-ai/worldline/schemas';
 import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
@@ -23,7 +22,6 @@ import { TexraSignalElement } from '@ui/litBase';
 import {
   postStateSetting,
   renderStateSettingNumberRow,
-  renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
 import { settingSignal } from '../settingsState';
 
@@ -87,7 +85,6 @@ export class ApprovalTab extends TexraSignalElement {
                 }
               </p>
             </div>
-            ${renderStateSettingToggleRow(TOOL_PATH_PROTECTION_SETTING)}
             ${renderStateSettingNumberRow(GOAL_MAX_COST_SETTING, {
               step: 0.5,
             })}

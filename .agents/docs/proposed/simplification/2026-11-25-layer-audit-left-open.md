@@ -57,6 +57,13 @@ Same rule as above; each fix edits a file #15229 or #15230 holds.
 - `packages/harness/src/agent/runtime/delegation/bashDelivery.ts` is read
   only by `tools/bash.ts`.
 
+Landed 2026-11-28: `bashDelivery.ts` is `tools/bashDelivery.ts`, and
+`BASH_BACKGROUND_LOG_CAP_CHARS` sits in it beside the excerpt budgets the
+same writer keeps. `toolResultText.ts` and the HTTP status reads had left
+on 2026-11-27. `backoffSchedule.ts` stays: `randomizedExponentialBackoff`
+is on the `./plugins` entry and the app's arXiv download and usage-log
+flush read it.
+
 ## 2. The store file's name sits in `utils/`
 
 `storeFileName` (`packages/harness/src/utils/system/appNamespace.ts`) is read
@@ -65,6 +72,13 @@ only by the session stores in `controllers/session/`, and
 It belongs with the store schema. Left because
 `packages/harness/docs/spec.md` cites the current path and #15229 holds that
 file.
+
+Landed 2026-11-28: `storeFileName` is in `controllers/session/storeSchema.ts`
+and the spec cites it there. `PROJECT_STORE_FORMAT` stays in
+`appNamespace.ts`: the `./schemas` entry exports it to hosts that attach to
+a running service, and that entry's closure must stay browser-safe. The
+`${namespace}.db` beside it in `projectDatabase.ts` is the pre-v1 project
+file name, not the global store's, so it stays spelled out.
 
 ## 3. Why a model cannot be served is worded twice in the harness
 
@@ -76,6 +90,10 @@ again, and the two texts have drifted ("Choose an active model" against
 "Choose another model"). `modelAvailability.ts` says a surface's words for
 each kind are the app's. Decision needed: one harness sentence both read, or
 a reason kind the app words.
+Landed 2026-11-27: one sentence. llm's `decideModelRoute` gives an unserved
+route its `reason` (the clause after the model's name), and the bind's
+refusal and the model listing both word it as `<name> <reason>. Choose
+another model.`
 
 ## 4. The settings view decides model-list rules at render time
 
@@ -99,6 +117,15 @@ the groups, the lock and the helper choices. The wire shape is
   read only by `chat/tui/`. Moving them is mechanical; left to keep this PR
   to modules with a wrong import direction or a duplicated fact.
 
+Landed 2026-11-28: the completion scripts are `commands/completion/`, the
+account status and access selection are `chat/tui/apiStatus.ts` and
+`chat/tui/modelAccessSelection.ts`, and the clipboard paste is
+`chat/tui/input/clipboardImage.ts` beside the paste queue.
+`loginOptions.ts` stays in `runtime/models/`: `texra auth` and
+`subscriptionLogin.ts` read it too. `taskAttach.ts` stays: the 2026-11-27
+terminal note found reading the chat's layout is the point of
+`texra tasks attach`.
+
 ## 6. Smaller single-owner moves
 
 - `common/files/fileHandlingRules.ts` imports `WORKSPACE_DIFF_SUFFIX` from
@@ -106,6 +133,9 @@ the groups, the lock and the helper choices. The wire shape is
 - `utils/text/braceBalancedMacro.ts` and `utils/text/xmlCdata.ts` are each
   read by one subsystem (`latex/criticismParser.ts`, `agent/output/`), both
   held.
+  Landed 2026-11-28: `braceBalancedMacro.ts` is
+  `packages/texra/src/latex/braceBalancedMacro.ts`, its suite under
+  `test/latex/`. `xmlCdata.ts` had already gone with its reader.
 - `installAdvice` for the LaTeX tab is computed in the controller
   (`LatexToolingController.ts`) and again at render time
   (`ui/settings/tabs/LaTeXTab.ts`, held).

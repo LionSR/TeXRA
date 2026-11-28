@@ -39,13 +39,14 @@ import {
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
-import { isOutcomeOf } from '@texra-ai/worldline';
+import { type DatabaseReadFailed, isOutcomeOf } from '@texra-ai/worldline';
 import {
   formatResultCount,
   type RuntimeCommand,
   Rejected,
   ensureError,
 } from '@texra-ai/worldline/schemas';
+import { requestErrorText } from '@ui/copy/requestErrors';
 import {
   envFlag,
   IS_WINDOWS,
@@ -93,7 +94,9 @@ export const environmentApiKeys = (): Readonly<Record<string, string>> =>
  * `request` to the session of `workspace` the service holds: the outcome its
  * kind is answered with. A message carries this process's keys, which the
  * run resumes with if the message wakes it. An answer of another kind (a
- * service from another build) is `Rejected`.
+ * service from another build) is `Rejected`, and so is the service's own
+ * bridge error (a request it could not parse, a handler that died), worded
+ * for the user; a runtime refusal arrives as its class.
  */
 export const requestOnService = <R extends RuntimeCommand>(
   client: ServiceClient,
@@ -107,6 +110,12 @@ export const requestOnService = <R extends RuntimeCommand>(
         ? { ...request, apiKeys: request.apiKeys ?? environmentApiKeys() }
         : request,
   }).pipe(
+    Effect.catchTags({
+      Invalid: (error) =>
+        Effect.fail(new Rejected({ reason: requestErrorText(error) })),
+      Internal: (error) =>
+        Effect.fail(new Rejected({ reason: requestErrorText(error) })),
+    }),
     Effect.filterOrFail(
       (outcome) => isOutcomeOf<R['kind']>(request.kind, outcome),
       (outcome) =>
@@ -187,6 +196,13 @@ export class ServiceUnavailable extends Schema.TaggedError<ServiceUnavailable>()
   }
 }
 
+/** The service record could not be read, for the client that looks for
+ *  the service and the service that claims the record alike. */
+export const serviceRecordUnreadable = (error: DatabaseReadFailed) =>
+  new ServiceUnavailable({
+    reason: `The service record could not be read: ${error.message}`,
+  });
+
 /** Why no service runs on Windows yet: a named pipe there takes the
  *  default ACL, which other local users can read and pre-create. */
 export const WINDOWS_UNSUPPORTED =
@@ -206,7 +222,7 @@ const START_TIMEOUT = '60 seconds';
 const HELLO_TIMEOUT = '10 seconds';
 
 /** Whether the service speaks this build's protocol ({@link PROTOCOL}). */
-export const compatible = (info: ServiceInfo): boolean =>
+const compatible = (info: ServiceInfo): boolean =>
   info.protocol === PROTOCOL.digest;
 
 /** Whether both builds are released ones, and `order` holds between the
@@ -314,12 +330,7 @@ export const probeRecordedService: Effect.Effect<
   ServiceUnavailable,
   GlobalValues
 > = readServiceRecord.pipe(
-  Effect.mapError(
-    (error) =>
-      new ServiceUnavailable({
-        reason: `The service record could not be read: ${error.message}`,
-      }),
-  ),
+  Effect.mapError(serviceRecordUnreadable),
   Effect.flatMap((record) =>
     record === null ? Effect.succeed(null) : probeService(record.socket),
   ),
@@ -462,12 +473,13 @@ export const reachBundledService = (
  * starts). The service closes its socket after it has released every
  * project store (`serve`), so its process may still be exiting, but the
  * next opener of a project is not refused. A socket nobody accepts on is a
- * service already gone.
+ * service already gone. A failure names the service as `service` says.
  */
-export const stopService = (
+const stopService = (
   socket: string,
   drain: boolean,
-): Effect.Effect<void, SocketError | RpcClientError.RpcClientError> =>
+  service: string,
+): Effect.Effect<void, ServiceUnavailable> =>
   Effect.scoped(
     Effect.gen(function* () {
       const gone = yield* Deferred.make<void>();
@@ -478,7 +490,15 @@ export const stopService = (
       yield* client['service.stop']({ drain }, { discard: true });
       yield* Deferred.await(gone);
     }),
-  ).pipe(Effect.catchIf(nobodyListens, () => Effect.void));
+  ).pipe(
+    Effect.catchIf(nobodyListens, () => Effect.void),
+    Effect.mapError(
+      (error) =>
+        new ServiceUnavailable({
+          reason: `Could not stop ${service}: ${error.message}`,
+        }),
+    ),
+  );
 
 /** How long {@link stopRunningService} waits for the service to go. */
 const STOP_TIMEOUT = '30 seconds';
@@ -512,22 +532,16 @@ export const stopRunningService: Effect.Effect<
     target.pid === undefined
       ? 'the TeXRA service'
       : `the TeXRA service (pid ${target.pid})`;
-  yield* stopService(target.socket, false).pipe(
+  yield* stopService(target.socket, false, service).pipe(
     Effect.timeoutOrElse({
       duration: STOP_TIMEOUT,
       orElse: () =>
         Effect.fail(
           new ServiceUnavailable({
-            reason: `it did not exit within ${STOP_TIMEOUT}`,
+            reason: `Could not stop ${service}: it did not exit within ${STOP_TIMEOUT}`,
           }),
         ),
     }),
-    Effect.mapError(
-      (failure) =>
-        new ServiceUnavailable({
-          reason: `Could not stop ${service}: ${failure.message}`,
-        }),
-    ),
   );
   return target.pid === undefined ? {} : { pid: target.pid };
 });
@@ -598,14 +612,7 @@ const ensureService = Effect.fn('server.ensureService')(function* (
             'Stopping an incompatible TeXRA service after its active tasks finish, then starting this version.',
           ).pipe(
             Effect.andThen(
-              stopService(failure.socket, true).pipe(
-                Effect.mapError(
-                  (stopFailure) =>
-                    new ServiceUnavailable({
-                      reason: `Could not stop the older TeXRA service: ${stopFailure.message}`,
-                    }),
-                ),
-              ),
+              stopService(failure.socket, true, 'the older TeXRA service'),
             ),
             Effect.as({ found: null, replaced: true }),
           );
@@ -626,13 +633,10 @@ const ensureService = Effect.fn('server.ensureService')(function* (
         ? `Waiting for TeXRA service ${leaving.version} (pid ${leaving.pid}) to finish ${tasks} and exit.`
         : `Updating TeXRA service ${leaving.version}: waiting for ${tasks} to finish before restarting.`,
     );
-    yield* stopService(leaving.socket, true).pipe(
-      Effect.mapError(
-        (error) =>
-          new ServiceUnavailable({
-            reason: `Could not stop the older TeXRA service (pid ${leaving.pid}): ${error.message}`,
-          }),
-      ),
+    yield* stopService(
+      leaving.socket,
+      true,
+      `the older TeXRA service (pid ${leaving.pid})`,
     );
     info = null;
   }
@@ -735,14 +739,6 @@ interface Followed<A> {
   readonly changes: Stream.Stream<A>;
 }
 
-/** `ref` as its readers follow it; only its holder sets it. */
-export const followed = <A>(
-  ref: SubscriptionRef.SubscriptionRef<A>,
-): Followed<A> => ({
-  get: SubscriptionRef.get(ref),
-  changes: SubscriptionRef.changes(ref),
-});
-
 /** What a link holds: the client it is connected through, or none and
  *  why, as a window says it: reconnecting ({@link SERVICE_OFFLINE}),
  *  refused by a newer service ({@link WINDOW_OUTDATED}), or given up on a
@@ -773,12 +769,15 @@ export interface ServiceLink<Client = ServiceClient> {
   readonly refusalTold: Ref.Ref<boolean>;
 }
 
-/** A link over the one value its holder sets. */
+/** A link over the one value its holder sets; its readers only follow it. */
 export const linkOver = <Client>(
   state: SubscriptionRef.SubscriptionRef<Linked<Client>>,
   refusalTold: Ref.Ref<boolean>,
 ): ServiceLink<Client> => ({
-  state: followed(state),
+  state: {
+    get: SubscriptionRef.get(state),
+    changes: SubscriptionRef.changes(state),
+  },
   client: {
     get: Effect.map(SubscriptionRef.get(state), ({ client }) => client),
     changes: SubscriptionRef.changes(state).pipe(

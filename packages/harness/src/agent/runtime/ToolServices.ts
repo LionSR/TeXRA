@@ -1,4 +1,4 @@
-import { Context, Effect, Schema, type Scope } from 'effect';
+import { Context, Effect, type Scope } from 'effect';
 import { ToolContext } from '@tools/core/ToolTypes';
 import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
@@ -9,10 +9,9 @@ import {
 } from '@agent/runtime/processRun';
 import type { PlatformServices } from '@platform/processRuntime';
 import { SessionRoots, StorageFs, WorkspaceFs } from '@platform/rootedFs';
-import { type RunEnd, type RunId, factName } from '@shared/schemas';
+import { type RunEnd, type RunId } from '@shared/schemas';
 import {
   Approvals,
-  HistoryQuery,
   RunHistory,
   SessionLog,
   SessionViewAccess,
@@ -28,6 +27,7 @@ import type { RunCallShape } from './RunCall';
 import type { RouteRetries } from './ModelRetryGate';
 import type { PlanQuotas } from './modelAccess/planQuotas';
 import type { SessionServices } from './rootLaunch';
+import { HistoryQuery } from './historyQuery/HistoryQuery';
 
 /**
  * What a run's program requires of the process: the platform services every
@@ -78,16 +78,6 @@ export interface ChildRunsShape {
     readonly exists: Effect.Effect<boolean, Error>;
     readonly end: Effect.Effect<RunEnd | null, Error>;
   };
-  /** The latest value of `factKind` among the run's own facts, decoded
-   *  by its schema; undefined while the run recorded none. */
-  readonly fact: <A>(
-    runId: RunId,
-    factKind: {
-      readonly plugin: string;
-      readonly kind: string;
-      readonly schema: Schema.Codec<A, unknown>;
-    },
-  ) => Effect.Effect<A | undefined, Error>;
   /** Whether the launching run's work runs unasked (the Auto-approve policy,
    *  or an all-agent-work grant on it or an ancestor), read on each call,
    *  since a grant may land mid-run: what a child's own sandbox or
@@ -131,7 +121,6 @@ export const childRuns = (
   session: Context.Context<SessionServices>,
 ): ChildRunsShape => {
   const { runId } = call.run;
-  const log = Context.get(session, SessionLog);
   const inSession = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     Effect.provide(effect, session);
   return {
@@ -142,13 +131,6 @@ export const childRuns = (
       exists: inSession(getRunRecords(id).exists()),
       end: inSession(getRunRecords(id).readRunEnd()),
     }),
-    fact: (id, factKind) =>
-      Effect.map(log.facts(id), (held) => {
-        const row = held?.facts[factName(factKind)];
-        return row === undefined
-          ? undefined
-          : Schema.decodeUnknownSync(factKind.schema)(row.value);
-      }),
     autoApproved: inSession(workAutoApproved(runId)),
   };
 };

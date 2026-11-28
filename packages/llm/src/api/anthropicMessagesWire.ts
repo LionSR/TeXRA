@@ -99,7 +99,7 @@ export const BlockSchema = Schema.Union([
   }),
 ]);
 // The SDK parses SSE JSON but does not validate its supported event/block fields.
-/** One event of a streamed `messages.create` response. */
+/** One event of a streamed `messages.create` response, tagged by its `type`. */
 export const EventSchema = Schema.Union([
   Schema.Struct({
     type: Schema.Literal('message_start'),
@@ -151,19 +151,7 @@ export const EventSchema = Schema.Union([
     type: Schema.Literal('content_block_stop'),
     index: CountSchema,
   }),
-]);
-
-/** The event types `EventSchema` decodes; the record's key type keeps them in step. */
-export const EVENT_TYPES: ReadonlySet<string> = new Set(
-  Object.keys({
-    message_start: true,
-    message_delta: true,
-    message_stop: true,
-    content_block_start: true,
-    content_block_delta: true,
-    content_block_stop: true,
-  } satisfies Record<(typeof EventSchema.Type)['type'], true>),
-);
+]).pipe(Schema.toTaggedUnion('type'));
 
 type AssertNever<T extends never> = T;
 type WireStopReason = NonNullable<typeof StopSchema.Type.stop_reason>;

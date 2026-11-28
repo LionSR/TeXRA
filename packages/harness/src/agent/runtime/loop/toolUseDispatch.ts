@@ -2,8 +2,7 @@
  * Dispatch of one committed response's tool calls, from the run's state and
  * back into it. What it guarantees, by construction: contiguous parallel
  * calls run concurrently under a small window while every other call is a
- * barrier that runs alone and in order; a call repeating an earlier call's
- * name and arguments never executes and derives its primary's result; a
+ * barrier that runs alone and in order; a
  * result that ends the turn stops dispatch after its group; one interrupt
  * cancels the whole in-flight batch through the fiber; an ordinary tool
  * failure becomes a model-visible error result; and a durable write failure
@@ -40,7 +39,6 @@ import {
   Semaphore,
 } from 'effect';
 
-import { normalizeToolCallError } from '@tools/core/toolCallParsing';
 import { extractToolAttachments } from '@tools/core/toolAttachmentExtraction';
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
 import {
@@ -86,7 +84,7 @@ import {
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
-} from '@shared/toolResultText';
+} from '@tools/core/toolResultText';
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { ToolRegistry } from '@tools/toolTable';
@@ -96,7 +94,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { captureAttachments, storedMediaPart } from '../run/mediaInput';
 import type { InputPart } from '@texra-ai/llm';
-import { stored } from '../run/recordedRequest';
 import {
   localCallsOf,
   parseCallArguments,
@@ -127,8 +124,6 @@ interface Dispatch {
   readonly cell: RunCell;
   readonly step: StepTools;
   readonly responseId: string;
-  /** The user instruction the response answers. */
-  readonly instruction: string | undefined;
   /** The response was pending when the cell opened and has a model to
    *  report to: a call nothing of which ran is reported, not run. */
   readonly recovered: boolean;
@@ -179,14 +174,12 @@ const issuedBy = (state: RunState, scriptCallId: string) =>
 const storedResult = (result: ToolResult): ToolCallResult['result'] =>
   Schema.decodeUnknownSync(FinishedToolResultSchema)(result);
 
-/** A duplicate's copy of its primary's result: no edits, no files. */
-const withoutEffects = (
-  result: ToolCallResult['result'],
-): ToolCallResult['result'] => {
-  if (result.status !== 'executed') return result;
-  const { edits: _edits, files: _files, ...rest } = result;
-  return rest;
-};
+/** A tool call's failure as the model reads it: the tool's name and the
+ *  failure's message, a schema failure's as its rendered issue tree. */
+const failureText = (toolName: string, error: unknown): string =>
+  error instanceof Schema.SchemaError
+    ? `${toolName}: Invalid parameters:\n${error.message}`
+    : `${toolName}: ${toErrorMessage(error)}`;
 
 const dispositionOf = (
   result: Pick<ToolResult, 'status'>,
@@ -205,7 +198,7 @@ const UPLOAD_DEADLINE = '5 seconds';
  *  model as its mention, which says why. */
 function resultContent(
   recorded: Pick<ToolCallResult, 'result' | 'attachments'>,
-  capabilities: Parameters<typeof storedMediaPart>[2],
+  bound: Parameters<typeof storedMediaPart>[2],
 ): {
   readonly text: InputPart;
   readonly media: readonly {
@@ -221,7 +214,7 @@ function resultContent(
         mimeType,
         note: `its bytes were not captured (${content.reason})`,
       };
-    const part = storedMediaPart(mimeType, content.digest, capabilities);
+    const part = storedMediaPart(mimeType, content.digest, bound);
     if (part === null)
       return { path, mimeType, note: `the model takes no ${mimeType} inline` };
     media.push({ path, part });
@@ -296,8 +289,8 @@ const resultRow = (
   ...(blobs.length > 0 && { blobs }),
 });
 
-/** Commit a result no body returned (a duplicate's copy, a script's host
- *  function's answer, a skip) at `attempt`; `card` says whether an attempt
+/** Commit a result no body returned (a script's host function's answer, a
+ *  skip) at `attempt`; `card` says whether an attempt
  *  of the call opened the card this result then closes. */
 const commitResult = (
   call: Call,
@@ -329,8 +322,7 @@ const skipCall = (
 /**
  * Finish one call from where its rows left it, under `place`: the script
  * that issued it, or the door a `script` call issues its own through. A
- * finished call keeps its result; a duplicate derives its primary, effects
- * stripped; a call after a group that `ended` the turn, one untouched in a
+ * finished call keeps its result; a call after a group that `ended` the turn, one untouched in a
  * recovered response, and a started body that may have run and may not be
  * replayed are skipped, closing their cards; any other runs at the attempt
  * `resumedAttempt` names, asking again whatever it asked. A throwing tool
@@ -352,16 +344,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     kind: 'issued',
   };
   if (status.kind === 'finished') return;
-  if ('duplicateOf' in fact && fact.duplicateOf !== null) {
-    const primary = finishedCall(dispatch, state, fact.duplicateOf);
-    if (primary !== null)
-      yield* commitResult(call, Math.max(1, attemptOf(status)), {
-        disposition: 'duplicate',
-        result: withoutEffects(primary.result),
-        attachments: [],
-      });
-    return;
-  }
   if (ended) {
     yield* skipCall(call, status, SKIPPED_AFTER_END_TURN);
     return;
@@ -460,7 +442,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     const runCall: RunCallShape = {
       run,
       responseId,
-      instruction: dispatch.instruction,
       attempt,
       logId: fact.logId,
       state: cell.current,
@@ -476,7 +457,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
             env: {
               roots,
               workingDirectory: run.workingDirectory,
-              stepRoots: step.stepRoots,
               run: runCall.run,
             },
             requests,
@@ -506,7 +486,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
           ),
         );
       if (failed.kind === 'refused') return yield* failed.refusal;
-      const message = normalizeToolCallError(
+      const message = failureText(
         fact.toolName,
         failed.kind === 'error' ? failed.error : failed.defect,
       );
@@ -817,18 +797,14 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   } satisfies ScriptDoor;
 });
 
-/** A response's calls in the order they run: contiguous parallel calls (a
- *  duplicate among them, whatever its tool's lane) form one group that runs
- *  under the window; every other call is a group of its own, a barrier that
- *  runs alone. */
-const groupsOf = (calls: readonly DispatchFacts[]) => {
-  const parallel = (fact: DispatchFacts) =>
-    fact.duplicateOf !== null || fact.lane === 'parallel';
-  return Iterable.groupWith(
+/** A response's calls in the order they run: contiguous parallel calls
+ *  form one group that runs under the window; every other call is a group
+ *  of its own, a barrier that runs alone. */
+const groupsOf = (calls: readonly DispatchFacts[]) =>
+  Iterable.groupWith(
     calls,
-    (left, right) => parallel(left) && parallel(right),
+    (left, right) => left.lane === 'parallel' && right.lane === 'parallel',
   );
-};
 
 /** Delivery: the paid turn enters history once, with the complete tool
  *  group, each result as the model reads it. */
@@ -853,7 +829,7 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
     if (recorded === null) {
       throw new Error(`Call ${fact.callId} has no result at delivery.`);
     }
-    const content = resultContent(recorded, bound.config.capabilities);
+    const content = resultContent(recorded, bound);
     media.push(...content.media);
     return {
       callOrdinal: ordinal,
@@ -940,16 +916,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const pending = initial.pendingResponse;
   if (pending === null) return initial;
   const { responseId } = pending;
-  // The calls answer the instruction the committed state records.
-  const at = initial.input.instruction;
   const dispatch: Dispatch = {
     run,
     cell,
     step,
     responseId,
-    instruction:
-      run.config.rootUserInstruction ??
-      (at ? stored(initial, at, Schema.String) : run.config.instruction),
     recovered:
       cell.opened.pendingResponse?.responseId === responseId &&
       pending.assistant.origin !== null,
@@ -969,21 +940,15 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       { script: null, scriptCalls: scriptDoor(dispatch, fact) },
       ended,
     );
-  // Each group in turn: its own calls together, under the window, then its
-  // duplicates. A group after one that ended the turn sees that it did.
+  // Each group in turn, its calls together under the window. A group after
+  // one that ended the turn sees that it did.
   let ended = false;
   for (const group of groupsOf(pending.calls)) {
     const endedBefore = ended;
-    yield* Effect.forEach(
-      group.filter((fact) => fact.duplicateOf === null),
-      (fact) => finish(fact, endedBefore),
-      { concurrency: MAX_PARALLEL_TOOL_CALLS, discard: true },
-    );
-    yield* Effect.forEach(
-      group.filter((fact) => fact.duplicateOf !== null),
-      (fact) => finish(fact, endedBefore),
-      { discard: true },
-    );
+    yield* Effect.forEach(group, (fact) => finish(fact, endedBefore), {
+      concurrency: MAX_PARALLEL_TOOL_CALLS,
+      discard: true,
+    });
     const state = yield* cell.current;
     ended ||= group.some(({ callId }) =>
       endsTurn(finishedCall(dispatch, state, callId)),

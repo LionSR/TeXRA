@@ -175,57 +175,6 @@ export function workTreeDirty(
   );
 }
 
-/** A commit hash, abbreviated (from 4 hex digits) or full. */
-const COMMIT_HASH = /^[0-9a-fA-F]{4,40}$/;
-
-/** Whether `hash` names a commit in the history of the repository at `cwd`. */
-export function commitExists(
-  cwd: string,
-  hash: string,
-): Effect.Effect<boolean, never, ChildProcessSpawner> {
-  if (!COMMIT_HASH.test(hash)) return Effect.succeed(false);
-  return Effect.map(
-    gitOutput(cwd, 'rev-parse', '--verify', '--quiet', `${hash}^{commit}`),
-    (value) => value !== null,
-  );
-}
-
-/**
- * Up to `limit` recent commits, each labelled `<shortHash>: <subject>
- * (<relativeDate>)`, or null when `cwd` is not a work tree. A repository
- * with no commit has none; a `git log` that fails on one that has commits
- * (unreadable objects, a timeout) is logged at warn and reads as none.
- */
-export const recentCommitLabels = Effect.fn('git.recentCommitLabels')(
-  function* (
-    cwd: string,
-    limit: number,
-  ): Effect.fn.Return<readonly string[] | null, never, ChildProcessSpawner> {
-    if (!(yield* isGitRepository(cwd))) return null;
-    if (
-      (yield* gitOutput(cwd, 'rev-parse', '--verify', '--quiet', 'HEAD')) ===
-      null
-    )
-      return [];
-    const log = yield* gitRead(cwd, [
-      'log',
-      '-n',
-      String(limit),
-      '--pretty=format:%h: %s (%cr)',
-    ]);
-    if (log?.code !== 0) {
-      yield* Effect.logWarning(
-        `Cannot read the recent commits of ${cwd}: ${log?.stderr || 'git gave no answer'}`,
-      ).pipe(withLogChannel('platform'));
-      return [];
-    }
-    return log.stdout
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line !== '');
-  },
-);
-
 /**
  * Environment keys that let git invoke arbitrary helper programs (editors,
  * pagers, askpass, external-diff, config overrides). Stripped before handing

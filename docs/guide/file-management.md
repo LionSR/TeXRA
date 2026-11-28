@@ -1,8 +1,3 @@
-<script setup>
-import StorageLifecycleFlow from '../.vitepress/components/StorageLifecycleFlow.vue';
-import CliStorageHero from '../.vitepress/components/CliStorageHero.vue';
-</script>
-
 # File management
 
 This guide explains how TeXRA organizes input files, read-only context, media attachments, and run-storage outputs.
@@ -92,10 +87,8 @@ The list is the only mode; there is no separate "single file" view. To work with
 
 ### Output files
 
-For programs that edit documents, output filenames are the selected input
-filenames in the same order. The programs that create a new document write a
-fixed name: `transcript.tex` for `transcribe`, `slides.tex` for `slides` and
-`poster.tex` for `poster`.
+A program edits its input files in place. `transcribe` writes a new file,
+`transcript.tex` unless the instruction names another.
 
 ## File path handling
 
@@ -105,56 +98,26 @@ TeXRA handles file paths as follows:
 
 - **Display**: Files are displayed with paths relative to the workspace root
 - **Processing**: TeXRA resolves paths to their absolute form when needed
-- **Output**: A program's outputs are saved in run storage. Use **Accept** or
-  **Archive outputs to History** when you want to copy reviewed outputs back into the workspace.
+- **Output**: A task writes its changes to the files in your project.
 
 ### File discovery rules
 
 TeXRA uses built-in file extensions and exclusions when discovering inputs,
 context, edited files, and media. Read the [file discovery section of the configuration guide](./configuration.md#file-discovery).
 
-## Output file naming
+## Run storage
 
-TeXRA stores a program's outputs in the run folder under run storage. Within
-that folder, the revised document keeps your input filename in every revision
-(the first revision in `r0/`, the second in `r1/`, and so on):
-
-```
-r{round}/<input-filename>
-```
-
-Subdirectories are preserved, so `chapters/intro.tex` lands at
-`r0/chapters/intro.tex`. The only fixed name is the raw model response,
-`r{round}/output.xml`.
-
-## Run storage and file commands
-
-Every run gets an isolated run folder under TeXRA's workspace storage directory:
+Every run gets a run folder under TeXRA's workspace storage directory:
 
 ```text
 executions/<executionId>/
 ```
 
-A program's outputs are listed in the Tasks view under **Generated files** (select a filename to preview it, or use <wa-icon library="texra" name="folder-open"></wa-icon> **Open task folder** to inspect generated files, compile logs, and mirrored dependencies). Three actions manage a task's outputs:
-
-- **Accept**: Copies the reviewed output file into your project.
-- **Archive outputs to History** (<wa-icon library="texra" name="box-archive"></wa-icon>): Copies the run folder (output files, logs, and mirrored dependencies) into a timestamped folder under `History/`.
-- **Delete output files** (<wa-icon library="texra" name="trash"></wa-icon>): Deletes the run folder and its generated artifacts while leaving your project files untouched.
-
-<StorageLifecycleFlow />
-
-<p class="hero-caption">Accept copies reviewed outputs into your project, Archive saves a snapshot into History, and Delete removes the run folder. Your input files are never touched.</p>
-
-The CLI follows the same storage-first lifecycle: it reads and writes the
-same `executions/<executionId>/` run store, and `--output` plays the role of
-**Accept**:
-
-<CliStorageHero />
-
-<p class="hero-caption">Three beats of the same lifecycle: storage-first output, <code>--output</code> as Accept, and <code>history show</code> to browse a run's stored files.</p>
-
-The folder also stores intermediate artifacts such as optional
-debug JSON files written when `texra.debug.saveModelIO` is enabled.
+It holds the run's own files: pasted images, tool-edit previews and, when
+`texra.debug.saveModelIO` is enabled, debug JSON files. Use
+<wa-icon library="texra" name="folder-open"></wa-icon> **Open task folder**
+in the Tasks view to inspect it, and `texra history show <id>` in the
+terminal. The documents a task edits stay in your project.
 
 ## Working with LaTeX projects
 

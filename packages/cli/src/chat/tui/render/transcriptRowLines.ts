@@ -12,12 +12,9 @@ import {
 } from '@texra-ai/worldline/transcript';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import { hiddenRowsText } from '@cli/tui/overflowText';
-import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
-import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
+import { hangingIndent, TOOL_OUTPUT_PREFIX } from '@cli/tui/ui/glyphs';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
-import { formatMediaLabel } from '@ui/copy/format';
 import { errorRowText } from '@ui/copy/modelAccess';
-import { fileLoadTone } from '@ui/copy/runStatus';
 
 // A body block can be arbitrarily large (a 50 KB tool dump, a long error
 // payload). Finalized scrollback and the live region show a head+tail slice
@@ -67,20 +64,10 @@ export function elidedTextLines(
 
 /** Open a block with the corner glyph and indent its continuation rows. */
 function cornerBlock(lines: readonly string[]): string[] {
+  const indent = hangingIndent(TOOL_OUTPUT_PREFIX);
   return lines.map((line, index) =>
-    index === 0 ? `${TOOL_OUTPUT_CORNER} ${line}` : `  ${line}`,
+    index === 0 ? `${TOOL_OUTPUT_PREFIX}${line}` : `${indent}${line}`,
   );
-}
-
-function fileListLines(row: Extract<TranscriptRow, { kind: 'fileList' }>) {
-  return row.files.map((file) => {
-    const { media } = file;
-    const { marker } = TONE_PAINT[fileLoadTone(file.ok)];
-    const name = file.varName ? `${file.varName}: ` : '';
-    const source = file.sourceDisplay ? ` (${file.sourceDisplay})` : '';
-    const size = media ? ` ${formatMediaLabel(media)}` : '';
-    return `${marker} ${name}${file.path}${source}${size}`;
-  });
 }
 
 /**
@@ -98,8 +85,6 @@ export function transcriptRowBodyLines(
         return elidedTextLines(row.text, elide);
       case 'error':
         return elidedTextLines(errorRowText(row).detailText, elide);
-      case 'fileList':
-        return fileListLines(row);
       case 'contextManagement':
         return row.items.map((item) => `${item.label}: ${item.value}`);
       case 'progressStatus':

@@ -289,6 +289,7 @@ Landed:
    `Content-Disposition` would be saved as `.tex`. Compare the media type
    (the text before `;`) instead. Both open PRs edit the file; take it
    after them.
+   - Taken on 2026-11-27, by removing the question: see that run below.
 
 ### Checked and declined on 2026-11-26
 
@@ -321,3 +322,191 @@ Landed:
   dependency for under forty lines.
 - **One `Retry-After` reader for llm and the GitHub client.** The GitHub
   client reads seconds only; #15229 deletes it.
+
+## The 2026-11-27 run
+
+Two read-only sweeps (the harness, llm, the app and `supabase/functions/`;
+the hosts, scripts and test support) over the code added since 2026-11-24
+and the families again. No new family turned up hand-written; what landed
+is one problem met twice, a scanner that disagreed with the app's own, and
+the validation scripts #15229 had held.
+
+Landed:
+
+- **What a response body is, decided by substrings of its headers.**
+  - The arXiv download (item 6) named its file from `Content-Disposition`,
+    or from `includes('tar')` / `includes('gz')` / `includes('tex')` on the
+    content type, and placement branched on that name's extension, while
+    the tar extraction read the gzip magic number anyway.
+    `placeSourceFiles` now reads the bytes: `%PDF`, the gzip magic, and
+    `ustar` at offset 257 of the (decompressed) first block. The
+    header-to-extension table, the `Content-Disposition` parse and the
+    **content-disposition** dependency are gone: here the simpler design
+    removes a package.
+  - `web_fetch` tested `includes('html') || includes('xml')`, which is true
+    of every Office type (`application/vnd.openxmlformats-…`), so a `.docx`
+    went through the HTML-to-Markdown converter, and read the charset with
+    a regular expression. Both come from `parseMIMEType` of **undici**
+    ([npm](https://www.npmjs.com/package/undici), 8.13.1, published
+    2026-11-20, already a harness dependency and the client the tool
+    fetches with): the parser of the Fetch standard, which lower-cases the
+    type, drops the parameters and unquotes the charset. Node's
+    `util.MIMEType` stays declined (experimental on Node 22, and it throws
+    on a malformed header where this returns `'failure'`).
+- **The `annotate` program's `\criticize` scanner** removed every brace
+  group after the macro and allowed no whitespace between groups, unlike
+  `findBraceBalancedMacroCalls`, which the editor reads annotations with.
+  It reads three groups. The program runs in the script sandbox, so it
+  cannot import the app's scanner.
+- **The validation scripts** (item 1 of the 2026-11-26 consolidation note).
+  `validate-run.mjs` found a project store by listing `workspace-storage`
+  in eight scenarios, polled with three deadline loops beside `waitFor`,
+  and spawned `find` twice (`FIND.EXE` on Windows): `projectStore`,
+  a `waitFor` that returns what its check found, and a recursive
+  `readdirSync`. Not `fs.globSync`: its `**` skips hidden directories, so
+  it never found the service logs under `home/.texra`. The
+  provider key list, the fake key and the validation build were written in
+  it and in `generate-golden-store.mjs`, and the node-pty loader in three
+  scripts; `validationAgent.mjs` and `nodePtySpawnHelper.mjs` own them.
+- **`glob` left `packages/cli/package.json`**: nothing in the CLI imports
+  it (the harness and the app declare their own).
+
+### Open after 2026-11-27
+
+7. **The setup terminal's output is cut before its control sequences are
+   stripped** (`packages/extension/src/frontend/setupTerminalRunner.ts`):
+   `(read + chunk).slice(-N)` can cut inside a CSI sequence, and
+   `stripVTControlCharacters` then leaves `[0m` at the head of the tail.
+   Stripping each chunk first has the same fault at a chunk boundary, so
+   the fix is a streaming stripper: the CLI has one
+   (`packages/cli/src/tui/noColorOutput.ts`) that the extension cannot
+   import. Needs an owner for that stripper below both hosts.
+   - Taken on 2026-11-28 without a shared stripper: see that run below.
+8. **`onDiskSize` in `scripts/verify-desktop.mjs`** recurses with
+   `statSync`, which follows pnpm's sibling links: sizes are counted
+   twice and a dependency cycle would not end. `scripts/walkFiles.mjs`
+   with `lstatSync` is the replacement; the number the failure message
+   prints changes.
+   - Taken on 2026-11-28, in place: `walkFiles.mjs` is not the
+     replacement, see that run below.
+9. **`derive` in `generate-golden-store.mjs`** restates the harness's
+   `callChildRunId` with `createHash`; the harness does not export it.
+   - Taken on 2026-11-28 through the fixture bundle the script already
+     loads the row codec from.
+10. **The validation-model child environment** is still assembled at four
+    sites in the two scripts (the fake keys, the switch, the flag path,
+    `HARNESS_INTERNAL_VALIDATE_REQUEST_CONTEXT`); they differ in which
+    keys are fake, so one owner needs that difference named first. The
+    chat scenario's reply wait in `validate-run.mjs` keeps its own loop
+    for the output tail in its failure message.
+    **Landed 2026-11-27** for `validate-run.mjs` in the consolidation
+    audit: `validationModelEnv` at its three sites, and the reply wait
+    through `waitFor`; the golden store's copy is item 2 of
+    [`2026-11-27-consolidation-and-natives-left-open.md`](2026-11-27-consolidation-and-natives-left-open.md).
+
+### Checked and declined on 2026-11-27
+
+- **`URLPattern` or a router for the `executions` path table**
+  (`packages/harness/src/tools/ExecutionsTool.ts`, about 15 lines).
+  `URLPattern` is not a Node 22 global.
+- **`readDirectory({ recursive: true })` and `fs.cp` for the plugin digest
+  walk and `copyPlugin`.** The walk skips `.git`, and the copy re-points a
+  link inside the plugin, which `fs.cp` does not.
+- **`pathToFileURL` for the SQLite URI filename** (`databaseLayer.ts`). It
+  writes `file:///C:/…` and encodes more than the three characters SQLite
+  reads.
+- **`HttpClientResponse.filterStatusOk` in the trace viewer's bridge** and
+  **`Effect.repeat` for two poll loops in test support**: four lines each,
+  and the first changes the error text.
+- **file-type for the arXiv sniff.** A new dependency for three magic
+  numbers, and it cannot tell a gzipped tar from a gzipped file without the
+  same decompress-and-look.
+
+## The 2026-11-28 run
+
+Three read-only sweeps (the harness and llm; the app and the GUI hosts;
+the CLI, scripts, `supabase/functions/` and test support), reading
+function bodies in the files changed since 2026-11-23 and in every file
+with a character loop, an index cursor or many regular expressions. No
+package swap turned up: the sixth run to find none above ten lines. What
+the reading found is faults in the hand-written code itself, and those
+landed.
+
+Landed:
+
+- **The history query's read check accepted any `EXPLAIN`**
+  (`statementRefusal`, `packages/harness/src/agent/runtime/historyQuery/views.ts`).
+  SQLite applies `PRAGMA query_only` when a statement is prepared,
+  explained or not, so `EXPLAIN PRAGMA query_only = OFF` made the
+  in-memory query store writable for the statements after it. An `EXPLAIN`
+  is accepted only of a `SELECT`, `WITH` or `VALUES`. No builtin replaces
+  the check: `node:sqlite` on Node 22 has no authorizer and no read-only
+  statement flag.
+- **Item 7, the setup terminal's tail.** Each chunk is stripped with
+  `stripVTControlCharacters` as it arrives and a sequence the chunk began
+  and did not end is held for the next one, so the limit counts visible
+  text and no cut falls inside a sequence. One pattern finds the
+  unfinished sequence; the CLI's stripper removes colour only and was not
+  the shared owner the item asked for.
+- **A file dropped on the desktop app had no path.** The drop handler
+  read `File.path`, which Electron removed in version 32. The preload's
+  bridge names it through `webUtils.getPathForFile` from **electron**
+  ([npm](https://www.npmjs.com/package/electron), already the desktop's
+  runtime).
+- **Desktop shortcuts on a non-Latin layout.** A chord was matched on
+  `event.key`; a key that reports a non-ASCII character is read from
+  `event.code`, except under AltGr.
+- **The Logs tab read the whole log file** on the main thread at every
+  change to keep its last 160 KiB; it reads that tail.
+- **`formatRelativeTime` said "4 quarters ago"** for a date in the
+  previous year under 365 days back (`quarters < 4` is true of every past
+  date).
+- **A negative `Retry-After`** fell through to `Date.parse('-1')`, the
+  year 2001, and gave a zero delay.
+- **A plugin agent file starting with a byte order mark** was refused for
+  having no frontmatter.
+- **Item 8, `onDiskSize`**, decides from each `Dirent` and sizes files
+  with `lstatSync`. Not `scripts/walkFiles.mjs`: on Node 22.23 a recursive
+  `readdirSync` walks into linked directories (1786 of 1807 entries under
+  one pnpm package's `node_modules` were reached through its links). None
+  of the eight roots `walkFiles` reads holds a link today.
+- **Item 9, the golden store's `derive`**, calls `callChildRunId` from
+  `scripts/fixtures/rowCodec.ts`.
+
+### Open after 2026-11-28
+
+11. **`Select` reads raw escape sequences Ink 8 already names**
+    (`rawSelectArrowDirection`, `isRawSelectEscChordInput`,
+    `isRawSelectNavigationInput` in `packages/cli/src/tui/ui/Select.tsx`,
+    17 lines and four uses). **ink** 8's key parser reads `ESC [ A`,
+    `ESC O A` and their double-ESC forms as arrows and splits `ESC ESC x`
+    into two events, so the first two can decide nothing through Ink's
+    stdin. The third still matters for a double-ESC sequence Ink does not
+    name: without it, Alt with an unrecognised function key would cancel
+    the form. Needs keys tried in a real terminal, as item 5 does.
+12. **Ctrl+Alt shortcuts under AltGr.** On a Windows layout where
+    Ctrl+Alt is AltGr (German, Polish), Ctrl+Alt+E reports `€` and
+    Ctrl+Alt+M `µ`, so Run Task and New Task do not answer. Matching those
+    by physical key would take the characters away from someone typing
+    them; other chords for the two commands is the owner's choice.
+
+### Checked and declined on 2026-11-28
+
+- **`gray-matter` for `splitFrontmatterFence`.** A new dependency of the
+  published SDK, and the body must keep the file's bytes.
+- **`Stream.fromReadableStream` for `pullStream`**
+  (`packages/llm/src/api/transport.ts`). The abort-before-cancel order is
+  the point.
+- **`fileURLToPath` for `filePathOfFileUrl`.** The module is in the
+  browser closure.
+- **`readline.clearLine` for `CLEAR_LINE`**
+  (`packages/cli/src/runtime/runProgressRenderer.ts`). It writes to the
+  stream itself; the constant is joined into one write.
+- **The window `resize` listener beside a `ResizeObserver`**
+  (`TerminalOutput.ts`) and **the per-frame wait for `<body>`**
+  (`waColorScheme.ts`): four lines each, and neither can be seen working
+  without a webview.
+- **`$CLAUDE_PLUGIN_ROOT` replaced as a prefix** (`expand`,
+  `packages/harness/src/common/plugins/pluginHooks.ts`: `$CLAUDE_PLUGIN_ROOTS`
+  becomes the root followed by `S`). That is how the format TeXRA reads
+  these hooks from expands it.
