@@ -2,8 +2,8 @@ name: Live LLM
 
 # The only wire evidence `packages/llm` has: one suite per HTTP protocol, run
 # against the real provider. It spends money and depends on eleven third-party
-# services, so it is never part of PR validation — `ci.yml` stays hermetic and
-# free. It runs when someone asks for it: the `live-llm` label on a PR, or a
+# services, so it is part of neither `ci.yml` nor `nightly.yml`: both stay
+# hermetic and free. It runs when someone asks for it: the `live-llm` label on a PR, or a
 # manual dispatch.
 #
 # A suite whose key is not configured skips its keyed cases (the

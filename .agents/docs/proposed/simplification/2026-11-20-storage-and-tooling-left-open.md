@@ -31,8 +31,8 @@ row version, `SCHEMA_VERSION`, stored or wire shape changed.
    facts.** It embeds the worker, but every bundle reads it for
    `harnessBundleOptions` (the worker plugin, the WASM loader, the build
    identity, `keepNames`). Renaming it (for example
-   `scripts/harness-bundle.mjs`) touches five importers, `vitest.config.mjs`
-   and the `ci.yml` path filter that names the file. Decision: worth the
+   `scripts/harness-bundle.mjs`) touches five importers and
+   `vitest.config.mjs`. Decision: worth the
    rename, or leave the name with its header saying what else it holds.
 
 ## Checked and declined
