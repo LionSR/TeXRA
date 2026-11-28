@@ -34,15 +34,14 @@ lands.
 4. **Closed.** The user message's Copy is the shared `<copy-button>`.
 5. **Closed.** `factDot` (`wa/factDot.ts`) is the dot between two
    elements, hidden from a screen reader.
-6. **A status glyph and its colour disagree in two places.** `LaTeXTab.ts`
-   shows a missing dependency as `triangle-exclamation` in the error colour,
-   and the "Failed to render" entry (`progress/formatters/index.ts`,
-   `logEntryStyles.ts`) shows `circle-exclamation` in the warning colours.
-   The success mark is `check` in three places and `circle-check`
-   (`TONE_GLYPH.success`) in one, in three greens. `statusGlyph({ tone })`
+6. **The success mark has three greens.** It is `check` in three places
+   and `circle-check` (`TONE_GLYPH.success`) in one, in three greens. `statusGlyph({ tone })`
    with a `tone-*` class is the owner; which green stays is a design call.
    (The 2026-11-27 run gave `LaTeXTab.ts`'s missing dependency
-   `circle-exclamation`, the error glyph its colour already said.)
+   `circle-exclamation`, the error glyph its colour already said; the
+   2026-11-28 run gave the "Failed to render" entry,
+   `progress/formatters/index.ts`, the warning tone's glyph to match its
+   warning colours.)
 7. **Closed.** `toneVariant` (`wa/waVariant.ts`) maps a `RunTone` to a
    badge or tag variant; the approval badge reads the waiting status's
    glyph and name.
