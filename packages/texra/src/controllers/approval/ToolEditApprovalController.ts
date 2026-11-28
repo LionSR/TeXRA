@@ -24,16 +24,7 @@
  * user never changed just goes. A window that goes while the request still
  * waits takes its edits with it.
  */
-import {
-  Cause,
-  Effect,
-  Fiber,
-  type FileSystem,
-  type Path,
-  Ref,
-  Scope,
-  Semaphore,
-} from 'effect';
+import { Cause, Effect, Fiber, Ref, Scope, Semaphore } from 'effect';
 
 import {
   type OutcomeOf,
@@ -58,18 +49,12 @@ import {
   runLatexdiff,
   type BuildDisplayFn,
   type LatexPreviewEntry,
+  type PreviewServices,
 } from '@texra/controllers/approval/latexPreview';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'ToolEditApproval';
 
-/**
- * Runtime services this controller's programs take: preview programs stage
- * temp files and the host build spawns the compiler. A host provides them
- * once, where it forks {@link ToolEditApprovalController.follow}.
- */
-type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 type PreviewCall<A> = Effect.Effect<A, HostCommandFailure, PreviewServices>;
 /** An approval's session bypass, sent with its `request.decide`. */
 type Grant = Extract<HostCommand, { kind: 'toolEdit' }>['grant'];
