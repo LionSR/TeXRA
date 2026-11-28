@@ -63,7 +63,10 @@ import {
   type ServiceClient,
   type ServiceLink,
 } from './client';
-import type { EventsFrame } from '@texra/shared/session/sessionFrames';
+import type {
+  EventsFrame,
+  Subscribe,
+} from '@texra/shared/session/sessionFrames';
 import {
   RUN_RECORDS,
   type ProjectStateFailed,
@@ -290,62 +293,61 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         : Effect.succeed(state.client),
     ),
   );
-  /** One service's part of a watch ends when that service goes: its stream
-   *  fails, or is interrupted when the link closes its connection. Only a
-   *  failure is said, with what it costs the reader. */
-  const untilServiceGone =
-    (cost: string) =>
-    <A, E, R>(frames: Stream.Stream<A, E, R>): Stream.Stream<A, never, R> =>
-      frames.pipe(
-        Stream.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Stream.empty
-            : Stream.fromEffectDrain(
-                logFailure(
-                  CHANNEL,
-                  `The TeXRA service stopped sending ${workspace}; ${cost}`,
-                )(cause),
-              ),
+  /**
+   * The service's frames for `aggregates`, from `from` on: the one feed
+   * this window's own view and every surface's watch read. It follows the
+   * link, so each service the link holds serves it from the cursor the last
+   * one delivered, and while the link holds none it waits.
+   */
+  const frames = (
+    aggregates: Subscribe['aggregates'],
+    from: CommitOrdinal,
+    debug: boolean,
+  ): Stream.Stream<EventsFrame> =>
+    Stream.unwrap(
+      Effect.map(Ref.make(from), (cursor) =>
+        link.client.changes.pipe(
+          Stream.switchMap((client) =>
+            client === null
+              ? Stream.empty
+              : Stream.unwrap(
+                  Effect.map(Ref.get(cursor), (at) =>
+                    client['task.watch']({
+                      workspace,
+                      subscribe: { debug, cursor: at, aggregates },
+                    }),
+                  ),
+                ).pipe(
+                  Stream.tap((frame) => Ref.set(cursor, frame.cursor)),
+                  // A lost service's stream fails, or is interrupted
+                  // when the link closes its connection: either ends
+                  // this service's part, and the next one takes over.
+                  // Only a failure is said.
+                  Stream.catchCause((cause) =>
+                    Cause.hasInterruptsOnly(cause)
+                      ? Stream.empty
+                      : Stream.fromEffectDrain(
+                          logFailure(
+                            CHANNEL,
+                            `The TeXRA service stopped sending ${workspace}; it resumes when the service is back`,
+                          )(cause),
+                        ),
+                  ),
+                ),
+          ),
         ),
-      );
+      ),
+    );
   // The window's own view: the listing, plus the transcripts its readers
   // name, each reader's set held for its scope. A change of that set is a
-  // new watch, from the cursor and history the view already holds; the
-  // view interrupts the watch it replaces.
+  // new read, from the cursor and history the view already holds; the
+  // view interrupts the read it replaces. The window tells the service
+  // nothing else: the project's approval policy is its persisted setting,
+  // which the service reads itself.
   const view = yield* remoteSessionView(key, (aggregates, cursor, debug) =>
-    Stream.unwrap(
-      Effect.map(link.client.get, (client) =>
-        // Offline: the link's return asks again.
-        client === null
-          ? Stream.empty
-          : client['task.watch']({
-              workspace,
-              subscribe: { debug, cursor, aggregates },
-            }),
-      ),
-    ).pipe(
-      Stream.map((frame) => frame.inputs),
-      // A service that went ends this read: the link closing its connection
-      // interrupts the call, which must not end the view with it, and the
-      // next service the link reaches is asked again (below).
-      untilServiceGone("this window's run state no longer updates"),
-    ),
+    Stream.map(frames(aggregates, cursor, debug), (frame) => frame.inputs),
   );
   const { subscribe } = view;
-  // Each service the link reaches, the one it holds now included (the
-  // view's first read may have found none): naming the window's own empty
-  // set again has the view ask that service from where the view is. Offline,
-  // the watch stops. The window tells the service nothing else: the
-  // project's approval policy is its persisted setting, which the service
-  // reads itself.
-  const window = yield* subscribe([]);
-  yield* Effect.forkScoped(
-    link.client.changes.pipe(
-      Stream.runForEach((client) =>
-        client === null ? Effect.void : window.set([]),
-      ),
-    ),
-  );
   const scope = yield* Effect.scope;
   /** The service's answer to how the activation of a task it runs ended
    *  (`Run.result` there), with `at`, its log's position when it answered:
@@ -398,43 +400,15 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       (reason) => new Rejected({ reason }),
       (client) => requestOnService(client, workspace, runtimeRequest),
     );
-  // The watch names its runs to this window's own view too, so the view
-  // folds their transcripts while it runs; each service the link holds
-  // serves it from the cursor it last delivered.
+  // A surface's watch is the service's feed for the set it names, and the
+  // surface folds it. This window's own view keeps to the listing and the
+  // transcripts its own readers name: its title, its attention and its
+  // pending requests read nothing else, so the service reads a transcript
+  // once for each surface showing it and this process folds none of them.
   const watch: Session['view']['watch'] = (set, from) =>
-    Stream.unwrap(
-      Effect.gen(function* () {
-        yield* subscribe(set);
-        const cursor = yield* Ref.make(from.cursor);
-        return link.client.changes.pipe(
-          Stream.switchMap((client) =>
-            client === null
-              ? Stream.empty
-              : Stream.unwrap(
-                  Effect.map(Ref.get(cursor), (at) =>
-                    client['task.watch']({
-                      workspace,
-                      subscribe: {
-                        debug: from.debug,
-                        cursor: at,
-                        aggregates: [...set],
-                      },
-                    }),
-                  ),
-                ).pipe(
-                  Stream.tap((frame) => Ref.set(cursor, frame.cursor)),
-                  Stream.map((frame) => frame.inputs),
-                  Stream.filter((inputs) => inputs.length > 0),
-                  // A lost service's stream fails, or is interrupted
-                  // when the link closes its connection: either ends
-                  // this service's part, and the next one takes over.
-                  untilServiceGone(
-                    'the watch resumes when the service is back',
-                  ),
-                ),
-          ),
-        );
-      }),
+    frames([...set], from.cursor, from.debug).pipe(
+      Stream.map((frame) => frame.inputs),
+      Stream.filter((inputs) => inputs.length > 0),
     );
   /** The run the service started, as this window holds it: the `Run` of
    *  the activation the service named, over this window's view and the
