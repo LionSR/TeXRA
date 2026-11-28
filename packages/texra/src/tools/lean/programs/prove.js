@@ -1,4 +1,4 @@
-import { leanCheck, rounds, statedAxioms } from 'builtIn:rounds';
+import { checked, leanCheck, statedAxioms } from 'builtIn:checked';
 
 const PROVER = [
   'You complete formal proofs in a Lean 4 project. Work out the mathematics first: understand each statement, find the argument, and write a short informal outline before you write tactics.',
@@ -10,7 +10,7 @@ const PROVER = [
 
 export default async (args, launch) => {
   const stated = await statedAxioms(launch.inputFiles);
-  return rounds(
+  return checked(
     {
       name: 'prove',
       system: PROVER,
@@ -27,7 +27,6 @@ export default async (args, launch) => {
         'lean_project',
         'lean_loogle',
       ],
-      rounds: 3,
       extension: '.lean',
       describes: 'the .lean files to complete',
       fallback:

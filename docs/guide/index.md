@@ -36,7 +36,7 @@ research project.
 ## Understand the system
 
 - [**The assistant and programs**](./programs.md): what you can ask for, and every program
-- [**Programs: how they work**](./agent-architecture.md): rounds and the coded check
+- [**Programs: how they work**](./agent-architecture.md): the coded check
 - [**Multi-agent workflows**](./multi-agent-workflows.md): how the assistant fans work out in parallel
 - [**Models**](./models.md): picking a model for the job
 - [**Tailoring TeXRA**](./customizing.md): project instructions, skills, plugins and your own programs
@@ -91,7 +91,7 @@ TeXRA works in two ways:
 
 <AgentClasses />
 
-<p class="hero-caption">A program runs rounds of a helper agent and checks each in code; the assistant works conversationally with grounded tools.</p>
+<p class="hero-caption">A program runs a helper agent and checks its work in code; the assistant works conversationally with grounded tools.</p>
 
 TeXRA combines three mechanisms: **reflection** (critiquing and revising output),
 **tool use** (checking work against compilers, language servers,

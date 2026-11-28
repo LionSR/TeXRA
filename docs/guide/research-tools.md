@@ -91,8 +91,8 @@ The assistant formalizes mathematical statements and proofs directly in Lean 4. 
 
 You ask the assistant for any of this directly: a literature search, a
 derivation checked with `wolframscript`, an audit of a manuscript, work on a
-research-level problem. For Lean, the `prove` program completes proofs until
-Lean reports no error and no `sorry`.
+research-level problem. For Lean, the `prove` program completes proofs and
+reports whether Lean still finds an error or a `sorry`.
 
 Read [The assistant and programs](./programs.md) for the full list.
 

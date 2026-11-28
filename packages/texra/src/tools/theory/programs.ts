@@ -1,8 +1,8 @@
 /**
  * The theory plugin's programs. `annotate` reviews LaTeX files by adding
- * `\criticize` annotations: a child per round edits the files in place,
- * and the program checks in code that nothing outside the annotations
- * changed before it ends or starts the next round. `transcribe` starts one
+ * `\criticize` annotations: a child edits the files in place, and the
+ * program checks in code that nothing outside the annotations changed and
+ * says so in its answer when something did. `transcribe` starts one
  * child with the launch's media attached, which writes them as a LaTeX
  * file.
  *
@@ -22,7 +22,7 @@ export const THEORY_MODULES = Object.freeze({ annotate, transcribe });
 export const THEORY_PROGRAMS = Object.freeze({
   annotate: Object.freeze({
     description:
-      'Review the `.tex` files of `inputFiles` by adding `\\criticize{comment}{severity}{confidence}` annotations in place, checked to change nothing else; the instruction names the point of view.',
+      'Review the `.tex` files of `inputFiles` by adding `\\criticize{comment}{severity}{confidence}` annotations in place, and report any file where something else changed; the instruction names the point of view.',
     tools: Object.freeze(['agent', 'read_file']),
   }),
   transcribe: Object.freeze({

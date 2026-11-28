@@ -1,9 +1,10 @@
 /**
- * The `lean-simplify` program: rounds of a child agent that bring Lean
- * files toward library quality without changing what they prove, until Lean
- * reports them clean and they declare no new axiom (`builtIn:rounds`).
+ * The `lean-simplify` program: a child agent that brings Lean
+ * files toward library quality without changing what they prove; the
+ * program then reports whether Lean finds them clean and they declare no new
+ * axiom (`builtIn:checked`).
  */
-import { leanCheck, rounds, statedAxioms } from 'builtIn:rounds';
+import { checked, leanCheck, statedAxioms } from 'builtIn:checked';
 
 const SIMPLIFIER = [
   'You refactor Lean 4 files toward Mathlib quality: clear, general, well named and consistent with the library. Never change what a declaration states or computes, only how it is written; every theorem statement, instance and value stays as it is.',
@@ -14,7 +15,7 @@ const SIMPLIFIER = [
 
 export default async (args, launch) => {
   const stated = await statedAxioms(launch.inputFiles);
-  return rounds(
+  return checked(
     {
       name: 'lean-simplify',
       system: SIMPLIFIER,
@@ -30,7 +31,6 @@ export default async (args, launch) => {
         'lean_project',
         'lean_loogle',
       ],
-      rounds: 2,
       extension: '.lean',
       describes: 'the .lean files to simplify',
       fallback:
