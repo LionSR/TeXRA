@@ -75,10 +75,7 @@ export function settingSignal<A>(row: SettingRow<A>): Signal.State<A> {
 function signalFor(key: string): Signal.State<unknown> {
   let state = CATALOG_SIGNALS.get(key);
   if (!state) {
-    const entry = TEXRA_SETTINGS.settingsViewByKey(key);
-    if (!entry) {
-      throw new Error(`No settings-view catalog row for setting "${key}"`);
-    }
+    const entry = TEXRA_SETTINGS.settingsViewRow(key);
     state = trackedSignal<unknown>(() =>
       TEXRA_SETTINGS.catalog.defaultOf(entry.key),
     );
