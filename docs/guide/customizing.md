@@ -26,9 +26,10 @@ adds nothing to the conversation.
 ## Skills
 
 A skill is a folder with a `SKILL.md` that tells the assistant how to do one
-kind of work. TeXRA ships three of its own (`arxiv` and `zotero`, read
+kind of work. TeXRA ships four of its own (`arxiv` and `zotero`, read
 [Research tools](./research-tools.md); `github`, read
-[Agent integrations](./agent-integrations.md))
+[Agent integrations](./agent-integrations.md); `plugin-authoring`, for
+writing a plugin with a native `harness.mjs`)
 and reads more from installed plugins, from `.texra/skills/`
 in the project, from your own skills folder, and, once you switch that
 source on, from the `.agents`, `.claude`, `.codex` and `.gemini` skill folders

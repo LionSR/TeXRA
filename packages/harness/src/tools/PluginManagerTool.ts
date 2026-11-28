@@ -22,7 +22,6 @@ import { InstalledPlugins } from '@common/plugins/installedPlugins';
 import {
   describeProvides,
   NATIVE_ENTRY_FILE,
-  PROVIDES_WORDS,
 } from '@common/plugins/nativeEntry';
 import {
   installedPluginId,
@@ -317,9 +316,7 @@ Commands:
 - \`disable\` takes \`name\`: it stays installed and trusted, and loads nothing. The person is asked first.
 - \`remove\` takes \`name\`: it is forgotten with its trust. The person is asked first.
 
-A change reaches you at your next step (your next request to the model): its tools are offered, or withdrawn, then. A call already running keeps the version it started with; a call a stopped run left unfinished is not run again on another version when the run resumes: it ends with its outcome unknown, and the version loaded then serves your next step. When a newly trusted version of a native module does not load, the version in use before it stays in use until the plugin is fixed or disabled, but only while this process runs: after a restart the plugin is withheld with the new version's reason. \`list\` names the version in use and one that did not load.
-
-A plugin folder has \`.claude-plugin/plugin.json\` (\`{ "name": "<name>" }\`). Its \`${NATIVE_ENTRY_FILE}\` begins with \`export const description = '<one line>';\` and \`export const provides = [...];\` (each of ${PROVIDES_WORDS.map((word) => `\`${word}\``).join(', ')}), and its default export takes \`{ plugins, effect }\` (the plugin authoring surface, and the modules of the Effect library this process runs that a plugin is written with: \`Effect\`, \`Context\`, \`Layer\`, \`Schema\`, \`Stream\`, \`Scope\` and their kin) and returns \`plugins.definePlugin({ id: '<name>', tools: [...] })\`, each tool made with \`plugins.defineTool\`.`,
+A change reaches you at your next step (your next request to the model): its tools are offered, or withdrawn, then. A call already running keeps the version it started with; a call a stopped run left unfinished is not run again on another version when the run resumes: it ends with its outcome unknown, and the version loaded then serves your next step. When a newly trusted version of a native module does not load, the version in use before it stays in use until the plugin is fixed or disabled, but only while this process runs: after a restart the plugin is withheld with the new version's reason. \`list\` names the version in use and one that did not load.`,
   schema: PluginManagerInputSchema,
   execute: (input: PluginManagerInput) =>
     inRunSession((call) => runPluginManager(call, input)),
