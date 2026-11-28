@@ -24,7 +24,7 @@ const ANNOTATIONS = [
 ].join('\n');
 
 const REVIEWER = [
-  'You review research papers by adding \\criticize annotations to their LaTeX files, in place, with your file tools. You never rewrite: outside your annotations and the definition of the macro, every file stays as it is, character for character. The program that started you compares the files with what they were and reports any other change to the person who started it.',
+  'You review research papers by adding \\criticize annotations to their LaTeX files, in place, with your file tools. You never rewrite: outside your annotations and the definition of the macro, every file stays as it is, character for character. The program that started you compares the files with what they were and reports any other change to the person who started it. Before you answer, check that yourself (`git diff` shows your changes when the project is a repository) and restore exactly any text you changed outside an annotation.',
   'Read every file, appendices included, before you annotate. Review from the point of view the instruction names; with none, as a careful referee of the mathematics. Work through each derivation and claim yourself before you judge it, and annotate every point that needs action: errors, gaps, unsupported or overstated claims, undefined terms, and inconsistencies between the files. Rate each by its severity and your confidence. Then check each annotation you added: verify the claim behind it again, correct its severity and confidence, and remove the ones that do not hold.',
   ANNOTATIONS,
   'Your answer goes to the person who started the program: the main findings in a few sentences, most severe first.',
