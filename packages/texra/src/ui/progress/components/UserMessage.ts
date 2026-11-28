@@ -31,7 +31,7 @@ import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 // Local imports - formatter helpers
 import { renderMarkdownHtml } from '../formatters/markdownRenderer';
-import { formatDisplayTimestamp } from '../formatters/timestampUtils';
+import { messageTimestamp } from '../formatters/timestampUtils';
 import type {
   ScriptDeliverySummary,
   StoredMediaSchema,
@@ -189,11 +189,6 @@ export class UserMessage extends LitElement {
   }
 
   override render(): TemplateResult {
-    const messageDate = new Date(this.timestamp);
-    const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
-      messageDate,
-      'minute',
-    );
     const isStructuredDelivery = this.scriptSummary !== null;
 
     const folds = !isStructuredDelivery && isLong(this.text);
@@ -241,12 +236,7 @@ export class UserMessage extends LitElement {
           }
         </div>
         <div class="message-meta">
-          <time
-            class="message-timestamp"
-            datetime=${messageDate.toISOString()}
-            title=${tooltipTimestamp}
-            >${timeDisplay}</time
-          >
+          ${messageTimestamp(this.timestamp)}
           <copy-button
             .text=${this.text}
             .label=${'Copy message'}

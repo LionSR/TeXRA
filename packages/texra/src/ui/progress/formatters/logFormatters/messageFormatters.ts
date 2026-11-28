@@ -28,7 +28,7 @@ import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
-import { formatDisplayTimestamp } from '../timestampUtils';
+import { formatDisplayTimestamp, messageTimestamp } from '../timestampUtils';
 import {
   buildCopyButton,
   buildDetailsCard,
@@ -158,10 +158,6 @@ export function formatProgressStatusTemplate(
  */
 export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const { timestamp } = row;
-  const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
-    new Date(timestamp),
-    'minute',
-  );
 
   const worded = errorRowText(row);
   const summaryText = worded.summary;
@@ -183,16 +179,10 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const contentTemplate = html`<div class="banner-content log-entry-content banner-content--error">${detailTemplate}</div>`;
   // prettier-ignore
   const labelSpan = html`<span class="label">${summaryText}</span>`;
-  const timestampLabel = html`<time
-    class="error-timestamp message-timestamp"
-    datetime=${new Date(timestamp).toISOString()}
-    title=${tooltipTimestamp}
-    >${timeDisplay}</time
-  >`;
   // prettier-ignore
   const copyButton = buildCopyButton('Copy error details', rawContent);
   // prettier-ignore
-  const summaryTemplate = html`<div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}</span>${timestampLabel}${copyButton}</div>`;
+  const summaryTemplate = html`<div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}</span>${messageTimestamp(timestamp)}${copyButton}</div>`;
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--error tone-danger message-disclosure">${summaryTemplate}${contentTemplate}</wa-details>`;
 }
