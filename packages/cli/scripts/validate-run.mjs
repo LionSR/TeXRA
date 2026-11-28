@@ -25,6 +25,7 @@ import {
 import { loadPtySpawn } from './nodePtySpawnHelper.mjs';
 import {
   buildValidationCli,
+  projectStore,
   splitValidationAgent,
   VALIDATION_FAKE_API_KEY,
   VALIDATION_PROVIDER_KEYS,
@@ -215,19 +216,6 @@ async function waitFor(label, check, timeoutMs = 120_000, detail) {
     );
     await sleep(250);
   }
-}
-
-/**
- * The directory of the project store under the TeXRA data root `dataRoot`
- * whose name starts with `prefix`, or undefined until a session has made
- * it. A service also keeps a no-workspace store beside it, which holds no
- * runs.
- */
-function projectStore(dataRoot, prefix = 'work-') {
-  const storage = path.join(dataRoot, 'v1', 'workspace-storage');
-  if (!existsSync(storage)) return undefined;
-  const name = readdirSync(storage).find((entry) => entry.startsWith(prefix));
-  return name === undefined ? undefined : path.join(storage, name);
 }
 
 function assertSuccess(result, label) {

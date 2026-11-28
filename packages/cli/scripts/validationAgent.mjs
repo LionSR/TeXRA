@@ -1,9 +1,10 @@
 /**
  * What the validation scripts share about the validation build of the CLI:
- * how it is built, the provider keys its child processes are given, and how
- * a script names the run a launch starts.
+ * how it is built, the provider keys its child processes are given, where a
+ * launch's project store is, and how a script names the run a launch starts.
  */
 import { spawnSync } from 'node:child_process';
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { VALIDATION_AGENT } from '../src/runtime/models/validationSwitch.ts';
@@ -51,6 +52,19 @@ export function buildValidationCli(binaryPath) {
     });
     if (result.status !== 0) throw new Error(`pnpm run ${script} failed`);
   }
+}
+
+/**
+ * The directory of the project store under the TeXRA data root `dataRoot`
+ * whose name starts with `prefix`, or undefined until a session has made
+ * it. A service also keeps a no-workspace store beside it, which holds no
+ * runs.
+ */
+export function projectStore(dataRoot, prefix = 'work-') {
+  const storage = path.join(dataRoot, 'v1', 'workspace-storage');
+  if (!existsSync(storage)) return undefined;
+  const name = readdirSync(storage).find((entry) => entry.startsWith(prefix));
+  return name === undefined ? undefined : path.join(storage, name);
 }
 
 /**
