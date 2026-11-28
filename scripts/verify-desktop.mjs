@@ -22,7 +22,7 @@
 // for another stage's dependencies.
 
 // Node imports
-import { appendFileSync, statSync } from 'node:fs';
+import { appendFileSync, lstatSync, statSync } from 'node:fs';
 import {
   access,
   mkdir,
@@ -871,6 +871,10 @@ async function checkNoBundledNativeCliPayload(app, failures) {
   );
 }
 
+// The files under `path`, links not followed: a package manager's sibling
+// links would count a package once per package that depends on it, and a
+// pair that link to each other would never end. Not `scripts/walkFiles.mjs`:
+// a recursive `readdir` walks into linked directories.
 async function onDiskSize(path) {
   const entryStat = statSync(path, { throwIfNoEntry: false });
   if (entryStat == null) return null;
@@ -878,8 +882,9 @@ async function onDiskSize(path) {
 
   let total = 0;
   for (const entry of await readdir(path, { withFileTypes: true })) {
-    const childSize = await onDiskSize(join(path, entry.name));
-    if (childSize != null) total += childSize;
+    const child = join(path, entry.name);
+    if (entry.isDirectory()) total += (await onDiskSize(child)) ?? 0;
+    else if (entry.isFile()) total += lstatSync(child).size;
   }
   return total;
 }

@@ -27,6 +27,10 @@ import {
 import { actionMenu } from '@ui/wa/actionMenu';
 import { inlineRenameField } from '@ui/wa/inlineRename';
 import '@ui/progress/components/PlanUsageMeters';
+import {
+  DESKTOP_LOCAL_COMMANDS,
+  desktopCommandEntry,
+} from '../shared/desktopCommandSurface';
 import type { Shell } from './shell';
 
 /** One open project as the rail lists it: how its host names it, its session,
@@ -52,6 +56,9 @@ interface ShellSidebarModel {
 
 /** The recent projects the empty rail offers; File › Open Recent has all. */
 const RECENT_PROJECTS_SHOWN = 5;
+const OPEN_FOLDER_TITLE = desktopCommandEntry(
+  DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+).title;
 
 /** Project menu actions always name the project they affect. */
 type ProjectAction = 'new-task' | 'rename' | 'close';
@@ -222,7 +229,7 @@ export function shellSidebarTemplate(
         ${renderLabeledActionButton({
           id: 'shellNewTask',
           icon: 'plus',
-          text: 'New task',
+          text: desktopCommandEntry('texra.showMainView').title,
           kind: 'ghost',
           className: 'shell-sidebar-action is-row',
           onClick: callbacks.onNewTask,
@@ -234,12 +241,12 @@ export function shellSidebarTemplate(
           aria-label="Open projects"
         >
           <div class="shell-sidebar-section-heading">
-            <span class="shell-sidebar-section-label">Projects</span>
+            <span class="overline">Projects</span>
             ${renderIconActionButton({
               id: 'shellProjectAdd',
               icon: 'plus',
-              label: 'Open project folder',
-              tooltip: 'Open project folder',
+              label: OPEN_FOLDER_TITLE,
+              tooltip: OPEN_FOLDER_TITLE,
               className: 'shell-project-add',
               onClick: callbacks.onOpenFolder,
             })}

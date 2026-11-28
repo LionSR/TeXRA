@@ -3,15 +3,13 @@
  * bridge its surfaces subscribe to, its host snapshot, its tool-edit view,
  * its attachment as the project's window, its run actions, its file actions,
  * its transcript export, and the `host.request` body both hosts answer
- * through: one switch, one case order, one wire contract, over a binding
- * table each host fills with the verbs it actually performs. The policy (the
- * order, the guards, the refusal wording, the guide pages) lives here once,
- * and the difference between the hosts is the table.
- *
- * A host answers its own way only the kinds `OWN_REQUEST_LABEL` lists
- * ({@link OwnHostCommand}: its tab pop-out, its getting-started commands),
- * so its switch stays exhaustive and the compiler still names a kind it
- * forgot.
+ * through: one switch, one case order, one wire contract, over a table each
+ * host fills with the verbs it actually performs ({@link GuiWindowHost}). The
+ * policy (the order, the guards, the refusal wording, the guide pages) lives
+ * here once, and the difference between the hosts is the table. A verb only
+ * some hosts have (the editor's files, the tab pop-out, the getting-started
+ * commands) is an optional member, and the body refuses a request for one a
+ * host leaves out.
  */
 import * as path from 'node:path';
 
@@ -42,8 +40,14 @@ import {
   runDirUnder,
 } from '@texra-ai/worldline/plugins';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
-import type { HostCommand } from '@texra/shared/session/hostRequest';
-import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
+import type {
+  GettingStartedAction,
+  HostCommand,
+} from '@texra/shared/session/hostRequest';
+import type {
+  HostSnapshot,
+  ProjectDisplay,
+} from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import type { Dialogs, ExternalOpener } from '@texra/hosts/uiHosts';
@@ -125,36 +129,13 @@ export interface GuiSession {
   readonly writeFile: WriteProjectFile;
 }
 
-/** The kinds a host answers its own way, and what the refusal of one a
- *  host lacks names; the shared body answers every other kind. */
-const OWN_REQUEST_LABEL = {
-  popOut: 'Pop-out to editor',
-  popBack: 'Pop-out to editor',
-  gettingStarted: 'Starting a project',
-} as const satisfies Partial<Record<HostCommand['kind'], string>>;
-
-/** The refusal of a request this host has no verb for. */
-const notInThisApp = (label: string) =>
-  new Rejected({ reason: `${label} is not available in this app.` });
-
-/** The requests a host answers its own way. */
-type OwnHostCommand = Extract<
-  HostCommand,
-  { kind: keyof typeof OWN_REQUEST_LABEL }
->;
-
-type SharedHostCommand = Exclude<HostCommand, OwnHostCommand>;
-
-const isOwnHostCommand = (request: HostCommand): request is OwnHostCommand =>
-  Object.hasOwn(OWN_REQUEST_LABEL, request.kind);
-
-/** The handlers a host answers its own way, by kind. A kind a host leaves
- *  out is refused by the shared router, worded once for both hosts. */
-export type OwnHostHandlers = {
-  readonly [K in OwnHostCommand['kind']]?: (
-    request: Extract<OwnHostCommand, { kind: K }>,
-  ) => HostVerb<HostOutcome>;
-};
+/** A host's optional verb, or the refusal naming what it would have done. */
+const bound = <A>(verb: A | undefined, label: string) =>
+  verb === undefined
+    ? Effect.fail(
+        new Rejected({ reason: `${label} is not available in this app.` }),
+      )
+    : Effect.succeed(verb);
 
 /** A verb a host binds: it runs on the fiber the window's dispatch owns, and
  *  its failure is the value the case answers with. */
@@ -165,11 +146,18 @@ type HostVerb<A> = Effect.Effect<
 >;
 
 /**
- * The verbs behind the shared handlers. Every member is a capability the host
- * performs; nothing here decides anything, which is the point: the decision
- * -- the order, the guard, the refusal wording -- is in the one body below.
+ * What a host does for its window: the verbs behind the `host.request` body,
+ * and what its notices, run view, file actions and transcript export do.
+ * Every member is a capability the host performs; nothing here decides
+ * anything, which is the point: the decision -- the order, the guard, the
+ * refusal wording -- is in the one body below.
  */
-export interface SharedHostCommandBindings {
+export interface GuiWindowHost {
+  /** The window's notices. */
+  readonly notify: Dialogs['notify'];
+  /** A notice with one button per label, behind the failure and
+   *  instruction notices the body words and wires. */
+  readonly ask: AskNotice;
   /** Open a file by its absolute path, at a line when one is named. */
   openPath(absolutePath: string, line: number | undefined): HostVerb<void>;
   /** The host's native dialog that opens several files, behind the
@@ -188,7 +176,7 @@ export interface SharedHostCommandBindings {
    *  body below, as a rejection naming the address. */
   readonly openExternal: ExternalOpener['openExternal'];
   /** The onboarding card's verbs a host performs. "Set an API key" is
-   *  {@link SharedHostCommandBindings.setApiKey}, the same verb the banner
+   *  {@link GuiWindowHost.setApiKey}, the same verb the banner
    *  takes, the two skips write the funnel's flags and Run Setup launches
    *  the window's setup conversation in the body below. */
   readonly onboarding: {
@@ -204,19 +192,15 @@ export interface SharedHostCommandBindings {
     /** Every file the editor has open. */
     readonly openedFiles: HostVerb<readonly string[]>;
   };
-}
-
-/** What a host does for its window: the shared body's verbs, the requests
- *  it answers its own way, and what its editor, run view, file actions and
- *  transcript export do. */
-export interface GuiWindowHost {
-  /** The window's notices. */
-  readonly notify: Dialogs['notify'];
-  /** A notice with one button per label, behind the failure and
-   *  instruction notices the body words and wires. */
-  readonly ask: AskNotice;
-  readonly bindings: SharedHostCommandBindings;
-  readonly own: OwnHostHandlers;
+  /** Move the window's run view between its places, where the host has
+   *  two: its editor tab (`popOut`) and its sidebar (`popBack`). */
+  readonly placement?: {
+    readonly popOut: HostVerb<void>;
+    readonly popBack: HostVerb<void>;
+  };
+  /** Start a project from the getting-started card (a sample, an Overleaf
+   *  clone, an arXiv download). A host without it shows no card. */
+  readonly gettingStarted?: (action: GettingStartedAction) => HostVerb<void>;
   /** Show a file a run asks to be opened, built when it is a document. */
   openFile(
     payload: RuntimePresentationEventPayloads['openFile'],
@@ -242,23 +226,21 @@ interface GuiWindowPorts {
   readonly roots: WorkspaceRoots;
   readonly project: ProjectDisplay;
   /** The snapshot reads only this host answers. */
-  readonly snapshot: Omit<
-    Parameters<typeof openHostSnapshotSource>[0],
-    'project' | 'tools' | 'root' | 'stores'
-  >;
+  readonly snapshot: {
+    workspaceRoots(): HostSnapshot['workspaceRoots'];
+    /** Whether this host shows the setup notices (see
+     *  `openHostSnapshotSource`); a host with its own setup surfaces, and
+     *  no {@link GuiWindowHost.gettingStarted}, shows none. */
+    readonly setupNotices: boolean;
+  };
   readonly toolEdits: ToolEditApprovalHost;
   /** Emits when the window gains focus, so the project's calls come here
    *  first. */
   readonly focused: Stream.Stream<void>;
   /** The one process recorder. */
   readonly draftRequests: HostDraftRequests;
-  /** The host's half of the window, built for the window's scope once the
-   *  bridge and the snapshot are up. */
-  readonly host: Effect.Effect<
-    GuiWindowHost,
-    never,
-    Scope.Scope | ProcessServices
-  >;
+  /** The host's half of the window. */
+  readonly host: GuiWindowHost;
 }
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
@@ -275,7 +257,7 @@ const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   ports: GuiWindowPorts,
 ) {
-  const { runs, roots } = ports;
+  const { runs, roots, host } = ports;
   const { session } = runs;
   // The project's `.env` over the process's: what this window asks about its
   // project (model options, a polish's helper model) answers from it, as the
@@ -311,7 +293,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     handleHostCommand: handle,
     onPortClosed: draftRequests.closePort,
   }).pipe(Scope.provide(bridgeScope));
-  const host = yield* ports.host;
 
   // The window is its project's window wherever its runs run: here,
   // through this process's own windows, or in the service, whose runs ask
@@ -320,7 +301,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   const workspace = roots.workspace ?? roots.storage;
   const signals = yield* AppSignals;
   const secrets = yield* Secrets;
-  const { bindings } = host;
   // A notice's buttons run the verbs the window's requests run. The session
   // forks a notice outside any request, so the key store the set-key verb
   // reads is handed over here.
@@ -331,13 +311,11 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     openFile: host.openFile,
     ...windowNotices({
       ask: host.ask,
-      setApiKey: bindings
-        .setApiKey()
-        .pipe(Effect.provideService(Secrets, secrets)),
+      setApiKey: host.setApiKey().pipe(Effect.provideService(Secrets, secrets)),
       // The button was pressed, so a guide that does not open is said in
       // the window.
       openGuide: (page) =>
-        bindings
+        host
           .openExternal(texraGuideUrl(page))
           .pipe(
             Effect.tapError((failed) => host.notify('error', failed.message)),
@@ -430,7 +408,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     // The set-key verb either runs or faults, so its failure is the one
     // failure, as `ApiKeyPromptFailed`.
     promptForApiKey: (provider) =>
-      bindings.setApiKey(provider).pipe(
+      host.setApiKey(provider).pipe(
         Effect.provide(requestLayer),
         Effect.mapError(
           (failure) =>
@@ -451,27 +429,19 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       roots,
       session,
     });
-  /** The host's editor, or the refusal naming what it would have answered. */
-  const editor = (label: string) =>
-    bindings.editor === undefined
-      ? Effect.fail(notInThisApp(label))
-      : Effect.succeed(bindings.editor);
   /**
-   * One program per shared request, as a host's own handlers are: it runs on the
-   * fiber the window's dispatch already owns and finishes nothing, so its
-   * failure reaches the bridge's view as the value the port carried.
+   * One program per request: it runs on the fiber the window's dispatch
+   * already owns and finishes nothing, so its failure reaches the bridge's
+   * view as the value the port carried.
    */
-  function shared(
-    request: SharedHostCommand,
-    port: string,
-  ): HostVerb<HostOutcome> {
+  function answer(request: HostCommand, port: string): HostVerb<HostOutcome> {
     return Effect.gen(function* () {
       switch (request.kind) {
         case 'pickFiles': {
           const paths = yield* pickLauncherFiles(
             roots.workspace,
             request.fileType,
-            bindings.openFiles,
+            host.openFiles,
           );
           if (paths === null) return yield* new Cancelled();
           return { kind: 'files', paths } satisfies HostOutcome;
@@ -486,7 +456,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
                 .pipe(
                   Effect.mapError((cause) => hostFailure('openFile', cause)),
                 );
-          yield* bindings.openPath(absolutePath, request.line);
+          yield* host.openPath(absolutePath, request.line);
           return done;
         }
         case 'workspaceFile':
@@ -496,7 +466,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           const opened = yield* findLabelInWorkspace(
             roots.workspace,
             request.label,
-            (absolutePath, line) => bindings.openPath(absolutePath, line),
+            (absolutePath, line) => host.openPath(absolutePath, line),
           );
           if (!opened) {
             return yield* new Rejected({
@@ -506,7 +476,8 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return done;
         }
         case 'useCurrentFile': {
-          const currentPath = yield* (yield* editor(
+          const currentPath = yield* (yield* bound(
+            host.editor,
             "The editor's current file",
           )).currentFile;
           if (!currentPath)
@@ -520,8 +491,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return { kind: 'files', paths: [current] };
         }
         case 'addOpenedFiles': {
-          const opened = yield* (yield* editor("The editor's open files"))
-            .openedFiles;
+          const opened = yield* (yield* bound(
+            host.editor,
+            "The editor's open files",
+          )).openedFiles;
           // A file open in two tabs is listed once.
           const paths = new Set(
             opened.map((file) => workspaceRelativePath(roots.workspace, file)),
@@ -654,7 +627,18 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           yield* exportTranscript(request.runId);
           return done;
         case 'openSettings':
-          yield* bindings.openSettings(request.target);
+          yield* host.openSettings(request.target);
+          return done;
+        case 'popOut':
+          yield* (yield* bound(host.placement, 'Pop-out to editor')).popOut;
+          return done;
+        case 'popBack':
+          yield* (yield* bound(host.placement, 'Pop-out to editor')).popBack;
+          return done;
+        case 'gettingStarted':
+          yield* (yield* bound(host.gettingStarted, 'Starting a project'))(
+            request.action,
+          );
           return done;
         case 'setReasoningLevel':
           yield* setReasoningLevel(roots.globalState, {
@@ -666,9 +650,9 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return done;
         case 'apiKeyBanner':
           yield* request.action === 'set'
-            ? bindings.setApiKey()
+            ? host.setApiKey()
             : openLink(
-                bindings.openExternal,
+                host.openExternal,
                 texraGuideUrl('installation', 'setting-up-api-keys'),
               );
           return done;
@@ -678,15 +662,15 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'openInstallGuide':
           // Every dependency the banner lists installs from the one guide
           // page.
-          yield* openLink(bindings.openExternal, texraGuideUrl('installation'));
+          yield* openLink(host.openExternal, texraGuideUrl('installation'));
           return done;
         case 'onboarding':
           switch (request.action) {
             case 'signInChatGpt':
-              yield* bindings.onboarding.signInChatGpt;
+              yield* host.onboarding.signInChatGpt;
               return done;
             case 'setApiKey':
-              yield* bindings.setApiKey();
+              yield* host.setApiKey();
               return done;
             case 'skip':
               yield* setOnboardingDeclined(roots.globalState, true);
@@ -698,32 +682,18 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
               yield* setFirstRunDone(roots.globalState);
               return done;
             case 'openGettingStarted':
-              yield* bindings.onboarding.openGettingStarted;
+              yield* host.onboarding.openGettingStarted;
               return done;
           }
           return done;
       }
     });
   }
-  /** An own kind the host binds runs its handler; one it leaves out is
-   *  refused, worded here for both hosts. */
-  const own = (request: OwnHostCommand): HostVerb<HostOutcome> => {
-    const handler = host.own[request.kind];
-    if (handler === undefined)
-      return Effect.fail(notInThisApp(OWN_REQUEST_LABEL[request.kind]));
-    // cast: the handler bound under `request.kind` takes a request of that kind.
-    return (handler as (request: OwnHostCommand) => HostVerb<HostOutcome>)(
-      request,
-    );
-  };
   function handle(
     request: HostCommand,
     port: string,
   ): Effect.Effect<HostOutcome, HostCommandFailure, ProcessServices> {
-    return Effect.provide(
-      isOwnHostCommand(request) ? own(request) : shared(request, port),
-      requestLayer,
-    );
+    return Effect.provide(answer(request, port), requestLayer);
   }
 
   return {

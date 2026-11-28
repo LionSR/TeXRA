@@ -45,6 +45,7 @@ import { type Shell } from './shell';
 
 import {
   DESKTOP_LOCAL_COMMANDS,
+  desktopCommandEntry,
   dispatchDesktopCommand,
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface';
@@ -331,7 +332,9 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
         <div class="desktop-empty-workspace-actions">
           ${renderLabeledActionButton({
             icon: 'folder-open',
-            text: 'Open project folder',
+            text: desktopCommandEntry(
+              DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+            ).title,
             kind: 'primary',
             onClick: () =>
               postToMain({
@@ -397,7 +400,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
     ${
       sidebarCollapsedWithPendingApproval
         ? html`<span
-            class="status-dot shell-header-pending-approval-badge tone-warning"
+            class="status-indicator shell-header-pending-approval-badge tone-warning"
             aria-hidden="true"
           ></span>`
         : nothing

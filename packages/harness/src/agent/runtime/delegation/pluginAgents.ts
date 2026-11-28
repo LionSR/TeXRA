@@ -65,7 +65,8 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
       (error) => new AgentError({ message: error.message, cause: error }),
     ),
   );
-  const split = splitFrontmatterFence(content);
+  // The read keeps a byte order mark, which is not part of the fence line.
+  const split = splitFrontmatterFence(content.replace(/^\uFEFF/, ''));
   if (split.kind !== 'ok')
     return yield* new AgentError({
       message: `${file} must start with YAML frontmatter (---).`,

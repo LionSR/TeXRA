@@ -183,8 +183,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         runs: project,
         roots: project.roots,
         project: project.display,
-        // The desktop shows the credential in Settings, and starts a project
-        // from its own launcher.
+        // The desktop shows the credential in Settings.
         snapshot: {
           workspaceRoots: () => [],
           setupNotices: false,

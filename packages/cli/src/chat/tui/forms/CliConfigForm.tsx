@@ -372,8 +372,8 @@ function SettingsBrowser(props: SettingsBrowserProps): React.JSX.Element {
         commit(entry, !effective(entry));
         return;
       case 'form':
-        // The one list form a catalog row opens.
-        if (entry.openForm === 'skills') setMode({ kind: 'skills' });
+        // `openForm` names the one list form a catalog row opens.
+        setMode({ kind: 'skills' });
         return;
       case 'enum':
         setMode({ kind: 'enum', entry, category });

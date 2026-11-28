@@ -123,9 +123,12 @@ export class LeanStartError extends Schema.TaggedError<LeanStartError>()(
   },
 ) {}
 
-type LeanSessionError =
-  | LeanSessionNotRunning
-  | LeanFileUnreadable
+/** A call that opens a file and sends it only notifications. */
+type LeanFileError = LeanSessionNotRunning | LeanFileUnreadable;
+
+/** A call that also sends a request, which the server can refuse. */
+type LeanRequestError =
+  | LeanFileError
   | JsonRpcRequestError
   | JsonRpcConnectionDisposed;
 
@@ -149,7 +152,7 @@ export class LeanServer extends Context.Service<
      */
     readonly diagnostics: (
       filePath: string,
-    ) => Effect.Effect<FetchDiagnosticsResult, LeanSessionError>;
+    ) => Effect.Effect<FetchDiagnosticsResult, LeanFileError>;
     /**
      * Open the file (if needed), wait for Lean to elaborate it, and send a
      * position-scoped LSP request. Position requests like `$/lean/plainGoal`
@@ -160,11 +163,11 @@ export class LeanServer extends Context.Service<
       line: number,
       column: number,
       method: string,
-    ) => Effect.Effect<unknown, LeanSessionError>;
+    ) => Effect.Effect<unknown, LeanRequestError>;
     /** Drop the cached open state and re-open with fresh contents. */
     readonly restartFile: (
       filePath: string,
-    ) => Effect.Effect<void, LeanSessionError>;
+    ) => Effect.Effect<void, LeanFileError>;
   }
 >()('@texra-ai/texra/tools/LeanServer') {
   static readonly layer = (
