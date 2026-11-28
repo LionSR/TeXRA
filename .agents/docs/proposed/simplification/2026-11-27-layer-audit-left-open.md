@@ -116,6 +116,10 @@ worth taking.
 - **`RunTabs.ts` walks `childIds` by hand** where `descendantRuns` has a
   seen-set, and **`packages/texra/src/shared/state/PersistedState.ts`** is
   read only by renderers. (#15216)
+  Landed 2026-11-28 (#15216 closed without merging): the search filter
+  walks a run's tree with `descendantRuns`, and `PersistedState.ts` is
+  `packages/texra/src/ui/progress/PersistedState.ts`, beside the session
+  surfaces that read it; `shared/state/` held nothing else and is gone.
 - The items of section 1 of the 2026-11-26 note that #15229 freed are
   unchanged: the two leftover-run sweeps, `FAMILY_OF`, and the resume
   command formatted under `chat/tui/state/`, whose readers #15216 and

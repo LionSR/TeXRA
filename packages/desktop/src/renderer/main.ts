@@ -26,7 +26,7 @@ import './TexraDiffView';
 import {
   PersistedState,
   type KeyValueStore,
-} from '@texra/shared/state/PersistedState';
+} from '@ui/progress/PersistedState';
 
 import { DESKTOP_THEME_KIND } from '@texra/shared/ipc';
 import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
