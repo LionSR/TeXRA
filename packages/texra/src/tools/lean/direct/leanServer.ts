@@ -187,11 +187,18 @@ interface FileState {
   readonly progress: 'unreported' | 'processing' | 'elaborated';
 }
 
-interface ServerEnd {
-  readonly status: 'stopped' | 'error';
-  readonly message?: string;
-  /** The errno the exit carried, when that is what ended it. */
-  readonly cause?: unknown;
+type ServerEnd =
+  | { readonly status: 'stopped' }
+  | {
+      readonly status: 'error';
+      readonly message: string;
+      /** The errno the exit carried, when that is what ended it. */
+      readonly cause?: unknown;
+    };
+
+/** What a caller waiting on the server is told when it has ended. */
+function endMessage(end: ServerEnd): string {
+  return end.status === 'error' ? end.message : 'Lean server stopped';
 }
 
 function spawnFailure(error: PlatformError.PlatformError): LeanStartError {
@@ -301,9 +308,9 @@ const make = ({
       end: Effect.fnUntraced(function* (exit, tail) {
         const end = describeEnd(exit);
         yield* Effect.logInfo(
-          `lake env lean --server ended (${end.message ?? 'exit code 0'}) at ${root}${tail ? `\n${tail}` : ''}`,
+          `lake env lean --server ended (${end.status === 'error' ? end.message : 'exit code 0'}) at ${root}${tail ? `\n${tail}` : ''}`,
         ).pipe(withLogChannel(LOG_CHANNEL));
-        return end.message ?? 'Lean server stopped';
+        return endMessage(end);
       }),
       onNotification: (method, params) => {
         switch (method) {
@@ -340,8 +347,8 @@ const make = ({
       Effect.flatMap((end) =>
         Effect.fail(
           new LeanStartError({
-            message: end.message ?? 'Lean server stopped',
-            cause: end.cause,
+            message: endMessage(end),
+            cause: end.status === 'error' ? end.cause : undefined,
           }),
         ),
       ),
@@ -585,14 +592,10 @@ const make = ({
         Option.isNone(end)
           ? Effect.succeed({ ...base, status: 'running', startedAt })
           : Effect.map(end.value, (exit) => {
-              const { status, message } = describeEnd(exit);
-              return status === 'error'
-                ? {
-                    ...base,
-                    status,
-                    errorMessage: message ?? 'Lean server stopped',
-                  }
-                : { ...base, status };
+              const end = describeEnd(exit);
+              return end.status === 'error'
+                ? { ...base, status: end.status, errorMessage: end.message }
+                : { ...base, status: end.status };
             }),
     );
 
