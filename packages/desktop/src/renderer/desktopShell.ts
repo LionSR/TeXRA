@@ -242,7 +242,7 @@ export function shellSidebarTemplate(
           aria-label="Open projects"
         >
           <div class="shell-sidebar-section-heading">
-            <span class="shell-sidebar-section-label">Projects</span>
+            <span class="overline">Projects</span>
             ${renderIconActionButton({
               id: 'shellProjectAdd',
               icon: 'plus',

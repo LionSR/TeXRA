@@ -128,12 +128,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   gap: var(--wa-space-xs);
   padding-inline: var(--wa-space-xs) var(--wa-space-2xs);
 }
-.shell-sidebar-section-label {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  letter-spacing: 0.02em;
-}
 .shell-project-item {
   display: grid;
   grid-template-columns:
@@ -230,11 +224,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-files {
   align-content: start;
   padding: var(--wa-space-xs);
-}
-.shell-files .desktop-editor-tree-header > span {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
 }
 .shell-files .desktop-editor-tree-list {
   display: block;

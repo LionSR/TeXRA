@@ -68,10 +68,9 @@ lands.
     unsaved-file dot, `unsavedDot` in `paneChrome.ts`, which shows no
     status. (A tab's unsaved dot is the text colour and a tree row's the
     accent, which is a design call.)
-11. **Sidebar group labels** (`.shell-sidebar-section-label` and the Files
-    header in `desktopShell.css`) are small grey labels beside the kit's
-    `.overline`, which `RunTabs.ts` uses for its headings in the same
-    sidebar. Moving them makes the labels uppercase.
+11. **Closed.** The rail's "Projects" label and the Files pane's header
+    are the kit's `.overline`, as `RunTabs.ts`'s headings are; their own
+    rules in `desktopShell.css` are gone.
 12. **Closed.** `createPathToolbar` (`editorFileNotice.ts`) builds it for
     both panes.
 
