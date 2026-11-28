@@ -191,9 +191,7 @@ export const commandTool = defineTool({
   name: 'command',
   description: 'Run a command.',
   schema: Schema.Struct({ command: Schema.String }),
-  guard: {
-    command: { text: ({ command }) => command, grant: 'bash' },
-  },
+  command: { text: ({ command }) => command, grant: 'bash' },
   execute: ({ command }) => Effect.succeed(`ran ${command}`),
 });
 

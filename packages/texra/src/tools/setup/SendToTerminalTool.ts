@@ -101,11 +101,9 @@ export const SendToTerminalTool = defineTool({
   // Approval reuses the regular bash dialog: the loop gates the same trimmed
   // command the terminal receives. No cwd: the command goes to a named
   // terminal whose shell keeps its own directory, which this tool never sets.
-  guard: {
-    command: {
-      text: (input: SendToTerminalInput) => input.command.trim(),
-      cwd: 'unknown',
-    },
+  command: {
+    text: (input: SendToTerminalInput) => input.command.trim(),
+    cwd: 'unknown',
   },
   execute: sendToTerminal,
 });

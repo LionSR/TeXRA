@@ -1,20 +1,19 @@
 /**
- * The coding plans' usage meters, as the settings page and the terminal's
- * status bar show them: what the process knows of each plan's quota
- * (`PlanQuotas`, which asks the plan's endpoint and keeps the answer),
- * named for the person. A read always succeeds with a snapshot: a failed
- * request is the snapshot's `unavailable` state, so a caller has no error
- * case to write.
+ * A plan's usage meter, as the status bar, the settings page and the
+ * terminal show it: what the process knows of the plan's quota
+ * (`PlanQuotas`), as the one record they read. A read always succeeds: a
+ * failed request is the record's `unknown`, so a caller has no error case
+ * to write.
  */
 import { Effect, Record as EffectRecord } from 'effect';
 import { PlanQuotas, type PlanQuota } from '@texra-ai/worldline/host';
 import type { Secrets, SettingsStores } from '@texra-ai/worldline/plugins';
+import type { DeclinableUsageRoute } from '@texra-ai/worldline/schemas';
 import type { HttpClient } from 'effect/http';
 
-import { providerDisplayName } from '@texra-ai/llm';
 import type {
+  PlanUsage,
   SubscriptionUsageProvider,
-  SubscriptionUsageSnapshot,
   SubscriptionUsageSnapshots,
 } from '@texra/shared/model/subscriptionUsage';
 import {
@@ -28,47 +27,56 @@ const PLAN_BY_PROVIDER = {
   glmCodingPlan: codingPlanForUsageRoute('glm-coding-plan-subscription'),
 } satisfies Record<SubscriptionUsageProvider, CodingPlanSubscription>;
 
-/** `quota` as the meter of `plan`. A coding plan's quota comes from its
- *  endpoint, never from a reply or from nowhere. */
-const snapshotOf = (
-  plan: CodingPlanSubscription,
+/** `quota` as `plan`'s meter; none for a plan nothing states the quota of. */
+export const planUsageOf = (
+  plan: DeclinableUsageRoute,
   quota: PlanQuota,
-): Effect.Effect<SubscriptionUsageSnapshot> => {
+): PlanUsage | undefined => {
   switch (quota.state) {
     case 'read':
-      return Effect.succeed({
-        state: 'available',
-        providerName: providerDisplayName(plan.apiProvider),
-        planName: quota.planName ?? plan.displayName,
-        windows: [...quota.windows],
-        fetchedAt: quota.at,
-      });
+    case 'observed':
+      return {
+        plan,
+        ...(quota.state === 'read' &&
+          quota.planName && { planName: quota.planName }),
+        at: quota.at,
+        windows: quota.windows.map((window) => ({
+          name: window.name,
+          percentUsed: window.percentUsed,
+          resetAt: window.resetAt,
+        })),
+      };
     case 'failed':
-      return Effect.succeed({
-        state: 'unavailable',
-        reason: quota.reason,
-      });
-    default:
-      return Effect.die(
-        new Error(
-          `${plan.displayName}'s quota is ${quota.state}; a coding plan's is read from its endpoint.`,
-        ),
-      );
+      return { plan, windows: [], unknown: quota.reason };
+    case 'unobserved':
+      return { plan, windows: [], unknown: quota.state };
+    case 'unread':
+      return undefined;
   }
 };
 
-/** The usage of `provider`'s plan, with the key and settings `stores` hold. */
+/** The usage of `provider`'s plan, with the key and settings `stores` hold.
+ *  A coding plan's quota comes from its endpoint, so it always has a meter. */
 export const subscriptionUsage = (
   stores: SettingsStores,
   provider: SubscriptionUsageProvider,
 ): Effect.Effect<
-  SubscriptionUsageSnapshot,
+  PlanUsage,
   never,
   PlanQuotas | HttpClient.HttpClient | Secrets
 > => {
   const plan = PLAN_BY_PROVIDER[provider];
   return PlanQuotas.use((quotas) => quotas.read(plan.usageRoute, stores)).pipe(
-    Effect.flatMap((quota) => snapshotOf(plan, quota)),
+    Effect.flatMap((quota) => {
+      const usage = planUsageOf(plan.usageRoute, quota);
+      return usage === undefined
+        ? Effect.die(
+            new Error(
+              `${plan.displayName}'s quota is ${quota.state}; a coding plan's is read from its endpoint.`,
+            ),
+          )
+        : Effect.succeed(usage);
+    }),
   );
 };
 

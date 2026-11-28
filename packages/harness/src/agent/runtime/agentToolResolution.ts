@@ -69,9 +69,8 @@ import { ToolRegistry } from '@tools/toolTable';
 
 /** Whether `tool` may ask a person, so a run nobody can ask withholds it. */
 export const asksApproval = <E, R>(
-  tool: Pick<ITool<E, R>, 'guard' | 'requiresApproval'>,
-): boolean =>
-  tool.guard?.command !== undefined || tool.requiresApproval !== undefined;
+  tool: Pick<ITool<E, R>, 'command' | 'requiresApproval'>,
+): boolean => tool.command !== undefined || tool.requiresApproval !== undefined;
 /**
  * The host capabilities a session's host serves now (`ITool.hostCapability`
  * names one), by the session's storage root: what a plugin whose tools need

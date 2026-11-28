@@ -12,6 +12,7 @@ import { isWorking } from '@texra-ai/worldline/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_BADGE_TEXT } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
+import { currentUsageWindows } from '@ui/copy/subscriptionUsage';
 import { subscriptionUsage } from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
 
 import {
@@ -153,8 +154,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     displayUsage?.usageRoute === undefined;
   const modelAccess = displayUsage?.usageRoute ?? prospectiveRoute;
 
-  // `subscriptionUsage` always succeeds with a snapshot (see its module): an
-  // `unavailable` snapshot is the designed carrier of a transport failure.
+  // `subscriptionUsage` always succeeds (see its module): a failed request
+  // is the usage record's `unknown`, not an error.
   const subscriptionUsageProvider = subscriptionUsageProviderForStatus({
     usageRoute: displayUsage?.usageRoute,
     prospectiveRoute,
@@ -170,13 +171,15 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     readQuota,
     QUOTA_REFRESH,
   );
-  const subscriptionQuota =
-    quotaRead !== undefined && Exit.isSuccess(quotaRead)
-      ? quotaRead.value
-      : undefined;
-
   const runStartedAt = displayRun?.runStartedAt ?? undefined;
   const now = useLiveNowMsSince([runStartedAt]);
+  const subscriptionQuota =
+    quotaRead !== undefined && Exit.isSuccess(quotaRead)
+      ? {
+          ...quotaRead.value,
+          windows: currentUsageWindows(quotaRead.value, now),
+        }
+      : undefined;
 
   // Every request awaiting the user: the session view's pending approvals, the
   // same list the modal and the title read.
