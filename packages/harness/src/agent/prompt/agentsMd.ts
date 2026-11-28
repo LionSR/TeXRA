@@ -14,7 +14,7 @@ const CHANNEL = 'agentsMd';
 const AGENTS_FILE = 'AGENTS.md';
 
 /** An `AGENTS.md` that is there and could not be read. */
-export class AgentsMdUnread extends Schema.TaggedError<AgentsMdUnread>()(
+class AgentsMdUnread extends Schema.TaggedError<AgentsMdUnread>()(
   'AgentsMdUnread',
   { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
 ) {}
