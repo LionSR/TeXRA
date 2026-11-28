@@ -19,7 +19,7 @@ import {
   DeviceAuthorizationPending,
   DeviceAuthorizationTransient,
   pollDeviceAuthorization,
-  type SubscriptionDeviceCodePrompt,
+  type SubscriptionDeviceCodeHandler,
 } from '../deviceAuthorization.js';
 import {
   NonEmptyJwtClaim,
@@ -290,7 +290,7 @@ const pollDeviceToken = Effect.fn('xai.pollDeviceToken')(function* (
  * whose `message` is the user-facing text.
  */
 const xaiDeviceGrant = Effect.fn('xai.deviceGrant')(function* (
-  onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>,
+  onPrompt: SubscriptionDeviceCodeHandler,
 ) {
   const device = yield* requestDeviceCode();
   // Floor to 1s so a misbehaving endpoint cannot busy-loop us.

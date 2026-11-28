@@ -323,9 +323,20 @@ interface SubscriptionCoordinator<S extends SubscriptionSession> {
    * the provider has no device-code sign-in.
    */
   readonly signInWithDeviceCode?: (
-    onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>,
+    onPrompt: SubscriptionDeviceCodeHandler,
   ) => Effect.Effect<S, Error, HttpClient.HttpClient>;
 }
+```
+
+## SubscriptionDeviceCodeHandler
+
+Renders a {@link SubscriptionDeviceCodePrompt} while the grant polls for
+approval.
+
+```ts
+type SubscriptionDeviceCodeHandler = (
+  prompt: SubscriptionDeviceCodePrompt,
+) => Effect.Effect<void>;
 ```
 
 ## SubscriptionDeviceCodePrompt

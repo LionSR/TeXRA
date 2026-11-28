@@ -40,7 +40,7 @@ import type {
   SubscriptionSessionStatus,
   SubscriptionTokenResponse,
 } from './subscriptionCoordinator.js';
-import type { SubscriptionDeviceCodePrompt } from './deviceAuthorization.js';
+import type { SubscriptionDeviceCodeHandler } from './deviceAuthorization.js';
 import type { HttpClient } from 'effect/http';
 
 /** Refresh this long before expiry (the Codex CLI's and Zed's buffer). */
@@ -91,7 +91,7 @@ export class SubscriptionOAuthCoordinator<
   /** Held across every read-then-write of the stored session. */
   private readonly lock: Semaphore.Semaphore;
   readonly signInWithDeviceCode?: (
-    onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>,
+    onPrompt: SubscriptionDeviceCodeHandler,
   ) => Effect.Effect<S, Error, HttpClient.HttpClient>;
 
   private constructor(

@@ -201,7 +201,10 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
 });
 
 export { SubscriptionOAuthError } from './oauth/subscriptionOAuthError.js';
-export type { SubscriptionDeviceCodePrompt } from './oauth/deviceAuthorization.js';
+export type {
+  SubscriptionDeviceCodeHandler,
+  SubscriptionDeviceCodePrompt,
+} from './oauth/deviceAuthorization.js';
 export { LoopbackTransportUnavailableError } from './oauth/loopbackLogin.js';
 export type {
   SubscriptionCoordinator,

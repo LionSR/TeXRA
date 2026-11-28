@@ -25,6 +25,12 @@ export interface SubscriptionDeviceCodePrompt {
   readonly verificationUrlComplete?: string;
 }
 
+/** Renders a {@link SubscriptionDeviceCodePrompt} while the grant polls for
+ *  approval. */
+export type SubscriptionDeviceCodeHandler = (
+  prompt: SubscriptionDeviceCodePrompt,
+) => Effect.Effect<void>;
+
 /** The user has not approved yet; `slowDown` asks for a longer interval. */
 export class DeviceAuthorizationPending extends Schema.TaggedError<DeviceAuthorizationPending>()(
   'DeviceAuthorizationPending',
