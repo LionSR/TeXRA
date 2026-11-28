@@ -1,16 +1,20 @@
 /**
  * The transport framer: one per transport port, answering each
  * `Subscribe` with the session's own ordered input reader
- * (`Session.view.watch`): a replay whole, then each tail read, each batch
+ * (`Session.view.watch`): a replay whole, then each tail read, each input
  * one frame. A cold mount starts from the runtime view's cursor; a
  * resubscribe starts from the cursor it supplies. Of a tail read, the
  * transcript rows and text chunks of aggregates the subscriber did not
  * name are left out (the listing rows stay), and adjacent text chunks of
  * one row are merged, which the offsets make lossless; every frame
- * carries the commit the reader had drained, left-out rows included, so
- * the subscriber's cursor moves past them. The buffer suspends the framer
- * when the port falls behind, never the publisher. A subscriber that names
- * another set interrupts this stream and asks again.
+ * carries the last commit drained up to its input, left-out rows included, so
+ * the subscriber's cursor moves past them. A frame is one input, never a
+ * read's whole batch: the socket transport counts a connection alive by
+ * the messages it decodes, and a replay of a long transcript written as
+ * one message takes longer to arrive than its ping timeout, so the client
+ * would drop a healthy connection and ask for the replay again. The buffer
+ * suspends the framer when the port falls behind, never the publisher. A
+ * subscriber that names another set interrupts this stream and asks again.
  *
  * Rows are framed as committed: secrets never enter the event table, so no
  * framer redacts.
@@ -93,17 +97,20 @@ export function frameSubscription(
         Stream.mapAccum(
           () => tailFrom,
           (drained: CommitOrdinal, batch) => {
-            const cursor =
-              batch.findLast((input) => input._tag === 'drained')?.cursor ??
-              drained;
-            const frame: EventsFrame = {
-              cursor,
-              inputs: framed(named, batch),
-            };
-            return [cursor, [frame]] as const;
+            const frames: EventsFrame[] = [];
+            let cursor = drained;
+            for (const input of framed(named, batch)) {
+              if (input._tag === 'drained') cursor = input.cursor;
+              frames.push({ cursor, inputs: [input] });
+            }
+            return [cursor, frames] as const;
           },
         ),
         Stream.buffer({ capacity: FRAME_BUFFER, strategy: 'suspend' }),
+        // The transport writes each chunk as one message, and the buffer
+        // hands the port whatever has piled up: one frame per chunk keeps a
+        // message one input.
+        Stream.rechunk(1),
       );
   });
 }

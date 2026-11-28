@@ -30,6 +30,7 @@ import type { TranscriptInterest } from '@texra-ai/worldline/transcript';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import {
+  readsOf,
   ServerEnvelopeSchema,
   SessionRpcs,
   type HostOutcome,
@@ -192,7 +193,7 @@ export function installWebviewTransport(
       debug: boolean,
     ) =>
       client['session.frames']({ aggregates, cursor, debug }).pipe(
-        Stream.map((frame) => frame.inputs),
+        readsOf,
         Stream.catchCause((cause) => {
           // Ended either way, and never the view's updates with it; only a
           // failure is the host's defect, not the host ending the call (its

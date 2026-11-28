@@ -63,7 +63,7 @@ import {
   type ServiceClient,
   type ServiceLink,
 } from './client';
-import type { EventsFrame } from '@texra/shared/session/sessionFrames';
+import { type EventsFrame, readsOf } from '@texra/shared/session/sessionFrames';
 import {
   RUN_RECORDS,
   type ProjectStateFailed,
@@ -324,7 +324,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
             }),
       ),
     ).pipe(
-      Stream.map((frame) => frame.inputs),
+      readsOf,
       // A service that went ends this read: the link closing its connection
       // interrupts the call, which must not end the view with it, and the
       // next service the link reaches is asked again (below).
@@ -423,8 +423,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                   ),
                 ).pipe(
                   Stream.tap((frame) => Ref.set(cursor, frame.cursor)),
-                  Stream.map((frame) => frame.inputs),
-                  Stream.filter((inputs) => inputs.length > 0),
+                  readsOf,
                   // A lost service's stream fails, or is interrupted
                   // when the link closes its connection: either ends
                   // this service's part, and the next one takes over.
@@ -629,7 +628,7 @@ export function watchTask(
             subscribe: { debug, cursor, aggregates },
           }).pipe(
             Stream.tap((frame) => Effect.sync(() => onFrame(frame))),
-            Stream.map((frame) => frame.inputs),
+            readsOf,
             // Each end is said through `ended`, which ends the levels below.
             Stream.onEnd(endWith('the service closed the watch.')),
             Stream.catch((error) =>
