@@ -1,4 +1,9 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import {
+  contextBridge,
+  ipcRenderer,
+  webUtils,
+  type IpcRendererEvent,
+} from 'electron';
 
 import {
   HOST_BRIDGE_API_KEY,
@@ -72,6 +77,7 @@ contextBridge.exposeInMainWorld(HOST_BRIDGE_API_KEY, {
   setState: (nextState) => {
     state = nextState;
   },
+  filePath: (file) => webUtils.getPathForFile(file),
 } satisfies HostBridgeApi);
 const pushes = heldUntilListening();
 contextBridge.exposeInMainWorld(DESKTOP_PUSHES_API_KEY, {

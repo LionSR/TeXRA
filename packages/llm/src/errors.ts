@@ -276,9 +276,11 @@ function retryAfterMsOf(headers: Headers | undefined): number | undefined {
   }
   const retryAfter = read('retry-after');
   if (retryAfter === undefined) return undefined;
+  // A number is seconds and never a date: `Date.parse('-1')` is the year
+  // 2001, which would read as "retry now".
   const seconds = Number(retryAfter);
-  if (Number.isFinite(seconds) && seconds >= 0)
-    return Math.round(seconds * 1000);
+  if (Number.isFinite(seconds))
+    return seconds >= 0 ? Math.round(seconds * 1000) : undefined;
   const date = Date.parse(retryAfter);
   return Number.isFinite(date) ? Math.max(0, date - Date.now()) : undefined;
 }

@@ -1,9 +1,8 @@
 /**
- * The `\criticize{message}{severity}{confidence}` annotations a critique
- * program writes into a document: found once, by the brace-balanced macro
- * scanner (`@latex/braceBalancedMacro`), then either parsed with
- * their positions for the editor's decorations or stripped from a file
- * before it is accepted.
+ * The `\criticize{message}{severity}{confidence}` annotations the `annotate`
+ * program writes into a document, found by the brace-balanced macro scanner
+ * (`@latex/braceBalancedMacro`) and parsed with their positions for the
+ * editor's decorations.
  */
 
 import { findBraceBalancedMacroCalls } from '@latex/braceBalancedMacro';

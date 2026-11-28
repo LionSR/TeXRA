@@ -6,7 +6,6 @@ import { Effect, FileSystem, Iterable, Result } from 'effect';
 
 // Local imports - log
 import {
-  renderPrompt,
   withLogChannel,
   Settings,
   type SettingsStores,
@@ -16,14 +15,22 @@ import {
 
 // Local imports - latex utils
 import { readUncommentedLatex } from './latexParsingUtils';
-import { compileLatex2Pdf, perInputBuildDirectory } from './texTools';
+import { compileLatex2Pdf } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { FileLocation } from '@texra-ai/worldline/schemas';
 import { TIKZ_TEMPLATE_SETTING } from '@texra/shared/settings/texraSettings';
+import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
+
+/**
+ * The template's one placeholder. The template is a setting a project's
+ * config file can answer, so it is text with a hole, never a program: the
+ * rest is LaTeX, where `{#1}` is a macro argument.
+ */
+const TIKZ_PLACEHOLDER = /\{\{\s*tikzpicture\s*\}\}/g;
 
 /**
  * Create a standalone LaTeX file for a TikZ picture
- * @param template The `texra.latex.tikzTemplate` the picture is rendered into
+ * @param template The `texra.latex.tikzTemplate` the picture is put into
  * @param buildDir Absolute build directory path
  * @param workspaceRoot The session's workspace root the file is located in
  * @param suffix Optional suffix for multiple pictures with same label
@@ -38,9 +45,11 @@ const createStandalone = Effect.fn('tikzPictures.createStandalone')(function* (
   suffix?: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const standaloneContent = yield* renderPrompt(template, {
-    tikzpicture: tikzpictures,
-  });
+  // A replacer function, so a `$` in the picture is not a pattern.
+  const standaloneContent = template.replaceAll(
+    TIKZ_PLACEHOLDER,
+    () => tikzpictures,
+  );
 
   const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
   const texLocation = pathToLocationIn(
@@ -114,7 +123,12 @@ export const compileTikzPictures = Effect.fn('tikzPictures.compile')(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   const workspaceRoot = (yield* WorkspaceFs).root;
-  const buildDir = perInputBuildDirectory(latexFile.absolutePath);
+  // `<dir>/build/<stem>`: the pictures of each file in a folder of their own.
+  const buildDir = path.join(
+    path.dirname(latexFile.absolutePath),
+    LATEX_BUILD_DIRECTORY,
+    path.parse(latexFile.absolutePath).name,
+  );
 
   yield* fs.makeDirectory(buildDir, { recursive: true });
 

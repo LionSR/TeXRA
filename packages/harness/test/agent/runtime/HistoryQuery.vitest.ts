@@ -93,6 +93,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             Effect.flip,
           );
           expect(pragma).toMatchObject({ reason: 'not-a-read' });
+          // SQLite applies this pragma when the statement is prepared, so an
+          // EXPLAIN of it would turn the store writable.
+          const explained = yield* query(
+            session,
+            'EXPLAIN PRAGMA query_only = OFF',
+          ).pipe(Effect.flip);
+          expect(explained).toMatchObject({ reason: 'not-a-read' });
           const two = yield* query(session, "SELECT 1; SELECT ';' -- ;").pipe(
             Effect.flip,
           );

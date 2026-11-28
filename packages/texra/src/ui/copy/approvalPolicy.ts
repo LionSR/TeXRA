@@ -48,11 +48,11 @@ export function formatApprovalPolicy(policy: ApprovalPolicy): string {
   return APPROVAL_POLICY_COPY[policy].description;
 }
 
-/** The project's persisted policy as one line: the extension's status
- *  tooltip and the terminal's notice of a change to it. */
-export const projectApprovalPolicyLine = (policy: ApprovalPolicy): string =>
-  `Project approval policy: ${formatApprovalPolicy(policy)}`;
-
-/** A chat's own policy as one line, said when `/approval` sets it. */
-export const approvalModeLine = (policy: ApprovalPolicy): string =>
-  `Approval mode: ${formatApprovalPolicy(policy)}`;
+/** The line that states a policy and whose it is: the project's stored
+ *  policy, or the one this chat was launched with (`/approval`). */
+export const APPROVAL_POLICY_LINE = Object.freeze({
+  project: (policy: ApprovalPolicy) =>
+    `Project approval policy: ${formatApprovalPolicy(policy)}`,
+  chat: (policy: ApprovalPolicy) =>
+    `Approval mode: ${formatApprovalPolicy(policy)}`,
+});

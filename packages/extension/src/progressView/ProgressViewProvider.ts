@@ -37,6 +37,7 @@ import {
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
 import { DocumentFileTypeSchema } from '@texra/shared/launcher/fileTypes';
+import { commandCatalogById } from '@texra/shared/commands/catalog';
 import {
   PdfOpenFailed,
   type EditorCapabilities,
@@ -222,11 +223,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               label: folder.name,
               value: folder.uri.fsPath,
             })) ?? [],
-          shows: {
-            apiKeyBanner: true,
-            dependencyBanner: true,
-            gettingStarted: true,
-          },
+          shows: { apiKeyBanner: true, dependencyBanner: true },
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the diff editor shows, for each tool edit the session
@@ -243,7 +240,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             : focusChanged,
         ),
         draftRequests,
-        host: Effect.sync(() => ({
+        host: {
           ...createExtensionHostRequests({
             roots,
             extensionPath: context.extensionPath,
@@ -269,7 +266,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             revealProgress: (config: AgentConfig) =>
               onView((view) => view.revealProgress(config)),
           },
-        })),
+        },
       });
       const view = new ProgressViewProvider({
         window: gui,
@@ -622,7 +619,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // The toast is the delivered surface when the view cannot be made
     // visible, even if the user dismisses it without retrying the reveal.
     const selection = yield* vscodeUi.ask('info', launchNotice(config), {
-      items: ['Show Tasks'],
+      items: [commandCatalogById['texra.showProgressView'].title],
     });
     if (!selection) return;
     yield* this.showProgressView().pipe(
