@@ -85,7 +85,7 @@ export {
 // What a request of each kind is answered with, and the three ways any
 // request is declined.
 export type { DecisionOf, RefusalDecision } from '@shared/schemas';
-export { ToolError } from '@shared/schemas';
+export { asToolError, ToolError } from '@shared/schemas';
 export { nullishWithDefault, optionalInput } from '@tools/core/inputSchema';
 export {
   assertNoParentTraversal,

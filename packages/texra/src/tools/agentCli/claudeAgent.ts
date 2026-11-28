@@ -21,7 +21,11 @@
 
 // Third-party imports
 import { Effect, Schema, type Scope, Stream } from 'effect';
-import { ChildRuns, ToolContext } from '@texra-ai/worldline/plugins';
+import {
+  asToolError,
+  ChildRuns,
+  ToolContext,
+} from '@texra-ai/worldline/plugins';
 
 // Local imports
 import { MESSAGE_TYPES, type ToolUseLog } from '@texra-ai/worldline/schemas';
@@ -49,7 +53,6 @@ import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
   agentCliTool,
   StreamedToolCards,
-  asToolError,
   type AgentCliTurn,
 } from './agentCliShared';
 import {

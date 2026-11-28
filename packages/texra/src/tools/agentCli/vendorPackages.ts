@@ -37,6 +37,7 @@ import { logFailure } from '@texra-ai/worldline/plugins';
 import {
   executeCommand,
   IS_WINDOWS,
+  pathExists,
   withCommandDirs,
 } from '@texra-ai/worldline/node';
 import { ensureError } from '@texra-ai/worldline/schemas';
@@ -386,7 +387,9 @@ const resolveBinaryFromBase = Effect.fn('vendorPackages.resolveBinaryFromBase')(
 export function binaryIfPresent(
   binary: string,
 ): Effect.Effect<string | undefined, never, FileSystem.FileSystem> {
-  return Effect.flatMap(FileSystem.FileSystem, (fs) => fs.exists(binary)).pipe(
+  return Effect.flatMap(FileSystem.FileSystem, (fs) =>
+    pathExists(fs, binary),
+  ).pipe(
     Effect.map((present) => (present ? binary : undefined)),
     Effect.catch((error) =>
       logFailure(
