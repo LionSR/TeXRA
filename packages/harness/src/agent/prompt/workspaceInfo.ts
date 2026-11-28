@@ -121,7 +121,7 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
     lines.push(`Shell: ${escapeTextStrict(shell)}`);
   }
 
-  lines.push(`Date: ${date}`);
+  lines.push(`Date: ${date} (UTC)`);
 
   if (git) {
     const branchPart = git.branch

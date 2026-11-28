@@ -50,8 +50,8 @@ export const memoryFolders = (
 ): readonly MemoryFolder[] => [
   {
     path: path.join(roots.storageRoot, WORKSPACE_STORAGE_LAYOUT.memory),
-    label: 'Your memory',
-    holds: 'what is true of the person in every project',
+    label: 'User memory',
+    holds: 'what is true of the user in every project',
   },
   {
     path: path.join(roots.storage, WORKSPACE_STORAGE_LAYOUT.memory),
@@ -121,7 +121,7 @@ export const memorySection = Effect.fn('memory.section')(function* (
     ? ''
     : ' Their paths are listed with the accessible directories in <workspace_info>.';
   return `<memory>
-You have ${folders.length} folders of Markdown notes that persist across conversations: ${folderSummary}.${pathHint} They are ordinary files: read and write them with your file tools, by absolute path. Each folder's ${MEMORY_INDEX} is its index, shown below as it reads now, one line per note; the notes themselves are not shown, so read one when its line looks relevant to the request.
+You have ${folders.length} folders of Markdown notes that persist across conversations: ${folderSummary}.${pathHint} They are ordinary files outside the workspace, which your file tools read and write by absolute path. Each folder's ${MEMORY_INDEX} is its index, shown below as it reads now, one line per note; the notes themselves are not shown.
 ${indexes.join('\n')}
 </memory>`;
 });

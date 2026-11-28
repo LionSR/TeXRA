@@ -53,7 +53,7 @@ export const SINGLE_KINDS = Object.freeze({
 
 /** How `provides` names each kind, as a message or a description lists
  *  them. */
-export const PROVIDES_WORDS: readonly string[] = Object.freeze([
+const PROVIDES_WORDS: readonly string[] = Object.freeze([
   ...Struct.keys(NAMED_KINDS).map((word) => `${word}:<name>`),
   ...Struct.keys(SINGLE_KINDS),
 ]);

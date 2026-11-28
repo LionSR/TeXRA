@@ -258,7 +258,7 @@ const CLAUDE_TOOLS: Readonly<
       ...['type', 'head_limit', 'offset', 'multiline', 'path'],
     ),
   },
-  web_fetch: { name: 'WebFetch', ...same('url', 'prompt') },
+  web_fetch: { name: 'WebFetch', ...same('url') },
   web_search: { name: 'WebSearch', ...same('query') },
 };
 
