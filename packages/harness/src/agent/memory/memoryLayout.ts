@@ -50,8 +50,8 @@ export const memoryFolders = (
 ): readonly MemoryFolder[] => [
   {
     path: path.join(roots.storageRoot, WORKSPACE_STORAGE_LAYOUT.memory),
-    label: 'Your memory',
-    holds: 'what is true of the person in every project',
+    label: 'User memory',
+    holds: 'what is true of the user in every project',
   },
   {
     path: path.join(roots.storage, WORKSPACE_STORAGE_LAYOUT.memory),

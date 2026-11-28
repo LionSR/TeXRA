@@ -287,7 +287,7 @@ export const LeanLoogleTool = defineTool({
 
 Example queries:
 - "Real.sin" - find lemmas mentioning a constant
-- "List.map" or ""differ"" - search by name substring
+- "List.map", or "differ" with its quotes kept in the query - search by name or name substring
 - "_ * (_ ^ _)" - find lemmas with subexpression pattern
 - "(?a -> ?b) -> List ?a -> List ?b" - find List.map by type signature
 - "|- tsum _ = _ * tsum _" - search by main conclusion
@@ -295,9 +295,7 @@ Example queries:
 
 Supports batched queries: pass an array of strings to search multiple identifiers in one call.
 
-Returns: name, type signature, module (for imports), and documentation.
-
-Useful for finding the right lemma when you know roughly what type it should have.`,
+Returns: name, type signature, module (for imports), and documentation.`,
   schema: LeanLoogleInputSchema,
   // The owning agent run's cancellation enters here as interruption —
   // parallel batches must be able to abort in-flight Loogle requests and

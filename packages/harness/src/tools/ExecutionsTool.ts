@@ -235,7 +235,7 @@ const EXECUTION_ROUTES: ReadonlyArray<{
   },
   {
     path: '/executions/{id}/conversation',
-    summary: 'Full message history (subagents)',
+    summary: 'Full message history',
     kinds: ['agent', 'task', 'script'],
     actions: {
       view: ({ input, runId }) =>
@@ -273,13 +273,13 @@ const EXECUTION_ROUTES: ReadonlyArray<{
   },
   {
     path: '/executions/{id}/files',
-    summary: 'Generated files (task runs only)',
+    summary: 'Generated files',
     kinds: ['task'],
     actions: { view: ({ runId }) => listFiles(runId) },
   },
   {
     path: '/executions/{id}/files/{path}',
-    summary: 'Read specific generated file (task runs only)',
+    summary: 'Read specific generated file',
     actions: {
       view: ({ input, runId, rest }) =>
         readFile(runId, rest, input.view_range ?? undefined),

@@ -70,7 +70,7 @@ export const ReadConfigTool = defineTool({
   replay: 'safe',
   description: `Read the effective value of a TeXRA configuration key.
 
-Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls: read first, explain, then propose a change with \`update_config\`.`,
+Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default).`,
   schema: ReadConfigInputSchema,
   execute: Effect.fn('ConfigTools.execute')(function* (input: ReadConfigInput) {
     const { config } = (yield* ToolContext).env.roots;
@@ -140,7 +140,7 @@ export const UpdateConfigTool = defineTool({
   requiresApproval: true,
   description: `Update a TeXRA configuration value (allowlisted keys only).
 
-Use this AFTER calling \`read_config\` and explaining to the user what the setting does and what the new value will mean. Explain every change clearly. Pass \`target: "workspace"\` only when the change is genuinely workspace-specific (e.g. a project-local bib path); default to \`"user"\` for general preferences shared across workspaces.
+The user approves each change. \`target: "workspace"\` writes the setting for this project only (e.g. a project-local bib path); \`"user"\`, the default, writes it for every project.
 
 Allowlisted keys:
 ${ALLOWLIST_TEXT}
