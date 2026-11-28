@@ -189,11 +189,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         // from its own launcher.
         snapshot: {
           workspaceRoots: () => [],
-          shows: {
-            apiKeyBanner: false,
-            dependencyBanner: false,
-            gettingStarted: false,
-          },
+          setupNotices: false,
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the review pane diffs, for each tool edit the project's

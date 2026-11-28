@@ -95,14 +95,11 @@ interface HostSnapshotSourceOptions {
   stores: SettingsStores;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots(): HostSnapshot['workspaceRoots'];
-  /** The notices this host shows: the lost-credential banner, the tools
-   *  this machine lacks, and the offer to start a project (a sample, an
-   *  Overleaf clone, an arXiv download) while the folder has no LaTeX files. */
-  shows: {
-    readonly apiKeyBanner: boolean;
-    readonly dependencyBanner: boolean;
-    readonly gettingStarted: boolean;
-  };
+  /** Whether this host shows the setup notices: the lost-credential banner,
+   *  the tools this machine lacks, and the offer to start a project (a
+   *  sample, an Overleaf clone, an arXiv download) while the folder has no
+   *  LaTeX files. A host with its own setup surfaces shows none of them. */
+  setupNotices: boolean;
 }
 
 /** What the producers write; the snapshot is {@link snapshotOf} of it. */
@@ -332,7 +329,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     );
     const loadDependencies = yield* producer(
       'the missing tools',
-      options.shows.dependencyBanner
+      options.setupNotices
         ? Effect.flatMap(missingDependencyTools(), (missingTools) =>
             write({ missingTools }),
           )
@@ -452,7 +449,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         // A credential that worked stopped working: raised only once a task
         // has finished; before that the "Connect a model" card is the prompt.
         apiKey:
-          options.shows.apiKeyBanner &&
+          options.setupNotices &&
           s.credential === false &&
           s.flags?.firstRunDone === true,
         dependency:
@@ -460,7 +457,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
             ? s.missingTools
             : null,
         gettingStarted:
-          options.shows.gettingStarted &&
+          options.setupNotices &&
           s.inputFiles.length === 0 &&
           !s.dismissed.has('gettingStarted'),
         service: s.service,
