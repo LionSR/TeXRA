@@ -27,8 +27,9 @@ on:
 
 concurrency:
   # The scheduled run and a dispatch on `main` share a ref; the event name
-  # keeps one from cancelling the other. A second push or dispatch on a
-  # branch replaces the first.
+  # keeps one from cancelling the other. A second run of the same event on
+  # a ref replaces the first; a push and a dispatch do not replace each
+  # other.
   group: nightly-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
