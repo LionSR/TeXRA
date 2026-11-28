@@ -79,7 +79,7 @@ const DESKTOP_ONLY_COMMANDS = {
     keybinding: { key: 'ctrl+s', mac: 'cmd+s' },
   },
   [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: {
-    title: 'Open Folder',
+    title: 'Open Project Folder',
     category: 'File',
     keybinding: { key: 'ctrl+o', mac: 'cmd+o' },
   },

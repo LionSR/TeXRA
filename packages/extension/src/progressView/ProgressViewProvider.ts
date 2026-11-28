@@ -37,6 +37,7 @@ import {
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
 import { DocumentFileTypeSchema } from '@texra/shared/launcher/fileTypes';
+import { commandCatalogById } from '@texra/shared/commands/catalog';
 import {
   PdfOpenFailed,
   type EditorCapabilities,
@@ -622,7 +623,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // The toast is the delivered surface when the view cannot be made
     // visible, even if the user dismisses it without retrying the reveal.
     const selection = yield* vscodeUi.ask('info', launchNotice(config), {
-      items: ['Show Tasks'],
+      items: [commandCatalogById['texra.showProgressView'].title],
     });
     if (!selection) return;
     yield* this.showProgressView().pipe(
