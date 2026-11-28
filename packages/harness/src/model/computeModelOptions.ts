@@ -40,13 +40,8 @@ type ModelAvailabilityStatus =
       readonly kind: 'retired' | 'unserved';
       /** Why no route serves the model: its route's `reason`. */
       readonly reason: string;
-      readonly usageRoute?: undefined;
     }
-  | {
-      readonly kind: KeyVerdictKind;
-      /** The subscription paying for the next request; absent means own keys. */
-      readonly usageRoute?: DeclinableUsageRoute;
-    };
+  | { readonly kind: KeyVerdictKind };
 
 /** The verdicts a route that serves the model gives. */
 type KeyVerdictKind = Exclude<
@@ -131,15 +126,10 @@ type RoutedModels = ReadonlyMap<string, RoutedModel>;
  */
 function routeVerdict({ rawConfig, route }: RoutedModel):
   | { readonly verdict: ModelAvailabilityStatus }
-  | {
-      readonly keyOf: ApiKeyProviderId;
-      readonly usageRoute: DeclinableUsageRoute | undefined;
-    } {
+  | { readonly keyOf: ApiKeyProviderId } {
   switch (route.kind) {
     case 'session':
-      return {
-        verdict: { kind: 'subscription-access', usageRoute: route.plan },
-      };
+      return { verdict: { kind: 'subscription-access' } };
     case 'no-api-key':
       return { verdict: { kind: 'missing-key' } };
     case 'unserved':
@@ -150,10 +140,7 @@ function routeVerdict({ rawConfig, route }: RoutedModel):
         },
       };
     case 'api-key':
-      return {
-        keyOf: route.provider,
-        usageRoute: route.plan ?? undefined,
-      };
+      return { keyOf: route.provider };
   }
 }
 
@@ -259,7 +246,7 @@ const decideVerdicts = Effect.fn('decideVerdicts')(function* (
       Effect.map(read, (status): ModelAvailabilityStatus => {
         if (status === 'unreadable') return { kind: 'key-unreadable' };
         if (!status) return { kind: 'missing-key' };
-        return { kind: 'provider-key', usageRoute: decided.usageRoute };
+        return { kind: 'provider-key' };
       }),
     ]);
   }
@@ -519,7 +506,13 @@ function optionOf(
   const { route, config } = decision;
   const source = modelSource(route, config);
   const { verdict } = decided;
-  const { kind, usageRoute } = verdict;
+  // The plan the route pays through, when the verdict says it can run.
+  const usageRoute: DeclinableUsageRoute | undefined =
+    route.kind === 'session'
+      ? route.plan
+      : route.kind === 'api-key' && verdict.kind === 'provider-key'
+        ? (route.plan ?? undefined)
+        : undefined;
   // An unserved model is worded as its run's bind refuses it
   // (`decideRoute`).
   const unavailableReason =
@@ -529,7 +522,7 @@ function optionOf(
   const savedEffort = reasoningLevels[config.ref];
   return {
     model,
-    availability: kind,
+    availability: verdict.kind,
     ...(unavailableReason === undefined ? {} : { unavailableReason }),
     ...(usageRoute === undefined ? {} : { usageRoute }),
     published: decision.rawConfig,
