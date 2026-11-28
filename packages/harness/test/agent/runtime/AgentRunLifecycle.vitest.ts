@@ -127,7 +127,6 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
               { ...ctx, entry: { ...ctx.entry, parent: PARENT_RUN_ID } },
               Exit.succeed({
                 outcome: RUN_OUTCOME.COMPLETED,
-                runId,
                 output: { response: '', files: [] },
               } satisfies RunReport),
             ),

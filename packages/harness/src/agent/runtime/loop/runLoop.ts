@@ -693,7 +693,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         structured: at.structured.value,
       }),
     },
-    runId,
     ...(outcome === RUN_OUTCOME.FAILED && at.lastError !== null
       ? { failure: { kind: 'model' as const, failure: at.lastError } }
       : {}),
