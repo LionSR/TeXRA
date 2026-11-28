@@ -118,7 +118,7 @@ The standalone document structure TeXRA uses for each extracted figure:
 "texra.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}"
 ```
 
-Customize this template to include additional packages or settings your figures need.
+Customize this template to include additional packages or settings your figures need. Each `{{ tikzpicture }}` is replaced by the figure; everything else is copied as written, so macro definitions such as `\newcommand{\vect}[1]{\mathbf{#1}}` work in the preamble.
 
 ### TikZ input directory
 
