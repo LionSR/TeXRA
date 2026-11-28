@@ -165,12 +165,12 @@ interface StatusBarChrome {
   readonly locationLabel: string | undefined;
   /** Which surface currently owns input and global chat shortcuts: a
    *  foreground surface (approval, detail, form, slash palette, reverse
-   *  search) or the persistent child list. Neither active means the normal
-   *  chat shortcuts row (`shortcuts`) applies. */
-  readonly foreground: StatusBarForegroundInput;
+   *  search; `foregroundInputActive`) or the persistent child list. Neither
+   *  active means the normal chat shortcuts row (`shortcuts`) applies. */
+  readonly foregroundInputActive: boolean;
   readonly childList: StatusBarChildListInput;
   /** Availability/labels for the normal chat shortcuts row, shown when
-   *  neither `foreground` nor `childList` owns input. */
+   *  neither the foreground surface nor `childList` owns input. */
   readonly shortcuts: StatusBarShortcutsInput;
 }
 
@@ -184,11 +184,6 @@ interface StatusBarTurnInput {
    *  `loadingFrameAt`) shown ahead of the status label while a turn is
    *  active, so "running" reads as alive rather than a static word. */
   readonly runningFrame: string;
-}
-
-interface StatusBarForegroundInput {
-  /** True while a modal, form, palette, or search surface owns input. */
-  readonly inputActive: boolean;
 }
 
 interface StatusBarChildListInput {
@@ -543,7 +538,7 @@ function resolveStatusBarBindings(input: StatusBarChrome): string {
 
   const maxColumns = statusBarInnerWidth(input.width);
   const { ctrlCAction } = input;
-  if (input.foreground.inputActive) {
+  if (input.foregroundInputActive) {
     // The surface above prints its own keys, Esc included; only Ctrl-C,
     // which works over every surface, is the bar's to name.
     return keyHintText({ key: 'Ctrl-C', action: ctrlCAction });

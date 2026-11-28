@@ -18,8 +18,9 @@ const DEFAULT_PAGER = 'less -FIRX';
 
 /**
  * Write `text` to stdout, paging through `$PAGER` (default `less -FIRX`) **only**
- * when stdout is an interactive TTY. When stdout is not a TTY (piped, redirected,
- * `--print`, `--no-input`, `--output-format json|ndjson`) this is a strict
+ * when `interactive` (stdout is a TTY and the context is not headless). When it
+ * is not (piped, redirected, `--print`, `--no-input`, `--output-format
+ * json|ndjson`) this is a strict
  * no-op wrapper around `writeTextStdout` — byte-identical to writing directly,
  * so headless parity is preserved.
  *
@@ -28,15 +29,12 @@ const DEFAULT_PAGER = 'less -FIRX';
  */
 export const pageStdout = Effect.fn('pageStdout')(function* (
   text: string,
-  options: {
-    readonly stdoutIsTty?: boolean;
-    readonly headless?: boolean;
-  } = {},
+  interactive: boolean,
 ): Effect.fn.Return<void, never, ChildProcessSpawner> {
   // Empty output never pages — mirrors `emitCliResult`'s skip-empty behavior.
   if (text === '') return;
 
-  if (options.headless === true || options.stdoutIsTty !== true) {
+  if (!interactive) {
     writeTextStdout(text);
     return;
   }

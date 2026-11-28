@@ -21,8 +21,8 @@ interface ModelListFormProps {
   readonly currentModel: string;
   readonly availableRows: number;
   readonly selectable: boolean;
-  readonly getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
-  readonly onSelect?: (value: string) => void;
+  readonly getModelSwitchDisabledReason: GetModelSwitchDisabledReason;
+  readonly onSelect: (value: string) => void;
   readonly onClose: () => void;
 }
 
@@ -50,7 +50,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
       emptyClosesOnEnter
       emptyMessage={formatCliNoRunnableModelsMessage(CHAT_KEY_RECOVERY)}
       action={props.selectable ? 'select' : 'close'}
-      onSelect={(value) => props.onSelect?.(value)}
+      onSelect={props.onSelect}
       onCancel={props.onClose}
     />
   );

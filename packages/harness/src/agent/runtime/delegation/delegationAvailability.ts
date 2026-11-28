@@ -180,7 +180,7 @@ export const selectAvailableDelegationModel = Effect.fn(
   'selectAvailableDelegationModel',
 )(function* (input: {
   readonly requestedModel?: string | null;
-  readonly parentModel?: string | null;
+  readonly parentModel: string;
   /**
    * The setting slots the availability read answers from: the calling run's
    * session roots. Callers that reach this from outside their run — an
@@ -193,7 +193,7 @@ export const selectAvailableDelegationModel = Effect.fn(
   // Availability belongs to the model; an `@effort` suffix does not change it.
   const refOf = (model: string) => modelRefOf(model) ?? model;
   const enabled = yield* readModelOptions(input.settings);
-  const parent = input.parentModel?.trim() || undefined;
+  const parent = input.parentModel.trim() || undefined;
   const parentOptions =
     parent === undefined || enabled.some(({ model }) => model === refOf(parent))
       ? []
