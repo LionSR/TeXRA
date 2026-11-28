@@ -734,6 +734,23 @@ type DefineToolOptions<T, R = never> = Required<
   };
 ```
 
+## describedString
+
+A required tool-input string field that arrives trimmed and non-empty.
+
+The model sees a plain string carrying `description`, written on the encoded
+side because that is the side the model's JSON Schema is generated from.
+Decoding trims surrounding whitespace and rejects an empty result, so
+`execute` receives a non-empty, trimmed value and needs no trim or presence
+check of its own. Naming the shape keeps every described path/text field a
+tool requires on the one spelling.
+
+```ts
+function describedString(
+  description: string,
+): Schema.Codec<string, string>
+```
+
 ## DiffHunks
 
 One diff pass: its hunks, and — when the pass hit its bound — the warning
