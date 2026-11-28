@@ -26,7 +26,7 @@ The Tasks view shares the **TeXRA view** with the New task screen. Select the Te
 
 - **Automatic**: Opens automatically when you start a task.
 - **Manual**: Run **TeXRA: Show Tasks** (`Ctrl+Alt+P` / `Cmd+Option+P`).
-- **Editor tab**: Run **TeXRA: Open Tasks in Editor**, or pick **Open tasks in editor** from the panel's **⋯** menu.
+- **Editor tab**: Run **TeXRA: Open Tasks in Editor**, or pick **Open Tasks in Editor** from the panel's **⋯** menu.
 
 <GuideIntroHero />
 
@@ -76,7 +76,7 @@ The header summarizes and controls the selected task:
   - **Chat tasks**:
     - **Compact conversation**: Summarize earlier turns.
     - **Run again…**: Open the New task form prefilled with the chat's model, instruction, skills, and images to start a fresh task.
-  - **Global**: **Open tasks in editor** (or **Back to sidebar**).
+  - **Global**: **Open Tasks in Editor** (or **Back to sidebar**).
 - **After a task ends**: The composer area is replaced by a completion bar offering **Fork** (starts a new task with the conversation up to its last finished turn, leaving the original untouched) and, for interrupted tasks, **Resume** (continues from where the task stopped instead of starting over). Hovering over any of your messages after the first also offers **Fork from here**, which branches the conversation before that message and places the message in the composer.
 
 ### Checking a launch
