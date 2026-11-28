@@ -50,7 +50,7 @@ const gitRead = (
     Effect.timeoutOption(GIT_READ_TIMEOUT_MS),
     Effect.map(Option.getOrNull),
     // Git is not installed, or the folder is gone: no answer, as documented.
-    Effect.catch(() => Effect.succeed(null)),
+    Effect.orElseSucceed(() => null),
   );
 
 /** The trimmed stdout of a successful `git` read, `''` included, or null. */

@@ -72,16 +72,13 @@ function scrollBoundedRows<T>({
     };
   }
 
-  const offset = Math.max(
-    0,
-    Math.min(
-      maxScrollableRowOffset({
-        maxDisplayLines,
-        totalLines: rows.length,
-      }),
-      scrollOffset,
-    ),
-  );
+  const offset = Num.clamp(scrollOffset, {
+    minimum: 0,
+    maximum: maxScrollableRowOffset({
+      maxDisplayLines,
+      totalLines: rows.length,
+    }),
+  });
   const hiddenBefore = offset;
   const reserveBefore = hiddenBefore > 0 ? 1 : 0;
   const contentSlotsWithoutAfter = maxDisplayLines - reserveBefore;

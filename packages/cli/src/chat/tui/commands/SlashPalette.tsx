@@ -83,10 +83,10 @@ function slashPaletteWindow({
 
   const visibleInMiddle = Math.max(1, visibleAtEdge - 1);
   const centerOffset = Math.floor(visibleInMiddle / 2);
-  const start = Math.min(
-    Math.max(1, clamped - centerOffset),
-    itemCount - visibleInMiddle - 1,
-  );
+  const start = Num.clamp(clamped - centerOffset, {
+    minimum: 1,
+    maximum: itemCount - visibleInMiddle - 1,
+  });
   const end = start + visibleInMiddle;
   return {
     start,

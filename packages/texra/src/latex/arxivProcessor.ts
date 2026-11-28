@@ -493,9 +493,8 @@ const claimDirAndPlaceSource = Effect.fn(
         fs.makeDirectory(path.dirname(paperDirFull), { recursive: true }).pipe(
           Effect.andThen(fs.makeDirectory(paperDirFull)),
           Effect.as(true),
-          Effect.catchIf(
-            (error) => error.reason._tag === 'AlreadyExists',
-            () => Effect.succeed(false),
+          Effect.catchReason('PlatformError', 'AlreadyExists', () =>
+            Effect.succeed(false),
           ),
         ),
       );
