@@ -15,10 +15,11 @@ import {
 
 // Local imports - latex utils
 import { readUncommentedLatex } from './latexParsingUtils';
-import { compileLatex2Pdf, perInputBuildDirectory } from './texTools';
+import { compileLatex2Pdf } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { FileLocation } from '@texra-ai/worldline/schemas';
 import { TIKZ_TEMPLATE_SETTING } from '@texra/shared/settings/texraSettings';
+import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 
 /**
  * The template's one placeholder. The template is a setting a project's
@@ -122,7 +123,12 @@ export const compileTikzPictures = Effect.fn('tikzPictures.compile')(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   const workspaceRoot = (yield* WorkspaceFs).root;
-  const buildDir = perInputBuildDirectory(latexFile.absolutePath);
+  // `<dir>/build/<stem>`: the pictures of each file in a folder of their own.
+  const buildDir = path.join(
+    path.dirname(latexFile.absolutePath),
+    LATEX_BUILD_DIRECTORY,
+    path.parse(latexFile.absolutePath).name,
+  );
 
   yield* fs.makeDirectory(buildDir, { recursive: true });
 
