@@ -47,6 +47,10 @@ What follows is left open, in the order worth taking.
 - **The `HistoryQuery` service and its page schema** sit in
   `packages/harness/src/shared/session/runHistory.ts`; only `agent/`,
   `tools/` and `controllers/` read them.
+  Landed 2026-11-28: the service is declared in
+  `agent/runtime/historyQuery/HistoryQuery.ts` beside the store that serves
+  it, and the page schema and the two errors in `childSource.ts`, whose
+  replies decode to them.
 - **App vocabulary in llm.** `isCodexModel` and `isClaudeCodeModel`
   (`packages/llm/src/models/modelRoute.ts`) are read outside llm only by
   `packages/texra/src/shared/agentCliSettings.ts` and the app's agent-CLI
@@ -92,8 +96,8 @@ chat-only modules out of `packages/cli/src/runtime/` (item 5 of the
 - **"No model available" has three wordings in the CLI**
   (`packages/cli/src/runtime/doctor.ts`, and two in
   `packages/cli/src/runtime/models/modelAccess.ts`).
-- **The project's approval policy** reads "Approval policy:" in the
-  extension's status bar and "Project approval policy:" in the terminal.
+- **Closed.** The project's approval policy line is
+  `APPROVAL_POLICY_LINE.project` on both hosts.
 - **Dropped-file URLs are decoded twice**, by the renderer
   (`packages/texra/src/ui/progress/fileDropHandler.ts`) and by
   `MainViewDroppedFilesController.ts`. Not verified for Electron's

@@ -3,7 +3,11 @@ import { GoogleGenAI, type Interactions } from '@google/genai';
 import { Effect, Ref, Result, Schema, Stream } from 'effect';
 
 // Local imports - canonical model contract
-import { anchoredPrefix, coveredPrefix } from './continuation.js';
+import {
+  anchoredPrefix,
+  anchorResponseId,
+  coveredPrefix,
+} from './continuation.js';
 import {
   completedTurn,
   type GoogleInteractionsConfiguration,
@@ -17,7 +21,6 @@ import { boundTurn, resolveTurn } from './turnInput.js';
 import {
   COMPLETED_STATUSES,
   CONTINUATION_STATUS,
-  EVENT_TYPES,
   IN_FLIGHT_STATUSES,
   WireCompletedStepSchema,
   WireEventSchema,
@@ -37,12 +40,12 @@ import {
 } from '../errors.js';
 import { backgroundLifecycle } from './background.js';
 import {
+  decodeStreamEvent,
   decodeWireOrFail,
   ownedAbortSafeRequest,
   parseOutboundToolArguments,
   pullStream,
   readerAbortSignal,
-  refuseUnknownEvent,
   wireFail as fail,
 } from './transport.js';
 import type { InputPart, Part, PartEvent } from './parts.js';
@@ -400,10 +403,8 @@ const interactionEnd = (
   ...usageParts(interaction.usage),
   {
     kind: 'finish',
-    finish: {
-      finishReason:
-        interaction.status === 'requires_action' ? 'tool-calls' : 'stop',
-    },
+    finishReason:
+      interaction.status === 'requires_action' ? 'tool-calls' : 'stop',
   },
 ];
 
@@ -452,8 +453,8 @@ function googleWire() {
   let done = false;
   return (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
     Effect.gen(function* () {
-      yield* refuseUnknownEvent('Google', 'event_type', EVENT_TYPES, raw);
-      const event = yield* decodeWireOrFail(
+      const event = yield* decodeStreamEvent(
+        'Google',
         WireEventSchema,
         'Google returned malformed stream data.',
         raw,
@@ -536,8 +537,8 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
   result: TurnResult,
   origin: ModelOrigin,
 ) {
-  if (!turn.controls.store || result.providerResponseId === null)
-    return undefined;
+  const interactionId = anchorResponseId(result);
+  if (!turn.controls.store || interactionId === null) return undefined;
   const { prefix, ...covered } = anchoredPrefix(
     GOOGLE_PREFIX_DOMAIN,
     origin,
@@ -553,7 +554,7 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
     origin: { ...origin, protocol: turn.protocol },
     ...covered,
     anchor: {
-      interactionId: result.providerResponseId,
+      interactionId,
       coveredSteps: coveredSteps.length,
     },
   };
@@ -586,24 +587,17 @@ export const googleInteractionsModel = Effect.fn('llm.google.model')(function* (
       request,
       origin,
       background,
-      (input) => {
-        const store = config.defaults.store;
-        return input.mode === 'background' && !store
-          ? Effect.fail(
-              new ModelError({
-                kind: 'invalid-request',
-                message: 'Google background execution requires store:true.',
-              }),
-            )
-          : Effect.succeed({
-              controls: {
-                maxOutputTokens:
-                  input.maxOutputTokens ?? config.defaults.maxOutputTokens,
-                store,
-                thinkingLevel: config.defaults.thinkingLevel,
-              },
-            });
-      },
+      // A background turn on a binding that does not store is refused
+      // before this: such a binding has no `background` member.
+      (input) =>
+        Effect.succeed({
+          controls: {
+            maxOutputTokens:
+              input.maxOutputTokens ?? config.defaults.maxOutputTokens,
+            store: config.defaults.store,
+            thinkingLevel: config.defaults.thinkingLevel,
+          },
+        }),
       (turn) =>
         Effect.flatMap(boundTurn(turn, origin, turn.mode), (bound) =>
           invocationInput(bound, origin),

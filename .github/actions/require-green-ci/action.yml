@@ -1,25 +1,30 @@
 name: Require green CI
-description: Fail unless the commit being released has a green CI run of a push or a dispatch.
+description: Fail unless the commit being released has a green CI run and a green Nightly run.
 
 runs:
   using: composite
   steps:
-    - name: Require a green CI run on the commit
+    - name: Require green CI and Nightly runs on the commit
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
-      # A push or dispatch run is the one that runs every check; the nightly
-      # `schedule` run skips the static checks, the build and the e2e suites,
-      # so its green `validate` says nothing about this commit. The newest
-      # such run decides (a rerun updates its run), so a red run followed by
-      # a green rerun passes and the reverse fails. A commit whose run was
-      # cancelled or is still running, or that CI never ran on (a tag off a
-      # side branch), fails closed: dispatch CI on that ref first. The calling
-      # job needs `actions: read`.
+      # `ci.yml` runs the static checks and the compile; `nightly.yml` runs
+      # every test suite and builds the package. A release needs both on the
+      # exact commit, and neither runs the other's jobs. For each workflow
+      # the newest run on the commit decides (a rerun updates its run), so a
+      # red run followed by a green rerun passes and the reverse fails. A
+      # commit whose run was cancelled or is still running, or that a
+      # workflow never ran on, fails closed: the scheduled Nightly run only
+      # covers the commit `main` was at that night, so dispatch the workflow
+      # on the release ref first. The calling job needs `actions: read`.
       run: |
-        conclusion="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=100" \
-          --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.created_at) | last | .conclusion // "none"')"
-        if [ "$conclusion" != success ]; then
-          echo "::error::CI's push or dispatch run on $GITHUB_SHA is '$conclusion', not 'success'. Wait for CI (or dispatch it on this ref), then re-run this workflow."
-          exit 1
-        fi
+        status=0
+        for workflow in ci.yml nightly.yml; do
+          conclusion="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$GITHUB_SHA&per_page=100" \
+            --jq '[.workflow_runs[] | select(.event != "pull_request")] | sort_by(.created_at) | last | .conclusion // "none"')"
+          if [ "$conclusion" != success ]; then
+            echo "::error::The newest $workflow run on $GITHUB_SHA is '$conclusion', not 'success'. Wait for it, or dispatch it on this ref (gh workflow run $workflow --ref <ref>), then re-run this workflow."
+            status=1
+          fi
+        done
+        exit "$status"

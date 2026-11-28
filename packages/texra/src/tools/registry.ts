@@ -27,7 +27,6 @@ import {
 // Local imports
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import { texraPlugin } from '@texra/tools/texraPlugin';
-import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import type { ToolInstallAction } from '@texra/shared/settingsView/settingsViewMessages';
 import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
 
@@ -90,7 +89,7 @@ import { Settings } from '@texra-ai/worldline/plugins';
 import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
-export interface ToolPluginSetup {
+interface ToolPluginSetup {
   /**
    * The install and sign-in steps the card offers, in order: the guide, a
    * command the dashboard runs in a terminal to install the tool or sign
@@ -109,9 +108,6 @@ export interface ToolPluginSetup {
 export interface PluginCard {
   readonly name: string;
   readonly description: string;
-  /** The plugin's catalog rows the card renders inline, in order; the
-   *  catalog itself takes them from TeXRA's rows (`@texra/shared/settings/texraSettings`). */
-  readonly settings?: readonly PluginSettingRow[];
   /** Install and sign-in copy and actions; only a probed plugin's card
    *  shows them. */
   readonly setup?: ToolPluginSetup;
@@ -166,8 +162,7 @@ const MATH_IN_REPLIES = `For math in responses, use $...$ or \\(...\\) for inlin
  * annotations and the PDF viewer (each offered where the host serves it),
  * and the user-question dialog. Its
  * prompt section, at every step that offers a tool, says how replies write
- * math and names the configured default bibliography; how to read the
- * bibliography is said only to a step offered a tool that does it.
+ * math and names the configured default bibliography.
  */
 const core = (
   editors: EditorRegistry,
@@ -181,21 +176,10 @@ const core = (
     // inside a .tex file does not compile).
     prompt: ({ config, offered }) => {
       if (offered.length === 0) return '';
-      const offers = (...names: string[]) =>
-        names.some((name) => offered.includes(name));
       const bibPath = Settings.getConfig(config, BIB_DEFAULT_PATH_SETTING);
       return [
         MATH_IN_REPLIES,
-        ...(offers('open_pdf')
-          ? [
-              'After compiling a document the user asked to see, show it with `open_pdf`.',
-            ]
-          : []),
-        ...(bibPath
-          ? [
-              `The default bibliography file is ${bibPath}.${offers('grep', 'read_file', 'bash') ? ' You can grep or read this file to search for citations and references.' : ''}`,
-            ]
-          : []),
+        ...(bibPath ? [`The default bibliography file is ${bibPath}.`] : []),
       ].join('\n');
     },
     // The editor's PDF viewer, where `open_pdf` is offered while one is

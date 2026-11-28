@@ -22,7 +22,6 @@ export const WORKBENCH_KIND_META = Object.freeze({
     label: 'Terminal',
     singleton: false,
   }),
-  browser: Object.freeze({ icon: 'globe', label: 'Browser', singleton: true }),
   review: Object.freeze({
     icon: 'plus-minus',
     label: 'Review',
@@ -157,20 +156,6 @@ export function closeWorkbenchTab(
     ...state,
     workbenchTabs: state.workbenchTabs.filter((tab) => tab.id !== id),
     activeTabId: state.activeTabId === id ? undefined : state.activeTabId,
-  };
-}
-
-export function renameWorkbenchTab(
-  state: DesktopShellState,
-  id: string,
-  title: string,
-): DesktopShellState {
-  if (!title.trim()) return state;
-  return {
-    ...state,
-    workbenchTabs: state.workbenchTabs.map((tab) =>
-      tab.id === id ? { ...tab, title: title.trim() } : tab,
-    ),
   };
 }
 

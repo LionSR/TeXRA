@@ -1,77 +1,19 @@
-import { Result } from 'effect';
-import * as CommandLine from 'effect/process/CommandLine';
-
 import {
   formatCount,
   isEmptyUsage,
   type RunId,
   type TokenUsageStats,
 } from '@texra-ai/worldline/schemas';
-import { IS_WINDOWS } from '@texra-ai/worldline/node';
-import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { visibleTokenStats } from '@ui/copy/tokenUsage';
 
+import {
+  formatResumeCommand,
+  type ResumeCommandOptions,
+} from '../../../runtime/resumeCommand';
 import { runViewOf } from './sessionView';
-import type {
-  ApprovalPolicy,
-  RunView,
-  SessionView,
-} from '@texra-ai/worldline/schemas';
-
-interface ResumeCommandOptions {
-  readonly cwd?: string;
-  readonly processCwd?: string;
-  readonly approvalPolicy?: ApprovalPolicy;
-  readonly outputFormat?: CliOutputFormat;
-  readonly print?: boolean;
-  readonly skillSourcePaths?: readonly string[];
-}
-
-/** The shell a person pastes the hint into: PowerShell on Windows. */
-const SHELL_FORMAT = IS_WINDOWS ? 'powershell' : 'posix';
-
-/** A path from argv or the working directory, which holds no NUL to fail on. */
-const shellArgument = (value: string): string =>
-  Result.getOrThrow(CommandLine.quote(value, { format: SHELL_FORMAT }));
-
-export function formatResumeCommand(
-  commandName: string,
-  runId: string,
-  options: ResumeCommandOptions = {},
-): string {
-  const cwd = options.cwd;
-  const cwdArg =
-    cwd && cwd !== options.processCwd ? ` --cwd ${shellArgument(cwd)}` : '';
-  const policyFlag =
-    options.approvalPolicy && options.approvalPolicy !== 'ask'
-      ? ` --approval-policy ${options.approvalPolicy}`
-      : '';
-  const outputFormatFlag =
-    options.outputFormat && options.outputFormat !== 'text'
-      ? ` --output-format ${options.outputFormat}`
-      : '';
-  const printFlag = options.print === true ? ' --print' : '';
-  const sourceFlags = (options.skillSourcePaths ?? [])
-    .map((source) => ` --source ${shellArgument(source)}`)
-    .join('');
-  return `${commandName} resume ${runId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${sourceFlags}`;
-}
-
-/** Why `run`, when it was launched to run once (a headless `texra run`)
- *  and has ended, is not reopened as a chat: it reads no messages, so a
- *  fork, a new task holding its conversation, is how it continues. One
- *  stopped mid-turn (no outcome yet) still resumes to finish it, and any
- *  other run resumes: both read undefined. */
-export function oneShotResumeNotice(
-  commandName: string,
-  runId: RunId,
-  run: Pick<RunView, 'takesFollowUps' | 'outcome'> | undefined,
-): string | undefined {
-  if (run?.takesFollowUps !== false || run.outcome === null) return undefined;
-  return `Task ${runId} is a one-shot task and cannot accept follow-up messages. View it with \`${commandName} history show ${runId}\`, or fork it with \`${commandName} resume ${runId} --fork\`.`;
-}
+import type { SessionView } from '@texra-ai/worldline/schemas';
 
 /** The task's metered usage: the root run and every descendant. */
 export function collectResumeUsage(

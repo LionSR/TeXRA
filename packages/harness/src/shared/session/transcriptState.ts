@@ -319,7 +319,13 @@ export function slotRow(
     case 'tool':
       return toolRow(slot.base, slot.log, live, run, slot.call);
     case 'log':
-      return logPayloadRow(slot.base, slot.text, slot.payload, slot.forkAt);
+      return logPayloadRow(
+        slot.base,
+        slot.text,
+        slot.payload,
+        slot.forkAt,
+        run.runLabels,
+      );
   }
 }
 

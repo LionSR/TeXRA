@@ -2,13 +2,15 @@
 
 import console from 'node:console';
 import process from 'node:process';
-import { chmod, readFile, writeFile } from 'node:fs/promises';
-
-import { fileURLToPath, URL } from 'node:url';
+import { chmod, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { parseArgs } from 'node:util';
 
-const reactDevtoolsStub = fileURLToPath(
-  new URL('./react-devtools-core-stub.mjs', import.meta.url),
+import manifest from '../package.json' with { type: 'json' };
+
+const reactDevtoolsStub = path.join(
+  import.meta.dirname,
+  'react-devtools-core-stub.mjs',
 );
 
 const {
@@ -76,9 +78,7 @@ try {
     import('semver'),
   ]);
 
-  const { engines, version, bugs } = JSON.parse(
-    await readFile(new URL('../package.json', import.meta.url), 'utf8'),
-  );
+  const { engines, version, bugs } = manifest;
   const base = harnessBundleOptions();
   await build({
     ...base,

@@ -19,7 +19,7 @@ The PR that adds this note lands five findings:
   (`providerRegionSetting`).
 - The skill-list toggle and the wording of a setting write that did not land
   are decided once, in `stateSettingWrite.ts` (`setSkillEnabled`,
-  `settingWriteFailure`). The TUI's `/config` skills list now writes over the
+  the `failed` result, which carries the sentence). The TUI's `/config` skills list now writes over the
   list as stored, not as it was when the form opened, and every surface shows
   the same sentence for a rejected, failed or workspace-required write.
 - The TUI follows `approvalPolicyChanged` as the GUI hosts do, so the

@@ -25,10 +25,7 @@ import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
 import { commitProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
 import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import {
-  applyStateSettingUpdate,
-  settingWriteFailure,
-} from '@texra/controllers/settingsView/stateSettingWrite';
+import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import {
   settingEnumChoices,
   settingEnumOptions,
@@ -375,8 +372,8 @@ function SettingsBrowser(props: SettingsBrowserProps): React.JSX.Element {
         commit(entry, !effective(entry));
         return;
       case 'form':
-        // The one list form a catalog row opens.
-        if (entry.openForm === 'skills') setMode({ kind: 'skills' });
+        // `openForm` names the one list form a catalog row opens.
+        setMode({ kind: 'skills' });
         return;
       case 'enum':
         setMode({ kind: 'enum', entry, category });
@@ -450,8 +447,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     const result = yield* applyStateSettingUpdate(entry, value, roots);
     // The browser rolls its optimistic value back on a failure and reports
     // it, so a refused write must fail rather than read as applied.
-    const failure = settingWriteFailure(result);
-    if (failure !== undefined) return yield* failure;
+    if (result.kind === 'failed') return yield* result.error;
     if (result.kind === 'ignored') return;
     settings.reload();
   });

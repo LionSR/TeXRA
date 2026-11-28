@@ -68,7 +68,7 @@ const triggerLaTeXBuild = (
 
   return Effect.gen(function* () {
     // The build reads the file from disk, so a dirty buffer is saved first.
-    const { editor } = yield* openFileInEditor(fileUri.fsPath, {
+    const editor = yield* openFileInEditor(fileUri.fsPath, {
       preserveFocus: true,
     }).pipe(Effect.mapError(buildFailed));
     if (editor.document.isDirty) {

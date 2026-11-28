@@ -10,8 +10,10 @@ import { Schema } from 'effect';
 import { decodingDefault } from '@texra-ai/worldline/schemas';
 
 // Local imports
-import { LATEXDIFF_MATH_MARKUP_VALUES } from '@texra/shared/constants/latexConfig';
 import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
+
+/** latexdiff's `--math-markup` modes. */
+const MathMarkupSchema = Schema.Literals(['off', 'whole', 'coarse', 'fine']);
 
 export const LATEXDIFF_TIMEOUT_SETTING = Object.freeze({
   key: 'latexdiff.timeoutMs',
@@ -29,10 +31,7 @@ export const LATEXDIFF_TIMEOUT_SETTING = Object.freeze({
 
 export const LATEXDIFF_MATH_MARKUP_SETTING = Object.freeze({
   key: 'latexdiff.mathMarkup',
-  schema: decodingDefault(
-    Schema.Literals(LATEXDIFF_MATH_MARKUP_VALUES),
-    'coarse',
-  ),
+  schema: decodingDefault(MathMarkupSchema, 'coarse'),
   title: 'Math markup in diffs',
   description: 'How latexdiff marks up changes inside math environments.',
   category: 'latexdiff',
@@ -44,9 +43,7 @@ export const LATEXDIFF_MATH_MARKUP_SETTING = Object.freeze({
     fine: Object.freeze({ description: 'small changes inside equations' }),
   }),
   surfaces: Object.freeze({ settingsView: 'latex' }),
-} as const satisfies TexraSettingRow<
-  (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number]
->);
+} as const satisfies TexraSettingRow<typeof MathMarkupSchema.Type>);
 
 export const LATEXDIFF_CHANGES_ONLY_SETTING = Object.freeze({
   key: 'latexdiff.changesOnly',

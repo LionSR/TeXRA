@@ -6,29 +6,11 @@ import { ToolContext } from '@tools/core/ToolTypes';
 
 // Local imports
 import { ToolError, type ToolFileAttachment } from '@shared/schemas';
-import {
-  resolveToolPath,
-  type ToolPathResolution,
-} from '@tools/pathResolution';
+import type { ToolPathResolution } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { formatCount } from '@utils/text/stringUtils';
-
-interface BuildFileAttachmentOptions {
-  /** Path to a workspace file (relative or absolute) */
-  filePath: string;
-  /** Optional description surfaced to the model */
-  description?: string;
-  /** Override detected MIME type */
-  mimeType?: string;
-  /**
-   * Pre-resolved path. When provided, skips the internal resolveToolPath()
-   * call — use this to avoid double-resolution when the caller already
-   * resolved the path (e.g. ReadTool).
-   */
-  resolved?: ToolPathResolution;
-}
 
 /** The largest file read as an attachment or parsed as an email: 15 MiB. */
 export const ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024;
@@ -112,32 +94,17 @@ export const buildBytesAttachment = Effect.fn('buildBytesAttachment')(
 );
 
 /**
- * Build a tool attachment by reading a workspace file and packaging metadata.
+ * Build a tool attachment by reading a resolved workspace file and packaging
+ * metadata.
  */
-export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
-  filePath,
-  description,
-  mimeType,
-  resolved,
-}: BuildFileAttachmentOptions): Effect.fn.Return<
+export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* (
+  path: ToolPathResolution,
+  description: string,
+): Effect.fn.Return<
   ToolFileAttachment,
   ToolError,
   ToolContext | FileSystem.FileSystem
 > {
-  const call = yield* ToolContext;
-  if (typeof filePath !== 'string' || filePath.trim() === '') {
-    return yield* new ToolError('Attachment path must be provided.');
-  }
-
-  // An unresolvable path rejects with a ToolError the tool runner reports to
-  // the model, so it stays a failure rather than becoming a defect.
-  const path =
-    resolved ??
-    (yield* resolveToolPath(call.env, filePath).pipe(
-      Effect.mapError(
-        attachmentFailure(`Failed to resolve attachment ${filePath}`),
-      ),
-    ));
   const { display } = path;
   const fs = yield* FileSystem.FileSystem;
   const present = yield* entryExists(fs, path.absolute).pipe(
@@ -171,12 +138,9 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
       ),
     );
 
-  const inferredMime =
-    mimeType ?? getMimeType(path.fsPath) ?? 'application/octet-stream';
-
   const attachment = yield* buildBytesAttachment({
     path: display,
-    mimeType: inferredMime,
+    mimeType: getMimeType(path.fsPath) ?? 'application/octet-stream',
     bytes: buffer,
     description,
   });

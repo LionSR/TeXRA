@@ -3,8 +3,8 @@
  * carry, and the reasoning-level labels. Plain data and pure predicates, so
  * the settings webview renders the same words the hosts build rows with.
  */
-import { ReasoningEffort, selectModel } from '@texra-ai/llm';
-import { getModelLabel } from '@texra-ai/worldline/schemas';
+import { nearestEffort, ReasoningEffort, selectModel } from '@texra-ai/llm';
+import { getModelLabel, joinFacts } from '@texra-ai/worldline/schemas';
 
 /**
  * Display labels for llm-zoo's reasoning efforts, written low → high. The key type keeps the record
@@ -69,19 +69,49 @@ export function isExpensiveModel(outputPrice: number | undefined): boolean {
 }
 
 /**
+ * The reasoning level `selected` runs at on a route with `efforts`: the
+ * explicit `@effort` on `selected` (snapped to the route's nearest accepted
+ * level when the route lacks it), else what the route sends by default/saved
+ * preference. Shared by the desktop/VS Code picker and the CLI TUI.
+ */
+export function effectiveReasoningLevel(
+  selected: string,
+  efforts:
+    | {
+        readonly levels: readonly ReasoningEffort[];
+        readonly sent?: ReasoningEffort;
+      }
+    | undefined,
+): ReasoningEffort | undefined {
+  const named = selectModel(selected)?.request.effort;
+  if (named === undefined) return efforts?.sent;
+  return efforts === undefined ? named : nearestEffort(efforts.levels, named);
+}
+
+/**
+ * Format `ref` at `level`, preserving any active `+mode` (such as `+pro`)
+ * when `currentSelected` names the same model.
+ */
+export function modelChoiceWithEffort(
+  ref: string,
+  level: ReasoningEffort,
+  currentSelected?: string,
+): string {
+  const current = currentSelected ? selectModel(currentSelected) : undefined;
+  const mode = current?.config.ref === ref ? current.request.mode : undefined;
+  return `${ref}@${level}${mode ? `+${mode}` : ''}`;
+}
+
+/**
  * A model selection as a person reads it, the effort and mode it names
  * included: `GPT 6.1 Sol · High · Pro` for `openai/gpt-6.1-sol@high+pro`.
  * Two selections that run differently never read the same.
  */
 export function modelSelectionLabel(model: string): string {
   const request = selectModel(model)?.request;
-  return [
+  return joinFacts([
     getModelLabel(model),
-    request?.effort === undefined
-      ? undefined
-      : REASONING_LEVEL_LABELS[request.effort],
+    request?.effort !== undefined && REASONING_LEVEL_LABELS[request.effort],
     request?.mode === 'pro' ? 'Pro' : request?.mode,
-  ]
-    .filter((part) => part !== undefined)
-    .join(' · ');
+  ]);
 }

@@ -74,10 +74,7 @@ export function initializeLatexSupport(
         .install(LATEX_WORKSHOP_EXT_ID)
         .pipe(
           Effect.catch((err) =>
-            showLoggedErrorMessage(
-              'Could not install LaTeX Workshop',
-              err,
-            ).pipe(Effect.asVoid),
+            showLoggedErrorMessage('Could not install LaTeX Workshop', err),
           ),
         );
     }

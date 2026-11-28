@@ -39,7 +39,7 @@ import {
 import {
   PersistedState,
   type KeyValueStore,
-} from '@texra/shared/state/PersistedState';
+} from '@ui/progress/PersistedState';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { LAUNCH_FILE_LISTS } from '@ui/copy/fileSelectConfigs';
 
@@ -557,10 +557,6 @@ export function createSessionSurfaces(options: {
       });
       return;
     }
-    // Auto-approve is this launch's alone: the request carries it, and the
-    // request finishes only with the run, so the next task must not find it.
-    if (launch.approval !== 'policy')
-      act(entry, { kind: 'launch', patch: { approval: 'policy' } });
     hostRequestFor(entry, { kind: 'launch', launch, instruction });
   }
 

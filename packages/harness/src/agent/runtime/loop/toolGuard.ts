@@ -23,13 +23,12 @@ import {
 import {
   type DecisionOf,
   type HookOutcomePayload,
-  type RefusalDecision,
   type RequestPayload,
   type RunId,
   toJsonValue,
   type ToolResult,
 } from '@shared/schemas';
-import { refusalCopy } from '@tools/approval/refusalCopy';
+import { refusalResult } from '@tools/approval/refusalCopy';
 import {
   callRequestId,
   type AttemptRequests,
@@ -41,7 +40,6 @@ import type {
   ApprovalOperation,
   HookAnswer,
 } from '@shared/session/sessionApprovals';
-import { errorResult } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
 
 import { Interactions } from '../HostInteractions';
@@ -51,10 +49,6 @@ import type { AgentRunShape } from '../run/AgentRun';
 import type { SessionServices } from '../rootLaunch';
 import type { PluginToolServices } from '../ToolServices';
 import type { ToolCallHooks } from './hooks';
-
-const DEFAULT_BASH_REJECTION_GUIDANCE =
-  'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
-  'Continue without running it, use a non-shell method, or explain what approval would be needed.';
 
 /**
  * Ask the person about `command`: a `request.opened` on the run, answered
@@ -108,31 +102,13 @@ export const commandApproval = Effect.fn('commandApproval')(function* (
   if (answer === 'allow') return undefined;
   const decision =
     answer === 'ask' ? yield* askCommandApproval(runId, requests, ask) : answer;
-  return decision.action === 'approve'
-    ? undefined
-    : commandRejectedResult(ask.command, decision);
-});
-
-/** What the model is told when the person refuses `command`. */
-function commandRejectedResult(
-  command: string,
-  refusal: RefusalDecision,
-): ToolResult {
-  const preview = previewLabel(command);
-  const copy = refusalCopy('Command', refusal);
-  const message =
-    refusal.action === 'reject'
-      ? `User rejected command: ${preview}`
-      : `${copy.summary}: ${preview}`;
-  const guidance =
-    refusal.action === 'reject' ? DEFAULT_BASH_REJECTION_GUIDANCE : copy.detail;
-  const feedback = copy.feedback;
-  const error = feedback || !guidance ? message : `${message}\n\n${guidance}`;
-  return errorResult(error, {
-    summary: message,
-    ...(feedback && { userInstruction: feedback }),
+  if (decision.action === 'approve') return undefined;
+  const preview = previewLabel(ask.command);
+  return refusalResult('Command', decision, {
+    rejected: `User rejected command: ${preview}`,
+    target: preview,
   });
-}
+});
 
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 
@@ -185,27 +161,27 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   Error,
   PluginToolServices | SessionServices
 > {
-  const { guard, definition } = tool;
+  const { command: declared, definition } = tool;
   // The loop asks about a command, a tool that requires approval, and a call
   // a hook asked about. A tool whose body opens its own request (`'inBody'`)
   // answers the hook there, from `RunCall.hook`.
   const asks =
-    guard?.command !== undefined ||
+    declared !== undefined ||
     tool.requiresApproval === true ||
     (hook === 'ask' && tool.requiresApproval === undefined);
   if (!asks && !rewritten) return undefined;
   // The chain reads the call's own validated arguments, from the same schema
   // `call` validates with; a tool whose parameters are a pass-through JSON
   // Schema (an MCP server's) takes a JSON object, as its `call` checks. A
-  // guarded tool with no schema would have the guard quietly stop gating it,
-  // so it is a defect, not a skip.
+  // tool that declares a command and no schema would quietly stop being
+  // asked about, so it is a defect, not a skip.
   const schema =
     definition.schema ??
     (definition.parameters ? JSON_OBJECT_ARGUMENTS : undefined);
-  if (!schema && guard !== undefined)
+  if (!schema && declared !== undefined)
     return yield* Effect.die(
       new Error(
-        `Tool ${definition.name} is guarded but declares no schema: the guard has no arguments to read.`,
+        `Tool ${definition.name} declares a command and no schema: its text has no arguments to read.`,
       ),
     );
   const parsed = schema && Schema.decodeUnknownResult(schema)(input);
@@ -218,18 +194,18 @@ const rejection = Effect.fn('toolUse.guard')(function* (
           `it rewrote the call to an input ${definition.name} does not take.\n${parsed.failure.message}`,
         )
       : undefined;
-  // `ITool` erases the guard's input type to `never`. The guard was declared
+  // `ITool` erases the command's input type to `never`. It was declared
   // (`defineTool`) against the type `definition.schema` decodes, and a
   // pass-through-schema tool's against the JSON object it checks.
-  // cast: the guard's declared input, per the note above.
+  // cast: the command's declared input, per the note above.
   const decoded = (parsed ? parsed.success : input) as never;
   const call = yield* ToolContext;
 
   if (!asks) return undefined;
-  // The call as the prompt shows it: the guard's spelling, else the tool's
-  // name and its final input.
-  const command = guard?.command
-    ? guard.command.text(decoded)
+  // The call as the prompt shows it: the tool's spelling, else its name and
+  // its final input.
+  const command = declared
+    ? declared.text(decoded)
     : `${definition.name} ${JSON.stringify(decoded)}`;
   // The directory the approved command runs in, as the tool declared it.
   // `'unknown'`: the executor can name none, so the prompt names none rather
@@ -239,14 +215,14 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   // one and the workspace otherwise, which is what a shell-shaped tool runs
   // in.
   const cwd =
-    guard?.command && guard.command.cwd !== 'unknown'
+    declared && declared.cwd !== 'unknown'
       ? (call.env.workingDirectory ?? call.env.roots.workspace)
       : undefined;
 
   return yield* commandApproval(call.env.run.runId, call.requests, hook, {
     command,
     cwd,
-    operation: guard?.command?.grant ?? 'call',
+    operation: declared?.grant ?? 'call',
   });
 });
 

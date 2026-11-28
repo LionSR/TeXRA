@@ -19,48 +19,30 @@ lands.
 
 ## Web views
 
-1. **A hover hint has two forms for one kind of thing.** A message
-   timestamp is a `<wa-tooltip>` in `UserMessage.ts` and a native `title`
-   in `bannerFormatters.ts` and `messageFormatters.ts`; a file path is a
-   `<wa-tooltip>` in `FileList.ts` and `ProposalRequestPanel.ts` and a
-   `title` in `FileSelectGroup.ts`, `LaunchAttachments.ts` and
-   `htmlBuilders.ts`. A `<wa-tooltip>` anchors by `id`, and the formatter
-   rows render many to a shadow root, so the choice is between a native
-   `title` everywhere and an id per row. The same three files write the
-   message header (icon, author, time, Copy) out in full; one
-   `buildMessageHeader` beside `messageHeaderStyles` would hold it.
-   (The 2026-11-27 run gave the user message's time the native `title`;
-   the file-path hint is still open.)
-2. **A clickable file path has three markups and three click handlers.**
-   `buildFileLinkSpan` (`htmlBuilders.ts`) is the owner; `FileList.ts` and
-   `ProposalRequestPanel.ts` write their own span without its accessible
-   name, each with its own click and keydown handler.
-3. **`PluginsTab.renderSelectRow` restates `renderStateSettingSelectRow`**
-   (`settings/components/shared/stateSettingRows.ts`): the same catalog
-   lookup, row markup and write. The plugin card passes its own label and
-   a narrower select, so the helper needs a `label` first.
-4. **Closed.** `UserMessage.ts` draws its Copy through `buildCopyButton`,
-   so the user, assistant and error headers share one `<copy-button>` and
-   its native `title` hint.
-5. **Dot separators in templates.** `UsagePanel.ts`, `SessionComposer.ts`
-   and `ModelSelectionList.ts` write `<span aria-hidden="true">·</span>`
-   between elements. `joinFacts` joins strings only; a template join that
-   hides the dot from a screen reader would be the owner. (`wa/metaStrip.ts`
-   was that helper without the `aria-hidden` and without a caller; it is
-   deleted.)
-6. **A status glyph and its colour disagree in two places.** `LaTeXTab.ts`
-   shows a missing dependency as `triangle-exclamation` in the error colour,
-   and the "Failed to render" entry (`progress/formatters/index.ts`,
-   `logEntryStyles.ts`) shows `circle-exclamation` in the warning colours.
-   The success mark is `check` in three places and `circle-check`
-   (`TONE_GLYPH.success`) in one, in three greens. `statusGlyph({ tone })`
+1. **Closed.** A file path's hover hint is a native `title` everywhere:
+   `buildFileLinkSpan` sets it on every file link, and the proposal card's
+   read-only names carry it; the card's `<wa-tooltip>`s, their ids and the
+   helper's `id` option are gone, and so is the tooltip that repeated the
+   working directory the card already shows in full.
+2. **Closed.** `buildFileLinkSpan` draws every clickable file path and
+   `fileLinkTarget` reads the click.
+3. **Closed.** `PluginsTab.renderSelectRow` is gone from `main`, and the
+   plugin card has no select row; `renderStateSettingSelectRow` is the one
+   select row, and it reads its choices from the row it already holds.
+4. **Closed.** The user message's Copy is the shared `<copy-button>`.
+5. **Closed.** `factDot` (`wa/factDot.ts`) is the dot between two
+   elements, hidden from a screen reader.
+6. **The success mark has three greens.** It is `check` in three places
+   and `circle-check` (`TONE_GLYPH.success`) in one, in three greens. `statusGlyph({ tone })`
    with a `tone-*` class is the owner; which green stays is a design call.
    (The 2026-11-27 run gave `LaTeXTab.ts`'s missing dependency
-   `circle-exclamation`, the error glyph its colour already said.)
-7. **Closed.** `BackgroundTasksPanel.ts`'s badges take their variant from
-   a `RunTone` table and their glyph and accessible name from the running
-   and waiting statuses. The table stays in the panel until a second badge
-   reads a tone.
+   `circle-exclamation`, the error glyph its colour already said; the
+   2026-11-28 run gave the "Failed to render" entry,
+   `progress/formatters/index.ts`, the warning tone's glyph to match its
+   warning colours.)
+7. **Closed.** `toneVariant` (`wa/waVariant.ts`) maps a `RunTone` to a
+   badge or tag variant; the approval badge reads the waiting status's
+   glyph and name.
 8. **Closed.** The retry card's "Error details" is a plain
    `.collapsible-quiet`; its header and summary rules are gone. Its body
    stays local: it is extra-small, height-capped text in the card, where
@@ -74,19 +56,17 @@ lands.
 
 ## Desktop
 
-10. **Two status dots.** `.status-dot` (`styles.css`, 6px, `--dot-color`)
-    sits beside the kit's `.status-indicator`
-    (`styles/statusIndicatorStyles.ts`, 7px, `--tone-color`); the left rail
-    shows both sizes, a project's unseen dot above a run's. The two
-    remaining `.status-dot` users, `desktopShell.ts` and `main.ts`, are in
-    open PRs. (The 2026-11-26 run gave the file tree's "unsaved" dot in
-    `editorPane.ts` the accessible name the dock tab's has.)
-11. **Sidebar group labels** (`.shell-sidebar-section-label` and the Files
-    header in `desktopShell.css`) are small grey labels beside the kit's
-    `.overline`, which `RunTabs.ts` uses for its headings in the same
-    sidebar. Moving them makes the labels uppercase.
-12. **The path footer** (`footer.shell-editor-toolbar` with a path and one
-    compact button) is built in `pdfPane.ts` and in `projectWorkbench.ts`.
+10. **Closed for status.** The pending-approval badge on the desktop's
+    sidebar toggle is the kit's `.status-indicator`, which the desktop's
+    light DOM now adopts; `.status-dot` (`styles.css`) is left to the
+    unsaved-file dot, `unsavedDot` in `paneChrome.ts`, which shows no
+    status. (A tab's unsaved dot is the text colour and a tree row's the
+    accent, which is a design call.)
+11. **Closed.** The rail's "Projects" label and the Files pane's header
+    are the kit's `.overline`, as `RunTabs.ts`'s headings are; their own
+    rules in `desktopShell.css` are gone.
+12. **Closed.** `createPathToolbar` (`editorFileNotice.ts`) builds it for
+    both panes.
 
 ## Terminal
 
@@ -100,11 +80,8 @@ lands.
     `UserQuestion.tsx` bounds its prompt lines with its own version of
     `boundedScrollableLines`. Its version keeps the question and drops the
     oldest context, which the shared one does not.
-16. **A group heading inside a `Select`** is `<Text bold dimColor>` in
-    `SubagentList.tsx` and a one-row truncating box in
-    `ScriptStagePopup.tsx`.
-17. **`App.tsx` tests Ctrl-C and Ctrl-Z itself** where 22 sites use
-    `isCtrlInput` (`tui/inputKeys.ts`), which also rejects Meta.
+16. **Closed.** `SelectGroupHeading` (`tui/ui/Select.tsx`).
+17. **Closed.** `App.tsx` reads Ctrl-C and Ctrl-Z through `isCtrlInput`.
 
 ## Every host
 
@@ -121,8 +98,16 @@ lands.
     `controlStyles.ts`, so the lower file cannot import it back). The
     2026-11-26 run moved `visuallyHiddenDeclarations` down into
     `controlStyles.ts`, where `.action-button-label` now interpolates it.
-    `truncateDeclarations` takes the same move once `FileList.styles.ts`
-    and `SessionDrawer.ts`, two of its importers, are out of open PRs.
+    `truncateDeclarations` takes the same move; on 2026-11-28 its
+    importer `progress/components/ModelPicker.ts` is held by the open
+    #15275, and moving it without that file needs a re-export.
+
+The 2026-11-26 run closed entries 2, 4, 5, 7, 12, 14, 16 and 17 and half of
+1 and 10, and rewrote 3 and 13 to what it found. Its scan of the three hosts
+found no new custom icon, colour literal or inline style.
+
+The 2026-11-28 run closed entries 1, 3 and 11 and the status half of 10,
+and took the "Failed to render" glyph out of 6.
 
 ## Checked and declined
 

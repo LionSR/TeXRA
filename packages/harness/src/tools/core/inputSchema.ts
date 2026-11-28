@@ -65,13 +65,31 @@ export function optionalInput<S extends Schema.Top>(
 }
 
 /**
+ * A required tool-input string field that arrives trimmed and non-empty.
+ *
+ * The model sees a plain string carrying `description`, written on the encoded
+ * side because that is the side the model's JSON Schema is generated from.
+ * Decoding trims surrounding whitespace and rejects an empty result, so
+ * `execute` receives a non-empty, trimmed value and needs no trim or presence
+ * check of its own. Naming the shape keeps every described path/text field a
+ * tool requires on the one spelling.
+ */
+export function describedString(
+  description: string,
+): Schema.Codec<string, string> {
+  return Schema.String.annotate({ description }).pipe(
+    Schema.decodeTo(Schema.Trim.check(Schema.isMinLength(1))),
+  );
+}
+
+/**
  * A tool call's optional time limit in milliseconds, from one second to a
  * day. Each tool annotates it with what the limit stops.
  */
 export const timeoutMsField = Schema.optional(
   Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
-      Schema.isLessThanOrEqualTo(24 * 60 * 60 * 1000),
+    Schema.Int.check(
+      Schema.isBetween({ minimum: 1000, maximum: 24 * 60 * 60 * 1000 }),
     ),
   ),
 );

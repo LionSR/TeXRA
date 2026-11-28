@@ -281,11 +281,9 @@ export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
                       ...known,
                       model: identified.returnedModel ?? undefined,
                     }));
-                  // The result is delivered once, by the completion below.
-                  if (event.terminal) return [];
-                  return turnEvents.filter(
-                    (turnEvent) => turnEvent.kind !== 'completed',
-                  );
+                  // Only the completion below reports the terminal snapshot.
+                  // A step emits identities and deltas, never a result.
+                  return event.terminal ? [] : turnEvents;
                 }),
               ),
               Stream.flattenIterable,

@@ -6,7 +6,7 @@ import { Effect, Result } from 'effect';
 import { asToolError, ToolError } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
-import { canonicalizePath } from '@utils/files/externalRoots';
+import { canonicalizePath } from '@utils/files/canonicalPath';
 import {
   getPathSegments,
   isPathWithin,

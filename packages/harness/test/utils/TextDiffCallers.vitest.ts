@@ -43,9 +43,7 @@ layer(SessionGraph.hosted)('approved write', (it) => {
           final,
         ).pipe(Effect.provide(first.tools));
 
-        expect(writeResult).toEqual({
-          appliedContent: 'alpha\nBETA\nomega\nlocal\n',
-        });
+        expect(writeResult).toBe('alpha\nBETA\nomega\nlocal\n');
         expect(
           yield* Effect.tryPromise(() =>
             readFile(first.host.path('workspace/paper.tex'), 'utf-8'),

@@ -1,5 +1,10 @@
 import type { WebContents } from 'electron';
 
+import { TEXRA_SITE_URL } from '@ui/copy/guide';
+
+/** The host every guide link the app builds is under. */
+const SITE_HOST = new URL(TEXRA_SITE_URL).hostname;
+
 const ALLOWED_HTTPS_HOSTS = new Set<string>([
   'github.com',
   'www.github.com',
@@ -11,8 +16,8 @@ export function isAllowedExternalUrl(url: string): boolean {
   const parsed = URL.parse(url);
   if (!parsed || parsed.protocol !== 'https:') return false;
   const host = parsed.hostname;
-  // The site and docs live under texra.ai.
-  if (host === 'texra.ai' || host.endsWith('.texra.ai')) {
+  // The site, its docs and its subdomains.
+  if (host === SITE_HOST || host.endsWith(`.${SITE_HOST}`)) {
     return true;
   }
   return ALLOWED_HTTPS_HOSTS.has(host);

@@ -21,7 +21,7 @@ Once installers are published, download the build for your OS from the releases 
 ## First run
 
 <FlowSteps :steps="[
-  { n: 1, icon: 'folder-open', title: 'Open a project', desc: 'Open your LaTeX or research project folder (File → Open Folder).', chips: [{ text: 'project folder', variant: 'info', icon: 'folder-tree' }] },
+  { n: 1, icon: 'folder-open', title: 'Open a project', desc: 'Open your LaTeX or research project folder (File → Open Project Folder).', chips: [{ text: 'project folder', variant: 'info', icon: 'folder-tree' }] },
   { n: 2, icon: 'key', title: 'Connect a model', desc: 'Sign in with ChatGPT/Grok or add API keys under Settings → Models (or a project .env).', chips: [{ text: 'Models', variant: 'accent' }, { text: '.env', variant: 'info', icon: 'file-code' }] },
   { n: 3, icon: 'gear', title: 'Review settings', desc: 'Check Agents, Plugins, Memory, LaTeX, and General (Approval & Git) in Settings.', chips: [{ text: 'Settings', variant: 'accent' }] },
   { n: 4, icon: 'play', title: 'Start a task', desc: 'Ask TeXRA to tighten a section or check a proof and review the diff.', chips: [{ text: 'Tasks', variant: 'success', icon: 'list-check' }] }
@@ -37,7 +37,7 @@ Opening the same project folder in the desktop app, VS Code extension, or CLI au
 
 ### Layout and projects
 
-The desktop app lets you arrange **Agent**, **Files**, **Editor**, **PDF**, **Review**, **Terminal**, **Browser**, and **Logs** in split panes whose layout persists across restarts and project switches.
+The desktop app lets you arrange **Agent**, **Files**, **Editor**, **PDF**, **Review**, **Terminal**, and **Logs** in split panes whose layout persists across restarts and project switches.
 
 Open projects appear in the **Projects** section of the left sidebar with a status dot; the active project's tasks appear in **Task history** below. Press `Cmd/Ctrl+K` to open **Commands** (or **Switch Project** for open projects), and use **File → Open Recent** to reopen closed projects.
 

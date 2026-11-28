@@ -18,7 +18,7 @@ import { tokenCancelled } from '@frontend/vscode/vscodeEvents';
 import {
   downloadArxivSource,
   indentsDestination,
-  getArxivPaperDirName,
+  arxivReferencesDir,
   validateArxivId,
   type ArxivDownloadDestination,
 } from '@latex/arxivProcessor';
@@ -52,14 +52,12 @@ export const downloadArXivSource: (
       return;
     }
 
-    const paperId = getArxivPaperDirName(arxivId);
-
     const destinationPick = yield* quickPick<
       vscode.QuickPickItem & { value: ArxivDownloadDestination }
     >(
       [
         {
-          label: `References/${paperId}`,
+          label: arxivReferencesDir(arxivId),
           value: 'references',
         },
         {
@@ -95,18 +93,12 @@ export const downloadArXivSource: (
       },
       (progress, token) =>
         Effect.raceFirst(
-          Effect.gen(function* () {
-            const downloadResult = yield* downloadArxivSource(arxivId, {
-              roots,
-              destination,
-              indent,
-            }).pipe(
-              Effect.provideService(LatexProgress, (message, increment) =>
-                progress.report({ message, increment }),
-              ),
-            );
-            return Option.some(downloadResult.path);
-          }),
+          downloadArxivSource(arxivId, { roots, destination, indent }).pipe(
+            Effect.provideService(LatexProgress, (message, increment) =>
+              progress.report({ message, increment }),
+            ),
+            Effect.map(Option.some),
+          ),
           // Cancel interrupts the download, whose finalizers remove the
           // staging directory, and ends the command quietly.
           tokenCancelled(token).pipe(

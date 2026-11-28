@@ -33,6 +33,7 @@ import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from './composedPath';
 import { RunTab } from './RunTab';
 import {
+  descendantRuns,
   needsUser,
   type SessionView,
   type RunView,
@@ -122,12 +123,15 @@ export class RunTabs extends TexraElement {
 
   /** A run is listed when it or any run under it matches the filter. */
   private matchesSearch(run: RunView, query: string): boolean {
-    return (
-      matchesQuery(`${run.label} ${run.description ?? ''}`, query) ||
-      run.childIds.some((id) => {
-        const child = this.runOfEvent(id);
-        return child !== undefined && this.matchesSearch(child, query);
-      })
+    if (this.view === null) return false;
+    return descendantRuns(this.view, run.id, { includeRoot: true }).some(
+      (id) => {
+        const shown = this.runOfEvent(id);
+        return (
+          shown !== undefined &&
+          matchesQuery(`${shown.label} ${shown.description ?? ''}`, query)
+        );
+      },
     );
   }
 
@@ -140,12 +144,15 @@ export class RunTabs extends TexraElement {
    *  none and carries the rollup alone, with no disclosure; the drawer and
    *  the docked list show every child, a document task run's calls
    *  included, so a call's own subagents stay reachable under their
-   *  parent. */
+   *  parent. A command is not listed: the list is of agents, and a
+   *  command is reached from its call in its task's conversation and from
+   *  the task's background panel. */
   private childrenOf(run: RunView): RunView[] {
     if (this.topLevelOnly) return [];
     return run.childIds
       .map((id) => this.runOfEvent(id))
-      .filter((child): child is RunView => child !== undefined);
+      .filter((child): child is RunView => child !== undefined)
+      .filter((child) => child.identity.kind !== 'process');
   }
 
   private renderNode(run: RunView, selected: RunId | null): TemplateResult {

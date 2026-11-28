@@ -12,14 +12,10 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  ALLOW_ORCHESTRATOR_KILL_SETTING,
 } from '@texra-ai/worldline/schemas';
 import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
 import { TexraSignalElement } from '@ui/litBase';
-import {
-  renderStateSettingNumberRow,
-  renderStateSettingToggleRow,
-} from '../components/shared/stateSettingRows';
+import { renderStateSettingNumberRow } from '../components/shared/stateSettingRows';
 
 @customElement('agents-tab')
 export class AgentsTab extends TexraSignalElement {
@@ -71,7 +67,6 @@ export class AgentsTab extends TexraSignalElement {
           step: 1,
           revertOnEmpty: false,
         })}
-        ${renderStateSettingToggleRow(ALLOW_ORCHESTRATOR_KILL_SETTING)}
         ${renderStateSettingNumberRow(CHILD_RUN_CONCURRENCY_BUDGET_SETTING, {
           step: 1,
         })}

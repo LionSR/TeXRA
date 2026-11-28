@@ -21,6 +21,7 @@ import {
   RunEndSchema,
   RunIdentitySchema,
   RunNoticeSchema,
+  RUN_OUTCOME,
   RunOutcomeSchema,
   RunPositionSchema,
   StageSchema,
@@ -127,6 +128,8 @@ const RunViewSchema = Schema.Struct({
   takesFollowUps: Schema.Boolean,
   /** Its untaken messages (not its own requests); empty when none. */
   queuedFollowUps: QueuedFollowUpsSchema,
+  /** The model requested for the next call until the loop applies or drops the switch. */
+  queuedModel: Schema.optional(Schema.String),
   /** Its own approval grants (`RunRows.grants`): what it decided, never
    *  what it inherits (`resolveBypass` reads the ancestry). */
   grants: ApprovalGrantsSchema,
@@ -363,7 +366,8 @@ export function requireRun(
 }
 
 /** What wants this window: the requests it can answer (the badge), and since
- *  `previous` (none without it) the new ones and the runs that ended. */
+ *  `previous` (none without it) the new ones and the runs whose turn
+ *  finished. */
 export interface Attention<Request> {
   readonly requests: readonly Request[];
   readonly arrived: readonly Request[];
@@ -381,8 +385,10 @@ function pendingRequests<View extends SessionView>(
 
 /**
  * The one attention rule every host reads (the extension's badge and reveal,
- * the desktop's dock badge, notifications, and rail): a pending
- * request wants the user, and a run when its outcome lands.
+ * the desktop's dock badge, notifications, and rail, the terminal's bell): a
+ * pending request wants the user, and a run when its turn finishes, waiting
+ * for the next message or at its outcome. A run that ends after waiting was
+ * already announced, and a stop somebody asked for is not news.
  */
 export function attentionOf<View extends SessionView>(
   view: View,
@@ -394,11 +400,16 @@ export function attentionOf<View extends SessionView>(
   return {
     requests,
     arrived: requests.filter((request) => !known.has(request.requestId)),
-    finished: Arr.filter(
-      view.runs.values(),
-      ({ id, outcome }) =>
-        outcome !== null && previous.runs.get(id)?.outcome === null,
-    ),
+    finished: Arr.filter(view.runs.values(), ({ id, outcome, position }) => {
+      const before = previous.runs.get(id);
+      return (
+        before?.position !== 'waiting' &&
+        (position === 'waiting' ||
+          (outcome !== null &&
+            outcome !== before?.outcome &&
+            outcome !== RUN_OUTCOME.CANCELLED))
+      );
+    }),
   };
 }
 

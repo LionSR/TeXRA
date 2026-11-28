@@ -48,6 +48,7 @@ export {
   ModelOriginSchema,
   originOf,
   sameModelOrigin,
+  takesImageInput,
   TurnProtocolSchema,
 } from './protocol.js';
 export type { ModelOrigin, TurnUsage } from './protocol.js';
@@ -121,6 +122,7 @@ export {
   apiKeyOrigins,
   apiKeySecretName,
   apiKeyEntry,
+  routedApiKeyProvider,
   exposeApiKey,
   hasUsableApiKey,
   isApiProvider,

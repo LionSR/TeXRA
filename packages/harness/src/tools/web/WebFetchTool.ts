@@ -19,7 +19,6 @@ import {
   toFetchToolError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/definition';
-import { optionalInput } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createHtmlToMarkdown } from '@tools/web/htmlToMarkdown';
@@ -41,10 +40,6 @@ const WebFetchInputSchema = Schema.Struct({
       { message: 'URL must use HTTP or HTTPS protocol' },
     ),
   ).annotate({ description: 'Public HTTP or HTTPS URL to fetch.' }),
-  prompt: optionalInput(
-    Schema.NonEmptyString,
-    'Optional note on what you need from the page, echoed above the fetched text as a reminder; nothing extracts for you.',
-  ),
 });
 
 type WebFetchInput = typeof WebFetchInputSchema.Type;
@@ -273,7 +268,6 @@ const turndown = createHtmlToMarkdown();
 
 const fetchAsMarkdown = Effect.fn('WebFetchTool.execute')(function* ({
   url,
-  prompt,
 }: WebFetchInput) {
   const { rawBody, mediaType, unsupportedCharset } = yield* fetchPage(url);
 
@@ -297,7 +291,6 @@ const fetchAsMarkdown = Effect.fn('WebFetchTool.execute')(function* ({
 
   const cleaned = markdown.trim();
   const sections = [
-    ...(prompt ? [`Prompt\n------\n${prompt.trim()}`] : []),
     ...(unsupportedCharset === null
       ? []
       : [
@@ -316,7 +309,7 @@ export const WebFetchTool = defineTool({
   replay: 'safe',
   lane: 'parallel',
   description:
-    'Fetch content from a URL and return it as clean text. Fetches the HTML and converts it to Markdown locally. An optional prompt is echoed above the text as a reminder of what you need from it.',
+    'Fetch content from a URL and return it as clean text. Fetches the HTML and converts it to Markdown locally.',
   schema: WebFetchInputSchema,
   // The owning agent run's cancellation enters here as interruption —
   // without it, a cancelled run would wait out fetches (and their retries)

@@ -214,15 +214,14 @@ const decideSurfaceRequest = (
       return yield* unavailable(describeRefusal(resumed.failed));
     }
     // Where a fiber drives the run by now, its opening has committed its
-    // activation, which took the answer for a request still open.
-    yield* runs.opened(runId) ?? Effect.void;
-    if (!runs.heldAnswers(runId).has(requestId)) return done;
-    // Its parent resumed and its open call starts the run again: that
+    // activation, which took the answer for a request still open. Where none
+    // does, its parent resumed and its open call starts the run again: that
     // activation takes the answer.
-    if (runs.get(runId) === undefined) return done;
+    yield* runs.opened(runId) ?? Effect.void;
+    if (runs.get(runId) === undefined || !runs.dropAnswer(runId, requestId))
+      return done;
     // A fiber drove the run before this resume, or the request was decided
     // meanwhile: the transaction decides, as for any held run.
-    runs.dropAnswer(runId, requestId);
     if (!(yield* write)) return yield* notPending(runId);
     return done;
   });

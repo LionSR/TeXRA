@@ -35,10 +35,9 @@ import {
   hostFailed,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
-import {
-  EXTENSION_CATEGORIES,
-  getFilterExtensions,
-} from '@texra/common/files/fileTypeUtils';
+import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
+import { DocumentFileTypeSchema } from '@texra/shared/launcher/fileTypes';
+import { commandCatalogById } from '@texra/shared/commands/catalog';
 import {
   PdfOpenFailed,
   type EditorCapabilities,
@@ -204,8 +203,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // "Show a built file" for every caller in this window: a scheduled PDF
       // viewer opens in the view's scope, so a close of the view cancels an
       // open still waiting.
-      const showBuilt: ShowBuilt = (locations, options) =>
-        openBuilt(roots, locations, options).pipe(
+      const showBuilt: ShowBuilt = (location, preserveFocus) =>
+        openBuilt(roots, location, preserveFocus).pipe(
           Effect.provideService(Scope.Scope, scope),
         );
       const focusChanged = eventStream(
@@ -224,11 +223,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               label: folder.name,
               value: folder.uri.fsPath,
             })) ?? [],
-          shows: {
-            apiKeyBanner: true,
-            dependencyBanner: true,
-            gettingStarted: true,
-          },
+          setupNotices: true,
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the diff editor shows, for each tool edit the session
@@ -245,7 +240,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             : focusChanged,
         ),
         draftRequests,
-        host: Effect.sync(() => ({
+        host: {
           ...createExtensionHostRequests({
             roots,
             extensionPath: context.extensionPath,
@@ -260,9 +255,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           openFile: (payload) =>
             withProcessServices(
               runtime,
-              showBuilt([payload.location], {
-                preserveFocus: payload.preserveFocus,
-              }),
+              showBuilt(payload.location, payload.preserveFocus),
             ),
           window: editor,
           runs: {
@@ -271,7 +264,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             revealProgress: (config: AgentConfig) =>
               onView((view) => view.revealProgress(config)),
           },
-        })),
+        },
       });
       const view = new ProgressViewProvider({
         window: gui,
@@ -336,11 +329,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly followWorkspace = Effect.fn(
     'ProgressViewProvider.followWorkspace',
   )({ self: this }, function* () {
-    // Watch exactly the categories the launcher file lists are built from
-    // (fileListingRules), including user-configured extension overrides, so
-    // the watched set cannot drift from what the lists display.
+    // Watch exactly the file types the launcher file lists are built from
+    // (fileListingRules), so the watched set cannot drift from what the
+    // lists display.
     const extensions = new Set(
-      EXTENSION_CATEGORIES.flatMap(getFilterExtensions),
+      DocumentFileTypeSchema.literals.flatMap(getFilterExtensions),
     );
     const filePattern =
       extensions.size === 0 ? '**/*' : `**/*.{${[...extensions].join(',')}}`;
@@ -624,7 +617,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // The toast is the delivered surface when the view cannot be made
     // visible, even if the user dismisses it without retrying the reveal.
     const selection = yield* vscodeUi.ask('info', launchNotice(config), {
-      items: ['Show Tasks'],
+      items: [commandCatalogById['texra.showProgressView'].title],
     });
     if (!selection) return;
     yield* this.showProgressView().pipe(

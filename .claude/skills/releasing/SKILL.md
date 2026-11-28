@@ -35,14 +35,17 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
    git push origin vX.Y.Z cli-vX.Y.Z
    ```
 
-   Both publish jobs and the desktop publish job refuse to run unless CI's
-   push or dispatch run is green on that commit
-   (`.github/actions/require-green-ci`); the nightly run does not count, since
-   it skips the static checks and the builds. Wait for the push-to-`main` CI
-   run first. A red, missing, or cancelled run
-   fails the release job (a later push to `main` cancels the earlier commit's
-   run): dispatch CI on the tag (`gh workflow run CI --ref vX.Y.Z`), then
-   re-run the release job once it is green.
+   Both publish jobs and the desktop publish job refuse to run unless the
+   newest `CI` run and the newest `Nightly` run on that commit are both green
+   (`.github/actions/require-green-ci`). `CI` is the static checks and a
+   compile; `Nightly` is every test suite, and no pull request or push runs
+   it, so a release commit has one only if it was `main`'s tip at the
+   scheduled run. Dispatch it on the tag and wait
+   (`gh workflow run Nightly --ref vX.Y.Z`). A red, missing, or cancelled run
+   of either fails the release job (a later push to `main` cancels the
+   earlier commit's `CI` run): dispatch that workflow on the tag
+   (`gh workflow run CI --ref vX.Y.Z`), then re-run the release job once
+   both are green.
 
 3. **GitHub Releases.** Create two, body = the changelog section for that
    version (extract with e.g.
@@ -104,7 +107,7 @@ Steps:
 
 1. Set `version` in both manifests to `X.Y.Z` (or `X.Y.Z-preview.N`) and
    land it on `main`.
-2. Tag the commit `sdk-vX.Y.Z` once its push-to-`main` CI is green, push the
+2. Tag the commit `sdk-vX.Y.Z` once its `CI` and `Nightly` runs are green, push the
    tag, and create the release (with `--prerelease` for a preview, which
    publishes under the npm dist-tag `preview`):
 

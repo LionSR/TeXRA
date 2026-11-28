@@ -140,9 +140,8 @@ function getAttachmentConfig(filePath: string): AttachmentKind | null {
     return 'pdf';
   }
 
-  // Treat SVG as an image attachment so vision-capable models can inspect its rendered appearance
-  // even though the underlying file is XML text.
-  if (isImageMimeType(mimeType)) {
+  // An SVG is XML no model takes as an image, so it is read as the text it is.
+  if (isImageMimeType(mimeType) && mimeType !== 'image/svg+xml') {
     return 'image';
   }
 
@@ -169,11 +168,10 @@ const returnBinaryAttachment = Effect.fn('ReadFileTool.returnBinaryAttachment')(
     ToolContext | FileSystem.FileSystem
   > {
     const copy = ATTACHMENT_COPY[kind];
-    const attachment = yield* buildFileAttachment({
-      filePath: resolved.fsPath,
-      description: `${copy.label} returned by read_file tool.`,
+    const attachment = yield* buildFileAttachment(
       resolved,
-    });
+      `${copy.label} returned by read_file tool.`,
+    );
 
     const baseSummary = `Attached ${copy.label} ${attachment.path}.`;
     const summary = input.range
@@ -192,7 +190,7 @@ export const ReadFileTool = defineTool({
   replay: 'safe',
   lane: 'parallel',
   description:
-    'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
+    'Read and return files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
   schema: ReadInputSchema,
   execute: read,
 });

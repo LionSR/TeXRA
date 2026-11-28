@@ -23,7 +23,6 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type HarnessRowKey,
   type SettingRow,
-  ALLOW_ORCHESTRATOR_KILL_SETTING,
   DASHSCOPE_REGION_SETTING,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
@@ -95,7 +94,6 @@ interface SettingWriteEffects {
 export const SettingCategorySchema = Schema.Literals([
   'git',
   'agents',
-  'ai-agents',
   'model',
   'latex',
   'latexdiff',
@@ -112,10 +110,10 @@ interface Placement {
   /** Write-time consequences, read by the settings write handlers. */
   readonly onWrite?: SettingWriteEffects;
   /**
-   * The CLI `/config` panel edits the row in this existing list form (the
-   * skills form) instead of the scalar read/write accessor.
+   * The CLI `/config` panel edits the row in this list form instead of the
+   * scalar read/write accessor. The skills form is the only one.
    */
-  readonly openForm?: string;
+  readonly openForm?: 'skills';
 }
 
 /** A catalog row at least one TeXRA UI renders, with where and how. */
@@ -238,12 +236,6 @@ export const HARNESS_ROW_SURFACES: Readonly<
   [GIT_AUTHOR_EMAIL_SETTING.key]: Object.freeze({
     category: 'git',
     ...GIT_AUTHOR_AND_CLI,
-  }),
-
-  // --- Agent coordination -----------------------------------------------------
-  [ALLOW_ORCHESTRATOR_KILL_SETTING.key]: Object.freeze({
-    category: 'agents',
-    ...AGENTS_AND_CLI,
   }),
 
   // --- Memory and code mode --------------------------------------------------

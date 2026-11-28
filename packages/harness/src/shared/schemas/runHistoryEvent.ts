@@ -110,9 +110,6 @@ const DispatchFactsSchema = Schema.Struct({
    *  re-runs an unfinished call unasked only when this and the tool's
    *  current declaration both say `safe`. */
   replay: Schema.Literals(['safe', 'unsafe']),
-  /** The primary this call duplicates. A duplicate never executes and never
-   *  reapplies its primary's effects. */
-  duplicateOf: Schema.NullOr(CallIdSchema),
   /** The call's card id, minted with the response: the card opens under it
    *  when the call's body starts, and its result closes that card, a
    *  resumed call's too. */
@@ -201,8 +198,7 @@ export const ModelMessagePayloadSchema = Schema.Union([
    * provider history. `input` is what the appended messages change about
    * what the run answers (a fresh run's opening and a delivery record it
    * here); `reason` names a message the loop appended itself, so the turn's
-   * policy is read off the rows: `blank-continuation` after a blank turn
-   * that followed a tool result, `final-tool` before the forced turn that
+   * policy is read off the rows: `final-tool` before the forced turn that
    * must submit the structured output.
    */
   Schema.Struct({
@@ -210,9 +206,7 @@ export const ModelMessagePayloadSchema = Schema.Union([
     messages: Schema.Array(StoredMessageSchema).check(Schema.isMinLength(1)),
     sourceResponse: Schema.NullOr(ResponseIdSchema),
     input: Schema.optional(RunInputSchema),
-    reason: Schema.optional(
-      Schema.Literals(['blank-continuation', 'final-tool']),
-    ),
+    reason: Schema.optional(Schema.Literal('final-tool')),
   }),
 ]).check(
   Schema.makeFilter((p) => {
@@ -227,10 +221,6 @@ export const ModelMessagePayloadSchema = Schema.Union([
     }
     const issues: Schema.FilterIssue[] = [];
     const ids = new Set(p.calls.map((c) => c.callId));
-    // A duplicate has a primary to reuse, so it names a call that precedes it
-    // and is not itself a duplicate. Membership in `ids` alone would accept a
-    // call naming itself, which can never finish.
-    const earlierPrimaries = new Set<string>();
     p.calls.forEach((call, index) => {
       // Order, identity and tool: a fact that names another tool than the
       // part it stands for is the one the resume rule would dispatch, so the
@@ -245,14 +235,6 @@ export const ModelMessagePayloadSchema = Schema.Union([
             'Dispatch facts follow the response call order, identity and tool.',
         });
       }
-      if (call.duplicateOf != null && !earlierPrimaries.has(call.duplicateOf)) {
-        issues.push({
-          path: ['calls', index, 'duplicateOf'],
-          issue:
-            'A duplicate names an earlier non-duplicate call of this same response.',
-        });
-      }
-      if (call.duplicateOf == null) earlierPrimaries.add(call.callId);
     });
     if (ids.size !== p.calls.length) {
       issues.push({ path: ['calls'], issue: 'Duplicate call id.' });
@@ -419,13 +401,13 @@ export const ToolResultPayloadSchema = Schema.Struct({
   callId: CallIdSchema,
   attempt: Schema.Int.check(Schema.isGreaterThan(0)),
   /** The card the result closes; null for a call that shows none: a
-   *  duplicate, a script's host function, and a call no body ever started
+   *  script's host function, and a call no body ever started
    *  that is reported, not run (left untouched in a recovered response,
    *  after the turn's end, or when its script ended). */
   logId: Schema.NullOr(Schema.NonEmptyString),
   /** How the call ended, read as a fact, never matched from the English
    *  prose of an error message. */
-  disposition: Schema.Literals(['executed', 'failed', 'skipped', 'duplicate']),
+  disposition: Schema.Literals(['executed', 'failed', 'skipped']),
   result: FinishedToolResultSchema,
   attachments: Schema.Array(FinishedAttachmentSchema),
 }).check(
@@ -434,20 +416,13 @@ export const ToolResultPayloadSchema = Schema.Struct({
     // Both directions. The provider-facing status of the delivered tool group
     // is derived from `result.status` alone, so a call the run recorded as
     // failed or skipped carrying an executed result is delivered to
-    // the model as a success. A duplicate is the one disposition that copies
-    // its primary's status, whichever that was.
-    if (
-      p.disposition !== 'duplicate' &&
-      (p.disposition === 'executed') !== (p.result.status === 'executed')
-    ) {
+    // the model as a success.
+    if ((p.disposition === 'executed') !== (p.result.status === 'executed')) {
       issues.push({
         path: ['result'],
         issue:
-          'An executed disposition requires an executed result, and every other non-duplicate disposition an error result.',
+          'An executed disposition requires an executed result, and every other disposition an error result.',
       });
-    }
-    if (p.disposition === 'duplicate' && p.attachments.length > 0) {
-      issues.push("A duplicate never reapplies its primary's effects.");
     }
     return issues;
   }),

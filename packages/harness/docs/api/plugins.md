@@ -321,6 +321,15 @@ Fail when a raw tool path contains a parent-directory segment.
 const assertNoParentTraversal: (targetPath: string) => Effect<void, ToolError, never>
 ```
 
+## asToolError
+
+What a tool's own code threw, as the `ToolError` its call fails with: a
+thrown `ToolError` as it is, anything else under its own message.
+
+```ts
+const asToolError: (cause: unknown) => ToolError
+```
+
 ## BoundModel
 
 One bound model: llm's `Binding` (or the validation model's) and the facts
@@ -652,13 +661,13 @@ failures. An anonymous object type so the SDK's `.d.ts` inlines it.
 ```ts
 type DefinedTool<T, R = never, Name extends string = string> = Omit<
   ITool<Error, R>,
-  'call' | 'guard' | 'definition'
+  'call' | 'command' | 'definition'
 > & {
   readonly definition: ToolDefinition & { readonly name: Name };
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
-  readonly guard?: ToolGuard<T>;
+  readonly command?: ToolCommand<T>;
 };
 ```
 
@@ -712,15 +721,9 @@ type DefineToolOptions<T, R = never> = Required<
   > & {
     /** Decodes the model's input into `T`. */
     schema: Schema.Codec<T, unknown>;
-    /**
-     * What the run loop checks before this tool's body runs: the paths the
-     * call writes and the command it must get approved. Declared here; the
-     * loop applies it once, so the body never re-checks it.
-     *
-     * `NoInfer<R>`: the guard is checked against the requirement channel the
-     * tool already has, it never sets it.
-     */
-    guard?: ToolGuard<T>;
+    /** The command a call runs, which the run loop gets approved before
+     *  the body; the body never asks again. */
+    command?: ToolCommand<T>;
     /** The card a call states from its decoded input (`ToolUseLog.card`).
      *  A call whose input does not decode gets none. */
     card?: (input: T) => ToolCard | undefined;
@@ -729,6 +732,23 @@ type DefineToolOptions<T, R = never> = Required<
      *  an `Error` and the model reads its message as the tool's error. */
     execute: (input: T) => Effect.Effect<ToolResult | string, Error, R>;
   };
+```
+
+## describedString
+
+A required tool-input string field that arrives trimmed and non-empty.
+
+The model sees a plain string carrying `description`, written on the encoded
+side because that is the side the model's JSON Schema is generated from.
+Decoding trims surrounding whitespace and rejects an empty result, so
+`execute` receives a non-empty, trimmed value and needs no trim or presence
+check of its own. Naming the shape keeps every described path/text field a
+tool requires on the one spelling.
+
+```ts
+function describedString(
+  description: string,
+): Schema.Codec<string, string>
 ```
 
 ## DiffHunks
@@ -931,17 +951,13 @@ type InboxItem = (
 
 ## isTransientHttpStatus
 
-Whether an HTTP status code is transient (worth retrying): 408 request
-timeout, 429 rate limit, or 5xx server error. Other 4xx statuses are
-permanent and won't change on retry.
+Whether an HTTP status is worth retrying: 408 request timeout, 429 rate
+limit, or a 5xx server error. Any other 4xx will not change on a retry.
 
-This is the general-purpose HTTP policy (tool fetches, tool timeouts,
-device-code polling). The llm package's internal provider-error retry
-policy is a separate, deliberately different policy for LLM provider SDK
-errors: it also treats 409 Conflict as retryable, because a provider API's
-409 usually signals a transient session/resource race, unlike a generic
-HTTP 409. Don't merge the two without re-confirming that call for every
-consumer.
+This is the policy for a plain HTTP fetch: a tool's own requests, and a
+plugin's or the app's through the plugins entry. The llm package's retry
+of provider errors is deliberately different: it also retries 409, which
+a provider API uses for a session or resource race.
 
 ```ts
 function isTransientHttpStatus(status: number): boolean
@@ -968,8 +984,7 @@ interface ITool<E = Error, R = never> {
    * config cannot move an arbitrary tool out of order.
    *
    * - `'parallel'`: side-effect-free AND approval-free, so calls of one
-   *   response (or one script) run concurrently within the parallel window,
-   *   and identical ones collapse onto one (`partitionDuplicateCalls`). A
+   *   response (or one script) run concurrently within the parallel window. A
    *   read-only tool that prompts for approval is not parallel: it needs an
    *   approval round-trip first, so it stays a barrier.
    * - `'barrier'`: waits for every call issued before it and holds back
@@ -1004,15 +1019,15 @@ interface ITool<E = Error, R = never> {
   readonly replay?: DispatchFacts['replay'];
   /**
    * Whether a call needs a person's approval, and who asks. `true` (implied
-   * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
+   * by `command`): the run loop, before the body runs. `'inBody'`: the
    * body's own request (an edit's review, a plan, a delegation proposal, a
    * question), which answers what the call's hooks
    * said. A run that cannot present a prompt is not offered such a tool
    * (`asksApproval`).
    */
   readonly requiresApproval?: true | 'inBody';
-  /** The loop-side guard this tool declares; see {@link ToolGuard}. */
-  readonly guard?: ToolGuard<never>;
+  /** The command a call must get approved; see {@link ToolCommand}. */
+  readonly command?: ToolCommand<never>;
   /**
    * A description rendered from the other tools the run declares, the
    * modules its scripts may import and the programs they may start, in
@@ -1643,18 +1658,6 @@ interface Program {
 }
 ```
 
-## PromptRenderFailed
-
-A prompt that did not render: the template's own error, `nunjucks`
-failing to load, or an `AGENTS.md` that is there and could not be read.
-
-```ts
-class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()(
-  'PromptRenderFailed',
-  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
-)
-```
-
 ## PromptSection
 
 A plugin's section of each request's system text, rendered from the tool
@@ -1685,18 +1688,6 @@ type RefusalDecision = Extract<
   RequestDecision,
   { action: 'reject' | 'deny' | 'cancel' }
 >;
-```
-
-## renderPrompt
-
-`prompt` rendered as a nunjucks template over `variables`; a template
-error, or `nunjucks` failing to load, fails with its message. A template
-is code: its expressions run in this process, so render only text the
-agent's author wrote, never text taken from a project's files or an end
-user.
-
-```ts
-const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>
 ```
 
 ## reportDiffTimeout
@@ -2271,6 +2262,37 @@ interface ToolCatalogShape {
 }
 ```
 
+## ToolCommand
+
+The command a call runs, declared on the tool instead of asked about
+inside it: the run loop puts it through the session's command approval
+before the body runs, and is the one place that asks. A tool whose body
+asks its own question declares `requiresApproval: 'inBody'` (below).
+
+```ts
+interface ToolCommand<T> {
+  /** The command as the approval prompt shows it. */
+  readonly text: (input: T) => string;
+  /**
+   * The standing grant that answers this tool's commands. `'bash'`: the
+   * run's command grant ("approve all commands in this task"), which the
+   * shell declares. Omitted: each call is asked about and only the
+   * delegated-work grant covers it, so a tool whose prompt looks like a
+   * command (an MCP tool, codex) never inherits shell permission.
+   */
+  readonly grant?: 'bash';
+  /**
+   * Where the approved command actually runs, when that is not the call's
+   * own directory. Omitted: the call's working directory, else the
+   * workspace, which is what a shell-shaped tool uses. `'unknown'`: the
+   * executor cannot name one, so the prompt names none rather than a
+   * directory the command may not run in (`send_to_terminal` reuses a
+   * terminal whose shell has its own directory).
+   */
+  readonly cwd?: 'unknown';
+}
+```
+
 ## ToolContext
 
 The tool call the running tool serves.
@@ -2369,44 +2391,6 @@ class ToolError extends Data.TaggedError('ToolError')<{
   readonly summary?: string;
   readonly cause?: unknown;
 }>
-```
-
-## ToolGuard
-
-The guard the run loop applies before a tool's body runs, declared on the
-tool instead of called inside it: the command it must get approved. The
-run loop is the one place it is checked, so no tool body asks for the
-command's approval; a tool whose body asks its own question declares
-`requiresApproval: 'inBody'` (below).
-
-```ts
-interface ToolGuard<T> {
-  /**
-   * The command this call runs. Present: the loop puts it through the
-   * session's command approval before the body runs.
-   */
-  readonly command?: {
-    /** The command as the approval prompt shows it. */
-    readonly text: (input: T) => string;
-    /**
-     * The standing grant that answers this tool's commands. `'bash'`: the
-     * run's command grant ("approve all commands in this task"), which the
-     * shell declares. Omitted: each call is asked about and only the
-     * delegated-work grant covers it, so a tool whose prompt looks like a
-     * command (an MCP tool, codex) never inherits shell permission.
-     */
-    readonly grant?: 'bash';
-    /**
-     * Where the approved command actually runs, when that is not the call's
-     * own directory. Omitted: the call's working directory, else the
-     * workspace, which is what a shell-shaped tool uses. `'unknown'`: the
-     * executor cannot name one, so the prompt names none rather than a
-     * directory the command may not run in (`send_to_terminal` reuses a
-     * terminal whose shell has its own directory).
-     */
-    readonly cwd?: 'unknown';
-  };
-}
 ```
 
 ## ToolPathCall

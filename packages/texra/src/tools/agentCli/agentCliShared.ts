@@ -21,7 +21,6 @@ import {
 } from '@texra-ai/worldline/plugins';
 import {
   AgentConfigSchema,
-  ensureError,
   formatWallTime,
   toErrorMessage,
   previewLabel,
@@ -104,12 +103,6 @@ export interface AgentCliTurn {
   /** Set when the provider reported the turn failed without throwing. */
   readonly failure?: string;
 }
-
-/** A failure that is not the tool's own (a throw from a provider's SDK, a
- *  harness service's error) as the tool's failure, under the message it
- *  carried. */
-export const asToolError = (cause: unknown): ToolError =>
-  new ToolError(ensureError(cause).message, { cause });
 
 /** A launch the provider prepared from the call's input. */
 interface AgentCliLaunch {

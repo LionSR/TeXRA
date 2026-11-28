@@ -15,7 +15,7 @@ import { PersistedSurfaceSchema } from '@texra/shared/session/surface';
 import {
   createWebviewStorage,
   type KeyValueStore,
-} from '@texra/shared/state/PersistedState';
+} from '@ui/progress/PersistedState';
 import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { WebviewTransport } from '@ui/progress/sessionTransport';
@@ -103,22 +103,6 @@ function response<K extends 'runtimeRequest' | 'hostRequest'>(
 }
 
 describe('session Surface ownership', () => {
-  it('ends a per-task auto-approve with the launch it was chosen for (#13342)', () => {
-    surfaces.act(KEY, { kind: 'select', runId: null });
-    surfaces.act(KEY, {
-      kind: 'launch',
-      patch: { instruction: 'Proofread', approval: 'autoApprove' },
-    });
-    // The launch request settles only with its run: the next task must not
-    // inherit the choice while it runs.
-    response('hostRequest');
-    submit();
-    expect(transport.hostRequest.mock.calls[0]?.[0]).toMatchObject({
-      request: { kind: 'launch', launch: { approval: 'autoApprove' } },
-    });
-    expect(surfaces.get(KEY)?.surface$.get().launch.approval).toBe('policy');
-  });
-
   it('starts one task when Send is pressed again before the host admits it', async () => {
     surfaces.act(KEY, { kind: 'select', runId: null });
     surfaces.act(KEY, { kind: 'launch', patch: { instruction: 'Proofread' } });

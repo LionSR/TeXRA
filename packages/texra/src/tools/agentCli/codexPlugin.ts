@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 
 // Local imports
 import { definePlugin } from '@texra-ai/worldline/plugins';
-import { CODEX_SETTINGS } from '@texra/shared/settings/integrationSettings';
 import { CodexThreads, codexThreadsLayer } from './agentCliSessionStores';
 import {
   installCommandLines,
@@ -35,10 +34,6 @@ export const codex: TexraPlugin = texraPlugin({
   ...definePlugin<CodexThreads>({
     id: 'codex',
     tools: [CodexTool],
-    prompt: ({ offered }) =>
-      offered.includes('codex')
-        ? 'Use `codex` for substantial, self-contained coding work (a feature, a large refactor, an independent second opinion on code) while you keep the research thread.'
-        : '',
     toggle: 'off',
     sessionLayer: codexThreadsLayer,
     // A binary lookup that errors (EACCES, EMFILE) stays on the error
@@ -79,7 +74,6 @@ export const codex: TexraPlugin = texraPlugin({
     name: 'OpenAI Codex CLI',
     description:
       'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',
-    settings: CODEX_SETTINGS,
     setup: {
       get actions(): readonly ToolInstallAction[] {
         return [

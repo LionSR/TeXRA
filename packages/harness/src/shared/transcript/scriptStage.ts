@@ -17,6 +17,7 @@ import {
   AGENT_TOOL_NAME,
   PROGRAM_TOOL_NAME,
   SELF_TOOL_NAME,
+  SKIPPED_RESULT_NAME,
   TOOL_CALL_STATUS,
   type RequestPayload,
   type RunId,
@@ -82,7 +83,10 @@ export interface ScriptCallView {
         readonly kind: 'request';
         readonly payload: ReadonlyDeep<RequestPayload>;
       };
-  /** The child run an `agent` call launched: the row opens it. */
+  /** The child run an `agent` call launched: the row opens it, and a host
+   *  shows the call as a summary of that run. A call with none (any other
+   *  tool's, or an `agent` call that launched nothing: rejected before its
+   *  launch, reused, still queued) has only its own card to show. */
   readonly childRunId?: RunId;
   /** The run under the call waiting on the user: Review opens it. */
   readonly askingRunId?: RunId;
@@ -160,7 +164,7 @@ function statusOf(
         ? 'reused'
         : 'finished';
     case TOOL_CALL_STATUS.FAILED:
-      if (result?.status === 'error' && result.name === 'Skipped')
+      if (result?.status === 'error' && result.name === SKIPPED_RESULT_NAME)
         return 'skipped';
       if (row.cutByRunEnd === true)
         return agent && child === undefined ? 'not run' : 'cancelled';

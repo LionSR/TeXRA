@@ -229,10 +229,9 @@ function headerSummaryText(summary: string): string {
 /**
  * The header preview both hosts show, and the only statement of its
  * precedence: a `bash`-kind call is named by the model's description, else its
- * command (the input preview), else its summary; a `script` by its title, else
- * "Script"; every other tool reports its
- * own summary first and falls back to the input preview while it is still in
- * flight. An
+ * command (the input preview), else its summary; a `script` by its title, and
+ * by nothing when it has none; every other tool reports its own summary first
+ * and falls back to the input preview while it is still in flight. An
  * `executions` call names its child runs by label: the session fold passes
  * its runs as `runLabels`, so the label lands in the row once, for every host.
  */

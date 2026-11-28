@@ -1,7 +1,7 @@
 /**
  * TeXRA's own setting rows, and the static catalog its settings surfaces
  * read: the harness's rows (`@shared/state/stateSettings`), these, and the
- * rows its plugins declare (`./latexdiffSettings`, `./integrationSettings`).
+ * rows its plugins declare (`./latexdiffSettings`).
  * Every host's config carries the catalog ({@link TEXRA_SETTINGS}`.catalog`,
  * `ConfigProvider.catalog`); the settings surfaces read the placed rows
  * beside it, where each row's placement is the row's own or, for a harness
@@ -29,12 +29,7 @@ import {
 // Local imports
 import { CliOutputFormatSchema } from '@texra/shared/cliOutputFormat';
 import { CURATED_MODELS } from '@texra/model/curatedModels';
-import { LATEX_FORMATTER_VALUES } from '@texra/shared/constants/latexConfig';
 import { LATEXDIFF_SETTINGS } from '@texra/shared/settings/latexdiffSettings';
-import {
-  CLAUDE_AGENT_SETTINGS,
-  CODEX_SETTINGS,
-} from '@texra/shared/settings/integrationSettings';
 import {
   HARNESS_ROW_SURFACES,
   type SettingsViewRow,
@@ -203,12 +198,16 @@ export const TELEMETRY_ENABLED_SETTING = Object.freeze({
   surfaces: Object.freeze({ settingsView: 'telemetry' }),
 } as const satisfies TexraSettingRow<boolean>);
 
+/** The formatters the LaTeX formatter setting selects, or none. */
+const LatexFormatterSchema = Schema.Literals([
+  'latexindent',
+  'tex-fmt',
+  'none',
+]);
+
 export const LATEX_FORMATTER_SETTING = Object.freeze({
   key: 'latex.formatter',
-  schema: decodingDefault(
-    Schema.Literals(LATEX_FORMATTER_VALUES),
-    'latexindent',
-  ),
+  schema: decodingDefault(LatexFormatterSchema, 'latexindent'),
   title: 'LaTeX formatter',
   description: 'Which formatter to run when formatting LaTeX source.',
   category: 'latex',
@@ -222,7 +221,7 @@ export const LATEX_FORMATTER_SETTING = Object.freeze({
     }),
   }),
   surfaces: Object.freeze({ settingsView: 'latex' }),
-} as const satisfies TexraSettingRow<(typeof LATEX_FORMATTER_VALUES)[number]>);
+} as const satisfies TexraSettingRow<typeof LatexFormatterSchema.Type>);
 
 /**
  * Editor squiggles and Problems-panel entries exist only in VS Code. The
@@ -270,7 +269,6 @@ const TEXRA_PLACED_ROWS: readonly TexraSettingRow[] = [
   LATEX_FORMATTER_SETTING,
   INLINE_CRITICISM_SETTING,
   ...LATEXDIFF_SETTINGS,
-  ...[...CODEX_SETTINGS, ...CLAUDE_AGENT_SETTINGS].map(({ row }) => row),
 ];
 
 /**

@@ -22,6 +22,7 @@
 import {
   Array as Arr,
   Effect,
+  Equal,
   type FileSystem,
   Option,
   Predicate,
@@ -38,19 +39,15 @@ import {
   workspaceEnvironmentLayer,
 } from '@texra-ai/worldline/host';
 import {
-  Settings,
   logFailure,
   type AppSignals,
   type Secrets,
   type SettingsStores,
   AppState,
 } from '@texra-ai/worldline/plugins';
-import {
-  APPROVAL_POLICY_SETTING,
-  ensureError,
-} from '@texra-ai/worldline/schemas';
+import { ensureError } from '@texra-ai/worldline/schemas';
 import { isPathWithin } from '@texra-ai/worldline/node';
-import { apiKeyEntry } from '@texra-ai/llm';
+import { routedApiKeyProvider } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 import type {
   HostSnapshot,
@@ -58,6 +55,7 @@ import type {
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
+import { planUsageOf } from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
 import { workspaceInputFiles } from '@texra/controllers/session/workspaceFileOptions';
 import {
   hasUsableSetupCredential,
@@ -98,14 +96,11 @@ interface HostSnapshotSourceOptions {
   stores: SettingsStores;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots(): HostSnapshot['workspaceRoots'];
-  /** The notices this host shows: the lost-credential banner, the tools
-   *  this machine lacks, and the offer to start a project (a sample, an
-   *  Overleaf clone, an arXiv download) while the folder has no LaTeX files. */
-  shows: {
-    readonly apiKeyBanner: boolean;
-    readonly dependencyBanner: boolean;
-    readonly gettingStarted: boolean;
-  };
+  /** Whether this host shows the setup notices: the lost-credential banner,
+   *  the tools this machine lacks, and the offer to start a project (a
+   *  sample, an Overleaf clone, an arXiv download) while the folder has no
+   *  LaTeX files. A host with its own setup surfaces shows none of them. */
+  setupNotices: boolean;
 }
 
 /** What the producers write; the snapshot is {@link snapshotOf} of it. */
@@ -235,14 +230,15 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       credential: undefined,
       flags: undefined,
     });
-    /** Write `patch` when it changes a field, so an unchanged write
-     *  publishes nothing. */
+    /** Write `patch` when it changes a field's value, so an unchanged write
+     *  publishes nothing: a producer that reads the same list again builds
+     *  a new array, which is not a change. */
     const write = (patch: Partial<Inputs>) =>
       SubscriptionRef.updateSome(inputs, (current) =>
         Object.entries(patch).some(
           // cast: `Object.entries` widens keys to string; `patch` is a
           // `Partial<Inputs>`, so each key is one of `Inputs`.
-          ([key, value]) => current[key as keyof Inputs] !== value,
+          ([key, value]) => !Equal.equals(current[key as keyof Inputs], value),
         )
           ? Option.some({ ...current, ...patch })
           : Option.none(),
@@ -282,7 +278,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     // The plans the listed models bill, each as the process knows its
     // quota now: an endpoint's answer (asked when the kept one has expired)
     // or the last reply's word. A plan nothing states the quota of has no
-    // meter.
+    // meter, and neither has one with no credential: it has no usage to
+    // show and nothing a person fixes from the meter.
     const loadUsage = yield* producer(
       'the plan usage',
       Effect.gen(function* () {
@@ -296,34 +293,18 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         const planUsage = yield* Effect.forEach(
           plans,
           (plan) =>
-            Effect.map(quotas.read(plan, stores), (quota) => {
-              switch (quota.state) {
-                case 'read':
-                case 'observed':
-                  return [
-                    {
-                      plan,
-                      ...(quota.state === 'read' &&
-                        quota.planName && { planName: quota.planName }),
-                      at: quota.at,
-                      windows: quota.windows.map((window) => ({
-                        name: window.name,
-                        percentUsed: window.percentUsed,
-                        resetAt: window.resetAt,
-                      })),
-                    },
-                  ];
-                case 'failed':
-                  return [{ plan, windows: [], unknown: quota.reason }];
-                case 'unobserved':
-                  return [{ plan, windows: [], unknown: quota.state }];
-                case 'unread':
-                  return [];
-              }
-            }),
+            Effect.map(quotas.read(plan, stores), (quota) =>
+              planUsageOf(plan, quota),
+            ),
           { concurrency: 'unbounded' },
         );
-        yield* write({ planUsage: planUsage.flat() });
+        yield* write({
+          planUsage: planUsage.flatMap((usage) =>
+            usage === undefined || usage.unknown === 'missing_credentials'
+              ? []
+              : [usage],
+          ),
+        });
       }).pipe(underProjectEnv),
     );
     const loadFiles = yield* producer(
@@ -334,7 +315,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     );
     const loadDependencies = yield* producer(
       'the missing tools',
-      options.shows.dependencyBanner
+      options.setupNotices
         ? Effect.flatMap(missingDependencyTools(), (missingTools) =>
             write({ missingTools }),
           )
@@ -389,7 +370,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     // so an OAuth refresh or a GitHub token reloads no catalog. A sign-in
     // announces its token write, then its preference (`modelAccessChanged`).
     const providerKey = ({ key }: { readonly key: string }) =>
-      (apiKeyEntry(key) ?? 'unknown') !== 'unknown';
+      routedApiKeyProvider(key) !== undefined;
     yield* follow(
       Stream.filter(
         yield* subscribeAppSignal('credentialChanged'),
@@ -427,12 +408,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       ),
       loadFiles,
     );
-    // The approval policy is read live as each snapshot is mapped; a
-    // settings view's write republishes the inputs so the change shows.
-    yield* follow(
-      yield* subscribeAppSignal('approvalPolicyChanged'),
-      SubscriptionRef.update(inputs, (current) => ({ ...current })),
-    );
     // Configuring a credential clears a previous "Skip for now", so a user
     // who later loses every credential sees the picker again.
     yield* SubscriptionRef.changes(inputs).pipe(
@@ -452,10 +427,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     const snapshotOf = (s: Inputs): HostSnapshot => ({
       project: options.project,
       tools: options.tools,
-      approvalPolicy: Settings.getConfig(
-        stores.config,
-        APPROVAL_POLICY_SETTING,
-      ),
       modelOptions: s.modelOptions,
       planUsage: s.planUsage,
       workspaceRoots: s.workspaceRoots,
@@ -464,7 +435,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         // A credential that worked stopped working: raised only once a task
         // has finished; before that the "Connect a model" card is the prompt.
         apiKey:
-          options.shows.apiKeyBanner &&
+          options.setupNotices &&
           s.credential === false &&
           s.flags?.firstRunDone === true,
         dependency:
@@ -472,7 +443,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
             ? s.missingTools
             : null,
         gettingStarted:
-          options.shows.gettingStarted &&
+          options.setupNotices &&
           s.inputFiles.length === 0 &&
           !s.dismissed.has('gettingStarted'),
         service: s.service,

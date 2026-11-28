@@ -15,28 +15,28 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 describe('PromptBuilder', () => {
   it.effect(
-    "renders the persona's prompt and leaves the workspace's own facts as written",
+    "leaves the run's system text and the workspace's own facts as written",
     () =>
       Effect.gen(function* () {
         const storageRoot = mkdtempSync(join(os.tmpdir(), 'texra-prompt-'));
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => rmSync(storageRoot, { recursive: true })),
         );
-        // A folder name is the project's, like a branch name: an expression
-        // in one must reach the model as written, never run in this process.
+        // A system text may be a model's (an `agent` call's) and a folder
+        // name is the project's: an expression in either must reach the
+        // model as written, never run in this process.
         const workspace = join(storageRoot, 'ws {{ 7 * 6 }}');
         mkdirSync(workspace);
         // cast: the opening reads only the workspace and the storage root.
         const roots = { workspace, storageRoot } as WorkspaceRoots;
-        const system = yield* buildOpeningSystemPrompt(
-          'Work in {{ CWD }}.',
-          {
-            inputs: { CWD: '/work' },
-            activated: [],
-          },
-          { roots, textOnly: false, offered: ['bash'], memory: [] },
-        );
-        expect(system).toContain('Work in /work.');
+        const system = yield* buildOpeningSystemPrompt('Work in {{ 6 * 7 }}.', {
+          cwd: '/work',
+          roots,
+          textOnly: false,
+          offered: ['bash'],
+          memory: [],
+        });
+        expect(system).toContain('Work in {{ 6 * 7 }}.');
         expect(system).toContain('Working directory: /work');
         expect(system).toContain('ws {{ 7 * 6 }}');
       }).pipe(Effect.provide(nodePlatformLayer)),
@@ -58,14 +58,13 @@ describe('PromptBuilder', () => {
         writeFileSync(join(workspace, 'AGENTS.md'), 'Label equations eq:.\n');
         // cast: the opening reads only the workspace and the storage root.
         const roots = { workspace, storageRoot } as WorkspaceRoots;
-        const system = yield* buildOpeningSystemPrompt(
-          'Answer the task.',
-          {
-            inputs: { CWD: '/work' },
-            activated: [],
-          },
-          { roots, textOnly: true, offered: [], memory: [] },
-        );
+        const system = yield* buildOpeningSystemPrompt('Answer the task.', {
+          cwd: '/work',
+          roots,
+          textOnly: true,
+          offered: [],
+          memory: [],
+        });
         expect(system.indexOf('Use British spelling.')).toBeGreaterThan(-1);
         expect(system.indexOf('Label equations eq:.')).toBeGreaterThan(
           system.indexOf('Use British spelling.'),

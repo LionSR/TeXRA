@@ -22,7 +22,6 @@ import { InstalledPlugins } from '@common/plugins/installedPlugins';
 import {
   describeProvides,
   NATIVE_ENTRY_FILE,
-  PROVIDES_WORDS,
 } from '@common/plugins/nativeEntry';
 import {
   installedPluginId,
@@ -313,13 +312,11 @@ export const PluginManagerTool = defineTool({
 Commands:
 - \`list\` (the default) answers every installed plugin: whether it is enabled, whether it is trusted as it is now, and what it carries.
 - \`install\` takes \`source\`: a plugin folder, a git URL, or github.com/<owner>/<repo>[@ref]. It records the plugin disabled; nothing in it runs.
-- \`enable\` takes \`name\`. Unless the person already trusts the plugin as it is, they are shown what it carries and asked to trust it; once they do, it loads. Any later edit to it withdraws it until it is enabled and trusted again. Enabling a plugin with a native module always asks the person, whatever the approval policy, even one they trusted before and disabled; where no person can be asked, it fails and a person enables it themselves.
-- \`disable\` takes \`name\`: it stays installed and trusted, and loads nothing. The person is asked first.
-- \`remove\` takes \`name\`: it is forgotten with its trust. The person is asked first.
+- \`enable\` takes \`name\`. Unless the user already trusts the plugin as it is, they are shown what it carries and asked to trust it; once they do, it loads. Any later edit to it withdraws it until it is enabled and trusted again. Enabling a plugin with a native module always asks the user, whatever the approval policy, even one they trusted before and disabled; where no user can be asked, it fails and the user enables it themselves.
+- \`disable\` takes \`name\`: it stays installed and trusted, and loads nothing. The user is asked first.
+- \`remove\` takes \`name\`: it is forgotten with its trust. The user is asked first.
 
-A change reaches you at your next step (your next request to the model): its tools are offered, or withdrawn, then. A call already running keeps the version it started with; a call a stopped run left unfinished is not run again on another version when the run resumes: it ends with its outcome unknown, and the version loaded then serves your next step. When a newly trusted version of a native module does not load, the version in use before it stays in use until the plugin is fixed or disabled, but only while this process runs: after a restart the plugin is withheld with the new version's reason. \`list\` names the version in use and one that did not load.
-
-A plugin folder has \`.claude-plugin/plugin.json\` (\`{ "name": "<name>" }\`). Its \`${NATIVE_ENTRY_FILE}\` begins with \`export const description = '<one line>';\` and \`export const provides = [...];\` (each of ${PROVIDES_WORDS.map((word) => `\`${word}\``).join(', ')}), and its default export takes \`{ plugins, effect }\` (the plugin authoring surface, and the modules of the Effect library this process runs that a plugin is written with: \`Effect\`, \`Context\`, \`Layer\`, \`Schema\`, \`Stream\`, \`Scope\` and their kin) and returns \`plugins.definePlugin({ id: '<name>', tools: [...] })\`, each tool made with \`plugins.defineTool\`.`,
+A change reaches you at your next step (your next request to the model): its tools are offered, or withdrawn, then. A call already running keeps the version it started with; a call a stopped run left unfinished is not run again on another version when the run resumes: it ends with its outcome unknown, and the version loaded then serves your next step. When a newly trusted version of a native module does not load, the version in use before it stays in use until the plugin is fixed or disabled, but only while this process runs: after a restart the plugin is withheld with the new version's reason. \`list\` names the version in use and one that did not load.`,
   schema: PluginManagerInputSchema,
   execute: (input: PluginManagerInput) =>
     inRunSession((call) => runPluginManager(call, input)),

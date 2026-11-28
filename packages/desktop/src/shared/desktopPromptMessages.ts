@@ -21,7 +21,6 @@ export const DESKTOP_PROMPT_COMMANDS = Object.freeze({
 export const DesktopPromptRpcs = RpcGroup.make(
   Rpc.make('prompt', {
     payload: {
-      title: Schema.String,
       prompt: Schema.String,
       password: Schema.Boolean,
     },

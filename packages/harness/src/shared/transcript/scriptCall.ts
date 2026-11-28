@@ -47,3 +47,7 @@ export function formatScriptTally(tally: ScriptTally): string {
     ) || 'no calls'
   );
 }
+
+/** The line a finished script's output puts before the value it returned.
+ *  The script tool writes it and the script card's sections read past it. */
+export const SCRIPT_RETURNED_HEADING = 'The script returned:';

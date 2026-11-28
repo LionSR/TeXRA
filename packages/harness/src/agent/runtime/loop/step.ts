@@ -68,8 +68,10 @@ import type { PluginContext } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import {
+  type AgentConfig,
   PROGRAM_TOOL_NAME,
   programGrants,
+  runsScript,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
   SCRIPT_TOOL_NAME,
@@ -101,6 +103,12 @@ import {
   AGENT_SKILLS_ENABLED_SETTING,
   MEMORY_ENABLED_SETTING,
 } from '@shared/state/stateSettings';
+
+/** The skills a fresh run's user activated with its launch; a script's
+ *  run, which renders no prompt, activates none. */
+export const activatedSkills = (
+  config: Pick<AgentConfig, 'script' | 'skills'>,
+): readonly string[] => (runsScript(config) ? [] : (config.skills ?? []));
 
 /** The project's side of the tool catalog ({@link SessionTools}): its
  *  plugin layers and MCP servers, built in the session's scope and closed
@@ -359,7 +367,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const skills = { plugins: [...pinned.installed.values()], contributors };
     const names =
       state.at === null
-        ? (run.opening?.activated ?? [])
+        ? activatedSkills(run.config)
         : (state.input.activated ?? []);
     const recordedSkills = recorded === null ? null : state.offeredWith.skills;
     const listing =

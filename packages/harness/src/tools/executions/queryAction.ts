@@ -10,11 +10,11 @@ import { Effect } from 'effect';
 
 // Local imports
 import { ToolError, type ToolResult } from '@shared/schemas';
-import {
-  HistoryQuery,
-  type HistoryCell,
-  type HistoryPage,
-} from '@shared/session/runHistory';
+import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
+import type {
+  HistoryCell,
+  HistoryPage,
+} from '@agent/runtime/historyQuery/childSource';
 import { appendHead } from '@utils/text/appendTail';
 
 const CELL_CHARACTER_LIMIT = 2000;

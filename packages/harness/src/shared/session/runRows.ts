@@ -21,6 +21,8 @@
  * The reads of a run's requests and input (`runRowReads.ts`) apply the
  * shared rows they select through here too.
  */
+import { Array as Arr, Option } from 'effect';
+
 import type {
   FollowUpControl,
   FollowUpMessageContent,
@@ -70,6 +72,19 @@ export const isMessage = (row: QueuedFollowUp): row is QueuedMessage =>
 /** The run's own request a queued follow-up carries, if it is one. */
 export const controlOf = (row: QueuedFollowUp): FollowUpControl | undefined =>
   'control' in row.content ? row.content.control : undefined;
+
+/** The most recent model switch still waiting for the next model call. */
+export const queuedModelOf = (
+  followUps: readonly QueuedFollowUp[],
+): string | undefined =>
+  Option.getOrUndefined(
+    Arr.findLast(followUps, (followUp) => {
+      const control = controlOf(followUp);
+      return control?.kind === 'model'
+        ? Option.some(control.model)
+        : Option.none();
+    }),
+  );
 
 /**
  * A record keyed by an id the state carries: call and request ids come from

@@ -1,15 +1,14 @@
 /**
  * The filesystem primitives the repo must keep that the standard library's
- * `FileSystem` does not provide: crash-safe replace and symlink-dereferencing
- * copies.
+ * `FileSystem` does not provide: crash-safe replace.
  * Directory listings add policy over `FileSystem` operations. Recorded run
  * paths also need metadata without a process filesystem in scope.
  *
  * Nothing here re-implements an operation `FileSystem` already has — an
  * append, for instance, is `fs.writeFile(path, data, { flag: 'a' })` and gets
- * no wrapper. The Node calls made here (`cp` with `dereference`, a native
- * `realPath`, the `write-file-atomic` package and the metadata probes)
- * classify their errno as `@effect/platform-node` does.
+ * no wrapper. The Node calls made here (a native `realPath`, the
+ * `write-file-atomic` package and the metadata probes) classify their errno
+ * as `@effect/platform-node` does.
  */
 
 // Node imports

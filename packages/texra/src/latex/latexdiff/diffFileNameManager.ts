@@ -1,8 +1,8 @@
 // Standard library imports
 import * as path from 'node:path';
 
-/** The suffix a workspace diff carries after the edited file's stem. */
-export const WORKSPACE_DIFF_SUFFIX = '_diff';
+// Local imports
+import { WORKSPACE_DIFF_SUFFIX } from '@texra/common/files/fileHandlingRules';
 
 /** The diff filename for an edited file: its stem plus
  *  {@link WORKSPACE_DIFF_SUFFIX}. */

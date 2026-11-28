@@ -6,11 +6,8 @@ import {
   readToolEditContent,
   type RefusalDecision,
   type ToolEditRequest,
-  type ToolResult,
 } from '@shared/schemas';
-import { refusalCopy } from '@tools/approval/refusalCopy';
 import { Approvals, SessionLog } from '@shared/session/runHistory';
-import { errorResult } from '@tools/core/result';
 import {
   buildDiffHunks,
   countLineChanges,
@@ -170,22 +167,4 @@ export function appendApprovalDiffNote(
         : baseOutput,
     ),
   );
-}
-
-export function buildApprovalRejectedResult(
-  path: string,
-  sourceTool: string,
-  refusal: RefusalDecision,
-): ToolResult {
-  const copy = refusalCopy('Tool edit', refusal);
-  const summary =
-    refusal.action === 'reject'
-      ? `User rejected ${sourceTool} for ${path}.`
-      : `${copy.summary}: ${sourceTool} for ${path}.`;
-  // `refusalCopy` already trims a detail and drops an empty one.
-  const error = copy.detail ? `${summary}\n\n${copy.detail}` : summary;
-  return errorResult(error, {
-    summary,
-    ...(copy.feedback && { userInstruction: copy.feedback }),
-  });
 }

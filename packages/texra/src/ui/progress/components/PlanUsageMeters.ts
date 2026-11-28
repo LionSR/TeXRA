@@ -15,11 +15,13 @@ import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/popover/popover.js';
 
 // Local imports
-import type { PlanUsage } from '@texra/shared/session/hostSnapshot';
-import { modelAvailabilityLabel } from '@ui/copy/modelAccess';
+import type { PlanUsage } from '@texra/shared/model/subscriptionUsage';
 import {
+  currentUsageWindows,
   formatSubscriptionUsageReset,
   formatSubscriptionUsageUpdated,
+  limitingUsageWindow,
+  planUsageName,
   subscriptionQuotaTone,
   subscriptionQuotaUsed,
   subscriptionUsageUnavailable,
@@ -32,35 +34,6 @@ import { popoverPanelStyles } from '@ui/styles/overlaySurfaceStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { quotaBarStyles, renderQuotaBar } from '@ui/wa/quotaBar';
-
-/** The plan as its provider names its tier, else as TeXRA names the plan. */
-const planName = (usage: PlanUsage): string =>
-  usage.planName ??
-  modelAvailabilityLabel({
-    availability: 'subscription-access',
-    usageRoute: usage.plan,
-  });
-
-/** A plan's windows still running at `now`: a figure learned before its
- *  window reset says nothing about the window that followed. */
-const current = (usage: PlanUsage, now: number): PlanUsage => ({
-  ...usage,
-  windows: usage.windows.filter(
-    (window) => window.resetAt === undefined || window.resetAt > now,
-  ),
-});
-
-/** The window a chip stands for: the one nearest its limit, whichever
- *  windows the plan has. */
-const fullest = (usage: PlanUsage) =>
-  usage.windows.toSorted((a, b) => b.percentUsed - a.percentUsed).at(0);
-
-/** Why a plan shows no windows, in a line. */
-function unknownLine(unknown: NonNullable<PlanUsage['unknown']>): string {
-  return unknown === 'unobserved'
-    ? 'Usage shows after the next reply on this plan.'
-    : subscriptionUsageUnavailable(unknown);
-}
 
 @customElement('plan-usage-meters')
 export class PlanUsageMeters extends TexraElement {
@@ -160,13 +133,13 @@ export class PlanUsageMeters extends TexraElement {
   }
 
   private renderChip(usage: PlanUsage): TemplateResult {
-    const window = fullest(usage);
+    const window = limitingUsageWindow(usage.windows);
     if (window === undefined)
-      return html`<span class="chip">${planName(usage)}</span>`;
+      return html`<span class="chip">${planUsageName(usage)}</span>`;
     const tone = subscriptionQuotaTone(window);
     const toneClass = tone === undefined ? '' : `tone-${tone}`;
     return html`<span class="chip ${toneClass}">
-      ${planName(usage)} ${renderQuotaBar(window)}
+      ${planUsageName(usage)} ${renderQuotaBar(window)}
       <span class="chip-percent">${Math.round(window.percentUsed)}%</span>
     </span>`;
   }
@@ -174,7 +147,7 @@ export class PlanUsageMeters extends TexraElement {
   private renderPlan(usage: PlanUsage, now: number): TemplateResult {
     return html`<section class="plan">
       <div class="plan-head">
-        <span class="plan-name">${planName(usage)}</span>
+        <span class="plan-name">${planUsageName(usage)}</span>
         ${
           usage.at === undefined
             ? nothing
@@ -186,7 +159,9 @@ export class PlanUsageMeters extends TexraElement {
       ${
         usage.unknown === undefined
           ? nothing
-          : html`<span class="quiet">${unknownLine(usage.unknown)}</span>`
+          : html`<span class="quiet"
+              >${subscriptionUsageUnavailable(usage.unknown)}</span
+            >`
       }
       ${usage.windows.map((window) => {
         const tone = subscriptionQuotaTone(window);
@@ -203,11 +178,11 @@ export class PlanUsageMeters extends TexraElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    // A plan with no credential has no usage to show and nothing to fix here.
     const now = this.ticker.now;
-    const usage = this.usage
-      .filter((plan) => plan.unknown !== 'missing_credentials')
-      .map((plan) => current(plan, now));
+    const usage = this.usage.map((plan) => ({
+      ...plan,
+      windows: currentUsageWindows(plan, now),
+    }));
     if (usage.length === 0) return nothing;
     return html`
       <button

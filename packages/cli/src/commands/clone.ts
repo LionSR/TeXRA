@@ -121,9 +121,7 @@ export const cloneCommand = cliCommand('clone', {
     'Clone an Overleaf or ShareLaTeX project into a destination directory',
   config: {
     project: Argument.String('project').pipe(
-      Argument.withDescription(
-        'Project URL, git URL, or 24-character project ID',
-      ),
+      Argument.withDescription(CLONE_COPY.projectPrompt),
     ),
     destination: Argument.String('destination').pipe(
       Argument.withDescription(

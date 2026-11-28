@@ -5,6 +5,7 @@
  */
 import { Schema, Struct } from 'effect';
 
+import { FollowUpSenderSchema } from './followUp';
 import { ScriptDeliverySummarySchema } from './scriptDelivery';
 import { StoredMediaSchema } from './storedTurn';
 import type { FinishedToolResult } from './toolResult';
@@ -28,8 +29,13 @@ export type MediaAttachmentKind = typeof MediaAttachmentKindSchema.Type;
  * `scriptSummary` carries a script delivery's typed presentation facts
  * beside the rendered text, so the progress view renders structured data
  * instead of re-parsing it out of the row text.
+ * `from` is who put the message on the run, as its follow-up names them
+ * (for a child's opening instruction, its parent); absent when the person
+ * did, so a reader draws another run's report or a host's notice as
+ * theirs and never as the person's own words.
  */
 export const UserMessagePayloadSchema = Schema.Struct({
+  from: Schema.optional(FollowUpSenderSchema),
   attachments: Schema.optional(Schema.Array(MediaAttachmentKindSchema)),
   media: Schema.optional(Schema.Array(StoredMediaSchema)),
   scriptSummary: Schema.optional(ScriptDeliverySummarySchema),

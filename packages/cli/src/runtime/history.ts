@@ -18,8 +18,8 @@ import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@texra-ai/worldline/host';
-import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
-import type { ChatExportInput } from '@texra/agent/export/schemas';
+import { loadChatExportInput } from '@texra/controllers/export/loadChatExportInput';
+import type { ChatExportInput } from '@texra/controllers/export/schemas';
 import { formatBytes } from '@ui/copy/format';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 import type { RunStatusKey } from '@texra/shared/session/runStatusKey';
@@ -60,7 +60,7 @@ export interface CliHistoryEntry {
   readonly continuation: AgentRunListingEntry['continuation'];
   readonly inputBasename: string;
   /** A program's run, or a chat. */
-  readonly kind?: 'task' | 'chat';
+  readonly kind: 'task' | 'chat';
   readonly description?: string;
 }
 
@@ -390,12 +390,7 @@ export function formatCliHistoryDetailsText(
   ) {
     lines.push('', formatConversation(details.conversation));
   }
-  const shown = config
-    ? serializeFilteredConfig(
-        config,
-        runKindOf(config) === 'task' ? 'task' : 'agent',
-      )
-    : '{}';
+  const shown = config ? serializeFilteredConfig(config) : '{}';
   const files = details.files.map(
     (file) =>
       `${file.isDirectory ? '<dir>' : formatBytes(file.size)}\t${file.path}`,

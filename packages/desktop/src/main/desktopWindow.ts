@@ -24,6 +24,10 @@ import {
   DesktopOpenRecentProjectMessageSchema,
   DesktopSelectProjectMessageSchema,
 } from '../shared/desktopProjectMessages.js';
+import {
+  DESKTOP_SHELL_COMMANDS,
+  DesktopOpenLinkMessageSchema,
+} from '../shared/desktopShellMessages.js';
 import { DESKTOP_WORKSPACE_INBOUND_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
 import {
   DESKTOP_PDF_COMMANDS,
@@ -65,6 +69,7 @@ import { checkForDesktopUpdate } from './desktopUpdateChecker.js';
 import { createDesktopWindowHost } from './desktopWindowHost.js';
 import { bootstrapDesktopWindowLifecycle } from './desktopWindowLifecycle.js';
 import { getDesktopWindowTitle } from './desktopWindowTitle.js';
+import { NATIVE_WINDOW_TITLE } from '@ui/copy/sessionTitle';
 import {
   desktopSpawner,
   type DesktopWindowHooks,
@@ -79,7 +84,9 @@ import type {
 } from './desktopProjects.js';
 
 interface DesktopWindowOptions {
-  readonly projects: DesktopProjectRegistry;
+  /** The open projects, once they are: the launch's window loads its page
+   *  while the background service is reached and the folders reopen. */
+  readonly projects: Effect.Effect<DesktopProjectRegistry>;
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
   /** Where this build's preload script and renderer page are. */
@@ -97,66 +104,75 @@ const SessionMessageEnvelopeSchema = Schema.Struct({ session: Schema.String });
 const CHROMIUM_ERR_ABORTED = -3;
 const CHROMIUM_ERR_FILE_NOT_FOUND = -6;
 
-/** Opening is synchronous, as Electron's window creation is: see
- *  {@link DesktopWindows.open}. */
+/**
+ * The window exists and its page loads before the projects are open: the
+ * page paints with no project list, and what it posts meanwhile is answered
+ * once every surface is wired. See {@link DesktopWindows.open}.
+ */
 export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   options: DesktopWindowOptions,
   hooks: DesktopWindowHooks,
 ): Effect.fn.Return<OpenedDesktopWindow, never, Scope.Scope | ProcessServices> {
-  const { runtime, projects } = options;
+  const { runtime } = options;
   const scope = yield* Scope.Scope;
   const spawn = desktopSpawner(runtime, scope);
   const logFollowing = yield* FiberHandle.make<void>();
-  const initialProject = projects.active();
   const window = yield* openDesktopBrowserWindow({
-    title: getDesktopWindowTitle(initialProject),
+    title: NATIVE_WINDOW_TITLE.brand,
     preload: options.layout.preload,
   });
-  // The renderer's channels exist before anything can post to them; the
-  // routes and bindings they hand messages to are read as a message arrives,
-  // which is only once the page has loaded at the end of this open.
+  // What the page posted before the surfaces below existed, in order; unset
+  // once they do. The routes and bindings a message is handed to are read
+  // as it is handled, which is never before then.
+  let heldUntilWired: (() => void)[] | undefined = [];
+  const whenWired = (handle: () => void): void => {
+    if (heldUntilWired) heldUntilWired.push(handle);
+    else handle();
+  };
   const commandRoutes = new Map<string, DesktopCommandRoute>();
   const dropped = (what: string) =>
     Effect.logWarning(`Dropped ${what}`).pipe(withLogChannel('desktop'));
   const bridge = yield* installDesktopHostBridge(window, {
-    onCommand: (message) => {
-      const named = Schema.decodeUnknownResult(DesktopCommandMessageSchema)(
-        message,
-      );
-      if (!Result.isSuccess(named)) {
-        spawn(dropped('a renderer command with no command name'));
-        return;
-      }
-      const command = named.success;
-      const route = commandRoutes.get(command.command);
-      if (!route) {
-        spawn(dropped(`${command.command}: no surface routes it`));
-        return;
-      }
-      // The one run site for every command's program, and its one
-      // report: a failure or defect reaches the window's async-error
-      // reporter.
-      spawn(host.reported(route(command)));
-    },
+    onCommand: (message) =>
+      whenWired(() => {
+        const named = Schema.decodeUnknownResult(DesktopCommandMessageSchema)(
+          message,
+        );
+        if (!Result.isSuccess(named)) {
+          spawn(dropped('a renderer command with no command name'));
+          return;
+        }
+        const command = named.success;
+        const route = commandRoutes.get(command.command);
+        if (!route) {
+          spawn(dropped(`${command.command}: no surface routes it`));
+          return;
+        }
+        // The one run site for every command's program, and its one
+        // report: a failure or defect reaches the window's async-error
+        // reporter.
+        spawn(host.reported(route(command)));
+      }),
     // A session message names its project: that project's port answers
     // it.
-    onSession: (message) => {
-      const addressed = Schema.decodeUnknownResult(
-        SessionMessageEnvelopeSchema,
-      )(message);
-      if (!Result.isSuccess(addressed)) {
-        spawn(dropped('a session message with no session key'));
-        return;
-      }
-      const { session } = addressed.success;
-      const receive = Effect.suspend(() => {
-        const binding = bindings.get(session);
-        return binding
-          ? binding.port.receive(message)
-          : dropped(`a renderer message for session ${session}: not open`);
-      });
-      spawn(routing(receive), { startImmediately: true });
-    },
+    onSession: (message) =>
+      whenWired(() => {
+        const addressed = Schema.decodeUnknownResult(
+          SessionMessageEnvelopeSchema,
+        )(message);
+        if (!Result.isSuccess(addressed)) {
+          spawn(dropped('a session message with no session key'));
+          return;
+        }
+        const { session } = addressed.success;
+        const receive = Effect.suspend(() => {
+          const binding = bindings.get(session);
+          return binding
+            ? binding.port.receive(message)
+            : dropped(`a renderer message for session ${session}: not open`);
+        });
+        spawn(routing(receive), { startImmediately: true });
+      }),
   });
   const host = createDesktopWindowHost({ window, runtime, spawn, bridge });
   const { previewHost } = host;
@@ -165,6 +181,28 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   installDesktopNavigationPolicy(window.webContents, {
     openExternal: host.openExternalInBackground,
   });
+  // The renderer owns editor dirtiness. This event is the main process's only
+  // reading of it: Chromium emits it after the renderer's beforeunload handler
+  // observes a dirty Monaco buffer and refuses the unload, so every close path
+  // (quit, document reload, window close) asks here and nowhere else.
+  bootstrapDesktopWindowLifecycle({
+    webContents: window.webContents,
+    onDocumentReloaded: () => {
+      // A page that reloads before the surfaces exist holds nothing in them
+      // yet, and what the replaced document posted has nobody to answer.
+      if (heldUntilWired) heldUntilWired = [];
+      else spawn(routing(resetForNewDocument), { startImmediately: true });
+    },
+    showDiscardDialog: host.showDiscardDialog,
+    isFatalShutdownRequested: isFatalDesktopShutdownRequested,
+    clearContinueQuitAfterWindowClose: hooks.cancelPendingQuit,
+  });
+  loadDesktopWindow(window, options.layout.rendererPage);
+
+  const projects = yield* options.projects;
+  // Closed while the projects opened: nothing is left to wire.
+  if (window.isDestroyed()) return { window, reveal: () => {} };
+  window.setTitle(getDesktopWindowTitle(projects.active()));
   // Lightweight update check: at most once/day, notifies at most once per
   // release via a native dialog linking to the GitHub release page. Not a full
   // updater: no download, no install, no feed files. Disable with
@@ -213,6 +251,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     bindings,
   });
 
+  // The page gets the list when it asks and on every change after that. A
+  // change before it has asked is in the answer.
+  let pageAskedForProjects = false;
   const postProjects = () => {
     const {
       projects: open,
@@ -254,18 +295,15 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       Effect.gen(function* () {
         yield* bindings.sync;
         installMenu(state.recent);
-        const switched = state.activeKey !== surface.attached()?.key;
-        if (switched) {
-          for (const binding of bindings.all()) binding.browserViews.hideAll();
-        }
         yield* surface.attach();
-        postProjects();
+        if (pageAskedForProjects) postProjects();
       }),
     );
   /** A document reload destroys its request correlations (an open prompt
    *  answers undefined) and recording ownership: new ports, same sessions. */
   const resetForNewDocument = reconcileLane.withPermits(1)(
     Effect.gen(function* () {
+      pageAskedForProjects = false;
       yield* promptController.reset;
       yield* bindings.releaseAll;
       yield* bindings.sync;
@@ -300,19 +338,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     },
   );
 
-  // The renderer owns editor dirtiness. This event is the main process's only
-  // reading of it: Chromium emits it after the renderer's beforeunload handler
-  // observes a dirty Monaco buffer and refuses the unload, so every close path
-  // (quit, document reload, window close) asks here and nowhere else.
-  bootstrapDesktopWindowLifecycle({
-    webContents: window.webContents,
-    onDocumentReloaded: () =>
-      spawn(routing(resetForNewDocument), { startImmediately: true }),
-    showDiscardDialog: host.showDiscardDialog,
-    isFatalShutdownRequested: isFatalDesktopShutdownRequested,
-    clearContinueQuitAfterWindowClose: hooks.cancelPendingQuit,
-  });
-
   // One route per inbound command, each owned by one surface: the message's
   // `command` names the program that runs it.
   const claim = (
@@ -335,7 +360,10 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       // The project list the renderer asks for once it boots, and its select
       // and close requests.
       [DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS]: () =>
-        Effect.sync(postProjects),
+        Effect.sync(() => {
+          pageAskedForProjects = true;
+          postProjects();
+        }),
       [DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT]: parsedRoute(
         DesktopSelectProjectMessageSchema,
         (message) => navigation.select(message.key),
@@ -356,6 +384,19 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
             : dropped(
                 `${message.command}: ${message.root} is not a recent project`,
               ),
+      ),
+    },
+    {
+      // The page checked the scheme; it is checked again here, where the
+      // address is handed to the operating system.
+      [DESKTOP_SHELL_COMMANDS.OPEN_LINK]: parsedRoute(
+        DesktopOpenLinkMessageSchema,
+        ({ url }) => {
+          const protocol = URL.parse(url)?.protocol;
+          return protocol === 'http:' || protocol === 'https:'
+            ? Effect.sync(() => host.openExternalInBackground(url))
+            : dropped(`a link that is not a web address: ${url}`);
+        },
       ),
     },
     createDesktopLogIpc(host.post, {
@@ -391,7 +432,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   );
   installMenu(SubscriptionRef.getUnsafe(projects.state).recent);
 
-  loadDesktopWindow(window, options.layout.rendererPage);
+  const held = heldUntilWired;
+  heldUntilWired = undefined;
+  for (const handle of held) handle();
 
   return { window, reveal: navigation.reveal };
 });

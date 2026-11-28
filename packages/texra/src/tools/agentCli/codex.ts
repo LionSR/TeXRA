@@ -19,7 +19,11 @@ import { Effect, Schema, Stream } from 'effect';
 
 // Local imports
 import { type WorkspaceRoots } from '@texra-ai/worldline';
-import { ChildRuns, ToolContext } from '@texra-ai/worldline/plugins';
+import {
+  asToolError,
+  ChildRuns,
+  ToolContext,
+} from '@texra-ai/worldline/plugins';
 import {
   type TokenUsageStats,
   type ToolUseLog,
@@ -36,12 +40,16 @@ import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspace
 
 // Local file imports
 import { openCodexClient } from './codexImport';
+import {
+  AgentCliEffortSchema,
+  CODEX_DEFAULT_MODEL,
+  CODEX_MODELS,
+} from '@texra/shared/agentCliSettings';
 import { codexRun } from './codexConfig';
 import { CodexThreads } from './agentCliSessionStores';
 import {
   agentCliTool,
   StreamedToolCards,
-  asToolError,
   type AgentCliTurn,
 } from './agentCliShared';
 import {
@@ -74,6 +82,14 @@ const CodexInputSchema = Schema.Struct({
     description:
       'Instruction for the Codex agent. For a new session, describe the task. For a resume (thread_id set), describe the follow-up.',
   }),
+  model: optionalInput(
+    Schema.String,
+    `OpenAI model reference, optionally with an effort suffix (e.g. '${CODEX_DEFAULT_MODEL}@high'). Current ones: ${CODEX_MODELS.join(', ')}. Default: ${CODEX_DEFAULT_MODEL}.`,
+  ),
+  effort: optionalInput(
+    AgentCliEffortSchema,
+    "Reasoning effort; overrides the model's @effort suffix. A level the model or the installed Codex CLI lacks becomes the nearest one it has.",
+  ),
   thread_id: optionalInput(
     Schema.String,
     'Continue an existing Codex thread with a follow-up instruction, as its next turn. A thread whose turn is still running refuses another until that turn is delivered.',
@@ -322,7 +338,7 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
     workingDir || !input.thread_id
       ? buildAgentWorkspaceOptions(roots.workspace, workingDir)
       : {};
-  const run = yield* codexRun(roots, codexPath);
+  const run = yield* codexRun(codexPath, input);
   if (run.note) {
     yield* Effect.logInfo(run.note).pipe(withLogChannel(CODEX_AGENT_NAME));
   }
@@ -384,22 +400,18 @@ const prepareLaunch = Effect.fn('codex.prepareLaunch')(function* (
 export const CodexTool = defineTool({
   name: CODEX_AGENT_NAME,
   description:
-    'Spin off an OpenAI Codex agent to perform code analysis, generation, or research in a sandboxed environment. ' +
-    "The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox, which follows this run's approval policy: workspace-write when the launch was approved, full access under Auto-approve or an all-agent-work grant. " +
+    'Spin off an OpenAI Codex agent to perform code analysis, generation, or research. ' +
+    "The agent runs the Codex CLI locally and can read files, run commands, and make edits under the Codex sandbox mode this run's approval policy sets: workspace-write when the launch was approved, full access under Auto-approve or an all-agent-work grant. " +
     'Auth is handled by the CLI itself: use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
     'Pass thread_id on a later call to continue that thread with a follow-up instruction, one turn per call. ' +
-    'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like `agent`. ' +
-    'It runs in the working directory of the calling agent and takes no directory argument, so give parallel codex agents disjoint files to edit. ' +
-    'codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task.',
+    'It runs in the working directory of the calling agent and takes no directory argument, so parallel codex agents share that directory.',
   schema: CodexInputSchema,
   card: codexCallCard,
-  guard: {
-    command: {
-      text: (input: CodexInput) => `[${CODEX_AGENT_NAME}] ${input.prompt}`,
-      // A resumed thread keeps its stored workspace: name none, not the wrong one.
-      cwd: 'unknown',
-    },
+  command: {
+    text: (input: CodexInput) => `[${CODEX_AGENT_NAME}] ${input.prompt}`,
+    // A resumed thread keeps its stored workspace: name none, not the wrong one.
+    cwd: 'unknown',
   },
   execute: agentCliTool({
     name: CODEX_AGENT_NAME,

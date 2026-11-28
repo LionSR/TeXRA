@@ -2,7 +2,6 @@
 import { Array as Arr, Effect, FileSystem } from 'effect';
 
 // Local imports - agent
-import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import { delegationUpdate } from '@agent/runtime/delegation/delegationAvailability';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { PromptSections } from '@shared/schemas';
@@ -11,7 +10,6 @@ import type { Plugin } from '@tools/plugins';
 import type { PromptSection } from '@tools/toolTable';
 
 // Local imports - utilities
-import { renderPrompt } from '@agent/prompt/promptRender';
 import { loadAgentsMd } from '@agent/prompt/agentsMd';
 import type { MemoryFolder } from '@agent/memory/memoryLayout';
 import { buildWorkspaceInfoBlock } from './workspaceInfo';
@@ -35,7 +33,7 @@ export function stepInstructions(
       ? [
           [
             'skills',
-            `<available_skills>\nThe following skills are available. If one is relevant, inspect its SKILL.md at the listed path before applying it; a skill's relative links resolve against its own directory.\n${skills.map(({ text }) => text).join('\n')}\n</available_skills>`,
+            `<available_skills>\nEach entry gives a skill's name, its description and the path of its SKILL.md, which holds the skill's instructions; a skill's relative links resolve against its own directory.\n${skills.map(({ text }) => text).join('\n')}\n</available_skills>`,
           ],
         ]
       : []),
@@ -76,19 +74,21 @@ export function contextUpdate(
 }
 
 /**
- * The system text a conversation opens with: its run's own system text
- * rendered, then the user's and project's `AGENTS.md`, and the workspace
- * facts, which a text-only run (one that declares no tools) goes without.
- * Only the run's own system text is a template: the workspace facts (a path,
- * a branch name) come from the project, so they are data and are never
- * rendered. What each step's plugins add is appended per request
+ * The system text a conversation opens with: its run's own system text,
+ * then the user's and project's `AGENTS.md`, and the workspace facts, which
+ * a text-only run (one that declares no tools) goes without. Every part
+ * reaches the model as written: a run's system text may be a model's (an
+ * `agent` call's) or an installed plugin's, so none of it is a template.
+ * What each step's plugins add is appended per request
  * (`stepInstructions`).
  */
 export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
   function* (
     system: string,
-    { inputs }: TemplateOpening,
     options: {
+      /** The run's working directory (else its workspace, else `.`), which
+       *  `<workspace_info>` states. */
+      cwd: string;
       /** The run's session roots: the workspace whose `AGENTS.md` and
        *  `<workspace_info>` it reads, the storage root whose `AGENTS.md`
        *  is the person's own, and the setting slots the `<workspace_info>`
@@ -107,7 +107,6 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const rendered = yield* renderPrompt(system, inputs);
     const { roots } = options;
     // The two workspace reads are independent; run them together.
     const [agentsMd, workspaceInfo] = yield* Effect.all(
@@ -117,14 +116,14 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
           ? Effect.succeed('')
           : buildWorkspaceInfoBlock(
               roots.workspace,
-              inputs.CWD,
+              options.cwd,
               options.offered,
               options.memory,
             ),
       ],
       { concurrency: 'unbounded' },
     );
-    const systemPrompt = [rendered, agentsMd].filter(Boolean).join('\n');
+    const systemPrompt = [system, agentsMd].filter(Boolean).join('\n');
     if (options.textOnly) return systemPrompt;
     return [systemPrompt, workspaceInfo].filter(Boolean).join('\n');
   },

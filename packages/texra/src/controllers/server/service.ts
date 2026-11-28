@@ -200,6 +200,10 @@ export const serviceHandlers = (
             ),
           );
       const session = over((message) => new TaskFailed({ message }));
+      // The project's state store, the service's own: a window opens none.
+      const projectState = over(
+        (message) => new ProjectStateFailed({ message }),
+      );
       // cast: each member's handler answers that member of the project's
       // `Session.records(runId)`, which `RUN_RECORDS` types its procedure by.
       const records = Object.fromEntries(
@@ -244,19 +248,11 @@ export const serviceHandlers = (
             }),
           ),
         'task.result': ({ workspace, runId, activation }) =>
-          Effect.scoped(
-            Effect.gen(function* () {
-              const session = yield* open(workspace);
-              const end = yield* session
-                .run(runId, activation)
-                .result.pipe(
-                  Effect.mapError(
-                    (error) => new TaskFailed({ message: error.message }),
-                  ),
-                );
+          session(workspace, (held) =>
+            Effect.map(held.run(runId, activation).result, (end) =>
               // The result arrives once the session's view shows the end.
-              return { ...end, at: session.view.head() };
-            }),
+              ({ ...end, at: held.view.head() }),
+            ),
           ),
         'session.view': ({ workspace, runIds }) =>
           session(workspace, (held) => held.view.read(runIds)),
@@ -297,10 +293,10 @@ export const serviceHandlers = (
           ),
         // The project's state store, the service's own: a window opens none.
         'state.get': ({ workspace, keys }) =>
-          Effect.scoped(
-            Effect.flatMap(projects.open(workspace), (session) =>
+          projectState(workspace, (held) =>
+            Effect.map(
               Effect.forEach(keys, (key) =>
-                session.roots.workspaceState.get(key).pipe(
+                held.roots.workspaceState.get(key).pipe(
                   // The store answers what it holds, which is JSON.
                   Effect.flatMap((value) =>
                     value === undefined
@@ -312,42 +308,32 @@ export const serviceHandlers = (
                   ),
                 ),
               ),
-            ).pipe(
-              Effect.map((entries) => Object.fromEntries(entries)),
-              Effect.mapError(
-                (error) => new ProjectStateFailed({ message: error.message }),
-              ),
+              (entries) => Object.fromEntries(entries),
             ),
           ),
         'state.set': ({ workspace, next, ifCurrent }) =>
-          Effect.scoped(
-            Effect.flatMap(projects.open(workspace), (session) => {
-              const keys = Object.keys(next);
-              // With `ifCurrent`, written only while the stored values are the
-              // ones the window read: its read-modify-write, as one step here.
-              return session.roots.workspaceState.modify(keys, (current) =>
-                Result.succeed(
-                  ifCurrent === null ||
-                    keys.every(
-                      (key) =>
-                        JSON.stringify(current[key]) ===
-                        JSON.stringify(ifCurrent[key]?.value),
-                    )
-                    ? ([
-                        true,
-                        Object.fromEntries(
-                          keys.map((key) => [key, next[key]?.value]),
-                        ),
-                      ] as const)
-                    : ([false] as const),
-                ),
-              );
-            }).pipe(
-              Effect.mapError(
-                (error) => new ProjectStateFailed({ message: error.message }),
+          projectState(workspace, (held) => {
+            const keys = Object.keys(next);
+            // With `ifCurrent`, written only while the stored values are the
+            // ones the window read: its read-modify-write, as one step here.
+            return held.roots.workspaceState.modify(keys, (current) =>
+              Result.succeed(
+                ifCurrent === null ||
+                  keys.every(
+                    (key) =>
+                      JSON.stringify(current[key]) ===
+                      JSON.stringify(ifCurrent[key]?.value),
+                  )
+                  ? ([
+                      true,
+                      Object.fromEntries(
+                        keys.map((key) => [key, next[key]?.value]),
+                      ),
+                    ] as const)
+                  : ([false] as const),
               ),
-            ),
-          ),
+            );
+          }),
         'file.write': ({ path, contents, expected }) =>
           writeFileIfUnchanged(path, contents, expected),
         'host.focus': ({ attachment }) => hosts.focus(attachment),

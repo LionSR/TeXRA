@@ -1,8 +1,5 @@
 import { Schema } from 'effect';
-import { decodingDefault } from '@texra-ai/worldline/schemas';
-import type { SettingChoiceCopy } from '@texra-ai/worldline/schemas';
 import {
-  DEFAULT_EFFORT,
   isClaudeCodeModel,
   isCodexModel,
   MODEL_CONFIGS,
@@ -12,57 +9,43 @@ import {
 } from '@texra-ai/llm';
 
 /**
- * Agent CLI setting value schemas shared by settings IPC and tool runtimes.
- *
- * Keep this module a leaf over llm-zoo and the reasoning policy: tool modules
- * import it while defining their own runtime schemas, so it must not pull in
- * settings-view or tool code.
+ * The models and effort levels the two agent CLIs take, by llm-zoo
+ * reference. A leaf over llm-zoo: tool modules import it while defining
+ * their own schemas.
  */
 
-// ============================================================================
-// Models and effort — both agent CLIs name their model by llm-zoo reference
-// ============================================================================
-
-/** The picker's models: the eligible ones that are not deprecated, in registry order. */
-function pickerModels(eligible: (config: ModelConfig) => boolean) {
-  const configs = Object.values(MODEL_CONFIGS).filter(
-    (config) => eligible(config) && config.deprecated !== true,
+/** The eligible models that are not deprecated, by reference, in registry
+ *  order: what a tool's `model` input lists. */
+const currentModels = (
+  eligible: (config: ModelConfig) => boolean,
+): readonly ModelRef[] =>
+  Object.freeze(
+    Object.values(MODEL_CONFIGS)
+      .filter((config) => eligible(config) && config.deprecated !== true)
+      .map((config) => config.ref),
   );
-  return {
-    schema: Schema.Literals(configs.map((config) => config.ref)),
-    choices: Object.freeze(
-      Object.fromEntries(
-        configs.map((config) => [
-          config.ref,
-          Object.freeze({ label: config.label }),
-        ]),
-      ),
-    ),
-  };
-}
 
-const claudeCodeModels = pickerModels(isClaudeCodeModel);
-const codexModels = pickerModels(isCodexModel);
+/** The current models the `claude_code` tool's `model` input lists. */
+export const CLAUDE_AGENT_MODELS = currentModels(isClaudeCodeModel);
+/** The current models the `codex` tool's `model` input lists. */
+export const CODEX_MODELS = currentModels(isCodexModel);
 
-/** The Claude Code model setting: a bare reference; effort is its own setting. */
-export const ClaudeAgentModelSchema = claudeCodeModels.schema;
-const CLAUDE_AGENT_DEFAULT_MODEL: ModelRef = 'anthropic/claude-sonnet-5-5';
+/** The model a Claude Code call runs when it names none. */
+export const CLAUDE_AGENT_DEFAULT_MODEL: ModelRef =
+  'anthropic/claude-sonnet-5-5';
 
-/** The Codex model setting: a bare reference; effort is its own setting. */
-const CodexModelSchema = codexModels.schema;
 /**
- * The newest Codex model. llm-zoo records no release date, so "newest" is
- * not derivable from the registry; `PinnedModels.vitest.ts` decodes it
- * through the picker's schema.
+ * The model a Codex call runs when it names none: the newest Codex model. llm-zoo records no release
+ * date, so "newest" is not derivable from the registry;
+ * `PinnedModels.vitest.ts` checks it is live.
  */
-const CODEX_DEFAULT_MODEL: ModelRef = 'openai/gpt-6.1-sol';
+export const CODEX_DEFAULT_MODEL: ModelRef = 'openai/gpt-6.1-sol';
 
 /**
- * The saved effort level for either agent CLI, passed to the reasoning policy
- * as the user's level: the tool call's or model string's own effort wins, and
- * a level the model lacks is snapped to the nearest one it has.
- * `claudeAgentShared.ts` guards this against the Claude SDK's `EffortLevel`
- * and `codexConfig.ts` against the Codex SDK's `ModelReasoningEffort`.
+ * An effort level either agent CLI takes. A level the model lacks is snapped
+ * to the nearest one it has. `claudeAgentShared.ts` guards this against the
+ * Claude SDK's `EffortLevel` and `codexConfig.ts` against the Codex SDK's
+ * `ModelReasoningEffort`.
  */
 export const AgentCliEffortSchema = Schema.Literals([
   ReasoningEffort.LOW,
@@ -72,23 +55,3 @@ export const AgentCliEffortSchema = Schema.Literals([
   ReasoningEffort.MAX,
 ]);
 export type AgentCliEffort = typeof AgentCliEffortSchema.Type;
-
-/** Value facts of the settings rows: the schema with its default, and the picker labels. */
-export const CLAUDE_AGENT_MODEL_VALUES = Object.freeze({
-  schema: decodingDefault(ClaudeAgentModelSchema, CLAUDE_AGENT_DEFAULT_MODEL),
-  choices: claudeCodeModels.choices,
-});
-export const CODEX_MODEL_VALUES = Object.freeze({
-  schema: decodingDefault(CodexModelSchema, CODEX_DEFAULT_MODEL),
-  choices: codexModels.choices,
-});
-export const AGENT_CLI_EFFORT_VALUES = Object.freeze({
-  schema: decodingDefault(AgentCliEffortSchema, DEFAULT_EFFORT),
-  choices: Object.freeze({
-    [ReasoningEffort.LOW]: Object.freeze({ label: 'Low' }),
-    [ReasoningEffort.MEDIUM]: Object.freeze({ label: 'Medium' }),
-    [ReasoningEffort.HIGH]: Object.freeze({ label: 'High' }),
-    [ReasoningEffort.XHIGH]: Object.freeze({ label: 'Extra high' }),
-    [ReasoningEffort.MAX]: Object.freeze({ label: 'Maximum' }),
-  }) satisfies Record<AgentCliEffort, SettingChoiceCopy>,
-});

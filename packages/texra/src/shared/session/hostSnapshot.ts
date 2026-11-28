@@ -7,15 +7,8 @@
  * harness passes literals. A schema because it crosses the bridge.
  */
 import { Schema } from 'effect';
-import {
-  getBasename,
-  ApprovalPolicySchema,
-  APPROVAL_POLICY_DEFAULT,
-  DeclinableUsageRouteSchema,
-  NonNegativeIntSchema,
-  PlanQuotaFailureSchema,
-} from '@texra-ai/worldline/schemas';
-import { SubscriptionUsageWindowSchema } from '@texra/shared/model/subscriptionUsage';
+import { getBasename } from '@texra-ai/worldline/schemas';
+import { PlanUsageSchema } from '@texra/shared/model/subscriptionUsage';
 import { ModelOptionDataSchema } from '@texra/shared/pickerOptions';
 
 /** Open workspace folder offered as a run working directory. */
@@ -73,26 +66,6 @@ const OnboardingFunnelStateSchema = Schema.Literals([
 ]);
 export type OnboardingFunnelState = typeof OnboardingFunnelStateSchema.Type;
 
-/**
- * What the process knows of one subscription plan's quota: its windows as
- * last learned and when, or why none is known. `unobserved` is a plan whose
- * replies state its quota and none has arrived in this process yet.
- */
-const PlanUsageSchema = Schema.Struct({
-  plan: DeclinableUsageRouteSchema,
-  /** The plan's tier as its provider names it, when it says: plans of one
-   *  route differ in their windows and limits, so the name is the
-   *  provider's and no window is assumed. */
-  planName: Schema.optional(Schema.NonEmptyString),
-  windows: Schema.Array(SubscriptionUsageWindowSchema),
-  /** When the windows were learned, in epoch milliseconds. */
-  at: Schema.optional(NonNegativeIntSchema),
-  unknown: Schema.optional(
-    Schema.Literals(['unobserved', ...PlanQuotaFailureSchema.literals]),
-  ),
-});
-export type PlanUsage = typeof PlanUsageSchema.Type;
-
 export const HostSnapshotSchema = Schema.Struct({
   project: ProjectDisplaySchema,
   modelOptions: Schema.Array(ModelOptionDataSchema),
@@ -107,8 +80,6 @@ export const HostSnapshotSchema = Schema.Struct({
     terminalOutput: Schema.Array(Schema.String),
   }),
   workspaceRoots: Schema.Array(WorkspaceRootOptionDataSchema),
-  /** The project's configured policy, shown before a task is launched. */
-  approvalPolicy: ApprovalPolicySchema,
   /** The one recorder per process and where its take is going. */
   recording: Schema.NullOr(
     Schema.Struct({ session: Schema.String, target: Schema.String }),
@@ -129,13 +100,10 @@ export const HostSnapshotSchema = Schema.Struct({
      *  service was out of reach when it opened. Null while a service
      *  window's service is reached, and for a window with no folder. */
     service: Schema.NullOr(
-      Schema.Union([
-        Schema.Struct({
-          kind: Schema.Literal('offline'),
-          reason: Schema.String,
-        }),
-        Schema.Struct({ kind: Schema.Literal('local'), reason: Schema.String }),
-      ]),
+      Schema.Struct({
+        kind: Schema.Literals(['offline', 'local']),
+        reason: Schema.String,
+      }),
     ),
   }),
   onboarding: OnboardingFunnelStateSchema,
@@ -149,7 +117,6 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     planUsage: [],
     tools: { icons: {}, terminalOutput: [] },
     workspaceRoots: [],
-    approvalPolicy: APPROVAL_POLICY_DEFAULT,
     recording: null,
     banners: {
       apiKey: false,

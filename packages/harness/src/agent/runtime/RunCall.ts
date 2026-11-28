@@ -128,8 +128,6 @@ export interface RunCallShape {
   /** The response whose call this is; a script's calls are its script's.
    *  A provider's call ids are unique within one response only. */
   readonly responseId: string;
-  /** The user instruction that response answers. */
-  readonly instruction: string | undefined;
   /** The intent attempt this execution of the call runs under: 1, then
    *  one more for each re-run a resume accepted. */
   readonly attempt: number;

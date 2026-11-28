@@ -1,5 +1,6 @@
 import { Schema } from 'effect';
 import {
+  DeclinableUsageRouteSchema,
   NonNegativeIntSchema,
   PlanQuotaFailureSchema,
 } from '@texra-ai/worldline/schemas';
@@ -31,27 +32,32 @@ export const SubscriptionUsageWindowSchema = Schema.Struct({
 export type SubscriptionUsageWindow =
   (typeof SubscriptionUsageWindowSchema)['Type'];
 
-const SubscriptionUsageSnapshotSchema = Schema.Union([
-  Schema.Struct({
-    state: Schema.Literal('available'),
-    providerName: Schema.NonEmptyString,
-    planName: Schema.NonEmptyString,
-    fetchedAt: NonNegativeIntSchema,
-    windows: Schema.Array(SubscriptionUsageWindowSchema).check(
-      Schema.isMinLength(1),
-    ),
-  }),
-  Schema.Struct({
-    state: Schema.Literal('unavailable'),
-    reason: PlanQuotaFailureSchema,
-  }),
-]);
-export type SubscriptionUsageSnapshot =
-  (typeof SubscriptionUsageSnapshotSchema)['Type'];
+/**
+ * What the process knows of one subscription plan's quota: its windows as
+ * last learned and when, or why none is known. `unobserved` is a plan whose
+ * replies state its quota and none has arrived in this process yet. The one
+ * record every meter reads: the status bar's, the settings page's and the
+ * terminal's.
+ */
+export const PlanUsageSchema = Schema.Struct({
+  plan: DeclinableUsageRouteSchema,
+  /** The plan's tier as its provider names it, when it says: plans of one
+   *  route differ in their windows and limits, so the name is the
+   *  provider's and no window is assumed. */
+  planName: Schema.optional(Schema.NonEmptyString),
+  windows: Schema.Array(SubscriptionUsageWindowSchema),
+  /** When the windows were learned, in epoch milliseconds. */
+  at: Schema.optional(NonNegativeIntSchema),
+  unknown: Schema.optional(
+    Schema.Literals(['unobserved', ...PlanQuotaFailureSchema.literals]),
+  ),
+});
+export type PlanUsage = typeof PlanUsageSchema.Type;
 
+/** Each coding plan's usage, by the provider that reports it. */
 export const SubscriptionUsageSnapshotsSchema = Schema.Record(
   SubscriptionUsageProviderSchema,
-  SubscriptionUsageSnapshotSchema,
+  PlanUsageSchema,
 );
 export type SubscriptionUsageSnapshots =
   (typeof SubscriptionUsageSnapshotsSchema)['Type'];

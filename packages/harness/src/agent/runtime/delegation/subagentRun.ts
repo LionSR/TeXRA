@@ -102,21 +102,6 @@ export function delegatedChildGrants(
   }
 }
 
-/** A value the person's approval changed: the one chosen over the one
- *  proposed. */
-interface ApprovalOverride {
-  readonly chosen: string;
-  readonly proposed: string;
-}
-
-/** How the delegation was approved, included in the tool result. */
-export interface ApprovalMeta {
-  /** How the child's own grants record the approval: `inherit` is a
-   *  person's approval, any other an approval bypass. */
-  readonly childApproval: DelegatedChildApproval;
-  readonly model?: ApprovalOverride;
-}
-
 /**
  * Launch one background child of `call` under `runId` and return the
  * receipt the model reads: the child's report arrives later as a
@@ -130,7 +115,12 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     runId: RunId,
     childConfig: AgentConfig,
     registration: ChildRegistration,
-    approvalMeta: ApprovalMeta,
+    /** How the child's own grants record the approval: `inherit` is a
+     *  person's approval, any other an approval bypass. */
+    childApproval: DelegatedChildApproval,
+    /** The model the delegation proposed, which the person's approval may
+     *  have changed. */
+    proposedModel: string,
   ) {
     const agentName = childConfig.label;
     // Like every child, it ends with its reply, and a follow-up to it is
@@ -142,19 +132,18 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       identity: { kind: 'agent', agent: definition.config.label },
       parent: childOf(call, false),
     });
-    const model = approvalMeta.model
-      ? `${approvalMeta.model.chosen} (overridden from ${approvalMeta.model.proposed})`
-      : childConfig.model;
+    const model =
+      childConfig.model === proposedModel
+        ? childConfig.model
+        : `${childConfig.model} (overridden from ${proposedModel})`;
     const approval =
-      approvalMeta.childApproval === 'inherit'
-        ? 'user-approved'
-        : 'auto-approved';
+      childApproval === 'inherit' ? 'user-approved' : 'auto-approved';
     return executed(
       [
         `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
         `Run ID: ${runId}`,
         `Approval: ${approval}. Model: ${model}.`,
-        `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
+        `To check progress: executions tool with path=/executions/${runId}; action=wait waits for it.`,
         `To send follow-up instructions once it has reported: executions tool, action=send, path=/executions/${runId}; it continues from where it ended and reports again.`,
       ].join('\n'),
       `Launched '${agentName}' (async)`,

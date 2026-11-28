@@ -33,10 +33,8 @@ import {
   ALL_RUNS,
   tail,
 } from '@test/shared/session/fanOutScenario';
-import type {
-  PlanUsage,
-  ProjectDisplay,
-} from '@texra/shared/session/hostSnapshot';
+import type { PlanUsage } from '@texra/shared/model/subscriptionUsage';
+import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import { emptySurface, type Surface } from '@texra/shared/session/surface';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -158,7 +156,6 @@ const rail = (projects: readonly RailProject[], shell: Shell) =>
       projects,
       recent: [],
       shell,
-      commandsLabel: 'Commands',
       commandsTitle: 'Commands - ⌘K',
     },
     sidebarCallbacks,

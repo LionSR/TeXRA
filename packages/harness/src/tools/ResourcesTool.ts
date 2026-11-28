@@ -78,7 +78,7 @@ const modelsNow = Effect.fn('resources.models')(function* (call: RunToolCall) {
 
 const windowOf = (window: PlanUsageWindow) => ({
   name: window.name,
-  remainingPercent: window.percentRemaining,
+  remainingPercent: 100 - window.percentUsed,
   ...(window.resetAt !== undefined && {
     resetsAt: formatLocalTime(window.resetAt),
   }),

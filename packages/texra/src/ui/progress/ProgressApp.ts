@@ -49,6 +49,7 @@ import {
 } from '@ui/wa/actionButtons';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
+import { commandCatalogById } from '@texra/shared/commands/catalog';
 import { requestErrorText } from '@ui/copy/requestErrors';
 
 // Local imports - progress view frontend
@@ -111,7 +112,7 @@ export class ProgressApp extends LitElement {
           }
         : {
             icon: 'picture-in-picture',
-            label: 'Open tasks in editor',
+            label: commandCatalogById['texra.openProgressViewInTab'].title,
             activate: host('popOut'),
           },
     ];
@@ -198,11 +199,12 @@ export class ProgressApp extends LitElement {
       pressed: surface.drawerOpen,
       onClick: this.toggleDrawer,
     });
+    const newTaskTitle = commandCatalogById['texra.showMainView'].title;
     const newTask = renderIconActionButtonParts({
       id: 'shell-new-task',
       icon: 'plus',
-      label: 'New task',
-      tooltip: 'New task',
+      label: newTaskTitle,
+      tooltip: newTaskTitle,
       slot: 'end',
       onClick: this.selectNew,
     });
@@ -296,7 +298,7 @@ export class ProgressApp extends LitElement {
           ${renderLabeledActionButton({
             id: 'onboardingRunSetupButton',
             icon: 'rocket',
-            text: 'Run setup assistant',
+            text: commandCatalogById['texra.runSetupAssistant'].title,
             kind: 'primary',
             onClick: () => this.onboarding('runSetup'),
           })}

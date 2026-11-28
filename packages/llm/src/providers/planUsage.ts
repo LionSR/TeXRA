@@ -32,7 +32,6 @@ export interface PlanUsageWindow {
   /** The provider's own name for the window (`five_hour`, `glm-4.6:weekly`). */
   readonly name: string;
   readonly percentUsed: number;
-  readonly percentRemaining: number;
   /** When the window resets, in epoch milliseconds. */
   readonly resetAt?: number;
   /** How long the window is, in minutes, when the provider says. */
@@ -267,7 +266,6 @@ function usageWindow(
   return {
     name,
     percentUsed,
-    percentRemaining: 100 - percentUsed,
     ...(resetAt !== undefined ? { resetAt } : {}),
   };
 }

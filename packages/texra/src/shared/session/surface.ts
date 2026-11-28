@@ -68,11 +68,6 @@ export const LaunchSurfaceSchema = FileFieldsSchema.mapFields(
      *  ({@link chatOf}), which its launch starts again; null, the entry
      *  agent. A new task clears it. */
     chat: decodingDefault(Schema.NullOr(ChatLaunchSchema), null),
-    /** Per-task approval, applied at launch by `launchApprovalOptions`. */
-    approval: decodingDefault(
-      Schema.Literals(['policy', 'autoApprove']),
-      'policy',
-    ),
   }),
 );
 type LaunchSurface = typeof LaunchSurfaceSchema.Type;

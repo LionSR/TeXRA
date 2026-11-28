@@ -31,8 +31,12 @@ function PlainEntryRows({
   readonly fillWidth?: boolean;
   readonly layout: TranscriptEntryLayout;
 }): React.JSX.Element {
-  // User turns are full-width inverse bands in both static and live panes.
-  const shouldFill = fillWidth === true || entry.kind === 'user';
+  // The person's turns are full-width inverse bands in both static and live
+  // panes. A message another run, a notice or the run's own note sent is
+  // not the person's: it prints dim, under its sender.
+  const own = entry.kind === 'user' && entry.sender === undefined;
+  const received = entry.kind === 'user' && entry.sender !== undefined;
+  const shouldFill = fillWidth === true || own;
   const lines = shouldFill
     ? fillRows(layout.lines.join('\n'), layout.columns).split('\n')
     : layout.lines;
@@ -55,8 +59,10 @@ function PlainEntryRows({
     <Box {...boxProps}>
       <Text
         color={rowColor}
-        dimColor={entry.kind === 'log' && entry.origin === 'local'}
-        inverse={entry.kind === 'user'}
+        dimColor={
+          received || (entry.kind === 'log' && entry.origin === 'local')
+        }
+        inverse={own}
       >
         {lines.join('\n')}
       </Text>
@@ -75,7 +81,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   /** The row printed directly above this one, so its bottom separator can
    *  absorb this row's top one. Yoga does not collapse margins. */
   readonly previousEntry?: TranscriptRow;
-  readonly width?: number;
+  readonly width: number;
 }): React.JSX.Element {
   if (entry.kind === 'tool') {
     return <ToolUseRow toolRow={entry} width={width} />;
@@ -121,7 +127,7 @@ export const LiveTranscriptEntry = memo(function LiveTranscriptEntry({
 }: {
   readonly entry: TranscriptRow;
   readonly maxRows?: number;
-  readonly width?: number;
+  readonly width: number;
 }): React.JSX.Element {
   if (entry.kind === 'tool') {
     return <ToolUseRow maxRows={maxRows} toolRow={entry} width={width} />;

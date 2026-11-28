@@ -29,8 +29,6 @@ import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 export interface ProjectSurface {
   /** The settings surface of the project the window is bound to. */
   settings(): DesktopSettingsIpc | undefined;
-  /** The project the window is bound to. */
-  attached(): DesktopProject | undefined;
   /**
    * Bind the window to the project it shows. The old settings IPC is detached
    * first, so an attach that fails partway leaves settings messages
@@ -87,12 +85,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         dialogs: {
           notify: (level, message) => dialogs.notify(level, message),
           confirm: (question) => dialogs.confirm(question),
-          input: (field) =>
-            options.promptController.request({
-              title: field.prompt,
-              prompt: field.prompt,
-              password: field.secret,
-            }),
+          input: options.promptController.request,
         },
         // The one browser hand-off every settings URL takes. Its failure
         // reaches the settings body's own report, so the opener shows no
@@ -145,7 +138,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
 
     return {
       settings: () => settings,
-      attached: () => attached,
       attach,
       reattach: () =>
         Effect.suspend(() => {

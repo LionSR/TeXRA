@@ -21,7 +21,6 @@ import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { StepToolInputs } from '@agent/runtime/agentToolResolution';
-import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import {
   ModelAccess,
   modelAccessLayer,
@@ -73,9 +72,7 @@ interface LaunchEntry {
    *  history a fork is seeded with; null on a resume, whose cell activates
    *  the run its rows hold. */
   readonly fresh: {
-    readonly registration: Registration & {
-      readonly start: NonNullable<Registration['start']>;
-    };
+    readonly registration: Registration;
     readonly seed?: RegisterRunOptions['seed'];
   } | null;
   /** Run `commit`, the batch that enters the run, uninterruptibly: the
@@ -112,9 +109,6 @@ export interface RunLaunch {
   readonly toolPolicy: ToolPolicy;
   /** Absolute or absent, parsed once at launch. */
   readonly workingDirectory?: string;
-  /** What the run opens from; null on a resume, whose rows hold its
-   *  opening, which it never renders again. */
-  readonly opening: TemplateOpening | null;
   /** How the launch enters the run's cell. */
   readonly entry: LaunchEntry;
 }

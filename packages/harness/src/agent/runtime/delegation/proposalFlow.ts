@@ -33,13 +33,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 
 // Local file imports
-import type { ApprovalMeta, DelegatedChildApproval } from './subagentRun';
-
-const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
-  'No feedback provided.',
-  'Do not retry the same or equivalent delegation unless the user explicitly asks for it;',
-  'continue directly with available context, or ask the user a clarifying question.',
-].join(' ');
+import type { DelegatedChildApproval } from './subagentRun';
 
 /** Build a concise summary of proposal parameters for rejection echo. */
 function summarizeProposal(proposal: AgentProposal): string {
@@ -79,9 +73,7 @@ function proposalRefusalResult(
     }
     case 'reject': {
       const feedback = refusal.feedback?.trim();
-      const feedbackLine = feedback
-        ? `\nUser feedback: ${feedback}`
-        : `\n${DEFAULT_DELEGATION_REJECTION_FEEDBACK}`;
+      const feedbackLine = feedback ? `\nUser feedback: ${feedback}` : '';
       return errorResult(
         `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
         { summary: `User rejected delegation to '${agentName}'` },
@@ -202,7 +194,9 @@ function formEdits(
  *  approval finished on, and how it was approved. */
 interface ApprovedDelegation {
   readonly proposal: AgentProposal;
-  readonly approvalMeta: ApprovalMeta;
+  /** How the child's own grants record the approval: `inherit` is a
+   *  person's approval, any other an approval bypass. */
+  readonly childApproval: DelegatedChildApproval;
 }
 
 /**
@@ -223,7 +217,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
     return {
       proposal,
-      approvalMeta: { childApproval: decision.childApproval },
+      childApproval: decision.childApproval,
     } satisfies ApprovedDelegation;
   }
 
@@ -267,11 +261,6 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
       ...edited,
       ...(modelOverride && { model: modelOverride }),
     },
-    approvalMeta: {
-      childApproval: 'inherit',
-      ...(modelOverride && {
-        model: { chosen: modelOverride, proposed: proposal.model },
-      }),
-    },
+    childApproval: 'inherit',
   } satisfies ApprovedDelegation;
 });

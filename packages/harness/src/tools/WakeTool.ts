@@ -25,7 +25,7 @@ import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
 import { ToolError, type RunId } from '@shared/schemas';
 import { conversationOf } from '@tools/codemode/SelfTool';
 import { defineTool } from '@tools/core/definition';
-import { nullishWithDefault } from '@tools/core/inputSchema';
+import { nullishWithDefault, optionalInput } from '@tools/core/inputSchema';
 import {
   formatCompactDuration,
   formatLocalTime,
@@ -54,23 +54,18 @@ const WakeInputSchema = Schema.Union([
       description:
         'What you will read when the time comes. Write it for a reader who remembers nothing of why it was set: what to check or do, and what to do next.',
     }),
-    afterSeconds: Schema.optional(
-      Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
-    ).annotate({
-      description: `Seconds from now, at least ${MIN_DELAY_SECONDS}. Give this or \`at\`.`,
-    }),
-    at: Schema.optional(
-      Schema.NullOr(
-        Schema.String.check(
-          Schema.isPattern(
-            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/,
-          ),
+    afterSeconds: optionalInput(
+      Schema.Int.check(Schema.isGreaterThan(0)),
+      `Seconds from now, at least ${MIN_DELAY_SECONDS}. Give this or \`at\`.`,
+    ),
+    at: optionalInput(
+      Schema.String.check(
+        Schema.isPattern(
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/,
         ),
       ),
-    ).annotate({
-      description:
-        'A time as ISO 8601 with its UTC offset (`2030-01-31T09:00:00Z`, `2030-01-31T09:00:00+01:00`), without the zone name in brackets that times are shown with. Give this or `afterSeconds`.',
-    }),
+      'A time as ISO 8601 with its UTC offset (`2030-01-31T09:00:00Z`, `2030-01-31T09:00:00+01:00`), without the zone name in brackets that times are shown with. Give this or `afterSeconds`.',
+    ),
   }),
   Schema.Struct({
     command: Schema.Literal('list').annotate({

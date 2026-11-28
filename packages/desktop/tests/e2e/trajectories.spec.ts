@@ -72,47 +72,6 @@ test.afterAll(async () => {
   if (launched) expect(launched.rendererErrors).toEqual([]);
 });
 
-test('approval menu shows the current policy and keeps selection marks inside its rows', async () => {
-  const { page } = launched;
-  for (const [value, label] of [
-    ['ask', 'Ask'],
-    ['yolo', 'Auto-approve'],
-  ] as const) {
-    await setSettingsTab(launched, 'general');
-    await page.locator('[data-section="approval"]').click();
-    const policy = page.locator('#texra-approval-policy');
-    await policy.locator(`wa-radio[value="${value}"]`).click();
-    await expect(policy).toHaveJSProperty('value', value);
-    await page.locator('.desktop-settings-close').click();
-    await showLauncher(launched);
-    const trigger = page.locator('#composer-approval');
-    await expect(trigger).toContainText(label);
-    await trigger.click();
-    const selected = page.locator(
-      'session-composer wa-dropdown-item[value="approval:policy"]',
-    );
-    await expect(selected).toBeVisible();
-    await expect(selected).toHaveJSProperty('checked', true);
-    await expect(selected).toContainText(`Use settings · ${label}`);
-    const contained = await selected.evaluate((item) => {
-      const check = item.shadowRoot?.querySelector('#check');
-      if (!check) throw new Error('The selection mark was not rendered.');
-      const row = item.getBoundingClientRect();
-      const mark = check.getBoundingClientRect();
-      return mark.left >= row.left && mark.right <= row.right;
-    });
-    expect(contained).toBe(true);
-    await page.screenshot({
-      path: test.info().outputPath(`approval-${value}.png`),
-    });
-    await page.keyboard.press('Escape');
-  }
-});
-
-/**
- * Trajectory 3 — the Memory tab offers the two memory folders, whose notes
- * are ordinary files a person opens from there.
- */
 test('the Memory tab offers both memory folders', async () => {
   await setSettingsTab(launched, 'memory');
   const tab = launched.page.locator('memory-tab');

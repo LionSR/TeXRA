@@ -11,6 +11,7 @@ import {
   listCliEnabledModelCatalog,
   setCliModelEnabled,
 } from '../runtime/models/enabledModels';
+import { unknownCliModelMessage } from '../runtime/platform/cliConfig';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
@@ -22,7 +23,6 @@ import {
   formatNoListableModelsMessage,
   listableModelAccessEntries,
   loadCliModelAccessEntry,
-  type CliModelListOptions,
 } from '../runtime/models/modelAccess';
 
 import { boolFlag, cliCommand } from './_helpers/cliCommand';
@@ -48,17 +48,17 @@ function reportModelPlatformFailure(cause: unknown): number {
 
 const listModels = Effect.fn('listModels')(function* (
   context: CliContext,
-  options: CliModelListOptions,
+  includeUnavailable: boolean,
 ) {
   const services = yield* cliPlatform;
   const models = yield* loadModelOptions(
     services,
-    options.includeUnavailable === true ? MODELS : undefined,
+    includeUnavailable ? MODELS : undefined,
   );
 
-  const listedModels = listableModelAccessEntries(models, options);
+  const listedModels = listableModelAccessEntries(models, includeUnavailable);
   if (context.outputFormat === 'text' && listedModels.length === 0) {
-    writeTextStderr(formatNoListableModelsMessage(options));
+    writeTextStderr(formatNoListableModelsMessage(includeUnavailable));
   }
   const records = listedModels.map(cliModelRecord);
   yield* emitPagedCliResult(
@@ -79,7 +79,7 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
   const entry = yield* loadCliModelAccessEntry(id, services);
 
   if (!entry) {
-    return yield* failUsage(`Model not found: ${id}`);
+    return yield* failUsage(unknownCliModelMessage(id));
   }
 
   // A reference with `@effort` or `+mode` is valid when a run's bind takes
@@ -104,8 +104,7 @@ const modelsListCommand = cliCommand('list', {
   config: {
     all: boolFlag('all', 'Include unavailable models with their access status'),
   },
-  run: (context, input) =>
-    listModels(context, { includeUnavailable: input.all }),
+  run: (context, input) => listModels(context, input.all),
   catchExitCode: reportModelPlatformFailure,
 });
 

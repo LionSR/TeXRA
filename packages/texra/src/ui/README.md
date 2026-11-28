@@ -21,9 +21,9 @@ supervise each step. Every surface serves one of these:
 - **Made for the person.** The rail, the statuses and the usage meters
   answer a person's questions: what is running, what needs me, what
   finished, what it costs. Autonomy has one vocabulary, the approval
-  policy's: Ask / Auto-approve. The composer's Approval chip follows the
-  policy by default, or auto-approves this task alone. The run header shows that switch for as
-  long as the run lives. Every failure the person must act on is shown where
+  policy's: Ask / Auto-approve, set in Settings. Under Ask, a request card
+  grants a kind of work for the task, and the run header shows that grant
+  for as long as the run lives. Every failure the person must act on is shown where
   it happened.
 
 ## Layers
@@ -92,6 +92,14 @@ supervise each step. Every surface serves one of these:
   `triangle-exclamation` (`TONE_GLYPH`, `copy/runStatus.ts`). A log level's icon
   and word come from `copy/logLevels.ts`, a run status's from
   `copy/runStatus.ts`.
+- **Status badges.** A badge or tag that shows a status takes its variant
+  from the status's tone (`toneVariant`, `wa/waVariant.ts`) and its glyph
+  from `statusGlyph`; it names neither directly.
+- **File links.** A file path that opens its file is `buildFileLinkSpan`,
+  and the view's delegated click reads it with `fileLinkTarget`
+  (`progress/formatters/htmlBuilders.ts`).
+- **Fact separators.** Facts on one line are joined by `joinFacts` when they
+  are strings and by `factDot()` (`wa/factDot.ts`) when they are elements.
 - **Disclosure toggles.** A button that opens a section passes `expanded`
   and names no icon: the helper draws the chevron, which turns while open.
 - **Icons and menus.** `waIcon()` uses a square canvas. Dropdown items reserve

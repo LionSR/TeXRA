@@ -151,24 +151,6 @@ export const unsupportedStreamEvent = (
   });
 
 /**
- * Fails when `raw` is a stream event whose `key` names a type outside
- * `known`. The provider sends that event again on every repeat of the
- * request, so the failure is not retried; a malformed event of a known type
- * still is.
- */
-export const refuseUnknownEvent = (
-  provider: string,
-  key: string,
-  known: ReadonlySet<string>,
-  raw: unknown,
-): Effect.Effect<void, ModelError> => {
-  const type = Predicate.hasProperty(raw, key) ? raw[key] : undefined;
-  return typeof type !== 'string' || known.has(type)
-    ? Effect.void
-    : Effect.fail(unsupportedStreamEvent(provider, type));
-};
-
-/**
  * Decodes one raw wire value with `schema`, failing as the provider's
  * rejection with `message` when it does not match. The process did not author provider
  * output, so a mismatch is the model's; the parse failure rides along as the
@@ -189,6 +171,30 @@ export const decodeWireOrFail = <A>(
         }),
     ),
   );
+
+/**
+ * Decodes one stream event with `schema`, a union tagged by the field that
+ * names an event's type (`Schema.toTaggedUnion`). An event whose type the
+ * union does not name is refused as not retryable: the provider sends it
+ * again on every repeat of the request. A malformed event of a named type
+ * is the provider's rejection with `message`, as {@link decodeWireOrFail}.
+ */
+export const decodeStreamEvent = <A>(
+  provider: string,
+  schema: Schema.Codec<A, unknown> & {
+    readonly tag: PropertyKey;
+    readonly discriminants: ReadonlyArray<PropertyKey>;
+  },
+  message: string,
+  raw: unknown,
+): Effect.Effect<A, ModelError> => {
+  const type = Predicate.hasProperty(raw, schema.tag)
+    ? raw[schema.tag]
+    : undefined;
+  return typeof type !== 'string' || schema.discriminants.includes(type)
+    ? decodeWireOrFail(schema, message, raw)
+    : Effect.fail(unsupportedStreamEvent(provider, type));
+};
 
 /**
  * Waits out `pending` at scope close. A rejection is dropped only when it

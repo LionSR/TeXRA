@@ -56,7 +56,7 @@ import {
   setTransientNotice,
 } from './tui/state/cliState';
 import type { TuiSession } from './tui/state/sessionRunState';
-import { oneShotResumeNotice } from './tui/state/resumeHint';
+import { oneShotResumeNotice } from '../runtime/resumeCommand';
 import { currentView, runViewOf, sessionView } from './tui/state/sessionView';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import {
@@ -355,6 +355,39 @@ export function createChatSessionController(
   });
 
   /**
+   * Claim the chat's root launch and run `body` for it on its own fiber,
+   * owned by the process's shutdown scope, as the chat's sends are; then
+   * wait until the launch ends. A launch `body` leaves unended ends with
+   * `unended`. Completes with whether the claim was taken: false while
+   * another launch is on its way.
+   */
+  const claimRootLaunch = <R>(
+    body: (
+      launched: Deferred.Deferred<RunId | null>,
+    ) => Effect.Effect<void, never, R>,
+    unended: CliExitCode,
+  ): Effect.Effect<boolean, never, R> =>
+    // The claim and the fork of the program that ends it are one
+    // uninterruptible step: an interrupted caller never leaves a launch
+    // that nothing will end. Only the wait for the launch is interruptible.
+    Effect.uninterruptibleMask((restore) =>
+      Effect.suspend(() => {
+        const launched = session.claimLaunch();
+        if (launched === undefined) return Effect.succeed(false);
+        return body(launched).pipe(
+          Effect.ensuring(
+            Effect.sync(() =>
+              session.endLaunch(launched, { exitCode: unended }),
+            ),
+          ),
+          Effect.forkIn(untilShutdown.scope),
+          Effect.andThen(restore(Deferred.await(launched))),
+          Effect.as(true),
+        );
+      }),
+    );
+
+  /**
    * The one root-run launch: claims the root launch, then prepares and
    * starts the run on its own fiber, so a message typed while the model is
    * chosen already sees the launch. `shownInstruction` goes to the
@@ -365,15 +398,10 @@ export function createChatSessionController(
     resolveConfig: Effect.Effect<AgentConfigPayload, Error, R>,
     shownInstruction: string,
   ): Effect.Effect<boolean, never, R | ProcessServices> =>
-    // The claim and the fork of the program that ends it are one
-    // uninterruptible step: an interrupted caller never leaves a launch
-    // that nothing will end. Only the wait for the launch is interruptible.
-    Effect.uninterruptibleMask((restore) =>
-      Effect.suspend(() => {
-        const launched = session.claimLaunch();
-        if (launched === undefined) return Effect.succeed(false);
+    Effect.suspend(() => {
+      let held = false;
+      return claimRootLaunch((launched) => {
         const runId = generateRunId();
-        let held = false;
         // A configuration that cannot be prepared has no launch to show its
         // failure: it shows here, below the instruction it was typed for,
         // which a configuration that never resolved has not shown yet.
@@ -404,7 +432,6 @@ export function createChatSessionController(
           focusRun(run.runId);
           return { runId: run.runId, result: yield* handOver(launched, run) };
         });
-        // Owned by the process's shutdown scope, as the chat's sends are.
         // Every typed failure was shown where it arose; a defect is shown
         // here.
         return recoverRun(launch.pipe(Effect.tapDefect(showFailure)), () =>
@@ -420,17 +447,9 @@ export function createChatSessionController(
                   reportHeldRunFailure(run.runId, error),
                 ),
           ),
-          Effect.ensuring(
-            Effect.sync(() =>
-              session.endLaunch(launched, { exitCode: CliExitCode.Success }),
-            ),
-          ),
-          Effect.forkIn(untilShutdown.scope),
-          Effect.andThen(restore(Deferred.await(launched))),
-          Effect.map(() => held),
         );
-      }),
-    );
+      }, CliExitCode.Success).pipe(Effect.map(() => held));
+    });
 
   // -----------------------------------------------------------------------
   // resume
@@ -439,117 +458,105 @@ export function createChatSessionController(
   // The user's resume of a conversation they pick. Config is adopted once
   // the session accepted the resumed run.
   const resume = (id: RunId): Effect.Effect<void, Error, ProcessServices> =>
-    // The claim and the fork of the program that ends it are one
-    // uninterruptible step, as a launch's are.
-    Effect.uninterruptibleMask((restore) =>
-      Effect.suspend(() => {
-        const launched = session.claimLaunch();
-        if (launched === undefined) {
-          appendLocalNotice(
-            'Finish the active task before resuming a previous one.',
-          );
-          return Effect.void;
-        }
-        const endWithout = (exitCode: CliExitCode) =>
-          Effect.sync(() => session.endLaunch(launched, { exitCode }));
-        const attemptResume = Effect.gen(function* () {
-          // The durable record carries the config the TUI adopts before the run.
-          const store = init.runSession.records(id);
-          const [config, exists] = yield* Effect.all(
-            [store.readConfig, store.exists],
-            { concurrency: 2 },
-          );
-          if (!config || !exists) {
-            appendLocalErrorTranscript(taskNotFoundText(id, cwd));
-            yield* endWithout(CliExitCode.Usage);
-            return;
-          }
-          // A program run takes no chat: it resumes beside this one, as
-          // `/resume all` resumes it, and joins the agent list.
-          if (programOf(config) !== null) {
-            appendLocalNotice(`Resuming program run ${id}. Tab lists it.`);
-            yield* endWithout(CliExitCode.Success);
-            // Owned by the process's shutdown scope, as the chat's own
-            // resume is: an exit interrupts a resume still on its way.
-            yield* Effect.forkIn(
-              resumeTask(id).pipe(
-                Effect.catch((refusal) =>
-                  Effect.sync(() => appendLocalRequestRefusal(refusal, id)),
-                ),
-              ),
-              untilShutdown.scope,
-            );
-            return;
-          }
-          // Read from the log: at startup a service window's own view has
-          // not filled yet.
-          const stored = (yield* runSession.view.read([id])).runs.get(id);
-          const oneShot = oneShotResumeNotice(init.commandName, id, stored);
-          if (oneShot !== undefined) {
-            appendLocalErrorTranscript(oneShot);
-            yield* endWithout(CliExitCode.Usage);
-            return;
-          }
-
-          // A refusal is the resume's answer, not a failure: the chat says
-          // it in the session's words and exits as a usage error.
-          const run = yield* resumeRun(runSession, id).pipe(
-            Effect.catchIf(isRequestRefusal, (refusal) =>
-              Effect.succeed(refusal),
-            ),
-          );
-          if (isRequestRefusal(run)) {
-            appendLocalRequestRefusal(run);
-            yield* endWithout(CliExitCode.Usage);
-            return;
-          }
-          // Adopting the resumed stream is the mutation a refusal must not
-          // cost: it runs only once the session accepted the run, so a
-          // refusal reaches the chat the user is looking at instead of a
-          // cleared transcript switched onto a dead stream. The run resumed
-          // is the one asked for, or the parent that owns it.
-          const adoptedConfig =
-            run.runId === id
-              ? config
-              : yield* init.runSession.records(run.runId).readConfig;
-          if (adoptedConfig === null)
-            return yield* new Rejected({
-              reason: `Run ${run.runId} has no configuration to resume`,
-            });
-          adoptRunConfig(adoptedConfig, 'history');
-          clearLocalTranscript();
-          // The transcript and the work plan are the view's: the TUI
-          // subscribes the run's aggregate and renders `transcript.rows`, and
-          // an open `/plan` reader reads the same `RunView`.
-          focusRun(run.runId);
-          // A stop asked before this point lands on the run adopted here.
-          const result = yield* handOver(launched, run);
-          yield* recoverRun(Effect.asVoid(result), (error) =>
-            reportHeldRunFailure(run.runId, error),
-          );
-        });
-        // A defect reaches the transcript as a failure does. The program
-        // completes once the session holds the run, or the resume ended
-        // without one; the run itself goes on. Every path above ends the
-        // launch with its own code, so the `ensuring` counts only for a
-        // resume interrupted before it did (the chat is leaving).
-        return recoverRun(attemptResume, (error) =>
-          showFailure(error).pipe(
-            Effect.andThen(
-              Effect.sync(() =>
-                session.endLaunch(launched, {
-                  exitCode: CliExitCode.AgentError,
-                }),
-              ),
-            ),
-          ),
-        ).pipe(
-          Effect.ensuring(endWithout(CliExitCode.Interrupted)),
-          Effect.forkIn(untilShutdown.scope),
-          Effect.andThen(restore(Deferred.await(launched))),
-          Effect.asVoid,
+    claimRootLaunch((launched) => {
+      const endWithout = (exitCode: CliExitCode) =>
+        Effect.sync(() => session.endLaunch(launched, { exitCode }));
+      const attemptResume = Effect.gen(function* () {
+        // The durable record carries the config the TUI adopts before the run.
+        const store = init.runSession.records(id);
+        const [config, exists] = yield* Effect.all(
+          [store.readConfig, store.exists],
+          { concurrency: 2 },
         );
-      }),
+        if (!config || !exists) {
+          appendLocalErrorTranscript(taskNotFoundText(id, cwd));
+          yield* endWithout(CliExitCode.Usage);
+          return;
+        }
+        // A program run takes no chat: it resumes beside this one, as
+        // `/resume all` resumes it, and joins the agent list.
+        if (programOf(config) !== null) {
+          appendLocalNotice(`Resuming program run ${id}. Tab lists it.`);
+          yield* endWithout(CliExitCode.Success);
+          // Owned by the process's shutdown scope, as the chat's own
+          // resume is: an exit interrupts a resume still on its way.
+          yield* Effect.forkIn(
+            resumeTask(id).pipe(
+              Effect.catch((refusal) =>
+                Effect.sync(() => appendLocalRequestRefusal(refusal, id)),
+              ),
+            ),
+            untilShutdown.scope,
+          );
+          return;
+        }
+        // Read from the log: at startup a service window's own view has
+        // not filled yet.
+        const stored = (yield* runSession.view.read([id])).runs.get(id);
+        const oneShot = oneShotResumeNotice(init.commandName, id, stored);
+        if (oneShot !== undefined) {
+          appendLocalErrorTranscript(oneShot);
+          yield* endWithout(CliExitCode.Usage);
+          return;
+        }
+
+        // A refusal is the resume's answer, not a failure: the chat says
+        // it in the session's words and exits as a usage error.
+        const run = yield* resumeRun(runSession, id).pipe(
+          Effect.catchIf(isRequestRefusal, (refusal) =>
+            Effect.succeed(refusal),
+          ),
+        );
+        if (isRequestRefusal(run)) {
+          appendLocalRequestRefusal(run);
+          yield* endWithout(CliExitCode.Usage);
+          return;
+        }
+        // Adopting the resumed stream is the mutation a refusal must not
+        // cost: it runs only once the session accepted the run, so a
+        // refusal reaches the chat the user is looking at instead of a
+        // cleared transcript switched onto a dead stream. The run resumed
+        // is the one asked for, or the parent that owns it.
+        const adoptedConfig =
+          run.runId === id
+            ? config
+            : yield* init.runSession.records(run.runId).readConfig;
+        if (adoptedConfig === null)
+          return yield* new Rejected({
+            reason: `Run ${run.runId} has no configuration to resume`,
+          });
+        adoptRunConfig(adoptedConfig, 'history');
+        clearLocalTranscript();
+        // The transcript and the work plan are the view's: the TUI
+        // subscribes the run's aggregate and renders `transcript.rows`, and
+        // an open `/plan` reader reads the same `RunView`.
+        focusRun(run.runId);
+        // A stop asked before this point lands on the run adopted here.
+        const result = yield* handOver(launched, run);
+        yield* recoverRun(Effect.asVoid(result), (error) =>
+          reportHeldRunFailure(run.runId, error),
+        );
+      });
+      // A defect reaches the transcript as a failure does. The program
+      // completes once the session holds the run, or the resume ended
+      // without one; the run itself goes on. Every path above ends the
+      // launch with its own code, so `unended` counts only for a resume
+      // interrupted before it did (the chat is leaving).
+      return recoverRun(attemptResume, (error) =>
+        showFailure(error).pipe(
+          Effect.andThen(endWithout(CliExitCode.AgentError)),
+        ),
+      );
+    }, CliExitCode.Interrupted).pipe(
+      Effect.flatMap((claimed) =>
+        claimed
+          ? Effect.void
+          : Effect.sync(() =>
+              appendLocalNotice(
+                'Finish the active task before resuming a previous one.',
+              ),
+            ),
+      ),
     );
 
   /** Adopt a resumed run's configuration. A failure is the

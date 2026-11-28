@@ -1,6 +1,6 @@
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
-import { formatResumeCommand } from '../../chat/tui/state/resumeHint';
+import { formatResumeCommand } from '../resumeCommand';
 import { readCliCwd, type CliContext } from '../platform/cliContext';
 import type { RunId } from '@texra-ai/worldline/schemas';
 

@@ -40,7 +40,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
     target: prepared,
     proposedContent: input.content,
     sourceTool: 'write_file',
-    present: ({ appliedContent }) => {
+    present: (appliedContent) => {
       const originalLineCount = countLines(original ?? '');
       const newLineCount = countLines(appliedContent);
       const action = original === null ? 'Created' : 'Overwrote';
@@ -60,7 +60,7 @@ export const WriteFileTool = defineTool({
   name: 'write_file',
   requiresApproval: 'inBody',
   description:
-    'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
+    'Overwrite a file with the provided content. Creates the file if it does not exist.',
   schema: WriteInputSchema,
   execute: write,
 });
