@@ -42,7 +42,9 @@ here.
 **One owner for the described, trimmed, non-empty string tool-input field.**
 `inputSchema.ts` (`packages/harness/src/tools/core/`) is the declared home for
 shared tool-input field spellings (`optionalInput`, `nullishWithDefault`,
-`timeoutMsField`), re-exported from `@texra-ai/worldline/plugins`. The shape "a
+`timeoutMsField`); its public members (`optionalInput`, `nullishWithDefault`)
+are re-exported from `@texra-ai/worldline/plugins`, where `describedString` now
+joins them. The shape "a
 string the model must fill, described on the encoded side, trimmed and rejected
 when empty" was written out twice, verbatim down to the comment — once as
 `DiagnosticsPathSchema` (`DiagnosticsTool.ts`) and once as the `add` command's
