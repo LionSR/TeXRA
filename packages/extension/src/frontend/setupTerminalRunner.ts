@@ -163,8 +163,11 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   // failing, not a defect. The exit-code fiber is a child of this one, so
   // failing here tears its subscription down with it.
   // The tail read so far, kept outside the drain so a stream error or a drain
-  // timeout still reports what had arrived.
-  const tail = yield* Ref.make('');
+  // timeout still reports what had arrived. Control sequences are stripped as
+  // the chunks arrive, so the limit counts the text a reader sees and the cut
+  // cannot fall inside a sequence; `held` is a sequence the last chunk began
+  // and did not end.
+  const read = yield* Ref.make({ tail: '', held: '' });
   const stream = yield* Effect.try({
     try: () => execution.read(),
     catch: (cause) =>
@@ -179,9 +182,18 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   const reader = yield* Effect.forkChild(
     Stream.fromAsyncIterable(stream, ensureError).pipe(
       Stream.runForEach((chunk: string) =>
-        Ref.update(tail, (read) =>
-          appendTail(read, chunk, TERMINAL_OUTPUT_MAX_CHARS),
-        ),
+        Ref.update(read, ({ tail, held }) => {
+          const text = held + chunk;
+          const unfinished = unfinishedSequenceStart(text);
+          return {
+            tail: appendTail(
+              tail,
+              stripVTControlCharacters(text.slice(0, unfinished)),
+              TERMINAL_OUTPUT_MAX_CHARS,
+            ),
+            held: text.slice(unfinished),
+          };
+        }),
       ),
     ),
     // Start on this frame so iteration begins before the caller suspends on
@@ -217,17 +229,23 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
     // code for a command that did end. Both read as an absent exit code, and
     // only the first is a timeout.
     exitCode: Option.getOrUndefined(raced),
-    output: truncateTerminalOutput(yield* Ref.get(tail)),
+    output: (yield* Ref.get(read)).tail,
     ...(outputLost === undefined ? {} : { outputLost }),
     timedOut: Option.isNone(raced),
   };
 });
 
-/** Strip ANSI control sequences and retain the captured output tail. */
-function truncateTerminalOutput(output: string): string {
-  return appendTail(
-    stripVTControlCharacters(output),
-    '',
-    TERMINAL_OUTPUT_MAX_CHARS,
-  );
+// A control sequence the text ends inside: a lone ESC, a CSI (`ESC [`) with no
+// final byte yet, or an OSC (`ESC ]`, which shell integration writes around
+// every command) with no BEL or ST yet. A sequence held past the limit is not
+// one a shell is still writing, so it goes to the output as it came.
+const UNFINISHED_SEQUENCE =
+  // eslint-disable-next-line no-control-regex -- matching ESC and BEL is the point
+  /\u001B(?:\[[\u0020-\u003F]*|\][^\u0007\u001B]*\u001B?)?$/;
+
+function unfinishedSequenceStart(text: string): number {
+  const start = text.search(UNFINISHED_SEQUENCE);
+  return start === -1 || text.length - start > TERMINAL_OUTPUT_MAX_CHARS
+    ? text.length
+    : start;
 }
