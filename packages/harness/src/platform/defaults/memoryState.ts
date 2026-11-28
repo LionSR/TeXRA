@@ -2,11 +2,7 @@
 import { Effect, Result } from 'effect';
 
 // Local imports - platform
-import type {
-  StateChange,
-  StateStore,
-  StateWriteFailed,
-} from '@shared/config/settings';
+import type { StateStore, StateWriteFailed } from '@shared/config/settings';
 
 /** In-memory platform state store for CLI, tests, and lightweight hosts. */
 export class MemoryStateStore implements StateStore {
@@ -31,7 +27,12 @@ export class MemoryStateStore implements StateStore {
    *  write. */
   modify<K extends string, A, E>(
     keys: readonly K[],
-    change: StateChange<K, unknown, A, E>,
+    change: (
+      current: Readonly<Record<K, unknown>>,
+    ) => Result.Result<
+      readonly [A] | readonly [A, Readonly<Record<K, unknown>>],
+      E
+    >,
   ): Effect.Effect<A, E | StateWriteFailed> {
     return Effect.suspend(() => {
       const result = change(

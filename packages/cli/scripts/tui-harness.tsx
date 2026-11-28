@@ -150,7 +150,6 @@ import {
   appendLocalUserTranscript,
 } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
-import { defaultShortcutModifierLabel } from '../src/runtime/terminal/shortcutLabels';
 import { makeCliProcessRuntime } from '../src/runtime/platform/cliProcessRuntime';
 import { cliPlatform } from '../src/runtime/platform/initPlatform';
 import { CliExitCode } from '../src/runtime/platform/exitCodes';
@@ -1855,9 +1854,7 @@ function handleHarnessSlashCommand(line: string): boolean {
   switch (commandName) {
     case 'help':
       appendHarnessAssistantTranscript(
-        formatSlashCommandHelp(harnessCommands.list, {
-          shortcutModifierLabel: defaultShortcutModifierLabel(),
-        }),
+        formatSlashCommandHelp(harnessCommands.list),
       );
       return true;
     case 'resume':

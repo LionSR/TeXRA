@@ -4,6 +4,7 @@
 // than fetched, since the app must render identically offline.
 import { Schema } from 'effect';
 import {
+  attentionOf,
   decodingDefault,
   extractErrorMessage,
 } from '@texra-ai/worldline/schemas';
@@ -29,6 +30,7 @@ import {
 } from '@ui/progress/PersistedState';
 
 import { DESKTOP_THEME_KIND } from '@texra/shared/ipc';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
 import { ProgressApp } from '@ui/progress/ProgressApp';
 
@@ -44,12 +46,10 @@ import type { OsPlatform } from '@texra/shared/osPlatform';
 import { type Shell } from './shell';
 
 import {
-  DESKTOP_COMMAND_PALETTE_ID,
   DESKTOP_LOCAL_COMMANDS,
+  desktopCommandEntry,
   dispatchDesktopCommand,
-  paletteEntries,
   type DesktopCommandActions,
-  type DesktopCommandId,
 } from '../shared/desktopCommandSurface';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import {
@@ -228,7 +228,7 @@ const railProjects = (): RailProject[] =>
   });
 const activeRailProject = (projects: readonly RailProject[]) =>
   projects.find((project) => project.display.key === shell.active);
-let renamingProjectKey: string | null = null;
+let renamingProjectKey: string | undefined;
 
 function renameProject(key: string, name: string): void {
   const project = projectWorkbenches.get(key);
@@ -243,36 +243,16 @@ const rendererPlatform = ((): OsPlatform => {
   return 'linux';
 })();
 document.body.dataset.desktopPlatform = rendererPlatform;
-const desktopPaletteEntries = paletteEntries(rendererPlatform);
-// One name per action: chrome labels and tooltips quote the command catalog
-// verbatim (the same source the palette reads) instead of paraphrasing it in
-// sentence case.
-const commandsById = new Map<
-  string,
-  { readonly label: string; readonly accelerator?: string | undefined }
->(
-  [
-    ...desktopPaletteEntries,
-    desktopCommandPaletteShortcut(rendererPlatform),
-  ].map((entry) => [entry.id, entry]),
+// The palette button's tooltip quotes the command catalog's name verbatim
+// (the same source the palette reads), with its shortcut.
+const paletteShortcut = desktopCommandPaletteShortcut(rendererPlatform);
+const paletteAccelerator = formatDesktopAccelerator(
+  paletteShortcut.accelerator,
+  rendererPlatform,
 );
-
-function commandLabel(
-  commandId: DesktopCommandId | typeof DESKTOP_COMMAND_PALETTE_ID,
-): string {
-  return commandsById.get(commandId)?.label ?? commandId;
-}
-
-function commandTitle(
-  commandId: DesktopCommandId | typeof DESKTOP_COMMAND_PALETTE_ID,
-): string {
-  const shortcut = formatDesktopAccelerator(
-    commandsById.get(commandId)?.accelerator,
-    rendererPlatform,
-  );
-  const label = commandLabel(commandId);
-  return shortcut ? `${label} - ${shortcut}` : label;
-}
+const commandsTitle = paletteAccelerator
+  ? `${paletteShortcut.label} - ${paletteAccelerator}`
+  : paletteShortcut.label;
 
 // =============================================================================
 // Conversation-first shell state
@@ -354,7 +334,9 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
         <div class="desktop-empty-workspace-actions">
           ${renderLabeledActionButton({
             icon: 'folder-open',
-            text: commandLabel(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+            text: desktopCommandEntry(
+              DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+            ).title,
             kind: 'primary',
             onClick: () =>
               postToMain({
@@ -397,7 +379,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
   // visible affordance (#11511). Surface the same signal on the toggle that
   // reopens the rail.
   const hasPendingApproval = projects.some(
-    (project) => project.view.rollup.waiting > 0,
+    (project) => attentionOf(project.view).requests.length > 0,
   );
   const sidebarCollapsedWithPendingApproval =
     shellState().sidebarCollapsed && hasPendingApproval;
@@ -405,7 +387,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
     ? 'Show sidebar'
     : 'Hide sidebar';
   if (sidebarCollapsedWithPendingApproval) {
-    sidebarToggleLabel = 'Show sidebar (waiting on you)';
+    sidebarToggleLabel = `Show sidebar (${runStatusLabel('waitingOnUser').toLowerCase()})`;
   }
   const sidebarToggle = html`<span class="shell-header-button-slot">
     ${renderIconActionButton({
@@ -539,8 +521,7 @@ function shellTemplate(): TemplateResult {
               recent: recentProjects ?? [],
               renamingProjectKey,
               shell,
-              commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
-              commandsTitle: commandTitle(DESKTOP_COMMAND_PALETTE_ID),
+              commandsTitle,
             },
             {
               onNewTask: returnToLauncher,
@@ -570,7 +551,7 @@ function shellTemplate(): TemplateResult {
               },
               onRenameProject: renameProject,
               onCloseRename: () => {
-                renamingProjectKey = null;
+                renamingProjectKey = undefined;
                 rerenderShell();
               },
               onOpenSettings: () => settingsDialog.open(),

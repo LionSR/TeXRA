@@ -47,7 +47,7 @@ import {
 } from '@texra-ai/worldline/plugins';
 import { ensureError } from '@texra-ai/worldline/schemas';
 import { isPathWithin } from '@texra-ai/worldline/node';
-import { apiKeyEntry } from '@texra-ai/llm';
+import { routedApiKeyProvider } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 import type {
   HostSnapshot,
@@ -95,14 +95,11 @@ interface HostSnapshotSourceOptions {
   stores: SettingsStores;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots(): HostSnapshot['workspaceRoots'];
-  /** The notices this host shows: the lost-credential banner, the tools
-   *  this machine lacks, and the offer to start a project (a sample, an
-   *  Overleaf clone, an arXiv download) while the folder has no LaTeX files. */
-  shows: {
-    readonly apiKeyBanner: boolean;
-    readonly dependencyBanner: boolean;
-    readonly gettingStarted: boolean;
-  };
+  /** Whether this host shows the setup notices: the lost-credential banner,
+   *  the tools this machine lacks, and the offer to start a project (a
+   *  sample, an Overleaf clone, an arXiv download) while the folder has no
+   *  LaTeX files. A host with its own setup surfaces shows none of them. */
+  setupNotices: boolean;
 }
 
 /** What the producers write; the snapshot is {@link snapshotOf} of it. */
@@ -280,7 +277,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     // The plans the listed models bill, each as the process knows its
     // quota now: an endpoint's answer (asked when the kept one has expired)
     // or the last reply's word. A plan nothing states the quota of has no
-    // meter.
+    // meter, and neither has one with no credential: it has no usage to
+    // show and nothing a person fixes from the meter.
     const loadUsage = yield* producer(
       'the plan usage',
       Effect.gen(function* () {
@@ -312,7 +310,9 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
                     },
                   ];
                 case 'failed':
-                  return [{ plan, windows: [], unknown: quota.reason }];
+                  return quota.reason === 'missing_credentials'
+                    ? []
+                    : [{ plan, windows: [], unknown: quota.reason }];
                 case 'unobserved':
                   return [{ plan, windows: [], unknown: quota.state }];
                 case 'unread':
@@ -332,7 +332,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     );
     const loadDependencies = yield* producer(
       'the missing tools',
-      options.shows.dependencyBanner
+      options.setupNotices
         ? Effect.flatMap(missingDependencyTools(), (missingTools) =>
             write({ missingTools }),
           )
@@ -387,7 +387,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     // so an OAuth refresh or a GitHub token reloads no catalog. A sign-in
     // announces its token write, then its preference (`modelAccessChanged`).
     const providerKey = ({ key }: { readonly key: string }) =>
-      (apiKeyEntry(key) ?? 'unknown') !== 'unknown';
+      routedApiKeyProvider(key) !== undefined;
     yield* follow(
       Stream.filter(
         yield* subscribeAppSignal('credentialChanged'),
@@ -452,7 +452,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         // A credential that worked stopped working: raised only once a task
         // has finished; before that the "Connect a model" card is the prompt.
         apiKey:
-          options.shows.apiKeyBanner &&
+          options.setupNotices &&
           s.credential === false &&
           s.flags?.firstRunDone === true,
         dependency:
@@ -460,7 +460,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
             ? s.missingTools
             : null,
         gettingStarted:
-          options.shows.gettingStarted &&
+          options.setupNotices &&
           s.inputFiles.length === 0 &&
           !s.dismissed.has('gettingStarted'),
         service: s.service,

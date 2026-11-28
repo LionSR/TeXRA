@@ -239,11 +239,7 @@ export {
   type StateKey,
 } from '@shared/state/stateSettings';
 // What a `ConfigProvider` (`./plugins`) writes to and reads back per scope.
-export type {
-  ConfigInspection,
-  ConfigTarget,
-  StateChange,
-} from '@shared/config/settings';
+export type { ConfigInspection, ConfigTarget } from '@shared/config/settings';
 // The providers' custom-endpoint and China-region rows, and a provider's
 // own, if it has them.
 export {

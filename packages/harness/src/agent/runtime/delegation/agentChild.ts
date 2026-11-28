@@ -181,21 +181,12 @@ export function limitResult(
   return null;
 }
 
-/** What the child an earlier attempt of the call left finishes it to. */
-type Recovered =
-  | {
-      readonly kind: 'ended';
-      readonly runId: RunId;
-      readonly result: RunEnd;
-    }
-  /** No child answers the call: this attempt launches its own. */
-  | { readonly kind: 'launch' };
-
 /**
  * Finish a call from the child an earlier attempt of it left, before
  * anything about a launch is decided again: the child was approved and
  * configured when it launched. An ended child is read back, and one cut
- * short is resumed under its id.
+ * short is resumed under its id. Null when no child answers the call: this
+ * attempt launches its own.
  */
 export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
   call: RunToolCall,
@@ -206,21 +197,21 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
      *  child's read is not timed. */
     readonly timeoutMs: number | null | undefined;
   },
-): Effect.fn.Return<Recovered, Error, AgentRunServices> {
+): Effect.fn.Return<ChildRunEnd | null, Error, AgentRunServices> {
   const earlier = yield* earlierChild(call);
-  if (earlier === null) return { kind: 'launch' };
+  if (earlier === null) return null;
   const standing = yield* standingOf(earlier);
   switch (standing.kind) {
     case 'answered':
-      return { kind: 'ended', runId: earlier, result: standing.result };
+      return { runId: earlier, result: standing.result };
     case 'fresh':
-      return { kind: 'launch' };
+      return null;
     case 'resume': {
       const { result } = yield* withinTime(
         recovery.timeoutMs,
         resumeSubagentInBand(call, earlier, recovery.notify),
       );
-      return { kind: 'ended', runId: earlier, result };
+      return { runId: earlier, result };
     }
   }
 });

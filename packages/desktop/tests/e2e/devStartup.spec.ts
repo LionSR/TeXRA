@@ -213,12 +213,10 @@ test('renders the dev app from a cold cache and restores the editor after reload
         originalText: string;
         proposedText: string;
         language: string;
-        fill: boolean;
       };
       preview.originalText = 'const result = theorem(input);';
       preview.proposedText = 'const result = theorem(input, assumptions);';
       preview.language = 'typescript';
-      preview.fill = true;
       preview.style.cssText =
         'position:fixed;inset:100px 100px auto;height:320px;z-index:3000';
       document.body.append(preview);

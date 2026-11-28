@@ -2354,20 +2354,6 @@ sends it to a service as it is.
 const StartRequestSchema: Union<readonly [Struct<{ readonly runId: optional<brand<String, "RunId">>; readonly continues: optional<brand<String, "RunId">>; readonly helperModel: optional<Boolean>; readonly approval: optional<Literals<readonly ["autoApprove", "ask"]>>; readonly interactive: optional<Boolean>; readonly apiKeys: optional<$Record<String, String>>; readonly system: String; readonly tools: optional<$Array<NonEmptyString>>; readonly label: optional<String>; readonly instruction: String; readonly model: String; }>, Struct<{ readonly runId: optional<brand<String, "RunId">>; readonly continues: optional<brand<String, "RunId">>; readonly helperModel: optional<Boolean>; readonly approval: optional<Literals<readonly ["autoApprove", "ask"]>>; readonly interactive: optional<Boolean>; readonly apiKeys: optional<$Record<String, String>>; readonly config: Struct<{ readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly label: String; readonly system: withDecodingDefault<String, never>; readonly tools: withDecodingDefault<$Array<NonEmptyString>, never>; readonly toolScope: optional<Literals<readonly ["declared", "topLevel"]>>; readonly model: String; readonly instruction: withDecodingDefault<String, never>; readonly displayInstruction: optional<String>; readonly skills: optional<$Array<String>>; readonly workingDirectory: optional<String>; readonly outputSchema: optional<$Record<String, Unknown>>; readonly script: optional<Union<readonly [Struct<{ readonly kind: Literal<"background">; readonly code: NonEmptyString; readonly title: NonEmptyString; readonly tools: $Array<NonEmptyString>; readonly timeoutMs: optional<Int>; }>, Struct<{ readonly kind: Literal<"program">; readonly name: NonEmptyString; readonly args: $Record<String, Codec<Json, Json, never, never>>; }>]>>; }>; }>]>
 ```
 
-## StateChange
-
-The read-modify-write callback a store's `modify` takes. It sees the stored
-value of every key (`V` is `unknown` for a settings store, a family's
-`T | undefined` for a value store) and answers its result with the next
-value of every key (`undefined` deletes it), with its result alone to write
-nothing, or refuses with its own error and nothing is written.
-
-```ts
-type StateChange<K extends string, V, A, E> = (
-  current: Readonly<Record<K, V>>,
-) => Result.Result<readonly [A] | readonly [A, Readonly<Record<K, V>>], E>;
-```
-
 ## StateKey
 
 One stored key: where it lives and what its stored value decodes to. A

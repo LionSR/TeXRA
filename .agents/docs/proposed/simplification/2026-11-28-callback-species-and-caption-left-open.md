@@ -18,8 +18,8 @@ single-owned or on a builtin. The one species still spread past the 5-site
 bar was the callback type written out at each implementer, which the PR that
 adds this note swept to completion:
 
-- `StateChange` (5 stores) and `SubscribeTranscripts` (4 subscribers) —
-  item 4 of `2026-11-27-consolidation-and-natives-left-open.md`.
+- `SubscribeTranscripts` (4 subscribers). PR #15283 covers the five stores
+  with `ValuesChange`. Together these address item 4 of `2026-11-27-consolidation-and-natives-left-open.md`.
 - `SubagentProgressNotify` (6 sites, agent delegation) and
   `SubscriptionDeviceCodeHandler` (4 `onPrompt` sites, llm `oauth/`) — the
   same species, not previously recorded.
@@ -28,7 +28,7 @@ adds this note swept to completion:
   `truncateDeclarations`/`overlineDeclarations` already are
   (`2026-11-27-ui-kit-bypasses-left-open.md` item 7).
 
-After it, no callback type is spelled out at more than three implementers,
+After both changes, no callback type is spelled out at more than three implementers,
 and the `*Declarations` precedent owns the caption block.
 
 ## Open (each small, none audit-sized on its own)

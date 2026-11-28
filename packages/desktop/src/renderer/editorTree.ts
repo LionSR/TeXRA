@@ -74,27 +74,25 @@ function freezeNodes(
 }
 
 /**
- * Converts a flat recursive listing into a nested tree.
+ * Converts a flat list of file paths into a nested tree, each path's leading
+ * segments becoming its directories.
  *
  * Review surfaces receive an already-complete changed-file list, so they keep
  * this full-tree representation. The workspace explorer uses
  * {@link buildEditorDirectoryEntries} instead and never calls this recursively.
  */
 export function buildEditorTree(
-  entries: readonly EditorFileEntry[],
+  paths: readonly string[],
 ): readonly EditorTreeNode[] {
   const root = new Map<string, MutableEditorTreeNode>();
 
-  for (const entry of entries) {
-    const segments = workspacePathSegments(entry.path);
+  for (const filePath of paths) {
+    const segments = workspacePathSegments(filePath);
     if (segments.length === 0) continue;
 
     let siblings = root;
     for (const [index, name] of segments.entries()) {
-      const lastSegment = index === segments.length - 1;
-      const isDirectoryEntry = !lastSegment || entry.isDirectory;
-
-      if (isDirectoryEntry) {
+      if (index < segments.length - 1) {
         const existing = siblings.get(name);
         if (existing?.kind === 'directory') {
           siblings = existing.children;
@@ -115,7 +113,7 @@ export function buildEditorTree(
       siblings.set(name, {
         kind: 'file',
         name,
-        path: entry.path,
+        path: filePath,
       });
     }
   }
@@ -138,8 +136,8 @@ export function buildEditorDirectoryEntries(
   for (const entry of entries) {
     // The stored path is the normalized segments re-joined, so a node keys
     // identically however its entry arrived ('./dir/name', 'dir//name',
-    // 'dir\name'). buildEditorTree's file nodes store the raw entry path
-    // instead, because reviewPane keys them by the un-normalized displayPath.
+    // 'dir\name'). buildEditorTree's file nodes store the raw path instead,
+    // because reviewPane keys them by the un-normalized displayPath.
     const segments = workspacePathSegments(entry.path);
     const name = segments.at(-1);
     if (!name) continue;

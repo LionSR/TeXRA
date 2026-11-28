@@ -1,5 +1,4 @@
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
@@ -17,11 +16,12 @@ import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postToHost } from '@ui/settings/messageDispatcher';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TexraSignalElement } from '@ui/litBase';
-import { SKILL_SOURCE_LABEL, skillSourceToggleLabel } from '@ui/copy/skills';
 import { captionDeclarations } from '@ui/styles/commonViewStyles';
 import { PLUGINS_PAGE } from '@ui/copy/plugins';
+import { SKILL_SOURCE_LABEL, skillSourceToggleLabel } from '@ui/copy/skills';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
+import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
 import { catalogDetailStyles } from '../components/shared/catalogDetailStyles';
 import { settingSignal } from '../settingsState';
@@ -146,7 +146,7 @@ export class SkillsTab extends TexraSignalElement {
     return html`<section slot="detail" aria-labelledby="skill-detail-name">
       <div class="catalog-detail-header">
         <h3 class="catalog-detail-name" id="skill-detail-name">${item.name}</h3>
-        <wa-tag size="s">${SKILL_SOURCE_LABEL[item.scope]}</wa-tag>
+        ${renderStatusBadge({ label: SKILL_SOURCE_LABEL[item.scope] })}
       </div>
       <p class="catalog-detail-description">${item.description}</p>
       ${renderSettingsToggleRow({

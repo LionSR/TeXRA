@@ -5,7 +5,10 @@
 // markdown (bold section headers + list items) so each command stays on
 // its own row.
 
-import { focusChordLabel } from '@cli/runtime/terminal/shortcutLabels';
+import {
+  defaultShortcutModifierLabel,
+  focusChordLabel,
+} from '@cli/runtime/terminal/shortcutLabels';
 import { AGENT_LIST } from '@ui/copy/nestedRuns';
 
 import { textInputEditingHelp } from '../input/textInputBindings';
@@ -26,9 +29,6 @@ const CATEGORY_SECTIONS: ReadonlyArray<{
 ];
 
 interface SlashCommandHelpOptions {
-  /** Chord modifier shown for stream-focus shortcuts: `Alt` on most
-   *  platforms, `Esc` on macOS (see `defaultShortcutModifierLabel`). */
-  readonly shortcutModifierLabel?: string;
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
    *  active; Ctrl-J is the universal fallback. */
   readonly shiftEnterNewline?: boolean;
@@ -51,8 +51,8 @@ function commandSections(commands: readonly SlashCommand[]): string[] {
 }
 
 function keyboardSection(options: SlashCommandHelpOptions): string {
-  const modifier = options.shortcutModifierLabel ?? 'Alt';
-  const focusChord = focusChordLabel(modifier);
+  // `Alt` on most platforms, `Esc` on macOS.
+  const focusChord = focusChordLabel(defaultShortcutModifierLabel());
   const newline =
     options.shiftEnterNewline === true
       ? '`Shift-Enter` or `Ctrl-J` insert a newline'

@@ -158,7 +158,6 @@ const rail = (projects: readonly RailProject[], shell: Shell) =>
       projects,
       recent: [],
       shell,
-      commandsLabel: 'Commands',
       commandsTitle: 'Commands - ⌘K',
     },
     sidebarCallbacks,

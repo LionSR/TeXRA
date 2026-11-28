@@ -83,7 +83,7 @@ export const HostCommandSchema = Schema.Union([
    *  instead of taking an answer still fresh. */
   Schema.Struct({
     kind: Schema.Literal('refreshUsage'),
-    force: Schema.optional(Schema.Boolean),
+    force: Schema.Boolean,
   }),
   /** Remember `level` as a model's reasoning level: every later run on the
    *  model starts at it, until another is picked. */

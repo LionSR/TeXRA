@@ -9,7 +9,6 @@ import {
 import { type Session } from '@texra-ai/worldline';
 import { compareByNewestCreationTime } from '@texra-ai/worldline/transcript';
 import { readModelOptions } from '@texra-ai/worldline/host';
-import { defaultShortcutModifierLabel } from '@cli/runtime/terminal/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import {
   selectedRunId as selectedRunIdSignal,
@@ -43,7 +42,6 @@ export function showCliSlashCommandHelp(commands: SlashCommands): void {
   openInfoPane(
     '/help',
     formatSlashCommandHelp(commands.list, {
-      shortcutModifierLabel: defaultShortcutModifierLabel(),
       shiftEnterNewline: terminalCapabilities.get().kittyKeyboard,
     }),
   );

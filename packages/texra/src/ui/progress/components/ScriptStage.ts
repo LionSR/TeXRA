@@ -82,7 +82,7 @@ const scriptStageStyles = css`
     min-height: 28px;
     min-width: 0;
     padding: 0 var(--wa-space-2xs);
-    border-radius: var(--wa-border-radius-s);
+    border-radius: var(--border-radius);
   }
 
   .row.is-linked {

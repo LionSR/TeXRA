@@ -230,7 +230,7 @@ export function createProjectWorkbench(options: {
       zone: 'bottom',
       size: { height: 220 },
       mount: (tab, host) => host.append(terminalPane.elementFor(tab.id)),
-      layout: (tab) => terminalPane.activate(tab.id, { focus: false }),
+      layout: (tab) => terminalPane.activate(tab.id, false),
       release: (tab) => terminalPane.dispose(tab.id),
     },
     review: {
