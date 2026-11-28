@@ -49,8 +49,9 @@ export function isAgentRunRecord(record: RunRecord): record is AgentConfig {
 /**
  * Serialize a run record to pretty JSON for `/executions/{id}/config` and
  * `texra history show`, leaving out the agent-config fields that do not
- * apply to the run: a conversation hides a task's file fields, a program's
- * run hides its program's source. Other records serialize unchanged.
+ * apply to the run: a program's run hides its program's source, and any
+ * other agent record (a conversation or a background script) hides a task's
+ * file fields. A task's record serializes unchanged.
  */
 export function serializeFilteredConfig(record: RunRecord): string {
   if (!isAgentRunRecord(record)) return JSON.stringify(record, null, 2);

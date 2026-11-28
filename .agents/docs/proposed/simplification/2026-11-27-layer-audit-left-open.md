@@ -108,7 +108,8 @@ worth taking.
   (#15245)
   Landed 2026-11-28: one constant beside the schema, and the description
   words the cap and the default from the two constants (the same text).
-  The timeout message no longer states the cap.
+  The timeout message states the elapsed time, never the cap, so it needed
+  no change.
 - **"Does the total include the agents' spend"** is decided by field
   comparison in `packages/texra/src/ui/progress/components/UsagePanel.ts` and
   by a child count in `packages/cli/src/chat/tui/sessionStatus.ts`.
