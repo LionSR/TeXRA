@@ -3,7 +3,6 @@
  *  the child loop's turn bookkeeping: database reads of committed rows. */
 
 import { Effect, Iterable, Result, Schema } from 'effect';
-import stableStringify from 'safe-stable-stringify';
 
 import { runHistoryRows } from '@agent/runtime/providerMessages';
 import { SessionRoots } from '@platform/rootedFs';
@@ -31,7 +30,7 @@ import {
   isAgentRunRecord,
   type RunRecord,
 } from '@shared/schemas';
-import { truncatedHexId } from '@utils/core/idHash';
+import { sha256 } from '@utils/core/idHash';
 
 /** What a read of a run's records takes from its session. */
 type RecordServices =
@@ -79,7 +78,7 @@ export const callChildRunId = ({
     attempt,
   };
   // cast: a minting site; 24 hex digits satisfy `RunIdSchema` by construction.
-  return truncatedHexId(stableStringify(identity), 24) as RunId;
+  return sha256(identity).slice(0, 24) as RunId;
 };
 
 /** The runs the attempts so far of `runId`'s open calls launched under

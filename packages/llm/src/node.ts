@@ -24,7 +24,7 @@
  *   [`transcribeAudio`](#transcribeaudio) a recording's text.
  */
 import { Effect, type Scope } from 'effect';
-import { ModelError, type BillingRoute } from './errors.js';
+import { ModelError, toErrorMessage, type BillingRoute } from './errors.js';
 import { originOf, type ModelOrigin } from './protocol.js';
 import type { ModelConfig } from 'llm-zoo';
 
@@ -235,7 +235,7 @@ export const transcribeAudio = (
       catch: (cause) =>
         new ModelError({
           kind: 'transport',
-          message: `The transcription module failed to load: ${cause instanceof Error ? cause.message : String(cause)}`,
+          message: `The transcription module failed to load: ${toErrorMessage(cause)}`,
           retryable: false,
           cause,
         }),
