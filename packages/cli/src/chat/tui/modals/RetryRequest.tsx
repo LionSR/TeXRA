@@ -1,3 +1,4 @@
+import { String as Str } from 'effect';
 import { Text, useWindowSize } from 'ink';
 
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
@@ -63,7 +64,7 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
           ? [
               {
                 key: 'k',
-                action: `${RETRY_OWN_KEY_LABEL.charAt(0).toLowerCase()}${RETRY_OWN_KEY_LABEL.slice(1)}`,
+                action: Str.uncapitalize(RETRY_OWN_KEY_LABEL),
                 decision: REQUEST_ACTIONS.retry.k,
               },
             ]

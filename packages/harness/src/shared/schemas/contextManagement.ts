@@ -4,6 +4,8 @@ import { NonNegativeIntSchema } from './nonNegativeInt';
 
 const PositiveTokenCountSchema = Schema.Int.check(Schema.isGreaterThan(0));
 
+const UtilizationSchema = Schema.Number.check(Schema.isGreaterThanOrEqualTo(0));
+
 /**
  * The one context-management event the run writes: a request's output
  * ceiling lowered to fit what the context window leaves.
@@ -11,15 +13,13 @@ const PositiveTokenCountSchema = Schema.Int.check(Schema.isGreaterThan(0));
 export const ContextManagementDataSchema = Schema.Struct({
   action: Schema.Literal('max_tokens_reduced'),
   contextWindow: PositiveTokenCountSchema,
-  utilizationBefore: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  utilizationBefore: UtilizationSchema,
   details: Schema.optional(Schema.String),
   originalMaxTokens: PositiveTokenCountSchema,
   reducedMaxTokens: PositiveTokenCountSchema,
 });
 
 export type ContextManagementData = typeof ContextManagementDataSchema.Type;
-
-const UtilizationSchema = Schema.Number.check(Schema.isGreaterThanOrEqualTo(0));
 
 const CompactionActivityFields = {
   activity: Schema.Literal('context_compaction'),
@@ -60,7 +60,7 @@ export type CompactionActivityOutcome = Exclude<
 export const ContextStateDataSchema = Schema.Struct({
   inputTokens: NonNegativeIntSchema,
   contextWindow: PositiveTokenCountSchema,
-  utilizationPercent: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  utilizationPercent: UtilizationSchema,
 });
 
 export type ContextStateData = typeof ContextStateDataSchema.Type;

@@ -18,10 +18,9 @@ import {
   type PlatformError,
 } from 'effect';
 import { LRUCache } from 'lru-cache';
-import stableStringify from 'safe-stable-stringify';
 
 // Local imports - utilities
-import { sha256Hex } from '@utils/core/idHash';
+import { sha256, sha256Hex } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 import {
@@ -284,5 +283,5 @@ export const pluginDigest = Effect.fn('pluginDigest')(function* (
     },
     { concurrency: 'unbounded' },
   );
-  return sha256Hex(stableStringify({ files, servers, hooks }) ?? '');
+  return sha256({ files, servers, hooks });
 });

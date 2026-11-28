@@ -1,4 +1,5 @@
 // Third-party imports
+import { Predicate } from 'effect';
 import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -151,7 +152,7 @@ export class RunTabs extends TexraElement {
     if (this.topLevelOnly) return [];
     return run.childIds
       .map((id) => this.runOfEvent(id))
-      .filter((child): child is RunView => child !== undefined)
+      .filter(Predicate.isNotUndefined)
       .filter((child) => child.identity.kind !== 'process');
   }
 
@@ -220,7 +221,7 @@ export class RunTabs extends TexraElement {
     const query = surface?.search ?? '';
     const top = (view?.order ?? [])
       .map((id) => this.runOfEvent(id))
-      .filter((run): run is RunView => run !== undefined)
+      .filter(Predicate.isNotUndefined)
       .filter((run) => !this.activeOnly || runStatus(run).section !== 'recent')
       .filter((run) => this.matchesSearch(run, query))
       // A list without section headings leads with what needs the person;

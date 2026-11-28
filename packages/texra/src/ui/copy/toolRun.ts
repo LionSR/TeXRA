@@ -6,7 +6,10 @@
 import { String as Str } from 'effect';
 
 // Local imports
-import { formatCompactDuration, pluralize } from '@texra-ai/worldline/schemas';
+import {
+  formatCompactDuration,
+  formatResultCount,
+} from '@texra-ai/worldline/schemas';
 
 /** What a call counts as in a run's sentence. */
 export type ToolRunClause =
@@ -24,15 +27,15 @@ export type ToolRunClause =
 export type ToolRunCounts = readonly (readonly [ToolRunClause, number])[];
 
 const CLAUSE: Readonly<Record<ToolRunClause, (count: number) => string>> = {
-  read: (n) => `read ${n} ${pluralize(n, 'file')}`,
-  edit: (n) => `edited ${n} ${pluralize(n, 'file')}`,
-  write: (n) => `wrote ${n} ${pluralize(n, 'file')}`,
-  search: (n) => `searched ${n} ${pluralize(n, 'time')}`,
-  bash: (n) => `ran ${n} ${pluralize(n, 'command')}`,
-  web: (n) => `searched the web ${n} ${pluralize(n, 'time')}`,
-  agent: (n) => `started ${n} ${pluralize(n, 'agent')}`,
-  script: (n) => `ran ${n} ${pluralize(n, 'script')}`,
-  other: (n) => `used ${n} ${pluralize(n, 'tool')}`,
+  read: (n) => `read ${formatResultCount(n, 'file')}`,
+  edit: (n) => `edited ${formatResultCount(n, 'file')}`,
+  write: (n) => `wrote ${formatResultCount(n, 'file')}`,
+  search: (n) => `searched ${formatResultCount(n, 'time')}`,
+  bash: (n) => `ran ${formatResultCount(n, 'command')}`,
+  web: (n) => `searched the web ${formatResultCount(n, 'time')}`,
+  agent: (n) => `started ${formatResultCount(n, 'agent')}`,
+  script: (n) => `ran ${formatResultCount(n, 'script')}`,
+  other: (n) => `used ${formatResultCount(n, 'tool')}`,
 };
 
 const LIST = new Intl.ListFormat('en', { type: 'conjunction' });

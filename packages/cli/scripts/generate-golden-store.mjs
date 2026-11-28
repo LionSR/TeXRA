@@ -87,7 +87,6 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   realpathSync,
   renameSync,
@@ -108,6 +107,7 @@ import stableStringify from 'safe-stable-stringify';
 import { loadPtySpawn } from './nodePtySpawnHelper.mjs';
 import {
   buildValidationCli,
+  projectStore,
   splitValidationAgent,
   VALIDATION_FAKE_API_KEY,
   VALIDATION_PROVIDER_KEYS,
@@ -362,13 +362,8 @@ process.stdin.on('end', function answer() {
   };
   // The project's store; the service keeps one for no workspace beside it.
   const store = () => {
-    const dir = path.join(home, '.texra/v1/workspace-storage');
-    const key = existsSync(dir)
-      ? readdirSync(dir).find((name) => name.startsWith('project-'))
-      : undefined;
-    return key === undefined
-      ? null
-      : path.join(dir, key, 'texra.project-v1.db');
+    const dir = projectStore(path.join(home, '.texra'), 'project-');
+    return dir === undefined ? null : path.join(dir, 'texra.project-v1.db');
   };
   // `texra serve` in the foreground, as a window's service, for `use`,
   // which runs its client commands (`texra tasks`) and calls procedures

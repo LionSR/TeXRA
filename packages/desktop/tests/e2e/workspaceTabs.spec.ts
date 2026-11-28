@@ -4,6 +4,8 @@ import { join } from 'node:path';
 
 import type { Locator } from '@playwright/test';
 
+import { processExists } from '../../../../scripts/texra-services.mjs';
+
 import {
   box,
   closeTexraApp,
@@ -447,16 +449,7 @@ test('moves live terminals and unsaved editors without recreating resources', as
   await page.keyboard.press(`${mod}+s`);
   // Closing one PTY releases only that session.
   await terminal1.locator('.shell-dock-tab-close wa-button').click();
-  await expect
-    .poll(() => {
-      try {
-        process.kill(pid, 0);
-        return true;
-      } catch {
-        return false;
-      }
-    })
-    .toBe(false);
+  await expect.poll(() => processExists(pid)).toBe(false);
   await expect(panel('terminal')).toHaveCount(1);
 });
 

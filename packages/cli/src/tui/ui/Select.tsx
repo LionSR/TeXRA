@@ -25,12 +25,7 @@ import {
 import { COLOR_HINT } from './colors';
 import { POINTER, TICK } from './glyphs';
 import { DETAIL_SEPARATOR } from '@texra-ai/worldline/schemas';
-import { nextListIndex } from '@ui/wa/listInteraction';
-
-/** `index` held to a valid index of a `length`-item list (0 when empty). */
-function clampIndex(index: number, length: number): number {
-  return Num.clamp(index, { minimum: 0, maximum: Math.max(0, length - 1) });
-}
+import { clampListIndex, nextListIndex } from '@ui/wa/listInteraction';
 
 export interface SelectItem<T> {
   readonly value: T;
@@ -115,7 +110,7 @@ function selectInitialHighlightIndex<T>({
 }): number {
   if (items.length === 0) return 0;
   if (initialIndex != null) {
-    const clampedInitialIndex = clampIndex(initialIndex, items.length);
+    const clampedInitialIndex = clampListIndex(initialIndex, items.length);
     if (
       !items[clampedInitialIndex]?.disabled ||
       items.every((item) => item.disabled)
@@ -144,7 +139,7 @@ function selectControlledHighlightIndex<T>({
   );
   return controlledIndex >= 0
     ? controlledIndex
-    : clampIndex(previousIndex, items.length);
+    : clampListIndex(previousIndex, items.length);
 }
 
 function nextSelectHighlightIndex<T>({
@@ -160,13 +155,13 @@ function nextSelectHighlightIndex<T>({
 }): number {
   if (items.length === 0) return 0;
 
-  const clampedHighlight = clampIndex(highlight, items.length);
+  const clampedHighlight = clampListIndex(highlight, items.length);
   if (
     items.every((item) => item.disabled) ||
     items.every((item) => !item.disabled)
   ) {
     if (!wrap) {
-      return clampIndex(clampedHighlight + direction, items.length);
+      return clampListIndex(clampedHighlight + direction, items.length);
     }
     return nextListIndex(
       direction === 1 ? 'next' : 'previous',
@@ -203,7 +198,7 @@ function visibleSelectRange({
           maximum: Math.max(0, maxVisibleItems),
         });
   if (visibleCount <= 0) return { start: 0, end: 0 };
-  const clampedHighlight = clampIndex(highlight, itemCount);
+  const clampedHighlight = clampListIndex(highlight, itemCount);
   const centerOffset = Math.floor(visibleCount / 2);
   const start = Math.min(
     Math.max(0, clampedHighlight - centerOffset),

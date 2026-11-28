@@ -48,18 +48,6 @@ export function postStateSetting(key: string, value: StateSettingValue): void {
 }
 
 /**
- * The placed row a control renders, as the catalog holds it. A row with no
- * settings-view placement is a defect: no snapshot would ever reach it.
- */
-function placedRow(row: SettingRow) {
-  const entry = TEXRA_SETTINGS.settingsViewByKey(row.key);
-  if (!entry) {
-    throw new Error(`No settings-view catalog row for setting "${row.key}"`);
-  }
-  return entry;
-}
-
-/**
  * The shared switch row, bound to a catalog row: the label and description
  * are the row's own (the same copy every other host shows for it), the value
  * is the row's setting signal, and flipping it posts the write itself, so a
@@ -70,7 +58,7 @@ export function renderStateSettingToggleRow(
   row: SettingRow<boolean>,
   options: { readonly disabled?: boolean } = {},
 ): TemplateResult {
-  const entry = placedRow(row);
+  const entry = TEXRA_SETTINGS.settingsViewRow(row.key);
   return renderSettingsToggleRow({
     label: entry.title,
     description: entry.description,
@@ -108,7 +96,7 @@ export function renderStateSettingNumberRow(
   row: SettingRow<number | null>,
   options: StateSettingNumberRowOptions = {},
 ): TemplateResult {
-  const entry = placedRow(row);
+  const entry = TEXRA_SETTINGS.settingsViewRow(row.key);
   return renderSettingsNumberRow({
     label: entry.title,
     description: entry.description,
@@ -129,7 +117,7 @@ export function renderStateSettingNumberRow(
 export function renderStateSettingSelectRow(
   row: SettingRow<string>,
 ): TemplateResult {
-  const entry = placedRow(row);
+  const entry = TEXRA_SETTINGS.settingsViewRow(row.key);
   return renderSettingsSelectRow({
     label: entry.title,
     description: entry.description,

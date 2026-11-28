@@ -15,7 +15,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { RESPONSE_CUT_NOTE } from '@ui/copy/responseCut';
 
 // Local imports - formatter helpers
-import { formatDisplayTimestamp } from '../timestampUtils';
+import { messageTimestamp } from '../timestampUtils';
 import { renderMarkdownHtml } from '../markdownRenderer';
 import { buildDetailsCard } from '../htmlBuilders';
 import type { StreamingTextRow } from '@texra-ai/worldline/transcript';
@@ -61,7 +61,6 @@ export function formatBannerContentTemplate(
     : html`<div class="banner-content markdown-content log-entry-content ${contentClass}">${unsafeHTML(renderMarkdownHtml(trimmedContent))}</div>`;
 
   if (kind === 'assistant') {
-    const time = formatDisplayTimestamp(new Date(timestamp), 'minute');
     // An answer its model ended early says so under its text.
     const cutNote =
       row.cut === undefined
@@ -72,7 +71,7 @@ export function formatBannerContentTemplate(
     // An answer is its text alone: no author line and no frame. Copy and
     // the time sit under it once it has finished, shown on hover.
     // prettier-ignore
-    const meta = isRunning ? nothing : html`<div class="message-meta"><copy-button .text=${trimmedContent} .label=${config.copyTitle}></copy-button><time class="message-timestamp" datetime=${new Date(timestamp).toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time></div>`;
+    const meta = isRunning ? nothing : html`<div class="message-meta"><copy-button .text=${trimmedContent} .label=${config.copyTitle}></copy-button>${messageTimestamp(timestamp)}</div>`;
     return html`<div class="assistant-message">
       ${contentTemplate}${cutNote}${meta}
     </div>`;

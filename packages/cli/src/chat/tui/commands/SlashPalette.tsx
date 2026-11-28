@@ -11,7 +11,7 @@ import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { CLOSE_HINT, KeyHints, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { nextListIndex } from '@ui/wa/listInteraction';
+import { clampListIndex, nextListIndex } from '@ui/wa/listInteraction';
 import {
   useSlashContext,
   type SlashCommand,
@@ -61,7 +61,7 @@ function slashPaletteWindow({
     return { start: 0, end: itemCount, hiddenBefore: 0, hiddenAfter: 0 };
   }
 
-  const clamped = Num.clamp(highlight, { minimum: 0, maximum: itemCount - 1 });
+  const clamped = clampListIndex(highlight, itemCount);
   if (clamped < visibleAtEdge) {
     return {
       start: 0,
@@ -131,10 +131,7 @@ export function SlashPalette(
   // Whenever the match list resizes (user kept typing), clamp the cursor
   // so it doesn't point past the end.
   useEffect(() => {
-    const clamped =
-      matchCount === 0
-        ? 0
-        : Num.clamp(highlight, { minimum: 0, maximum: matchCount - 1 });
+    const clamped = clampListIndex(highlight, matchCount);
     if (clamped !== highlight) setHighlight(clamped);
   }, [matchCount, highlight]);
 

@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
 import YAML from 'yaml';
 
@@ -9,10 +8,10 @@ import YAML from 'yaml';
 // missing signing identity or Azure setting fails the build instead of
 // building unsigned. (A missing App Store Connect key is electron-builder's to
 // report: it warns and skips notarization.)
-const configPath = fileURLToPath(
-  new URL('electron-builder.yml', import.meta.url),
-);
-const baseConfig = YAML.parse(readFileSync(configPath, 'utf8')) ?? {};
+const baseConfig =
+  YAML.parse(
+    readFileSync(new URL('electron-builder.yml', import.meta.url), 'utf8'),
+  ) ?? {};
 
 function requiredEnv(name) {
   const value = process.env[name];

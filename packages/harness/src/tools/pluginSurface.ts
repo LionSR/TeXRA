@@ -142,7 +142,7 @@ export {
   StateStores,
   type PluginContext,
 } from '@platform/processRuntime';
-export type { ValueFamily } from '@shared/session/valueFamily';
+export type { ValueFamily, ValuesChange } from '@shared/session/valueFamily';
 export type { CurrentValues } from '@shared/session/database';
 export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 export { logFailure, withLogChannel } from '@logger/effectLog';

@@ -9,6 +9,7 @@ import type {
   SettingsCatalog,
   StateKey,
 } from '@shared/state/stateSettings';
+import type { ValuesChange } from '@shared/session/valueFamily';
 
 const CHANNEL = 'settings';
 
@@ -150,12 +151,7 @@ export interface StateStore {
    */
   modify<K extends string, A, E = never>(
     keys: readonly K[],
-    change: (
-      current: Readonly<Record<K, unknown>>,
-    ) => Result.Result<
-      readonly [A] | readonly [A, Readonly<Record<K, unknown>>],
-      E
-    >,
+    change: ValuesChange<K, unknown, A, E>,
   ): Effect.Effect<A, E | StateWriteFailed>;
 }
 

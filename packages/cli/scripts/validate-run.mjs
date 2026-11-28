@@ -25,6 +25,7 @@ import {
 import { loadPtySpawn } from './nodePtySpawnHelper.mjs';
 import {
   buildValidationCli,
+  projectStore,
   splitValidationAgent,
   VALIDATION_FAKE_API_KEY,
   VALIDATION_PROVIDER_KEYS,
@@ -40,6 +41,7 @@ import {
   testLaunchEnv,
 } from '../../../scripts/isolated-home.mjs';
 import {
+  processExists,
   serviceAnnouncements,
   serviceLogPath,
   stopServices,
@@ -214,19 +216,6 @@ async function waitFor(label, check, timeoutMs = 120_000, detail) {
     );
     await sleep(250);
   }
-}
-
-/**
- * The directory of the project store under the TeXRA data root `dataRoot`
- * whose name starts with `prefix`, or undefined until a session has made
- * it. A service also keeps a no-workspace store beside it, which holds no
- * runs.
- */
-function projectStore(dataRoot, prefix = 'work-') {
-  const storage = path.join(dataRoot, 'v1', 'workspace-storage');
-  if (!existsSync(storage)) return undefined;
-  const name = readdirSync(storage).find((entry) => entry.startsWith(prefix));
-  return name === undefined ? undefined : path.join(storage, name);
 }
 
 function assertSuccess(result, label) {
@@ -2211,14 +2200,6 @@ async function validateServiceBuildIdentity() {
       ),
       label,
     );
-  const alive = (pid) => {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  };
   let nextList;
   try {
     // A task at work in this build's service: its model call is held.
@@ -2263,7 +2244,7 @@ async function validateServiceBuildIdentity() {
       },
       30_000,
     );
-    const waited = nextExit === null && alive(first.pid);
+    const waited = nextExit === null && processExists(first.pid);
     writeFileSync(path.join(project.work, 'golden-park.release'), '');
     await waitFor(
       'the newer client to finish',
@@ -2276,7 +2257,7 @@ async function validateServiceBuildIdentity() {
     );
     await waitFor(
       'the retired service to exit',
-      () => !alive(first.pid),
+      () => !processExists(first.pid),
       30_000,
     );
     const next = status(nextBuildPath, 'service status (next build)');

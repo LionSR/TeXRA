@@ -2,6 +2,8 @@
  * Timestamp formatting utilities for progress view formatters.
  */
 
+import { html, type TemplateResult } from 'lit';
+
 import { formatShortDateTime } from '@ui/formatting/dateTimeFormat';
 
 /** A time of day to the second, as a stage or a background task prints it. */
@@ -32,4 +34,16 @@ export function formatDisplayTimestamp(
     ).format(date),
     tooltipTimestamp: formatShortDateTime(date) ?? '',
   };
+}
+
+/** A message's time of day to the minute, as the `<time>` its meta line
+ *  shows, with the full moment as its tooltip. */
+export function messageTimestamp(timestamp: number): TemplateResult {
+  const date = new Date(timestamp);
+  const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
+    date,
+    'minute',
+  );
+  // prettier-ignore
+  return html`<time class="message-timestamp" datetime=${date.toISOString()} title=${tooltipTimestamp}>${timeDisplay}</time>`;
 }

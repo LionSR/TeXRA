@@ -324,6 +324,17 @@ export const TEXRA_SETTINGS = Object.freeze({
     return row !== undefined && isSettingsViewRow(row) ? row : undefined;
   },
   /**
+   * The row a settings-view control or signal is built for. One with no
+   * settings-view placement is a defect: no snapshot would ever reach it.
+   */
+  settingsViewRow: (key: string): SettingsViewRow => {
+    const row = placedByKey.get(key);
+    if (row === undefined || !isSettingsViewRow(row)) {
+      throw new Error(`No settings-view catalog row for setting "${key}"`);
+    }
+    return row;
+  },
+  /**
    * The rows one settings-view snapshot carries, in catalog order: the
    * outbound payload's schema, the backend's read loop and the webview's
    * apply step each iterate this list, so placing a row on a snapshot puts it

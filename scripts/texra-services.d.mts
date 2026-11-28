@@ -6,6 +6,7 @@ export interface ServiceAnnouncement {
 
 export function serviceLogPath(dataRoot: string): string;
 export function serviceAnnouncements(log: string): ServiceAnnouncement[];
+export function processExists(pid: number): boolean;
 export function serviceRunning(pid: number): boolean;
 export function servicePids(dataRoot: string): number[];
 export function stopServices(
