@@ -44,7 +44,6 @@ import { LeanServer, type LeanStartError } from './leanServer';
 import { LeanLanguageServices } from '../leanLanguageServices';
 import {
   LEAN_INSPECTIONS,
-  LeanFileCommandFailed,
   LeanFileUnreadable,
   LeanUnavailable,
   type LeanInspection,
@@ -324,9 +323,6 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
           new LeanFileUnreadable({ message: error.message, cause: error }),
         ),
       ),
-      // Diagnostics only send notifications, so no request can be refused:
-      // a request error here is a defect, never a file's verdict.
-      Effect.catchTag('JsonRpcRequestError', (error) => Effect.die(error)),
       Effect.tapError((error) =>
         Effect.logWarning(
           `fetchDiagnosticsForFile: no diagnostics for ${file}: ${error.message}`,
@@ -338,15 +334,11 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
   // Drop the cached open state and re-open with fresh contents.
   const restartFile = (filePath: string) =>
     withServer(filePath, (server) => server.restartFile(filePath)).pipe(
-      Effect.catchTag(
-        ['LeanFileUnreadable', 'PlatformError', 'JsonRpcRequestError'],
-        (error) =>
-          Effect.fail(
-            new LeanFileCommandFailed({
-              message: error.message,
-              cause: error,
-            }),
-          ),
+      // As for diagnostics: the folders above the file could not be read.
+      Effect.catchTag('PlatformError', (error) =>
+        Effect.fail(
+          new LeanFileUnreadable({ message: error.message, cause: error }),
+        ),
       ),
       Effect.withSpan('LeanServerPool.restartFile'),
     );

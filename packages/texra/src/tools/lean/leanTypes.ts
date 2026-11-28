@@ -143,18 +143,9 @@ export class LeanUnavailable extends Schema.TaggedError<LeanUnavailable>()(
   },
 ) {}
 
-/** The file to diagnose could not be read or opened. */
+/** The file could not be read or opened. */
 export class LeanFileUnreadable extends Schema.TaggedError<LeanFileUnreadable>()(
   'LeanFileUnreadable',
-  {
-    message: Schema.String,
-    cause: Schema.optional(Schema.Defect()),
-  },
-) {}
-
-/** A `lean_file` command ran into a failure of its own, reported by `message`. */
-export class LeanFileCommandFailed extends Schema.TaggedError<LeanFileCommandFailed>()(
-  'LeanFileCommandFailed',
   {
     message: Schema.String,
     cause: Schema.optional(Schema.Defect()),

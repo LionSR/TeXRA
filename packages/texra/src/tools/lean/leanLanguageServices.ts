@@ -7,7 +7,6 @@ import { Context, type Effect, type Result, type Scope } from 'effect';
 
 import type { LeanServerInfo } from './leanServerInfo';
 import type {
-  LeanFileCommandFailed,
   LeanFileUnreadable,
   LeanInspection,
   LeanInspectionReply,
@@ -20,8 +19,7 @@ import type {
  * The pool's operations, each run once by the native tool dispatcher. Every
  * caller converts a failure into a `ToolError`, so a call whose cause no tool
  * reports declares `Error`; the file calls, whose cause the tool reports, fail
- * with the tags in `./leanTypes` (`LeanUnavailable`, `LeanFileUnreadable`,
- * `LeanFileCommandFailed`).
+ * with the tags in `./leanTypes` (`LeanUnavailable`, `LeanFileUnreadable`).
  *
  * Every call requires the `Scope` the resources it starts stay held in: the
  * calling tool provides its run's scope, so a server the pool starts for a
@@ -37,7 +35,7 @@ interface LeanLanguageServicesShape {
   /** Close the file at its server and open it again with fresh contents. */
   restartFile(
     filePath: string,
-  ): Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable, Scope.Scope>;
+  ): Effect.Effect<void, LeanFileUnreadable | LeanUnavailable, Scope.Scope>;
   /**
    * Ask the file's server, once Lean has elaborated the file, what `kind`
    * shows at the 0-based position (`LEAN_INSPECTIONS`). A failure, or an
