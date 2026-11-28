@@ -60,7 +60,7 @@ export interface CliHistoryEntry {
   readonly continuation: AgentRunListingEntry['continuation'];
   readonly inputBasename: string;
   /** A program's run, or a chat. */
-  readonly kind?: 'task' | 'chat';
+  readonly kind: 'task' | 'chat';
   readonly description?: string;
 }
 
