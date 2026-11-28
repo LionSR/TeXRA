@@ -773,7 +773,6 @@ const SCENARIOS = [
   },
   {
     name: 'model-form-resize-and-confirm-effort',
-    smoke: true,
     env: {
       HARNESS_CAN_SELECT_MODEL: '1',
       HARNESS_VISIBLE_MODELS: 'openai/gpt-6.2-sol||openai/gpt-6.2-astra',
