@@ -397,14 +397,12 @@ const prepareLaunch = Effect.fn('codex.prepareLaunch')(function* (
 export const CodexTool = defineTool({
   name: CODEX_AGENT_NAME,
   description:
-    'Spin off an OpenAI Codex agent to perform code analysis, generation, or research in a sandboxed environment. ' +
-    "The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox, which follows this run's approval policy: workspace-write when the launch was approved, full access under Auto-approve or an all-agent-work grant. " +
+    'Spin off an OpenAI Codex agent to perform code analysis, generation, or research. ' +
+    "The agent runs the Codex CLI locally and can read files, run commands, and make edits under the Codex sandbox mode this run's approval policy sets: workspace-write when the launch was approved, full access under Auto-approve or an all-agent-work grant. " +
     'Auth is handled by the CLI itself: use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
     'Pass thread_id on a later call to continue that thread with a follow-up instruction, one turn per call. ' +
-    'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like `agent`. ' +
-    'It runs in the working directory of the calling agent and takes no directory argument, so give parallel codex agents disjoint files to edit. ' +
-    'codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task.',
+    'It runs in the working directory of the calling agent and takes no directory argument, so parallel codex agents share that directory.',
   schema: CodexInputSchema,
   card: codexCallCard,
   guard: {

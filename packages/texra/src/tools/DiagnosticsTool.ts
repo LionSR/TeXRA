@@ -179,7 +179,7 @@ export const DiagnosticsTool = defineTool({
   // (`EditorHost`): the extension's own session, or a service task with
   // one of its windows.
   hostCapability: 'readDiagnostics' satisfies EditorCapability,
-  description: `Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the ${settingName(INLINE_CRITICISM_SETTING)} setting and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".`,
+  description: `Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; "add" pushes a critique annotation as an editor diagnostic (squiggle + Problems panel entry), leaving the file unchanged. The "add" command requires the ${settingName(INLINE_CRITICISM_SETTING)} setting and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".`,
   schema: DiagnosticsInputSchema,
   execute: diagnose,
 });

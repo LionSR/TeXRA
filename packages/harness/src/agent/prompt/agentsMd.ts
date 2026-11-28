@@ -69,5 +69,5 @@ export const loadAgentsMd = Effect.fn('agentsMd.loadAgentsMd')(function* (
     { concurrency: 'unbounded' },
   );
   if (!own || !project) return own || project;
-  return `The person's own instructions, for every project:\n${own}\n\nThis project's instructions, which come first where the two disagree:\n${project}`;
+  return `The person's own instructions, for every project:\n${own}\n\nThis project's instructions, which take precedence where the two disagree:\n${project}`;
 });
