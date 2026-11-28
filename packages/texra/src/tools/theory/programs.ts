@@ -4,7 +4,9 @@
  * program checks in code that nothing outside the annotations changed and
  * says so in its answer when something did. `transcribe` starts one
  * child with the launch's media attached, which writes them as a LaTeX
- * file.
+ * file. `write-up` starts one child, which saw none of the work, to write a
+ * result up for a reader from its working files, and checks in code that
+ * the note states the claim as given and that those files did not change.
  *
  * Each module is a file of `programs/`, built into this table as its text.
  * A step records the module sources it ran, so a resumed run replays the
@@ -13,10 +15,18 @@
 import type { Program } from '@texra-ai/worldline/plugins';
 
 import annotate from './programs/annotate.js?raw';
+import text from './programs/text.js?raw';
 import transcribe from './programs/transcribe.js?raw';
+import writeUp from './programs/write-up.js?raw';
 
-/** The theory plugin's script modules, by name: one per program. */
-export const THEORY_MODULES = Object.freeze({ annotate, transcribe });
+/** The theory plugin's script modules, by name: `text`, which the programs
+ *  that compare files share, and one per program. */
+export const THEORY_MODULES = Object.freeze({
+  text,
+  annotate,
+  transcribe,
+  'write-up': writeUp,
+});
 
 /** The modules that are programs; each answers with its child's reply. */
 export const THEORY_PROGRAMS = Object.freeze({
@@ -29,5 +39,10 @@ export const THEORY_PROGRAMS = Object.freeze({
     description:
       'Turn `mediaFiles` (handwriting or scans, or audio) into a new LaTeX file in the project, `transcript.tex` unless the instruction names another.',
     tools: Object.freeze(['agent']),
+  }),
+  'write-up': Object.freeze({
+    description:
+      'Write a result up for a reader, in a fresh context: `inputFiles` are the working files that hold the argument, `args.claim` the file holding the exact statement claimed, `args.note` the LaTeX file to write. Answers with the gaps the writer found, and reports a note that does not state the claim as given or a working file that changed; the instruction names the reader.',
+    tools: Object.freeze(['agent', 'read_file']),
   }),
 } satisfies Record<string, Program>);
