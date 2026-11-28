@@ -21,7 +21,11 @@
 
 // Third-party imports
 import { Effect, Schema, type Scope, Stream } from 'effect';
-import { ChildRuns, ToolContext } from '@texra-ai/worldline/plugins';
+import {
+  asToolError,
+  ChildRuns,
+  ToolContext,
+} from '@texra-ai/worldline/plugins';
 
 // Local imports
 import { MESSAGE_TYPES, type ToolUseLog } from '@texra-ai/worldline/schemas';
@@ -49,7 +53,6 @@ import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
   agentCliTool,
   StreamedToolCards,
-  asToolError,
   type AgentCliTurn,
 } from './agentCliShared';
 import {
@@ -388,13 +391,10 @@ export const ClaudeAgentTool = defineTool({
     'Auth: ANTHROPIC_API_KEY (the Anthropic key TeXRA stores, or the env var), CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`), or `claude login` OAuth session. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the session_id). ' +
     'Pass session_id on a later call to continue that session with a follow-up, one turn per call. ' +
-    'Set fork_session to branch from that session while leaving the original unchanged. Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in the working directory of the calling agent, with independent file editing, search, and shell access, async and multi-turn like `agent`; it takes no directory argument, so give parallel coders disjoint files to edit. codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task.',
+    'Set fork_session to branch from that session while leaving the original unchanged. It runs in the working directory of the calling agent and takes no directory argument, so parallel claude_code agents share that directory.',
   schema: ClaudeAgentInputSchema,
-  guard: {
-    command: {
-      text: (input: ClaudeAgentInput) =>
-        `[${CLAUDE_AGENT_NAME}] ${input.prompt}`,
-    },
+  command: {
+    text: (input: ClaudeAgentInput) => `[${CLAUDE_AGENT_NAME}] ${input.prompt}`,
   },
   execute: agentCliTool({
     name: CLAUDE_AGENT_NAME,

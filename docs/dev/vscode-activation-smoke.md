@@ -14,9 +14,9 @@ npm run test:vscode -- --vscode minimum  # engines.vscode
 This launches the built extension in a real VS Code and asserts, from inside the
 extension host, that it activates, that every manifest command is registered, and
 that `showProgressView`, `showModels` and `openProgressViewInTab` run and open a
-TeXRA webview tab. CI runs it against stable VS Code on every push to `main`,
-on dispatch, and on pull requests that touch the VS Code host; the nightly run
-skips it. It makes no model call: it seeds no API key.
+TeXRA webview tab. The `Nightly` workflow runs it against stable VS Code; no
+pull request or push does, so run it yourself after touching the VS Code host.
+It makes no model call: it seeds no API key.
 
 ## Development Host
 

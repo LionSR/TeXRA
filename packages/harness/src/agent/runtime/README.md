@@ -37,8 +37,7 @@ file, so `npm run gate:docs` fails when one moves.
   call launches and awaits a native child),
   [`subagentRun`](delegation/subagentRun.ts) (a detached child),
   [`agentChild`](delegation/agentChild.ts) (the child a call answers from),
-  [`bashDelivery`](delegation/bashDelivery.ts) (what a background command
-  delivers), [`proposalFlow`](delegation/proposalFlow.ts) and
+  [`proposalFlow`](delegation/proposalFlow.ts) and
   [`delegationAvailability`](delegation/delegationAvailability.ts) (what a
   child may run, and the approval before it does),
   [`inputFields`](delegation/inputFields.ts).

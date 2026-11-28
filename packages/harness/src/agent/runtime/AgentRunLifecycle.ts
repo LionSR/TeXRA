@@ -98,8 +98,8 @@ export const endVerdict = Effect.fnUntraced(function* (
 });
 
 /** The report of a run that ended before its loop produced an output. */
-function emptyReport(ctx: RunLaunch, outcome: RunOutcome): RunReport {
-  return { outcome, output: emptyRunEndOutput(), runId: ctx.runId };
+function emptyReport(outcome: RunOutcome): RunReport {
+  return { outcome, output: emptyRunEndOutput() };
 }
 
 /**
@@ -214,7 +214,7 @@ export const endRun = Effect.fn('endRun')(function* (
   // with no failure of its own reports the rows the store refused.
   const failure = error ?? verdict.lost;
   const report: RunReport = {
-    ...(carried ?? emptyReport(ctx, verdict.outcome)),
+    ...(carried ?? emptyReport(verdict.outcome)),
     outcome: verdict.outcome,
     ...(failure !== undefined && { failure }),
   };

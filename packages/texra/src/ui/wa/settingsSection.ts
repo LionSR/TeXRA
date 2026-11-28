@@ -3,12 +3,15 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { guard } from 'lit/directives/guard.js';
 import { live } from 'lit/directives/live.js';
 
-// Web Awesome switch + input (the rows render them; the input is checked by class)
+// Web Awesome switch, select + input (the rows render them; the input is checked by class)
+import '@awesome.me/webawesome/dist/components/option/option.js';
+import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - utils
 import type { IconName } from '@ui/wa/iconNames';
+import { readSelectValue } from '@ui/wa/selectTemplates';
 
 // Local imports - Web Awesome
 import { waIcon } from './webAwesomeIcons';
@@ -98,7 +101,10 @@ interface SettingsToggleRowOptions {
 /** Stable per-row id derived from the label, so the `for`/`id` pair does not
  *  churn across re-renders the way a counter would. Labels are unique within a
  *  settings page. */
-function settingsRowId(kind: 'toggle' | 'number', label: string): string {
+function settingsRowId(
+  kind: 'toggle' | 'number' | 'select',
+  label: string,
+): string {
   return `settings-${kind}-${label
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, '-')
@@ -256,6 +262,57 @@ export function renderSettingsNumberRow(
             ? html`<span class="setting-unit">${options.unit}</span>`
             : nothing
         }
+      </div>
+    </div>
+  `;
+}
+
+interface SettingsSelectRowOptions {
+  readonly label: string;
+  readonly description: string;
+  readonly value: string;
+  readonly choices: readonly {
+    readonly value: string;
+    readonly label: string;
+  }[];
+  /** The chosen option's value; never the empty selection. */
+  readonly onChange: (value: string) => void;
+}
+
+/**
+ * The select row of a Settings page, for a list too long or too dynamic to
+ * show as a segmented group: label and help on the left, the select in the
+ * control slot, named by the label and described by the help text.
+ */
+export function renderSettingsSelectRow(
+  options: SettingsSelectRowOptions,
+): TemplateResult {
+  const id = settingsRowId('select', options.label);
+  return html`
+    <div class="settings-row">
+      <div class="settings-row-text">
+        <label class="settings-row-label" for=${id}>${options.label}</label>
+        <span class="settings-row-help" id="${id}-help"
+          >${options.description}</span
+        >
+      </div>
+      <div class="settings-row-control">
+        <wa-select
+          id=${id}
+          aria-describedby="${id}-help"
+          .value=${options.value}
+          @change=${(event: Event) => {
+            const selected = readSelectValue(event);
+            if (selected) options.onChange(selected);
+          }}
+        >
+          ${options.choices.map(
+            (choice) =>
+              html`<wa-option value=${choice.value}
+                >${choice.label}</wa-option
+              >`,
+          )}
+        </wa-select>
       </div>
     </div>
   `;

@@ -16,7 +16,7 @@ import {
   buildPluginRows,
   type PluginPageRoots,
 } from '@texra/controllers/settingsView/pluginRows';
-import { planToolTerminalAction } from '@texra/controllers/settingsView/ToolDashboardData';
+import { toolTerminalCommand } from '@texra/controllers/settingsView/ToolDashboardData';
 
 import {
   SETTINGS_LOG_CHANNEL,
@@ -130,16 +130,8 @@ export function settingsToolCommands(ports: {
     // The command is looked up from the plugin's card, never taken from
     // the webview.
     runToolCommand: ({ toolId, kind }) =>
-      Effect.flatMap(
-        planToolTerminalAction({ toolId, commandKind: kind }),
-        (action) =>
-          action.kind === 'none'
-            ? Effect.fail(
-                new SettingsRequestFailed({
-                  message: `No ${kind} command for tool "${toolId}" (${action.reason})`,
-                }),
-              )
-            : bindings.runInTerminal(action.name, action.command),
+      Effect.flatMap(toolTerminalCommand(toolId, kind), ({ name, command }) =>
+        bindings.runInTerminal(name, command),
       ),
     runInstallCommand: ({ installCommand }) =>
       isAllowedLatexInstallCommand(installCommand)

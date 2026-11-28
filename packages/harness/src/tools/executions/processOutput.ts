@@ -17,7 +17,8 @@ import {
   type SessionRow,
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import { BASH_BACKGROUND_LOG_CAP_CHARS, elidedNote } from '@shared/toolUse';
+import { elidedNote } from '@shared/toolUse';
+import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@tools/bashDelivery';
 import { executed } from '@tools/core/result';
 import type { LineRange } from '@tools/formatting';
 import { formatCount } from '@utils/text/stringUtils';

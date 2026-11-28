@@ -60,7 +60,7 @@ export interface CliHistoryEntry {
   readonly continuation: AgentRunListingEntry['continuation'];
   readonly inputBasename: string;
   /** A program's run, or a chat. */
-  readonly kind?: 'task' | 'chat';
+  readonly kind: 'task' | 'chat';
   readonly description?: string;
 }
 
@@ -390,12 +390,7 @@ export function formatCliHistoryDetailsText(
   ) {
     lines.push('', formatConversation(details.conversation));
   }
-  const shown = config
-    ? serializeFilteredConfig(
-        config,
-        runKindOf(config) === 'task' ? 'task' : 'agent',
-      )
-    : '{}';
+  const shown = config ? serializeFilteredConfig(config) : '{}';
   const files = details.files.map(
     (file) =>
       `${file.isDirectory ? '<dir>' : formatBytes(file.size)}\t${file.path}`,

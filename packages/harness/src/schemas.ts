@@ -28,7 +28,7 @@ export type {
   AgentConfigPayload,
 } from '@shared/schemas/agentConfig';
 // A run's saved record: an agent's config or a task's,
-// and its JSON with the fields its category hides dropped.
+// and its JSON without the fields that do not apply to the run.
 export {
   serializeFilteredConfig,
   type RunRecord,

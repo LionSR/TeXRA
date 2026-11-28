@@ -98,7 +98,10 @@ before the fix and passed 20 of 20 after.
    run of `validate:tui` without `--smoke` at least, or every PR. Only then
    do the `smoke` tag and the split go. 2026-11-20: the nightly run landed
    (the `tui-validation` job of `.github/workflows/ci.yml`); every PR is
-   still open, and with it the `smoke` tag.
+   still open, and with it the `smoke` tag. 2026-11-26: closed the other
+   way. No pull request runs a suite any more; the full `validate:tui` is a
+   job of `.github/workflows/nightly.yml`, and the `smoke` tag and `--smoke`
+   are deleted.
 2. **`/login`'s rows while its account state loads.** Its list mounts and
    listens at once, but the subscription rows are disabled until the
    account state loads, so a hotkey typed in that window selects nothing.

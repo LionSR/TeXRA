@@ -33,6 +33,7 @@ import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from './composedPath';
 import { RunTab } from './RunTab';
 import {
+  descendantRuns,
   needsUser,
   type SessionView,
   type RunView,
@@ -122,12 +123,15 @@ export class RunTabs extends TexraElement {
 
   /** A run is listed when it or any run under it matches the filter. */
   private matchesSearch(run: RunView, query: string): boolean {
-    return (
-      matchesQuery(`${run.label} ${run.description ?? ''}`, query) ||
-      run.childIds.some((id) => {
-        const child = this.runOfEvent(id);
-        return child !== undefined && this.matchesSearch(child, query);
-      })
+    if (this.view === null) return false;
+    return descendantRuns(this.view, run.id, { includeRoot: true }).some(
+      (id) => {
+        const shown = this.runOfEvent(id);
+        return (
+          shown !== undefined &&
+          matchesQuery(`${shown.label} ${shown.description ?? ''}`, query)
+        );
+      },
     );
   }
 

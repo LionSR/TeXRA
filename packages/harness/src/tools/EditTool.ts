@@ -87,7 +87,7 @@ export const EditFileTool = defineTool({
   name: 'edit_file',
   requiresApproval: 'inBody',
   description:
-    'Performs exact string replacements in workspace files using literal matching.',
+    'Performs exact string replacements in files using literal matching.',
   schema: EditInputSchema,
   execute: edit,
 });

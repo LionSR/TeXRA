@@ -102,19 +102,6 @@ export function toolCallOutput(log: ToolCallLog): {
 /** Default `bash` tool timeout (ms) when the model omits `timeout`. */
 export const BASH_TOOL_DEFAULT_TIMEOUT_MS = 120_000;
 
-/**
- * Max chars a background `bash` run records as `process.output` rows as
- * they arrive, both streams together. Past it the run writes a truncation
- * notice; a stream still records up to the delivery's head budget, and the
- * rest is held back. When the command ends each stream's held-back tail is
- * recorded as a row marking the gap before it (`elided`), so a capped log
- * holds at most one head and one tail per stream beyond this figure. Lives
- * here because the writer (`tools/bash.ts`) and the reader
- * (`/executions/{id}/output`) must agree on the figure the output header
- * reports.
- */
-export const BASH_BACKGROUND_LOG_CAP_CHARS = 200_000;
-
 /** The note an excerpt shows where it left `elided` characters out: of a
  *  tool result, of a command's `stream`, or where a capped process log left
  *  part of a stream out. */

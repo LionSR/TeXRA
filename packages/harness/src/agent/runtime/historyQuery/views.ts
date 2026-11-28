@@ -108,15 +108,21 @@ export const HISTORY_SCHEMA_SQL = [
   RUN_TREE,
 ].join('\n');
 
-/** One `SELECT`, `WITH`, `EXPLAIN` or `VALUES` statement, read with its
- *  comments and quoted text blanked so neither can hide structure. */
+/** One `SELECT`, `WITH` or `VALUES` statement, or an `EXPLAIN` of one, read
+ *  with its comments and quoted text blanked so neither can hide structure.
+ *  An `EXPLAIN` of anything else is refused: SQLite applies some pragmas
+ *  (`query_only` among them) when a statement is prepared, explained or not. */
 export function statementRefusal(sql: string): string | null {
   const shape = sql.replaceAll(
     /--[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|'(?:[^']|'')*'?|"(?:[^"]|"")*"?|`[^`]*`?|\[[^\]]*\]?/g,
     ' ',
   );
-  if (!/^\s*(?:select|with|explain|values)\b/i.test(shape)) {
-    return 'Only a read is allowed: one SELECT, WITH, EXPLAIN or VALUES statement.';
+  if (
+    !/^\s*(?:explain\s+(?:query\s+plan\s+)?)?(?:select|with|values)\b/i.test(
+      shape,
+    )
+  ) {
+    return 'Only a read is allowed: one SELECT, WITH or VALUES statement, or an EXPLAIN of one.';
   }
   if (shape.trim().replace(/;\s*$/, '').includes(';')) {
     return 'Send one statement per query; this one has more than one.';

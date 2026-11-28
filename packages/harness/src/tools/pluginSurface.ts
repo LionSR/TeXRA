@@ -41,13 +41,13 @@ export {
   type ToolProbeServices,
 } from '@tools/toolProbes';
 // What a tool's body reads from its call: the run, its roots and its
-// requests (`ToolContext`), and the guard that may refuse a call first.
+// requests (`ToolContext`), and the command it must get approved first.
 export {
   ToolContext,
   type CallRequests,
   type ToolContextShape,
   type ToolEnv,
-  type ToolGuard,
+  type ToolCommand,
 } from '@tools/core/ToolTypes';
 export { errorResult, executed } from '@tools/core/result';
 // The workspace's ignore policy.
@@ -85,8 +85,12 @@ export {
 // What a request of each kind is answered with, and the three ways any
 // request is declined.
 export type { DecisionOf, RefusalDecision } from '@shared/schemas';
-export { ToolError } from '@shared/schemas';
-export { nullishWithDefault, optionalInput } from '@tools/core/inputSchema';
+export { asToolError, ToolError } from '@shared/schemas';
+export {
+  describedString,
+  nullishWithDefault,
+  optionalInput,
+} from '@tools/core/inputSchema';
 export {
   assertNoParentTraversal,
   resolveToolPath,
@@ -176,8 +180,6 @@ export type { RunHistoryInconsistent } from '@shared/session/runState';
 // policy, trace and stages, model binding and run files.
 export type { ToolRun } from '@tools/core/ToolTypes';
 export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
-// Renders a prompt template (Nunjucks) with its variables.
-export { PromptRenderFailed, renderPrompt } from '@agent/prompt/promptRender';
 export type {
   AgentTrace,
   StreamHandle,

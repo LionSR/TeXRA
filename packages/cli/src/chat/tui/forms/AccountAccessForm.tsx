@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink';
 
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/worldline/schemas';
-import { loadCliModelAccessOverview } from '@cli/runtime/models/apiStatus';
+import { loadCliModelAccessOverview } from '@cli/chat/tui/apiStatus';
 import type {
   CliLogoutTarget,
   LoginFormValue,

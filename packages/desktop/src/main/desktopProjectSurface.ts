@@ -29,8 +29,6 @@ import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 export interface ProjectSurface {
   /** The settings surface of the project the window is bound to. */
   settings(): DesktopSettingsIpc | undefined;
-  /** The project the window is bound to. */
-  attached(): DesktopProject | undefined;
   /**
    * Bind the window to the project it shows. The old settings IPC is detached
    * first, so an attach that fails partway leaves settings messages
@@ -140,7 +138,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
 
     return {
       settings: () => settings,
-      attached: () => attached,
       attach,
       reattach: () =>
         Effect.suspend(() => {

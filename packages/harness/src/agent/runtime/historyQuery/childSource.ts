@@ -8,20 +8,15 @@
  *
  * It never opens the session database. `query_only` is on except while an
  * append runs, so the model's statement cannot write even through a
- * `WITH … INSERT`; the session side accepts only one `SELECT`/`WITH`/`EXPLAIN`
- * statement, which also keeps `PRAGMA` out. Stdin closing (its host exited,
- * by any means) ends the process.
+ * `WITH … INSERT`; the session side accepts only one `SELECT`, `WITH` or
+ * `VALUES` statement, explained or not, which also keeps `PRAGMA` out. Stdin
+ * closing (its host exited, by any means) ends the process.
  */
 import { type Cause, Effect, Queue, Schema, Scope, Stream } from 'effect';
 import { Ndjson } from 'effect/encoding';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
 import type { CommitOrdinal, RunId } from '@shared/schemas';
-import {
-  HistoryQueryFailed,
-  HistoryQueryRefused,
-  type HistoryCell,
-} from '@shared/session/runHistory';
 import type { SessionView } from '@shared/session/sessionView';
 
 import {
@@ -32,6 +27,46 @@ import {
 } from './views';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
+
+/** A correctable query refusal: SQLite's error or the exceeded limit. */
+export class HistoryQueryRefused extends Schema.TaggedError<HistoryQueryRefused>()(
+  'HistoryQueryRefused',
+  {
+    reason: Schema.Literals([
+      'not-a-read',
+      'rejected',
+      'timeout',
+      'result-too-large',
+    ]),
+    message: Schema.String,
+  },
+) {}
+
+/** A store failure: process startup, exit, or rejected history rows. */
+export class HistoryQueryFailed extends Schema.TaggedError<HistoryQueryFailed>()(
+  'HistoryQueryFailed',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+const HistoryCellSchema = Schema.Union([
+  Schema.String,
+  Schema.Number,
+  Schema.Null,
+]);
+/** One value of a history query's result row. */
+export type HistoryCell = typeof HistoryCellSchema.Type;
+/** One page of a history query's result: its columns, its rows (capped), and
+ *  whether more exist. */
+export const HistoryPageSchema = Schema.Struct({
+  columns: Schema.Array(Schema.String),
+  rows: Schema.Array(Schema.Array(HistoryCellSchema)),
+  more: Schema.Boolean,
+});
+/** {@link HistoryPageSchema}'s value. */
+export type HistoryPage = typeof HistoryPageSchema.Type;
 
 /** SQLite's own memory ceiling in the store, rows and sorts together. */
 const STORE_HEAP_LIMIT_BYTES = 1024 * 1024 * 1024;

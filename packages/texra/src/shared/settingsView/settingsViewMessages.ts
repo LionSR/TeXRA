@@ -161,11 +161,6 @@ export type ModelSelectionPage = typeof ModelSelectionPageSchema.Type;
 // Tool dashboard data schemas
 // ============================================================
 
-/** One tool a dashboard card groups, by name. */
-const ToolInfoSchema = Schema.Struct({
-  name: Schema.String,
-});
-
 /** One setup action exposed by a tool dashboard card. */
 const ToolInstallActionSchema = Schema.Union([
   Schema.Struct({
@@ -196,7 +191,8 @@ const ToolDashboardItemSchema = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   description: Schema.String,
-  tools: Schema.Array(ToolInfoSchema),
+  /** The names of the tools the card groups. */
+  tools: Schema.Array(Schema.String),
   /** What a probed plugin needs and how its probe found it; null for a
    *  built-in plugin, which needs nothing outside TeXRA. */
   setup: Schema.NullOr(

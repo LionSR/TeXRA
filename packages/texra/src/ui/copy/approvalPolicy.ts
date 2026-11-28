@@ -47,3 +47,12 @@ export function approvalPolicyLabel(policy: ApprovalPolicy): string {
 export function formatApprovalPolicy(policy: ApprovalPolicy): string {
   return APPROVAL_POLICY_COPY[policy].description;
 }
+
+/** The line that states a policy and whose it is: the project's stored
+ *  policy, or the one this chat was launched with (`/approval`). */
+export const APPROVAL_POLICY_LINE = Object.freeze({
+  project: (policy: ApprovalPolicy) =>
+    `Project approval policy: ${formatApprovalPolicy(policy)}`,
+  chat: (policy: ApprovalPolicy) =>
+    `Approval mode: ${formatApprovalPolicy(policy)}`,
+});

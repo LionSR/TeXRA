@@ -6,6 +6,7 @@ import { ToolContext } from '@texra-ai/worldline/plugins';
 import { toErrorMessage, formatResultCount } from '@texra-ai/worldline/schemas';
 import {
   resolveToolPath,
+  describedString,
   executed,
   ToolError,
   defineTool,
@@ -99,11 +100,9 @@ const InlineCommentInputSchema = Schema.Union([
     command: Schema.Literal('add').annotate({
       description: 'Open a new comment thread on a file range.',
     }),
-    // Described on the encoded side, the one the model's JSON Schema shows.
-    path: Schema.String.annotate({
-      description:
-        'File the comment anchors to. Workspace-relative or absolute.',
-    }).pipe(Schema.decodeTo(Schema.Trim.check(Schema.isMinLength(1)))),
+    path: describedString(
+      'File the comment anchors to. Workspace-relative or absolute.',
+    ),
     line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
       description: '1-based start line the comment anchors to.',
     }),
@@ -302,7 +301,7 @@ export const InlineCommentTool = defineTool({
   // Offered where the host passes its Comments UI (`texraPlugins`).
   hostCapability: 'inline-comments' satisfies InlineCommentCapability,
   description:
-    'Leave inline comment threads in the editor via VS Code\'s native Comments UI (gutter bubbles + Comments panel) that the user can reply to and resolve. Commands: "add" opens a thread on a file range, "reply" appends to a thread, "resolve"/"unresolve" toggle a thread\'s state, "list" reads open threads including the user\'s replies. Use this for conversational, resolvable review notes; use the diagnostics tool\'s "add" command for one-off lint-style critique squiggles. Not available outside the VS Code extension host.',
+    'Leave inline comment threads in the editor via VS Code\'s native Comments UI (gutter bubbles + Comments panel) that the user can reply to and resolve. Commands: "add" opens a thread on a file range, "reply" appends to a thread, "resolve"/"unresolve" toggle a thread\'s state, "list" reads open threads including the user\'s replies. Use this for conversational, resolvable review notes; use the diagnostics tool\'s "add" command for one-off lint-style critique squiggles.',
   schema: InlineCommentInputSchema,
   execute: inlineComment,
 });

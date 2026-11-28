@@ -74,24 +74,6 @@ Add a legend explaining the color scheme and improve the layout for better reada
 
 TeXRA can pull TikZ figures out of your LaTeX source for separate processing.
 
-### Automatic extraction
-
-A program run can attach the compiled TikZ figures of its input files. The assistant switches this on with `args: { autoExtractTikzFigure: true }` on its `program` call; ask for it in plain words ("attach the compiled TikZ figures").
-
-When automatic extraction is enabled, each `tikzpicture` in your selected files is extracted into a standalone `.tex` document, compiled to PDF with `pdflatex`, and attached to the prompt alongside the source code:
-
-<FlowSteps :steps="[
-  { icon: 'file-code', title: 'Source', desc: 'One .tex file with several tikzpicture environments.', chips: [{ text: 'diagrams.tex', variant: 'info', icon: 'file-code' }] },
-  { icon: 'file-submodule', title: 'Extract', desc: 'A standalone LaTeX document per figure.', chips: [{ text: 'fig1.tex', variant: 'neutral' }, { text: 'fig2.tex', variant: 'neutral' }, { text: 'fig3.tex', variant: 'neutral' }] },
-  { icon: 'play-circle', title: 'Compile', desc: 'pdflatex builds each standalone.', chips: [{ text: '3 PDFs', variant: 'warning', icon: 'file-pdf' }] },
-  { icon: 'output', title: 'Attach', desc: 'Models with native PDF support read the PDFs directly; others get rasterized PNGs via GraphicsMagick / ImageMagick + Ghostscript.', chips: [{ text: 'PDF or PNG', variant: 'success', icon: 'eye' }] },
-  { icon: 'robot', title: 'Agent', desc: 'Sees both the TikZ code and the rendered output.', chips: [{ text: 'code + image', variant: 'accent' }] }
-]" />
-
-<p class="hero-caption">The extract, compile, attach pipeline: each <code>tikzpicture</code> becomes its own standalone document and PDF. Rasterization to PNG, only for models without native PDF support, needs GraphicsMagick / ImageMagick + Ghostscript.</p>
-
-Missing system dependencies show <wa-icon library="texra" name="warning"></wa-icon> on **Settings → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
-
 ### Compile from the Command Palette
 
 You can also extract and compile TikZ figures manually from the Command Palette:
@@ -100,7 +82,7 @@ You can also extract and compile TikZ figures manually from the Command Palette:
 2. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
 3. Run **TeXRA: Compile TikZ Figures from Current File**.
 
-This wraps each TikZ figure in a standalone file, compiles it to PDF, and lets you open the result.
+This wraps each TikZ figure in a standalone file, compiles it to PDF with `pdflatex`, and lets you open the result. Missing system dependencies show <wa-icon library="texra" name="warning"></wa-icon> on **Settings → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
 
 ### In a chat
 
@@ -118,7 +100,7 @@ The standalone document structure TeXRA uses for each extracted figure:
 "texra.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}"
 ```
 
-Customize this template to include additional packages or settings your figures need.
+Customize this template to include additional packages or settings your figures need. Each `{{ tikzpicture }}` is replaced by the figure; everything else is copied as written, so macro definitions such as `\newcommand{\vect}[1]{\mathbf{#1}}` work in the preamble.
 
 ### TikZ input directory
 

@@ -101,7 +101,7 @@ function keyboardEventToAccelerator(
   platform: OsPlatform,
 ): string | undefined {
   if (MODIFIER_KEYS.has(event.key)) return undefined;
-  const key = normalizeKeyboardKey(event.key);
+  const key = normalizeKeyboardKey(latinKey(event));
   if (!key) return undefined;
 
   const parts: string[] = [];
@@ -112,6 +112,19 @@ function keyboardEventToAccelerator(
   if (platform !== 'darwin' && event.metaKey) parts.push('Super');
   if (parts.length === 0 && !FUNCTION_KEY_PATTERN.test(key)) return undefined;
   return [...parts, key].join('+');
+}
+
+const LETTER_OR_DIGIT_CODE = /^(?:Key|Digit)([A-Z0-9])$/;
+
+/** The key a chord names. A layout that types no Latin letters (Cyrillic,
+ *  Greek, Hebrew) reports its own character for Ctrl+K, which no accelerator
+ *  names, so the physical key answers there. Not under AltGr, where the
+ *  character is what the person is typing (`€` on a German layout). */
+function latinKey(event: KeyboardEvent): string {
+  const { key } = event;
+  if (key.length !== 1 || key.charCodeAt(0) < 0x80) return key;
+  if (event.getModifierState('AltGraph')) return key;
+  return LETTER_OR_DIGIT_CODE.exec(event.code)?.[1] ?? key;
 }
 
 const SUPPORTED_NAMED_KEYS: Record<string, string> = {

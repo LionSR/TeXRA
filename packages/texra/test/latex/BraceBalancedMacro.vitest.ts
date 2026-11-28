@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { findBraceBalancedMacroCalls } from '@texra/utils/text/braceBalancedMacro';
+import { findBraceBalancedMacroCalls } from '@latex/braceBalancedMacro';
 
 describe('findBraceBalancedMacroCalls', () => {
   it('handles arbitrarily nested braces within an argument', () => {

@@ -21,7 +21,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { apiKeyEntry } from '@texra-ai/llm';
+import { routedApiKeyProvider } from '@texra-ai/llm';
 
 import {
   setModelEnabled,
@@ -459,8 +459,8 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           // `unset_api_key`, another window). OAuth tokens and other
           // secrets are not provider keys, so they change nothing here.
           followSignal('credentialChanged', ({ key }) => {
-            const provider = apiKeyEntry(key);
-            return provider === undefined || provider === 'unknown'
+            const provider = routedApiKeyProvider(key);
+            return provider === undefined
               ? undefined
               : credentialsChanged(
                   CODING_PLAN_BY_API_PROVIDER.get(provider)?.id,

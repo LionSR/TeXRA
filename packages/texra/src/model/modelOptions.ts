@@ -89,6 +89,10 @@ function optionRow(verdict: ModelVerdict): ModelOptionData {
       ? undefined
       : {
           levels: [...route.efforts],
+          ...(!('refused' in route.fallback) &&
+            route.fallback.effort !== undefined && {
+              fallback: route.fallback.effort,
+            }),
           ...(!('refused' in route.sent) &&
             route.sent.effort !== undefined && { sent: route.sent.effort }),
         };

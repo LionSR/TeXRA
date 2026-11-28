@@ -81,7 +81,6 @@
  * value. Two generations on one tree give the same file.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import {
   cpSync,
@@ -1046,8 +1045,14 @@ const BASE_AT = Date.UTC(2026, 0, 1);
 const CHILD_CALLS = new Set(['agent', 'self']);
 
 async function normalize(file, root) {
-  const { decodeRow, encodeDraft, EVENT_COLUMNS, EVENT_FROM, sha256Hex } =
-    await loadRowCodec(root);
+  const {
+    callChildRunId,
+    decodeRow,
+    encodeDraft,
+    EVENT_COLUMNS,
+    EVENT_FROM,
+    sha256Hex,
+  } = await loadRowCodec(root);
   const db = new DatabaseSync(file);
   const events = db
     .prepare(
@@ -1116,11 +1121,8 @@ async function normalize(file, root) {
   // (`agentChildRunId`: its run, response, call and attempt), so a resume
   // finds it by deriving that name again. Such a child is renamed by the same derivation over
   // the normalized names, not by order, or no resume would find it.
-  const derive = (fields) =>
-    createHash('sha256')
-      .update(stableStringify(fields))
-      .digest('hex')
-      .slice(0, 24);
+  const derive = ({ parentRunId: parentId, ...call }) =>
+    callChildRunId({ parentId, ...call });
   const logicalOf = new Map(sequences.map((row) => [row.id, row.logical_id]));
   const children = new Map();
   for (const [index, row] of rows.entries()) {

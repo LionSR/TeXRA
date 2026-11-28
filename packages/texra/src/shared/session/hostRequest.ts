@@ -1,9 +1,10 @@
 /**
- * `host.request`: a capability
- * the host performs on the surface's behalf, mapped onto the process
- * services and the `@hosts/*` ports. Components dispatch one case as the detail of a
- * `host-request` event (`uiEvents.ts`); the root forwards it over the
- * bridge under a `session` and a `requestId`, answered by 8.4.
+ * `host.request`: a capability the host performs on the surface's behalf,
+ * over the process services and the verbs the host binds (`GuiWindowHost`).
+ * Components dispatch one case as the detail of a `host-request` event
+ * (`uiEvents.ts`); the root sends it as the session channel's `host.request`
+ * call (`sessionFrames.ts`), which the window's body (`openGuiWindow`)
+ * answers.
  *
  * Only the cases the shell components dispatch are declared; each new
  * component adds its case here with its first dispatch.
@@ -40,8 +41,7 @@ export const HostCommandSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('openLabel'), label: Schema.String }),
   Schema.Struct({ kind: Schema.Literal('openRunStorage'), ...runScoped }),
   Schema.Struct({ kind: Schema.Literal('exportTranscript'), ...runScoped }),
-  /** Relaunch a finished run: a workflow through the host's launcher with
-   *  its run id, a tool-use run through the resume port. */
+  /** Continue a finished run on the session that holds it. */
   Schema.Struct({ kind: Schema.Literal('resume'), ...runScoped }),
   /** The launch form, opened on a finished run's setup (Run again…). */
   Schema.Struct({ kind: Schema.Literal('runAgain'), ...runScoped }),
@@ -83,7 +83,7 @@ export const HostCommandSchema = Schema.Union([
    *  instead of taking an answer still fresh. */
   Schema.Struct({
     kind: Schema.Literal('refreshUsage'),
-    force: Schema.optional(Schema.Boolean),
+    force: Schema.Boolean,
   }),
   /** Remember `level` as a model's reasoning level: every later run on the
    *  model starts at it, until another is picked. */
