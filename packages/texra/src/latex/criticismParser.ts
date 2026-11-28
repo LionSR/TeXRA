@@ -1,12 +1,12 @@
 /**
  * The `\criticize{message}{severity}{confidence}` annotations a critique
  * program writes into a document: found once, by the brace-balanced macro
- * scanner (`@texra/utils/text/braceBalancedMacro`), then either parsed with
+ * scanner (`@latex/braceBalancedMacro`), then either parsed with
  * their positions for the editor's decorations or stripped from a file
  * before it is accepted.
  */
 
-import { findBraceBalancedMacroCalls } from '@texra/utils/text/braceBalancedMacro';
+import { findBraceBalancedMacroCalls } from '@latex/braceBalancedMacro';
 
 interface CriticismAnnotation {
   message: string;

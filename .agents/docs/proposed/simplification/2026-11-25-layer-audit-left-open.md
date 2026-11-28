@@ -133,6 +133,9 @@ terminal note found reading the chat's layout is the point of
 - `utils/text/braceBalancedMacro.ts` and `utils/text/xmlCdata.ts` are each
   read by one subsystem (`latex/criticismParser.ts`, `agent/output/`), both
   held.
+  Landed 2026-11-28: `braceBalancedMacro.ts` is
+  `packages/texra/src/latex/braceBalancedMacro.ts`, its suite under
+  `test/latex/`. `xmlCdata.ts` had already gone with its reader.
 - `installAdvice` for the LaTeX tab is computed in the controller
   (`LatexToolingController.ts`) and again at render time
   (`ui/settings/tabs/LaTeXTab.ts`, held).
