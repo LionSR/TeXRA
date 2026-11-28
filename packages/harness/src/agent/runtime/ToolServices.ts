@@ -12,7 +12,6 @@ import { SessionRoots, StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { type RunEnd, type RunId } from '@shared/schemas';
 import {
   Approvals,
-  HistoryQuery,
   RunHistory,
   SessionLog,
   SessionViewAccess,
@@ -28,6 +27,7 @@ import type { RunCallShape } from './RunCall';
 import type { RouteRetries } from './ModelRetryGate';
 import type { PlanQuotas } from './modelAccess/planQuotas';
 import type { SessionServices } from './rootLaunch';
+import { HistoryQuery } from './historyQuery/HistoryQuery';
 
 /**
  * What a run's program requires of the process: the platform services every
