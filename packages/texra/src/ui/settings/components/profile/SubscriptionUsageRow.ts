@@ -8,6 +8,7 @@ import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscription
 import {
   formatSubscriptionUsageReset,
   formatSubscriptionUsageUpdated,
+  subscriptionQuotaTone,
   subscriptionQuotaUsed,
   subscriptionUsageUnavailable,
   subscriptionUsageWindowLabel,
@@ -150,7 +151,8 @@ export class SubscriptionUsageRow extends TexraElement {
                     <bdi dir="auto">${percent}</bdi></span
                   >
                   ${renderQuotaBar(
-                    window,
+                    window.percentUsed,
+                    subscriptionQuotaTone(window),
                     `${snapshot.providerName} ${label} usage`,
                   )}
                   <span class="usage-reset"
