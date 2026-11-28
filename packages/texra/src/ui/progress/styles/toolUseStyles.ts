@@ -144,9 +144,6 @@ export const toolUseStyles = css`
 
   /* A received message that fits its line: the same line, nothing to open. */
   .received-line > .details-summary {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
     min-height: var(--control-size-s);
   }
 
