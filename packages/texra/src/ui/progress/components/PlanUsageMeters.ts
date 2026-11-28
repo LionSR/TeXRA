@@ -166,7 +166,7 @@ export class PlanUsageMeters extends TexraElement {
     const tone = subscriptionQuotaTone(window);
     const toneClass = tone === undefined ? '' : `tone-${tone}`;
     return html`<span class="chip ${toneClass}">
-      ${planName(usage)} ${renderQuotaBar(window.percentUsed, tone)}
+      ${planName(usage)} ${renderQuotaBar(window)}
       <span class="chip-percent">${Math.round(window.percentUsed)}%</span>
     </span>`;
   }
@@ -194,7 +194,7 @@ export class PlanUsageMeters extends TexraElement {
         const reset = formatSubscriptionUsageReset(window.resetAt, now);
         return html`<div class="window ${toneClass}">
           <span>${subscriptionUsageWindowLabel(window)}</span>
-          ${renderQuotaBar(window.percentUsed, tone, subscriptionUsageWindowLabel(window))}
+          ${renderQuotaBar(window, subscriptionUsageWindowLabel(window))}
           <span class="window-used">${subscriptionQuotaUsed(window)}</span>
           ${reset ? html`<span class="window-reset quiet">${reset}</span>` : nothing}
         </div>`;

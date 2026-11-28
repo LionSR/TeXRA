@@ -7,6 +7,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
 import type { RunTone } from '@ui/copy/runStatus';
+import { subscriptionQuotaTone } from '@ui/copy/subscriptionUsage';
 
 export const quotaBarStyles: CSSResult = css`
   .quota-bar {
@@ -23,7 +24,7 @@ export const quotaBarStyles: CSSResult = css`
  *  from that percentage; only a warning or danger tone colours it. `label`
  *  names it for a screen reader; without one the bar is decoration beside
  *  text that says the same. */
-export function renderQuotaBar(
+export function renderMeterBar(
   percentUsed: number,
   tone: RunTone | undefined,
   label?: string,
@@ -34,4 +35,17 @@ export function renderQuotaBar(
     label=${ifDefined(label)}
     aria-hidden=${label === undefined ? 'true' : nothing}
   ></wa-progress-bar>`;
+}
+
+/** {@link renderMeterBar} for a subscription window, in the tone its quota
+ *  has reached. */
+export function renderQuotaBar(
+  window: { readonly percentUsed: number },
+  label?: string,
+): TemplateResult {
+  return renderMeterBar(
+    window.percentUsed,
+    subscriptionQuotaTone(window),
+    label,
+  );
 }

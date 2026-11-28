@@ -30,7 +30,7 @@ import { toneStyles } from '@ui/styles/toneStyles';
 
 // Local imports - shared icons and utils
 import { factDot } from '@ui/wa/factDot';
-import { quotaBarStyles, renderQuotaBar } from '@ui/wa/quotaBar';
+import { quotaBarStyles, renderMeterBar } from '@ui/wa/quotaBar';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /** Each counter's icon and tooltip anchor in the strip; its name, order
@@ -271,7 +271,7 @@ export class UsagePanel extends LitElement {
     return html`
       <span id="usage-context-gauge" class="context-gauge" tabindex="0">
         <span class="context-label">Context</span>
-        ${renderQuotaBar(clamped, contextGaugeTone(clamped), 'Context used')}
+        ${renderMeterBar(clamped, contextGaugeTone(clamped), 'Context used')}
         <span class="context-state__value">${usageText}</span>
       </span>
       <wa-tooltip for="usage-context-gauge"
