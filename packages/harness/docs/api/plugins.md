@@ -600,12 +600,7 @@ interface CurrentValues {
   readonly modify: <T, K extends string, A, E = never>(
     family: ValueFamily<T>,
     keys: readonly K[],
-    change: (
-      current: Readonly<Record<K, T | undefined>>,
-    ) => Result.Result<
-      readonly [A] | readonly [A, Readonly<Record<K, T | undefined>>],
-      E
-    >,
+    change: ValuesChange<K, T | undefined, A, E>,
   ) => Effect.Effect<A, E | DatabaseWriteFailed>;
   /** Every row of a family, latest write first. */
   readonly list: <T>(
@@ -2079,12 +2074,7 @@ interface StateStore {
    */
   modify<K extends string, A, E = never>(
     keys: readonly K[],
-    change: (
-      current: Readonly<Record<K, unknown>>,
-    ) => Result.Result<
-      readonly [A] | readonly [A, Readonly<Record<K, unknown>>],
-      E
-    >,
+    change: ValuesChange<K, unknown, A, E>,
   ): Effect.Effect<A, E | StateWriteFailed>;
 }
 ```
@@ -2608,6 +2598,19 @@ interface ValueFamily<T> {
   readonly name: string;
   readonly schema: Schema.Codec<T, unknown>;
 }
+```
+
+## ValuesChange
+
+The change a read-modify-write applies to the values of its keys: it sees
+the stored ones and answers with its result and the next value of every
+key, with its result alone to write nothing, or refuses with its own error
+and nothing is written.
+
+```ts
+type ValuesChange<K extends string, V, A, E> = (
+  current: Readonly<Record<K, V>>,
+) => Result.Result<readonly [A] | readonly [A, Readonly<Record<K, V>>], E>;
 ```
 
 ## withFileWriteLane
