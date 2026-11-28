@@ -4,6 +4,7 @@
 // than fetched, since the app must render identically offline.
 import { Schema } from 'effect';
 import {
+  attentionOf,
   decodingDefault,
   extractErrorMessage,
 } from '@texra-ai/worldline/schemas';
@@ -397,7 +398,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
   // visible affordance (#11511). Surface the same signal on the toggle that
   // reopens the rail.
   const hasPendingApproval = projects.some(
-    (project) => project.view.rollup.waiting > 0,
+    (project) => attentionOf(project.view).requests.length > 0,
   );
   const sidebarCollapsedWithPendingApproval =
     shellState().sidebarCollapsed && hasPendingApproval;
