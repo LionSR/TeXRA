@@ -99,19 +99,6 @@
       ]
     },
     {
-      "id": "SCOPE-external-roots-standalone-service",
-      "candidate": "ExternalRoots as a standalone service",
-      "why": "One writer, four VS Code-free readers, keyed by kind not by session: a process-wide allowlist with a sound freeze rule. A process service is the correct shape but is +4 signatures for 0 deletions today. The hazard of module state is a test that leaves a registration behind; a registration returns its own removal, which such a test runs.",
-      "ruling": ".agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md#service-scopes-externalroots-stays-a-module-ruled-2026-09-20",
-      "symbols": [
-        {
-          "file": "packages/harness/src/utils/files/canonicalPath.ts",
-          "symbol": "registerExternalRoot",
-          "signature": "export function registerExternalRoot( absolutePath: string, options: ExternalRootOptions, ): () => void {…}"
-        }
-      ]
-    },
-    {
       "id": "LLM-subscription-credential-facade",
       "candidate": "a subscriptionCredential(route, secrets) call in @texra-ai/llm over the ChatGPT and Grok session coordinators, replacing the harness's two route branches in routeCredential",
       "why": "Built and closed unmerged: the coordinators keep consumers in two packages (the harness, and the app's subscriptionProviders.ts), so both stay exported and the call hides nothing. The harness's two branches were 32 lines; the facade was 58 plus two new exports, net +26, a layer that deletes nothing it replaces. The coordinators have since become the SubscriptionAccounts service in llm, built with the store Secrets.layer provides and the client identity, and read by route in both packages, which deleted the per-store memo and the two status pass-throughs and added no call; the harness now reads both routes through one file-local subscriptionCredential in credentials.ts. The facade over the service is still refused for the same reason.",

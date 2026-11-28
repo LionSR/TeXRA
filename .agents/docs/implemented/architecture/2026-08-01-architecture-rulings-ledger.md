@@ -747,7 +747,7 @@ scheme no proxy variable covers) gets the resolver check.
 
 **Reopen.** A signed or trusted-project mechanism exists that D6 can defer to.
 For D7, a concrete exfiltration incident through `web_fetch`; any prompt then
-belongs to a network guard kind on `ToolGuard` (D8) under the existing approval
+belongs to a network guard kind on the tool contract (D8) under the existing approval
 policy, not to a per-host grant of its own.
 
 ### The `defineTool` freeze admits guard kinds (D8)

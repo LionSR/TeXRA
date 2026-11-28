@@ -154,8 +154,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     displayUsage?.usageRoute === undefined;
   const modelAccess = displayUsage?.usageRoute ?? prospectiveRoute;
 
-  // `subscriptionUsage` always succeeds with a snapshot (see its module): an
-  // `unavailable` snapshot is the designed carrier of a transport failure.
+  // `subscriptionUsage` always succeeds (see its module): a failed request
+  // is the usage record's `unknown`, not an error.
   const subscriptionUsageProvider = subscriptionUsageProviderForStatus({
     usageRoute: displayUsage?.usageRoute,
     prospectiveRoute,
