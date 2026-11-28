@@ -254,6 +254,12 @@ export const TexraRpcs = RpcGroup.make(
     success: ServiceInfoSchema,
   }),
   Rpc.make('service.stop', { payload: { drain: Schema.Boolean } }),
+  /** The provider API keys the client's own environment holds, said once
+   *  on its connection: a task this client starts, resumes or messages
+   *  runs with them unless the request names its own. */
+  Rpc.make('client.keys', {
+    payload: { apiKeys: Schema.Record(Schema.String, Schema.String) },
+  }),
   Rpc.make('tasks.list', {
     /** `all`: every task, for resolving an id; otherwise the newest. */
     payload: { all: Schema.Boolean },

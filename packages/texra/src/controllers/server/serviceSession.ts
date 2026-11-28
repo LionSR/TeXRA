@@ -56,7 +56,6 @@ import {
 import { attachWindowHost } from './windowHost';
 import {
   SERVICE_OFFLINE,
-  environmentApiKeys,
   linkedClient,
   requestOnService,
   ServiceUnavailable,
@@ -531,7 +530,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       return callService(link, runFailure, (client) =>
         client['task.start']({
           workspace,
-          start: { ...start, apiKeys: start.apiKeys ?? environmentApiKeys() },
+          start,
         }).pipe(
           Effect.catchTag(
             'TaskFailed',
@@ -547,7 +546,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         client['task.resume']({
           workspace,
           runId,
-          apiKeys: input?.apiKeys ?? environmentApiKeys(),
+          apiKeys: input?.apiKeys,
         }).pipe(Effect.catchTag('TaskFailed', taskFailed(''))),
       ).pipe(
         Effect.flatMap((resumed) =>

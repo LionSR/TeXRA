@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import {
   Array as Arr,
   Cause,
+  Context,
   Effect,
   Iterable,
   Number as Num,
@@ -57,6 +58,15 @@ export interface ServiceLoad {
   readonly open: number;
   readonly working: number;
 }
+
+/** The provider API keys a connection's client said its environment holds
+ *  (`client.keys`); none until it says. */
+const ClientKeys = Context.Reference<Readonly<Record<string, string>>>(
+  '@texra-ai/texra/server/ClientKeys',
+  { defaultValue: () => ({}) },
+);
+const keysOf = (client: { readonly annotations: Context.Context<never> }) =>
+  Context.get(client.annotations, ClientKeys);
 
 /** The projects the service serves: one session per folder, opened on
  *  demand and released once nothing has held it for a while (`serve`
@@ -261,26 +271,45 @@ export const serviceHandlers = (
         'session.deleteRuns': ({ workspace, target }) =>
           session(workspace, (held) => held.deleteRuns(target)),
         ...records,
-        'task.request': ({ workspace, request }) =>
+        'client.keys': ({ apiKeys }, { client }) =>
+          Effect.sync(() => {
+            client.annotate(ClientKeys, apiKeys);
+          }),
+        // A message that wakes its run resumes it with the keys it names,
+        // or else its client's.
+        'task.request': ({ workspace, request }, { client }) =>
           Effect.scoped(
             projects.open(workspace).pipe(
               Effect.mapError(
                 (error) => new Rejected({ reason: error.message }),
               ),
-              Effect.flatMap((session) => session.request(request)),
+              Effect.flatMap((session) =>
+                session.request(
+                  request.kind === 'followUp.send'
+                    ? {
+                        ...request,
+                        apiKeys: request.apiKeys ?? keysOf(client),
+                      }
+                    : request,
+                ),
+              ),
               Effect.catchDefect((defect) =>
                 internal(Cause.die(defect)).pipe(Effect.flatMap(Effect.fail)),
               ),
             ),
           ),
-        'task.start': ({ workspace, start }) =>
+        'task.start': ({ workspace, start }, { client }) =>
           Effect.scoped(
             Effect.gen(function* () {
               yield* refuseWhileDraining;
               const session = yield* open(workspace);
               return yield* started(
                 // A service task stays open for its windows' follow-ups.
-                session.start({ ...start, interactive: true }),
+                session.start({
+                  ...start,
+                  apiKeys: start.apiKeys ?? keysOf(client),
+                  interactive: true,
+                }),
               );
             }),
           ),
@@ -339,7 +368,7 @@ export const serviceHandlers = (
         'host.focus': ({ attachment }) => hosts.focus(attachment),
         'host.answer': ({ attachment, message }) =>
           hosts.answer(attachment, message),
-        'task.resume': ({ workspace, runId, apiKeys }) =>
+        'task.resume': ({ workspace, runId, apiKeys }, { client }) =>
           Effect.scoped(
             Effect.gen(function* () {
               yield* refuseWhileDraining;
@@ -348,7 +377,10 @@ export const serviceHandlers = (
               // client takes up the conversation it belongs to (a chat left
               // it waiting here), which the session names.
               return yield* started(
-                session.resume(runId, { interactive: true, apiKeys }),
+                session.resume(runId, {
+                  interactive: true,
+                  apiKeys: apiKeys ?? keysOf(client),
+                }),
               );
             }),
           ),

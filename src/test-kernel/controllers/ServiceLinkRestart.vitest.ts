@@ -24,7 +24,11 @@ import {
 
 const serviceRpcs = RpcGroup.make(
   ...[...TexraRpcs.requests.values()].filter(
-    (rpc) => rpc._tag === 'service.hello' || rpc._tag === 'service.stop',
+    (rpc) =>
+      rpc._tag === 'service.hello' ||
+      rpc._tag === 'service.stop' ||
+      // What a link says once it has a service to speak to.
+      rpc._tag === 'client.keys',
   ),
 );
 
@@ -61,6 +65,7 @@ const fakeService = Effect.fn('fakeService')(function* (
           Effect.succeed({
             'service.hello': () => Effect.succeed(info),
             'service.stop': () => onStop,
+            'client.keys': () => Effect.void,
           }),
         ),
         RpcServer.layerProtocolSocketServer.pipe(

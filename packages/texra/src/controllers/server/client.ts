@@ -77,12 +77,11 @@ export type ServiceClient = RpcClient.FromGroup<
 >;
 
 /**
- * The provider API keys this process's environment holds, as a start, a
- * resume or a message sends them to the service (`StartInput.apiKeys`): a
- * key a terminal or a window was given reaches the task it asks for,
- * wherever the task runs.
+ * The provider API keys this process's environment holds, which it tells
+ * the service once on each connection (`client.keys`): a key a terminal or
+ * a window was given reaches the task it asks for, wherever the task runs.
  */
-export const environmentApiKeys = (): Readonly<Record<string, string>> =>
+const environmentApiKeys = (): Readonly<Record<string, string>> =>
   Object.fromEntries(
     API_KEY_ENV_NAMES.flatMap((name) => {
       const value = process.env[name]?.trim();
@@ -92,8 +91,7 @@ export const environmentApiKeys = (): Readonly<Record<string, string>> =>
 
 /**
  * `request` to the session of `workspace` the service holds: the outcome its
- * kind is answered with. A message carries this process's keys, which the
- * run resumes with if the message wakes it. An answer of another kind (a
+ * kind is answered with. An answer of another kind (a
  * service from another build) is `Rejected`, and so is the service's own
  * bridge error (a request it could not parse, a handler that died), worded
  * for the user; a runtime refusal arrives as its class.
@@ -103,13 +101,7 @@ export const requestOnService = <R extends RuntimeCommand>(
   workspace: string,
   request: R,
 ) =>
-  client['task.request']({
-    workspace,
-    request:
-      request.kind === 'followUp.send'
-        ? { ...request, apiKeys: request.apiKeys ?? environmentApiKeys() }
-        : request,
-  }).pipe(
+  client['task.request']({ workspace, request }).pipe(
     Effect.catchTags({
       Invalid: (error) =>
         Effect.fail(new Rejected({ reason: requestErrorText(error) })),
@@ -712,7 +704,12 @@ const ensureService = Effect.fn('server.ensureService')(function* (
     );
   }
   const { socket } = info;
+  // The connection every call of this link goes through. It says this
+  // process's keys once, before any call can ask for a task.
   const client = yield* connectService(socket, onDisconnect).pipe(
+    Effect.tap((connected) =>
+      connected['client.keys']({ apiKeys: environmentApiKeys() }),
+    ),
     Effect.mapError(
       (error) =>
         new ServiceUnavailable({
