@@ -31,6 +31,11 @@ export function listMoveOfKey(
   return undefined;
 }
 
+/** `index` held to a valid index of a `count`-row list (0 when empty). */
+export function clampListIndex(index: number, count: number): number {
+  return Num.clamp(index, { minimum: 0, maximum: Math.max(0, count - 1) });
+}
+
 /** Where `move` lands from `index` in a `count`-row list: a step past
  *  either end wraps to the other. -1 when the list is empty. */
 export function nextListIndex(
@@ -39,7 +44,7 @@ export function nextListIndex(
   count: number,
 ): number {
   if (count <= 0) return -1;
-  const at = Num.clamp(index, { minimum: 0, maximum: count - 1 });
+  const at = clampListIndex(index, count);
   switch (move) {
     case 'first':
       return 0;
