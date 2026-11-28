@@ -2,7 +2,10 @@
 import { css } from 'lit';
 
 // Local imports - shared styles
-import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import {
+  captionDeclarations,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 
 /** Styles for the individual <run-tab> row. */
@@ -141,8 +144,7 @@ export const runTabStyles = css`
     display: none;
     align-items: center;
     gap: var(--wa-space-3xs);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    ${captionDeclarations}
     width: 100%;
     min-width: 0;
     overflow: hidden;
@@ -255,8 +257,7 @@ export const runTabStyles = css`
 
   .nested-run-icon {
     display: var(--run-tab-nested-icon-display, inline-block);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    ${captionDeclarations}
     flex-shrink: 0;
     margin-inline-end: var(--wa-space-3xs);
   }

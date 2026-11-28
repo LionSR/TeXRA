@@ -50,6 +50,16 @@ export const truncateDeclarations: CSSResult = css`
   white-space: nowrap;
 `;
 
+/**
+ * The muted caption under or beside a primary line: a hint, a count, a reset
+ * time, a secondary detail. One type treatment wherever small secondary text
+ * sits; interpolate it into the rule that places the text.
+ */
+export const captionDeclarations: CSSResult = css`
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+`;
+
 /** {@link overlineDeclarations} as a class, for a tree that adopts sheets
  *  rather than composing rules (the desktop's light DOM). */
 export const overlineStyles: CSSResult = css`

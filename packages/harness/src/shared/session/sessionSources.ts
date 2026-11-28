@@ -22,11 +22,10 @@ import {
   Equivalence,
   Layer,
   Option,
-  type Scope,
   SubscriptionRef,
 } from 'effect';
 
-import type { TranscriptInterest } from '@shared/session/sessionViewAccess';
+import type { SubscribeTranscripts } from '@shared/session/sessionViewAccess';
 
 import type {
   RunId,
@@ -103,9 +102,7 @@ export class TranscriptSubscriptions extends Context.Service<
     >;
     /** Subscribe `set` for the caller's scope, as
      *  `SessionViewAccessShape.subscribe` does. */
-    readonly subscribe: (
-      set: readonly TranscriptSubscription[],
-    ) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;
+    readonly subscribe: SubscribeTranscripts;
   }
 >()('@texra-ai/worldline/session/TranscriptSubscriptions') {
   static readonly layer = Layer.effect(

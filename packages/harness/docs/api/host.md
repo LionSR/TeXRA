@@ -50,9 +50,7 @@ session elsewhere.
 interface ActivationViewSource {
   readonly current: () => SessionView;
   readonly changes: Stream.Stream<SessionView>;
-  readonly subscribe: (
-    set: readonly TranscriptSubscription[],
-  ) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;
+  readonly subscribe: SubscribeTranscripts;
 }
 ```
 

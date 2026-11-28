@@ -31,3 +31,7 @@ export type SubagentProgressUpdate =
   | PlanProgressUpdate
   | OverviewProgressUpdate
   | StartedProgressUpdate;
+
+/** Fires on meaningful subagent progress: plan changes, tool-call milestones
+ *  and the model's first call. */
+export type SubagentProgressNotify = (update: SubagentProgressUpdate) => void;

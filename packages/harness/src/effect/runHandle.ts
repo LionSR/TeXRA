@@ -6,29 +6,18 @@
  * (`sessionPrograms.ts`), so a reader that leaves, or a handle nobody reads,
  * changes nothing about the run.
  */
-import {
-  Context,
-  Effect,
-  Equivalence,
-  type Scope,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Context, Effect, Equivalence, Stream, SubscriptionRef } from 'effect';
 
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { replayTrace } from '@controllers/session/runTrace';
-import {
-  type CommitOrdinal,
-  type RunId,
-  type TranscriptSubscription,
-} from '@shared/schemas';
+import { type CommitOrdinal, type RunId } from '@shared/schemas';
 import { boundsLifecycle } from '@shared/session/runFacts';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { descendantRuns } from '@shared/session/sessionView';
 import type { SessionView } from '@shared/session/sessionView';
-import type { TranscriptInterest } from '@shared/session/sessionViewAccess';
+import type { SubscribeTranscripts } from '@shared/session/sessionViewAccess';
 
 import { RunFailure } from './errors.js';
 import type { Run } from './sessions.js';
@@ -40,9 +29,7 @@ import type { Run } from './sessions.js';
 export interface ActivationViewSource {
   readonly current: () => SessionView;
   readonly changes: Stream.Stream<SessionView>;
-  readonly subscribe: (
-    set: readonly TranscriptSubscription[],
-  ) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;
+  readonly subscribe: SubscribeTranscripts;
 }
 
 /**

@@ -20,7 +20,7 @@ import type { AgentEvent } from '@shared/session/agentEvent';
 import {
   runsScript,
   type RunId,
-  type SubagentProgressUpdate,
+  type SubagentProgressNotify,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
 import type { RunRows } from '@shared/session/runRowsShape';
@@ -62,7 +62,7 @@ export interface ExecuteAgentOptions {
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
-  readonly onProgress?: (update: SubagentProgressUpdate) => void;
+  readonly onProgress?: SubagentProgressNotify;
   /** The caller asks a root to end after one model/tool cycle instead of
    *  waiting for input (a launch that is not interactive). A child, a
    *  script and a root launched to run once end after it whatever this

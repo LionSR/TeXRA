@@ -41,7 +41,10 @@ import {
 } from '@ui/progress/clipboardImages';
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import { TexraElement } from '@ui/litBase';
-import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import {
+  captionDeclarations,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -79,8 +82,7 @@ export class SessionComposer extends TexraElement {
         align-items: center;
         gap: var(--wa-space-2xs);
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
+        ${captionDeclarations}
         min-width: 0;
       }
       .routing wa-icon {

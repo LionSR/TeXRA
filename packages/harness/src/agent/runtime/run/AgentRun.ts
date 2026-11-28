@@ -34,7 +34,7 @@ import type { PlanQuotas } from '@agent/runtime/modelAccess/planQuotas';
 import {
   type DeclinableUsageRoute,
   type RunId,
-  type SubagentProgressUpdate,
+  type SubagentProgressNotify,
   type AgentConfig,
   SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
@@ -153,7 +153,7 @@ export interface AgentRunShape extends RunLaunch {
    */
   readonly scope: Scope.Scope;
   /** Fires on meaningful progress: plan changes, tool call milestones. */
-  readonly onProgress?: (update: SubagentProgressUpdate) => void;
+  readonly onProgress?: SubagentProgressNotify;
   /**
    * The calls this run awaits children in, at most the child-run budget of
    * them at once (`childRunConcurrencyBudget`). An awaited child rides its
@@ -176,7 +176,7 @@ interface AgentRunLayerInput {
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress; carried onto the run's `onProgress`. */
-  readonly onProgress?: (update: SubagentProgressUpdate) => void;
+  readonly onProgress?: SubagentProgressNotify;
 }
 
 /**

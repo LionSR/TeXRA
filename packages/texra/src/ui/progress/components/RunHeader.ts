@@ -16,7 +16,10 @@ import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { TexraElement } from '@ui/litBase';
-import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import {
+  captionDeclarations,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 import {
   renderIconActionButton,
@@ -146,8 +149,7 @@ export class RunHeader extends TexraElement {
 
       .menu-status {
         padding: var(--wa-space-2xs) var(--wa-space-s) var(--wa-space-3xs);
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
+        ${captionDeclarations}
         white-space: nowrap;
       }
 
@@ -178,8 +180,7 @@ export class RunHeader extends TexraElement {
       }
       .ancestor-separator {
         flex: 0 0 auto;
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
+        ${captionDeclarations}
       }
       :dir(rtl) .ancestor-separator {
         transform: scaleX(-1);

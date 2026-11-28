@@ -15,7 +15,7 @@ import type {
   SubscriptionTokenResponseSchema,
 } from './subscriptionSessionSchema.js';
 import type { OAuthFormEndpoint } from './formTokenClient.js';
-import type { SubscriptionDeviceCodePrompt } from './deviceAuthorization.js';
+import type { SubscriptionDeviceCodeHandler } from './deviceAuthorization.js';
 import type { Effect, Schema } from 'effect';
 import type { HttpClient } from 'effect/http';
 
@@ -107,7 +107,7 @@ export interface SubscriptionCoordinator<S extends SubscriptionSession> {
    * the provider has no device-code sign-in.
    */
   readonly signInWithDeviceCode?: (
-    onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>,
+    onPrompt: SubscriptionDeviceCodeHandler,
   ) => Effect.Effect<S, Error, HttpClient.HttpClient>;
 }
 
@@ -135,7 +135,7 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
    * sign-in.
    */
   readonly deviceGrant?: (
-    onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>,
+    onPrompt: SubscriptionDeviceCodeHandler,
   ) => Effect.Effect<SubscriptionTokenResponse, Error, HttpClient.HttpClient>;
   /** The provider's authorize endpoint, for the PKCE code flow (`./pkce.ts`). */
   readonly authorize: {

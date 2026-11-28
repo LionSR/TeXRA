@@ -16,6 +16,7 @@ import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postToHost } from '@ui/settings/messageDispatcher';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TexraSignalElement } from '@ui/litBase';
+import { captionDeclarations } from '@ui/styles/commonViewStyles';
 import { PLUGINS_PAGE } from '@ui/copy/plugins';
 import { SKILL_SOURCE_LABEL, skillSourceToggleLabel } from '@ui/copy/skills';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -42,8 +43,7 @@ export class SkillsTab extends TexraSignalElement {
       }
       .skill-path {
         overflow-wrap: anywhere;
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
+        ${captionDeclarations}
       }
       .skill-issues {
         display: block;

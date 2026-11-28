@@ -30,12 +30,8 @@ export interface SessionViewAccessShape {
   /** Ordered view inputs for one transport subscription: complete replay,
    *  then events before live text. */
   readonly inputs: Context.Service.Shape<typeof SessionInputs>['read'];
-  /** Subscribe `set`'s transcripts for the caller's scope; the handle
-   *  replaces the set in place. The view's set is the union over every
-   *  subscriber. */
-  subscribe(
-    set: readonly TranscriptSubscription[],
-  ): Effect.Effect<TranscriptInterest, never, Scope.Scope>;
+  /** As {@link SubscribeTranscripts}. */
+  readonly subscribe: SubscribeTranscripts;
 }
 
 /** One subscriber's transcript set, held for the scope that subscribed it. */
@@ -45,3 +41,11 @@ export interface TranscriptInterest {
     next: readonly TranscriptSubscription[],
   ) => Effect.Effect<void>;
 }
+
+/**
+ * Subscribe `set`'s transcripts for the caller's scope; the handle replaces
+ * the set in place. The view's set is the union over every subscriber.
+ */
+export type SubscribeTranscripts = (
+  set: readonly TranscriptSubscription[],
+) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;

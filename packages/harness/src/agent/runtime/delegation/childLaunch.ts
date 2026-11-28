@@ -37,7 +37,7 @@ import {
   type CommitOrdinal,
   type RunEnd,
   type RunId,
-  type SubagentProgressUpdate,
+  type SubagentProgressNotify,
   type AgentConfig,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
@@ -200,7 +200,7 @@ export const executeSubagentInBand = (
   runId: RunId,
   config: AgentConfig,
   registration: ChildRegistration,
-  notify: (update: SubagentProgressUpdate) => void,
+  notify: SubagentProgressNotify,
 ): Effect.Effect<ChildRunEnd, Error, AgentRunServices> =>
   awaitChildRun(
     call,
@@ -224,6 +224,6 @@ export const executeSubagentInBand = (
 export const resumeSubagentInBand = (
   call: RunToolCall,
   runId: RunId,
-  notify: (update: SubagentProgressUpdate) => void,
+  notify: SubagentProgressNotify,
 ): Effect.Effect<ChildRunEnd, Error, AgentRunServices> =>
   awaitChildRun(call, runId, resumeOwnedChild(runId, call.run.runId, notify));
