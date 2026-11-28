@@ -1,12 +1,9 @@
 /**
  * The extension's half of its window (`openGuiWindow`): the verbs this host
  * performs, bound onto VS Code's commands, editors, pickers, and dialogs,
- * plus the few requests the extension answers its own way -- its tab
- * pop-out, its getting-started commands.
- * Everything else is the one shared body, which decides the order, the
- * guards, and the rejection wording for both GUI hosts. Each handler answers
- * exactly once with an outcome or a request error; a request the extension
- * does not perform is `Rejected` with its reason, never dropped.
+ * its tab pop-out and its getting-started commands among them. The one
+ * shared body decides the order, the guards, and the rejection wording for
+ * both GUI hosts.
  */
 import * as vscode from 'vscode';
 import { Effect } from 'effect';
@@ -28,7 +25,6 @@ import { openFilesDialog, quickPick } from '@frontend/ui/dialogs';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
-import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import type { HostFailed, NoticeLevel } from '@texra/hosts/uiHosts';
 
 import type { TranscriptExportOpenKind } from '@texra/controllers/progressView/exportTranscript';
@@ -37,10 +33,7 @@ import {
   hostFailed,
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
-import type {
-  OwnHostHandlers,
-  SharedHostCommandBindings,
-} from '@texra/controllers/session/openGuiWindow';
+import type { GuiWindowHost } from '@texra/controllers/session/openGuiWindow';
 import {
   type HostCommandFailure,
   type RequestRefusal,
@@ -69,8 +62,6 @@ export interface ExtensionHostRequestsOptions {
   popOutToEditor(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
 }
-
-const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
 /** The file a tab shows, by its absolute path: a text editor's, or a
  *  custom editor's (an image or a PDF); undefined for any other tab. */
@@ -150,10 +141,11 @@ const openExportPath = (
   );
 };
 
-/** This window's half of its `openGuiWindow`, for the view's scope. */
+/** This window's half of its `openGuiWindow`, for the view's scope: every
+ *  verb mapped onto a VS Code command, an editor API, or the sidebar. */
 export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,
-) {
+): Omit<GuiWindowHost, 'openFile' | 'window' | 'runs'> {
   const { roots } = options;
 
   /** What each getting-started action runs. */
@@ -168,9 +160,11 @@ export function createExtensionHostRequests(
     }
   };
 
-  /** This host's half of the shared body's binding table: every verb mapped
-   *  onto a VS Code command, an editor API, or the sidebar. */
-  const bindings: SharedHostCommandBindings = {
+  return {
+    // The host's members read `this`, so they cross the boundary bound.
+    notify: (level: NoticeLevel, message: string) =>
+      vscodeUi.notify(level, message),
+    ask: askNotice,
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
     openFiles: openFilesDialog,
     openSettings: (target) =>
@@ -196,32 +190,15 @@ export function createExtensionHostRequests(
       currentFile,
       openedFiles,
     },
-  };
-
-  /**
-   * The requests this host performs its own way. The capabilities that still
-   * answer with a promise - VS Code commands, the editor APIs - are lifted
-   * once (`executeVscodeCommand`), and this extension's own
-   * commands run as the programs behind them, so no handler re-enters the
-   * runtime between here and the bridge that runs this program.
-   */
-  const own: OwnHostHandlers = {
-    popOut: () => Effect.as(options.popOutToEditor(), done),
-    popBack: () => Effect.as(options.showInSidebar(), done),
-    gettingStarted: (request) =>
-      Effect.as(
-        runHandler(request.action, gettingStarted(request.action)),
-        done,
-      ),
-  };
-
-  return {
-    bindings,
-    own,
-    // The host's members read `this`, so they cross the boundary bound.
-    notify: (level: NoticeLevel, message: string) =>
-      vscodeUi.notify(level, message),
-    ask: askNotice,
+    // Suspended: each acts on the view, which is built after this table.
+    placement: {
+      popOut: Effect.suspend(() => options.popOutToEditor()),
+      popBack: Effect.suspend(() => options.showInSidebar()),
+    },
+    // This extension's own commands run as the programs behind them, so no
+    // handler re-enters the runtime between here and the bridge.
+    gettingStarted: (action) =>
+      Effect.asVoid(runHandler(action, gettingStarted(action))),
     // Each command is named, so a failure carries a tag, never a rejection.
     openDirectory: revealFileInOS,
     export: {

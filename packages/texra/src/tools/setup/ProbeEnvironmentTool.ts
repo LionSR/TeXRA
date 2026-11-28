@@ -134,6 +134,25 @@ const locateTool = Effect.fn('locateTool')(function* (
   return { name, installed: found !== null, path: found?.resolvedPath };
 });
 
+/** The names the report gives `missing` tools: the interchangeable image
+ *  tools as one entry, since either one satisfies the image capability. */
+const reportedNames = (
+  missing: readonly {
+    readonly name: string;
+    readonly interchangeable: boolean;
+  }[],
+): string[] => [
+  ...missing.filter((tool) => !tool.interchangeable).map((tool) => tool.name),
+  ...(missing.some((tool) => tool.interchangeable) ? [IMAGE_TOOL_LABEL] : []),
+];
+
+/** Every probed tool, as the report names it when all are missing. */
+const PROBED_TOOL_NAMES = reportedNames(
+  missingLatexTools(
+    PROBED_LATEX_TOOLS.map((name) => ({ name, installed: false })),
+  ),
+).join(', ');
+
 /** OS, arch and shell; the shell comes from the ambient ConfigProvider. */
 const readHostInfo = Effect.map(
   Effect.all([
@@ -260,12 +279,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     { concurrency: 'unbounded' },
   );
 
-  const missing = missingLatexTools(coreTools);
-  // One entry for the image capability: either tool satisfies it.
-  const missingCore = [
-    ...missing.filter((tool) => !tool.interchangeable).map((tool) => tool.name),
-    ...(missing.some((tool) => tool.interchangeable) ? [IMAGE_TOOL_LABEL] : []),
-  ];
+  const missingCore = reportedNames(missingLatexTools(coreTools));
   const latexWorkshopInstalled = editor?.installed(LATEX_WORKSHOP_EXT_ID);
 
   const summary = {
@@ -385,7 +399,7 @@ export const ProbeEnvironmentTool = defineTool({
   // A function of scripts: offered with the script tool, never sent.
   scriptGlobal: { positional: 'tool', withScript: true },
   replay: 'safe',
-  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, ${IMAGE_TOOL_LABEL}, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and the rest of TeXRA's persisted credential store (\`storedSecrets\`: \`staleSecrets\`, the stored credential entries that do not count as a saved credential (an \`apiKey.*\` entry for an unknown provider, or a known provider's key whose stored value is blank), by raw key name, and a redacted count of other secret names; \`"unavailable"\` when the store cannot be read). Recognised providers' keys can be removed with unset_api_key, and other entries only through the current host's credential-management surface. With {"tool": "<name>"}, re-checks only that tool on PATH and answers in one line (use after an install command to confirm it worked). Read-only, no approval required. Call this first in any setup session to decide what to do next, and again as the final check.`,
+  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (${PROBED_TOOL_NAMES}), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and the rest of TeXRA's persisted credential store (\`storedSecrets\`: \`staleSecrets\`, the stored credential entries that do not count as a saved credential (an \`apiKey.*\` entry for an unknown provider, or a known provider's key whose stored value is blank), by raw key name, and a redacted count of other secret names; \`"unavailable"\` when the store cannot be read). Recognised providers' keys can be removed with unset_api_key, and other entries only through the current host's credential-management surface. With {"tool": "<name>"}, re-checks only that tool on PATH and answers in one line (use after an install command to confirm it worked). Read-only, no approval required. Call this first in any setup session to decide what to do next, and again as the final check.`,
   schema: ProbeEnvironmentInputSchema,
   execute: probe,
 });

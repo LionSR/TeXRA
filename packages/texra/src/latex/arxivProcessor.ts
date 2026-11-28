@@ -349,6 +349,8 @@ const extractTarFile = Effect.fn('arxivProcessor.extractTarFile')(function* (
   );
 }, withLogChannel(ARXIV_CHANNEL));
 
+/** Download the source of the paper `input` names into the project and
+ *  succeed with the directory it is in. */
 export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
   function* (input: string, options: DownloadSourceOptions) {
     const { roots, destination, indent } = options;
@@ -376,8 +378,7 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
       isRoot ? '.' : arxivReferencesDir(id),
     );
 
-    const needsDownload = !(yield* hasExistingSource(isRoot, paperDirFull));
-    if (needsDownload) {
+    if (!(yield* hasExistingSource(isRoot, paperDirFull))) {
       yield* claimDirAndPlaceSource(id, paperDirFull, isRoot);
     }
 
@@ -404,11 +405,7 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
 
     yield* Effect.logInfo(`arXiv source downloaded to: ${paperDirFull}`);
 
-    return {
-      path: paperDirFull,
-      workspaceRoot,
-      alreadyExisted: !needsDownload,
-    };
+    return paperDirFull;
   },
   withLogChannel(ARXIV_CHANNEL),
 );

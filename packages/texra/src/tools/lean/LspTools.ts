@@ -24,15 +24,14 @@ import {
   formatGroupedSections,
 } from '@texra/tools/diagnosticFormatting';
 import {
+  LEAN_INSPECTIONS,
   LEAN_PROJECT_COMMANDS,
   extractHoverText,
+  type LeanInspection,
+  type LeanInspectionReply,
   type LeanProjectCommand,
-  type LeanUnavailable,
 } from './leanTypes';
-import {
-  LeanLanguageServices,
-  type LeanLanguageServicesShape,
-} from './leanLanguageServices';
+import { LeanLanguageServices } from './leanLanguageServices';
 
 const PROJECT_COMMAND_NAMES: LeanProjectCommand[] = Struct.keys(
   LEAN_PROJECT_COMMANDS,
@@ -82,11 +81,11 @@ const LeanProjectInputSchema = Schema.Struct({
 
 type LeanProjectInput = typeof LeanProjectInputSchema.Type;
 
-const INSPECT_TYPES = ['goal', 'term_goal', 'hover'] as const;
+const INSPECTIONS: LeanInspection[] = Struct.keys(LEAN_INSPECTIONS);
 
 const LeanInspectInputSchema = Schema.Struct({
   /** What to inspect: goal, term_goal, or hover */
-  type: Schema.Literals(INSPECT_TYPES).annotate({
+  type: Schema.Literals(INSPECTIONS).annotate({
     description:
       'What to inspect: "goal" for tactic proof state, "term_goal" for expected type in term mode, "hover" for type/docs',
   }),
@@ -104,14 +103,6 @@ const LeanInspectInputSchema = Schema.Struct({
 });
 
 type LeanInspectInput = typeof LeanInspectInputSchema.Type;
-
-/** The tool's answer when Lean cannot serve a call: the pool's message,
- *  which carries the setup advice where the toolchain is the cause. */
-const leanUnavailableResult = (
-  failed: string,
-  failure: LeanUnavailable,
-  summary: string,
-): ToolResult => errorResult(`${failed}: ${failure.message}`, { summary });
 
 /** What Lean reports on a declaration that a `sorry` stands in for. */
 const SORRY = "declaration uses 'sorry'";
@@ -228,13 +219,13 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
     forCallerRun(services.fetchDiagnosticsForFile(absoluteFile)),
   );
   if (Result.isFailure(fetched)) {
-    // Only a file that could not be opened is a "could not open file".
+    // Only a file that could not be opened is a "could not open file"; a
+    // Lean that cannot serve the call says why in the pool's message.
     const failure = fetched.failure;
     return failure._tag === 'LeanUnavailable'
-      ? leanUnavailableResult(
-          `Failed to get diagnostics for ${file}`,
-          failure,
-          'Failed to get diagnostics',
+      ? errorResult(
+          `Failed to get diagnostics for ${file}: ${failure.message}`,
+          { summary: 'Failed to get diagnostics' },
         )
       : errorResult(
           `Could not open file ${file}: ${failure.message}\n\nMake sure the file exists and is accessible.`,
@@ -325,23 +316,14 @@ Use when diagnostics are stale or after editing imports.`,
         Effect.as(
           executed(`Restarted ${file}`, 'Restarted Lean server for this file'),
         ),
-        // The pool's cause is the answer.
-        Effect.catchTags({
-          LeanFileCommandFailed: (failure) =>
-            Effect.succeed(
-              errorResult(`Could not restart ${file}: ${failure.message}`, {
-                summary: 'Command failed',
-              }),
-            ),
-          LeanUnavailable: (failure) =>
-            Effect.succeed(
-              leanUnavailableResult(
-                `Could not restart ${file}`,
-                failure,
-                'Command failed',
-              ),
-            ),
-        }),
+        // The pool's cause is the answer, whichever of its failures it is.
+        Effect.catch((failure) =>
+          Effect.succeed(
+            errorResult(`Could not restart ${file}: ${failure.message}`, {
+              summary: 'Command failed',
+            }),
+          ),
+        ),
       );
     }).pipe(
       catchLeanFailure(
@@ -393,22 +375,19 @@ function executeLeanInspectTool(
   const col0 = column - 1;
   const location = `${file}:${line}:${column}`;
 
-  // The three inspections differ only in which request they make and how
-  // they render an answer that carries data. Resolving the model's file
-  // against the run and ruling on an answer that carries none is the same
-  // for all three, so it is stated here once.
-  const inspect = Effect.fn('inspect')(function* <T>(
-    request: (
-      services: LeanLanguageServicesShape,
-      filePath: string,
-    ) => Effect.Effect<Result.Result<T, string>, never, Scope.Scope>,
+  // The three inspections differ only in how they render an answer that
+  // carries data. Resolving the model's file against the run and ruling on
+  // an answer that carries none is the same for all three, so it is stated
+  // here once.
+  const inspect = Effect.fn('inspect')(function* <K extends LeanInspection>(
+    kind: K,
     empty: { readonly message: string; readonly summary: string },
-    render: (data: T) => ToolResult,
+    render: (data: LeanInspectionReply<K>) => ToolResult,
   ): Effect.fn.Return<ToolResult, Error, ToolContext | LeanLanguageServices> {
     const call = yield* ToolContext;
     const services = yield* LeanLanguageServices;
     const answer = yield* forCallerRun(
-      request(services, yield* leanFilePath(file, call)),
+      services.inspect(kind, yield* leanFilePath(file, call), line0, col0),
     );
     if (Result.isFailure(answer)) {
       return errorResult(
@@ -430,7 +409,7 @@ function executeLeanInspectTool(
   switch (type) {
     case 'goal':
       program = inspect(
-        (services, filePath) => services.getGoalState(filePath, line0, col0),
+        'goal',
         { message: 'Could not get goal state', summary: 'No goal state' },
         (goal) =>
           goal.goals.length === 0
@@ -446,14 +425,14 @@ function executeLeanInspectTool(
       break;
     case 'term_goal':
       program = inspect(
-        (services, filePath) => services.getTermGoal(filePath, line0, col0),
+        'term_goal',
         { message: 'No expected type', summary: 'No term goal' },
         (termGoal) => executed(termGoal.goal, 'Term goal'),
       );
       break;
     case 'hover':
       program = inspect(
-        (services, filePath) => services.getHoverInfo(filePath, line0, col0),
+        'hover',
         { message: 'No information', summary: 'No hover info' },
         (hover) => {
           const text = extractHoverText(hover.contents);

@@ -21,7 +21,7 @@ Once installers are published, download the build for your OS from the releases 
 ## First run
 
 <FlowSteps :steps="[
-  { n: 1, icon: 'folder-open', title: 'Open a project', desc: 'Open your LaTeX or research project folder (File → Open Folder).', chips: [{ text: 'project folder', variant: 'info', icon: 'folder-tree' }] },
+  { n: 1, icon: 'folder-open', title: 'Open a project', desc: 'Open your LaTeX or research project folder (File → Open Project Folder).', chips: [{ text: 'project folder', variant: 'info', icon: 'folder-tree' }] },
   { n: 2, icon: 'key', title: 'Connect a model', desc: 'Sign in with ChatGPT/Grok or add API keys under Settings → Models (or a project .env).', chips: [{ text: 'Models', variant: 'accent' }, { text: '.env', variant: 'info', icon: 'file-code' }] },
   { n: 3, icon: 'gear', title: 'Review settings', desc: 'Check Agents, Plugins, Memory, LaTeX, and General (Approval & Git) in Settings.', chips: [{ text: 'Settings', variant: 'accent' }] },
   { n: 4, icon: 'play', title: 'Start a task', desc: 'Ask TeXRA to tighten a section or check a proof and review the diff.', chips: [{ text: 'Tasks', variant: 'success', icon: 'list-check' }] }

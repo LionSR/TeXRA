@@ -86,7 +86,11 @@ export {
 // request is declined.
 export type { DecisionOf, RefusalDecision } from '@shared/schemas';
 export { asToolError, ToolError } from '@shared/schemas';
-export { nullishWithDefault, optionalInput } from '@tools/core/inputSchema';
+export {
+  describedString,
+  nullishWithDefault,
+  optionalInput,
+} from '@tools/core/inputSchema';
 export {
   assertNoParentTraversal,
   resolveToolPath,

@@ -185,15 +185,10 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         runs: project,
         roots: project.roots,
         project: project.display,
-        // The desktop shows the credential in Settings, and starts a project
-        // from its own launcher.
+        // The desktop shows the credential in Settings.
         snapshot: {
           workspaceRoots: () => [],
-          shows: {
-            apiKeyBanner: false,
-            dependencyBanner: false,
-            gettingStarted: false,
-          },
+          shows: { apiKeyBanner: false, dependencyBanner: false },
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the review pane diffs, for each tool edit the project's
