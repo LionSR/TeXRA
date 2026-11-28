@@ -176,10 +176,7 @@ export function createReviewPane(): ReviewPaneController {
                   ? renderTree(
                       shown,
                       buildEditorTree(
-                        visible.map((entry) => ({
-                          path: entry.displayPath,
-                          isDirectory: false,
-                        })),
+                        visible.map((entry) => entry.displayPath),
                       ),
                     )
                   : renderEmptyMessage('No matching files')
