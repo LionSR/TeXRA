@@ -36,6 +36,16 @@ export function serviceAnnouncements(log) {
   }));
 }
 
+/** Whether a process with the id `pid` exists (signal 0 sends nothing). */
+export function processExists(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Whether `pid` is still a running `texra … serve`. A pid a service logged
  * long ago may have been reused, and a zombie (a service the caller spawned
@@ -43,14 +53,7 @@ export function serviceAnnouncements(log) {
  * the process exists.
  */
 export function serviceRunning(pid) {
-  if (process.platform === 'win32') {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  }
+  if (process.platform === 'win32') return processExists(pid);
   const [stat = '', ...command] = spawnSync(
     'ps',
     ['-o', 'stat=', '-o', 'command=', '-p', String(pid)],

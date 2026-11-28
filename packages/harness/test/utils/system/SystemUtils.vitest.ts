@@ -13,7 +13,7 @@ import { Effect, Exit, Fiber, Schedule } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { executeCommand } from '@texra-ai/worldline/node';
+import { executeCommand, processRunning } from '@texra-ai/worldline/node';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
@@ -33,14 +33,7 @@ import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 const PROCESS_EXIT_TEST_TIMEOUT_MS = 30_000;
 
 const processExited = (pid: number) =>
-  Effect.sync(() => {
-    try {
-      process.kill(pid, 0);
-      return false;
-    } catch {
-      return true;
-    }
-  }).pipe(
+  Effect.sync(() => !processRunning(pid)).pipe(
     Effect.repeat({
       schedule: Schedule.spaced('20 millis'),
       until: (exited) => exited,

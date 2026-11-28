@@ -25,6 +25,7 @@ import {
 } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
+import { processRunning } from '@texra-ai/worldline/node';
 import { RunIdSchema } from '@texra-ai/worldline/schemas';
 import { ProjectTools, stepFor } from '@agent/runtime/loop/step';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
@@ -98,15 +99,6 @@ require('node:readline')
       send({ jsonrpc: '2.0', id, error: { code: -32601, message: method } });
   });
 `;
-
-const isAlive = (pid: number): boolean => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 /** The tool table over the MCP config in `dir`, read through the node FileSystem. */
 const mcpToolTableLayer = (dir: string) =>
@@ -246,7 +238,7 @@ describe('MCP server plugins', () => {
               properties: { default: { type: 'array', items: {} } },
             });
             const pid = Number(readFileSync(pidFile, 'utf8'));
-            expect(isAlive(pid)).toBe(true);
+            expect(processRunning(pid)).toBe(true);
 
             // An edited env value is a new revision: a run opened now gets its
             // own server, whose tools supersede the old revision's in the catalog
@@ -298,14 +290,14 @@ describe('MCP server plugins', () => {
             // The run's pin was the server's last holder: closing it stops the
             // server.
             yield* Scope.close(pin, Exit.void);
-            yield* Effect.sync(() => isAlive(pid) || isAlive(editedPid)).pipe(
+            yield* Effect.sync(() => processRunning(pid) || processRunning(editedPid)).pipe(
               Effect.repeat({
                 schedule: Schedule.spaced('20 millis'),
                 while: (alive) => alive,
               }),
               Effect.timeout('5 seconds'),
             );
-            expect([isAlive(pid), isAlive(editedPid)]).toEqual([false, false]);
+            expect([processRunning(pid), processRunning(editedPid)]).toEqual([false, false]);
           }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer()));
         }),
       20_000,
