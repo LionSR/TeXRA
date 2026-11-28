@@ -25,7 +25,7 @@ import {
 } from './FormFrame';
 import { useAsyncListForm } from './useAsyncListForm';
 import type { ProcessServices } from '@texra-ai/worldline/host';
-import type { Effect } from 'effect';
+import { type Effect, Number as Num } from 'effect';
 
 /** At or below this many rows a form drops to its one-row compact layout. */
 const COMPACT_FORM_MAX_ROWS = 9;
@@ -137,10 +137,10 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
           activeValue={props.activeValue}
           highlightedValue={props.highlightedValue}
           onHighlightChange={props.onHighlightChange}
-          maxVisibleItems={Math.min(
-            props.items.length,
-            Math.max(1, props.compactVisibleItems ?? 1),
-          )}
+          maxVisibleItems={Num.clamp(props.compactVisibleItems ?? 1, {
+            minimum: 1,
+            maximum: props.items.length,
+          })}
           showOverflow={false}
           onSelect={props.onSelect}
           onCancel={props.onCancel}

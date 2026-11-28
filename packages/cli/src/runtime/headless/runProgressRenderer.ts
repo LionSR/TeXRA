@@ -5,7 +5,14 @@
  */
 import path from 'node:path';
 
-import { Effect, FiberHandle, Schedule, type Scope, Stream } from 'effect';
+import {
+  Effect,
+  FiberHandle,
+  Number as Num,
+  Schedule,
+  type Scope,
+  Stream,
+} from 'effect';
 
 import {
   DETAIL_SEPARATOR,
@@ -300,14 +307,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       nameOnlySubagents,
       elapsed,
     ]);
-    return Math.min(
-      ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH,
-      Math.max(
-        0,
-        columns -
-          textDisplayWidth(lineWithoutDescription) -
-          textDisplayWidth(DETAIL_SEPARATOR),
-      ),
+    return Num.clamp(
+      columns -
+        textDisplayWidth(lineWithoutDescription) -
+        textDisplayWidth(DETAIL_SEPARATOR),
+      { minimum: 0, maximum: ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH },
     );
   }
 }

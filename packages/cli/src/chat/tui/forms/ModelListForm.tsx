@@ -6,7 +6,7 @@
 
 import { signal } from '@lit-labs/signals';
 import { Box, Text, useInput } from 'ink';
-import { Effect } from 'effect';
+import { Effect, Number as Num } from 'effect';
 import { useState } from 'react';
 
 import { selectModel, type ReasoningEffort } from '@texra-ai/llm';
@@ -206,10 +206,10 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     const level = previous[focusedRow.value] ?? focusedEffort;
     const currentIndex = level === undefined ? 0 : focusedLevels.indexOf(level);
     const startIndex = currentIndex >= 0 ? currentIndex : 0;
-    const nextIndex = Math.max(
-      0,
-      Math.min(focusedLevels.length - 1, startIndex + direction),
-    );
+    const nextIndex = Num.clamp(startIndex + direction, {
+      minimum: 0,
+      maximum: focusedLevels.length - 1,
+    });
     const nextLevel = focusedLevels[nextIndex];
     if (nextLevel === undefined || nextLevel === level) return;
     drafts.set({ ...previous, [focusedRow.value]: nextLevel });
