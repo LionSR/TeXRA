@@ -41,6 +41,7 @@ import { renderSettingsBanner } from '@ui/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { PLUGINS_PAGE } from '@ui/copy/plugins';
 // Registers <copy-button>, the one Copy every view draws.
 import '@ui/progress/components/CopyButton';
 
@@ -59,9 +60,9 @@ import {
   LATEXDIFF_MATH_MARKUP_SETTING,
 } from '@texra/shared/settings/latexdiffSettings';
 
-/** The two actions beside an install command, wherever one is shown. */
+/** The copy action beside an install command, wherever one is shown; the
+ *  run action is the plugins page's "Install in terminal". */
 const COPY_INSTALL_COMMAND = 'Copy install command';
-const RUN_IN_TERMINAL = 'Run in Terminal';
 
 /** What the Dependencies section says of one dependency: the toolchain's
  *  dependencies, and LaTeX Workshop, which installs through a VS Code
@@ -241,7 +242,7 @@ export class LaTeXTab extends TexraSignalElement {
                   ></copy-button>
                   ${renderLabeledActionButton({
                     icon: 'terminal',
-                    text: RUN_IN_TERMINAL,
+                    text: PLUGINS_PAGE.installInTerminal,
                     title: `Run: ${installCmd.command}`,
                     kind: 'secondary',
                     onClick: () => this.handleRunInTerminal(installCmd.command),
@@ -318,7 +319,7 @@ export class LaTeXTab extends TexraSignalElement {
         ></copy-button>
         ${renderLabeledActionButton({
           icon: 'terminal',
-          text: RUN_IN_TERMINAL,
+          text: PLUGINS_PAGE.installInTerminal,
           kind: 'secondary',
           title: `Run ${pmName} installer in a terminal`,
           onClick: () => this.handleRunInTerminal(installCommand),

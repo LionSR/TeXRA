@@ -7,6 +7,10 @@ import { app } from 'electron';
 import { Effect } from 'effect';
 
 import type { RunId } from '@texra-ai/worldline/schemas';
+import {
+  DESKTOP_LOCAL_COMMANDS,
+  desktopCommandEntry,
+} from '../shared/desktopCommandSurface.js';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { DesktopProjectRegistry } from './desktopProjects.js';
 import type { DesktopWindowHost } from './desktopWindowHost.js';
@@ -77,7 +81,7 @@ export function createProjectNavigation(options: {
       }),
     openFolder: Effect.fn('desktop.openWorkspaceFolder')(function* () {
       const selectedPath = yield* host.pickFolder(
-        'Open Project Folder',
+        desktopCommandEntry(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER).title,
         projects.active().roots.workspace ?? app.getPath('home'),
       );
       if (!selectedPath) return;

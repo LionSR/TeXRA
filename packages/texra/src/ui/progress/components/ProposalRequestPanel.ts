@@ -206,18 +206,16 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   ): TemplateResult | typeof nothing {
     const workingDirectory = data.workingDirectory;
     if (!workingDirectory) return nothing;
-    return html`<div id="proposal-working-directory">
-        <span class="workflow-proposal__file-label"
-          >${WORKING_DIRECTORY_LABEL}:</span
-        >
-        <span
-          class="workflow-proposal__file-name workflow-proposal__file-name--readonly workflow-proposal__file-name--wrap"
-          >${workingDirectory}</span
-        >
-      </div>
-      <wa-tooltip for="proposal-working-directory"
-        >${workingDirectory}</wa-tooltip
-      >`;
+    // The path is shown in full and wraps, so it needs no hover hint.
+    return html`<div>
+      <span class="workflow-proposal__file-label"
+        >${WORKING_DIRECTORY_LABEL}:</span
+      >
+      <span
+        class="workflow-proposal__file-name workflow-proposal__file-name--readonly workflow-proposal__file-name--wrap"
+        >${workingDirectory}</span
+      >
+    </div>`;
   }
 
   private renderProposalFiles(
@@ -262,10 +260,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   ): TemplateResult | typeof nothing {
     if (files.length === 0) return nothing;
 
-    const idPrefix = `proposal-${label.toLowerCase()}`.replaceAll(
-      /[^a-z0-9_-]/g,
-      '-',
-    );
     return html`
       <div
         class="workflow-proposal__${label.toLowerCase()}-files"
@@ -278,17 +272,16 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
           (file) => file,
           (file, i) =>
             html`${i > 0 ? ', ' : ''}${
-                clickable
-                  ? buildFileLinkSpan(file, getBasename(file), {
-                      id: `${idPrefix}-file-${i}`,
-                      className: 'workflow-proposal__file-name',
-                    })
-                  : html`<span
-                      id="${idPrefix}-file-${i}"
-                      class="workflow-proposal__file-name workflow-proposal__file-name--readonly"
-                      >${getBasename(file)}</span
-                    >`
-              }<wa-tooltip for="${idPrefix}-file-${i}">${file}</wa-tooltip>`,
+              clickable
+                ? buildFileLinkSpan(file, getBasename(file), {
+                    className: 'workflow-proposal__file-name',
+                  })
+                : html`<span
+                    class="workflow-proposal__file-name workflow-proposal__file-name--readonly"
+                    title=${file}
+                    >${getBasename(file)}</span
+                  >`
+            }`,
         )}
       </div>
     `;
