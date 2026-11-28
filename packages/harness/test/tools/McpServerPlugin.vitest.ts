@@ -290,14 +290,19 @@ describe('MCP server plugins', () => {
             // The run's pin was the server's last holder: closing it stops the
             // server.
             yield* Scope.close(pin, Exit.void);
-            yield* Effect.sync(() => processRunning(pid) || processRunning(editedPid)).pipe(
+            yield* Effect.sync(
+              () => processRunning(pid) || processRunning(editedPid),
+            ).pipe(
               Effect.repeat({
                 schedule: Schedule.spaced('20 millis'),
                 while: (alive) => alive,
               }),
               Effect.timeout('5 seconds'),
             );
-            expect([processRunning(pid), processRunning(editedPid)]).toEqual([false, false]);
+            expect([processRunning(pid), processRunning(editedPid)]).toEqual([
+              false,
+              false,
+            ]);
           }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer()));
         }),
       20_000,

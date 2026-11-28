@@ -14,13 +14,7 @@
  * A row or draft that breaks the store's own protocol is a defect, never one
  * of these.
  */
-import {
-  Context,
-  type Effect,
-  type RcMap,
-  Schema,
-  type Stream,
-} from 'effect';
+import { Context, type Effect, type RcMap, Schema, type Stream } from 'effect';
 import { RunIdSchema } from '@shared/schemas';
 import type {
   RunId,

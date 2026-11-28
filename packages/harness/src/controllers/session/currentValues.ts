@@ -19,10 +19,7 @@ import {
 import { logFailure } from '@logger/effectLog';
 import { CURRENT_VALUE_VERSION } from '@shared/schemas';
 import type { CurrentValues } from '@shared/session/database';
-import type {
-  ValueFamily,
-  ValuesChange,
-} from '@shared/session/valueFamily';
+import type { ValueFamily, ValuesChange } from '@shared/session/valueFamily';
 import { CURRENT_VALUE_KIND, UPSERT_KINDS, type SqlRow } from './rowCodec';
 import { StoreCheckFailed } from './storeAside';
 import type { StoreConnection } from './storeConnection';
