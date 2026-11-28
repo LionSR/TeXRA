@@ -20,6 +20,7 @@ import { modelAvailabilityLabel } from '@ui/copy/modelAccess';
 import {
   formatSubscriptionUsageReset,
   formatSubscriptionUsageUpdated,
+  limitingQuotaWindow,
   subscriptionQuotaTone,
   subscriptionQuotaUsed,
   subscriptionUsageUnavailable,
@@ -49,11 +50,6 @@ const current = (usage: PlanUsage, now: number): PlanUsage => ({
     (window) => window.resetAt === undefined || window.resetAt > now,
   ),
 });
-
-/** The window a chip stands for: the one nearest its limit, whichever
- *  windows the plan has. */
-const fullest = (usage: PlanUsage) =>
-  usage.windows.toSorted((a, b) => b.percentUsed - a.percentUsed).at(0);
 
 /** Why a plan shows no windows, in a line. */
 function unknownLine(unknown: NonNullable<PlanUsage['unknown']>): string {
@@ -160,7 +156,7 @@ export class PlanUsageMeters extends TexraElement {
   }
 
   private renderChip(usage: PlanUsage): TemplateResult {
-    const window = fullest(usage);
+    const window = limitingQuotaWindow(usage.windows);
     if (window === undefined)
       return html`<span class="chip">${planName(usage)}</span>`;
     const tone = subscriptionQuotaTone(window);
@@ -203,11 +199,8 @@ export class PlanUsageMeters extends TexraElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    // A plan with no credential has no usage to show and nothing to fix here.
     const now = this.ticker.now;
-    const usage = this.usage
-      .filter((plan) => plan.unknown !== 'missing_credentials')
-      .map((plan) => current(plan, now));
+    const usage = this.usage.map((plan) => current(plan, now));
     if (usage.length === 0) return nothing;
     return html`
       <button

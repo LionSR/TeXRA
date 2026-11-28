@@ -47,7 +47,7 @@ import {
 } from '@texra-ai/worldline/plugins';
 import { ensureError } from '@texra-ai/worldline/schemas';
 import { isPathWithin } from '@texra-ai/worldline/node';
-import { apiKeyEntry } from '@texra-ai/llm';
+import { routedApiKeyProvider } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 import type {
   HostSnapshot,
@@ -277,7 +277,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     // The plans the listed models bill, each as the process knows its
     // quota now: an endpoint's answer (asked when the kept one has expired)
     // or the last reply's word. A plan nothing states the quota of has no
-    // meter.
+    // meter, and neither has one with no credential: it has no usage to
+    // show and nothing a person fixes from the meter.
     const loadUsage = yield* producer(
       'the plan usage',
       Effect.gen(function* () {
@@ -309,7 +310,9 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
                     },
                   ];
                 case 'failed':
-                  return [{ plan, windows: [], unknown: quota.reason }];
+                  return quota.reason === 'missing_credentials'
+                    ? []
+                    : [{ plan, windows: [], unknown: quota.reason }];
                 case 'unobserved':
                   return [{ plan, windows: [], unknown: quota.state }];
                 case 'unread':
@@ -384,7 +387,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     // so an OAuth refresh or a GitHub token reloads no catalog. A sign-in
     // announces its token write, then its preference (`modelAccessChanged`).
     const providerKey = ({ key }: { readonly key: string }) =>
-      (apiKeyEntry(key) ?? 'unknown') !== 'unknown';
+      routedApiKeyProvider(key) !== undefined;
     yield* follow(
       Stream.filter(
         yield* subscribeAppSignal('credentialChanged'),

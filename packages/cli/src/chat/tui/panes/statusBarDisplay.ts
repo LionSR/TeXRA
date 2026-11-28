@@ -36,6 +36,7 @@ import {
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
 import {
+  limitingQuotaWindow,
   subscriptionQuotaTone,
   subscriptionQuotaUsed,
 } from '@ui/copy/subscriptionUsage';
@@ -50,7 +51,7 @@ import {
 import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
 import { taskCostStatus } from '../sessionStatus';
-import { formatResumeCommand } from '../state/resumeHint';
+import { formatResumeCommand } from '../../../runtime/resumeCommand';
 import { type TransientNotice } from '../state/cliState';
 import type {
   ApprovalPolicy,
@@ -234,10 +235,7 @@ function subscriptionQuotaSegment(
   snapshot: SubscriptionUsageSnapshot | undefined,
 ): StatusBarSegment | undefined {
   if (snapshot?.state !== 'available') return undefined;
-  // The bar shows the window the plan runs out of first: the most used.
-  const limiting = snapshot.windows.toSorted(
-    (left, right) => right.percentUsed - left.percentUsed,
-  )[0];
+  const limiting = limitingQuotaWindow(snapshot.windows);
   if (!limiting) return undefined;
   const used = subscriptionQuotaUsed(limiting);
   const tone = subscriptionQuotaTone(limiting);
