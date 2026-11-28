@@ -62,14 +62,12 @@ lands.
 
 ## Desktop
 
-10. **Two status dots.** `.status-dot` (`styles.css`, 6px, `--dot-color`)
-    sits beside the kit's `.status-indicator`
-    (`styles/statusIndicatorStyles.ts`, 7px, `--tone-color`); the left rail
-    shows both sizes, a project's unseen dot above a run's. The two
-    remaining `.status-dot` users, `desktopShell.ts` and `main.ts`, are in
-    open PRs. (The "unsaved" dot is one template now, `unsavedDot` in
-    `paneChrome.ts`, with its accessible name; a tab's is the text colour
-    and a tree row's the accent, which is a design call.)
+10. **Closed for status.** The pending-approval badge on the desktop's
+    sidebar toggle is the kit's `.status-indicator`, which the desktop's
+    light DOM now adopts; `.status-dot` (`styles.css`) is left to the
+    unsaved-file dot, `unsavedDot` in `paneChrome.ts`, which shows no
+    status. (A tab's unsaved dot is the text colour and a tree row's the
+    accent, which is a design call.)
 11. **Sidebar group labels** (`.shell-sidebar-section-label` and the Files
     header in `desktopShell.css`) are small grey labels beside the kit's
     `.overline`, which `RunTabs.ts` uses for its headings in the same
