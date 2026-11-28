@@ -13,7 +13,7 @@ import { executeCliRun } from './run';
 import {
   formatResumeCommand,
   oneShotResumeNotice,
-} from '../chat/tui/state/resumeHint';
+} from '../runtime/resumeCommand';
 import { taskNotFoundText } from '../runtime/history';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';

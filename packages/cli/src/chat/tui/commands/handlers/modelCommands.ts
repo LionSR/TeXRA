@@ -24,8 +24,11 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { selectChatModel, type SlashCommandContext } from './slashContext';
 
-/** The model currently in effect for this chat: the root run's, else the session's. */
-export function currentChatModel(): string {
+/** The model currently in effect for this chat: the next launch's selection or the held root's model. */
+export function currentChatModel(
+  session: SlashCommandContext['session'],
+): string {
+  if (session.canStartRootRun()) return sessionMeta.get().model;
   const runId = rootRunId.get();
   return (
     (runId === undefined
@@ -155,13 +158,17 @@ export const applyCliModelPick = Effect.fn('applyCliModelPick')(function* (
   pick: CliModelPick,
   context: SlashCommandContext,
 ) {
+  const current = currentChatModel(context.session);
+  const ref = selectModel(pick.model)?.config.ref ?? pick.model.trim();
   if (pick.effort === undefined) {
-    yield* applyCliModelSelection(pick.model, context);
+    yield* applyCliModelSelection(
+      selectModel(current)?.config.ref === ref ? current : pick.model,
+      context,
+    );
     return;
   }
-  const ref = selectModel(pick.model)?.config.ref ?? pick.model.trim();
   const level = pick.effort;
-  const nextModel = modelChoiceWithEffort(ref, level, currentChatModel());
+  const nextModel = modelChoiceWithEffort(ref, level, current);
   yield* commitChatModelChange(nextModel, context, {
     messages: MODEL_SWITCH_MESSAGES,
     afterAccepted: () => saveReasoningLevel(context.stores, ref, level),
@@ -172,7 +179,7 @@ export const applyCliModelPick = Effect.fn('applyCliModelPick')(function* (
  *  model's route, persist the per-model default, and apply to the chat/run. */
 export const applyCliEffortSelection = Effect.fn('applyCliEffortSelection')(
   function* (rawEffort: string, context: SlashCommandContext) {
-    const current = currentChatModel();
+    const current = currentChatModel(context.session);
     const [option] = yield* loadModelOptions(context.stores, [current]);
     const ref = selectModel(current)?.config.ref ?? current;
     const label = option?.label ?? getModelLabel(ref);

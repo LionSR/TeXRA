@@ -111,7 +111,7 @@ const sessionGraphLayer = (key: SessionKey) => {
     DatabaseOpenFailed,
     ProjectDatabases | Layer.Services<ReturnType<typeof databaseLayer>>
   > =
-    key.open.transcriptMode?.kind === 'ephemeral'
+    key.open.ephemeral === true
       ? databaseLayer('ephemeral')
       : Layer.effect(
           Database,
@@ -179,7 +179,7 @@ const openSession = (open: SessionHandleInit) =>
       .contextEffect(key)
       .pipe(Effect.onError(() => sessions.invalidate(key)));
     // Read once held, so racing first opens agree: the other store refused.
-    const store = (init: SessionHandleInit) => init.transcriptMode?.kind;
+    const store = (init: SessionHandleInit) => init.ephemeral === true;
     for (const held of yield* RcMap.keys(sessions.rcMap))
       if (held.storage === key.storage && store(held.open) !== store(open))
         return yield* new SessionOptionsConflict({

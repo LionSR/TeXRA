@@ -29,7 +29,6 @@ import {
 // Local imports
 import { CliOutputFormatSchema } from '@texra/shared/cliOutputFormat';
 import { CURATED_MODELS } from '@texra/model/curatedModels';
-import { LATEX_FORMATTER_VALUES } from '@texra/shared/constants/latexConfig';
 import { LATEXDIFF_SETTINGS } from '@texra/shared/settings/latexdiffSettings';
 import {
   HARNESS_ROW_SURFACES,
@@ -199,12 +198,16 @@ export const TELEMETRY_ENABLED_SETTING = Object.freeze({
   surfaces: Object.freeze({ settingsView: 'telemetry' }),
 } as const satisfies TexraSettingRow<boolean>);
 
+/** The formatters the LaTeX formatter setting selects, or none. */
+const LatexFormatterSchema = Schema.Literals([
+  'latexindent',
+  'tex-fmt',
+  'none',
+]);
+
 export const LATEX_FORMATTER_SETTING = Object.freeze({
   key: 'latex.formatter',
-  schema: decodingDefault(
-    Schema.Literals(LATEX_FORMATTER_VALUES),
-    'latexindent',
-  ),
+  schema: decodingDefault(LatexFormatterSchema, 'latexindent'),
   title: 'LaTeX formatter',
   description: 'Which formatter to run when formatting LaTeX source.',
   category: 'latex',
@@ -218,7 +221,7 @@ export const LATEX_FORMATTER_SETTING = Object.freeze({
     }),
   }),
   surfaces: Object.freeze({ settingsView: 'latex' }),
-} as const satisfies TexraSettingRow<(typeof LATEX_FORMATTER_VALUES)[number]>);
+} as const satisfies TexraSettingRow<typeof LatexFormatterSchema.Type>);
 
 /**
  * Editor squiggles and Problems-panel entries exist only in VS Code. The

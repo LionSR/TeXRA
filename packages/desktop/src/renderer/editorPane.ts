@@ -333,7 +333,7 @@ export function createEditorPane(
     }
     return html`
       <div class="desktop-editor-tree-header">
-        <span>Files</span>
+        <span class="overline">Files</span>
         ${renderIconActionButton({
           id: 'editor-tree-refresh',
           icon: 'arrows-rotate',

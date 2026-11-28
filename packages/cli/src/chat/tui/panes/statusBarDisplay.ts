@@ -36,6 +36,7 @@ import {
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
 import {
+  limitingQuotaWindow,
   subscriptionQuotaTone,
   subscriptionQuotaUsed,
 } from '@ui/copy/subscriptionUsage';
@@ -50,7 +51,7 @@ import {
 import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
 import { taskCostStatus } from '../sessionStatus';
-import { formatResumeCommand } from '../state/resumeHint';
+import { formatResumeCommand } from '../../../runtime/resumeCommand';
 import { type TransientNotice } from '../state/cliState';
 import type {
   ApprovalPolicy,
@@ -168,12 +169,12 @@ interface StatusBarChrome {
   readonly locationLabel: string | undefined;
   /** Which surface currently owns input and global chat shortcuts: a
    *  foreground surface (approval, detail, form, slash palette, reverse
-   *  search) or the persistent child list. Neither active means the normal
-   *  chat shortcuts row (`shortcuts`) applies. */
-  readonly foreground: StatusBarForegroundInput;
+   *  search; `foregroundInputActive`) or the persistent child list. Neither
+   *  active means the normal chat shortcuts row (`shortcuts`) applies. */
+  readonly foregroundInputActive: boolean;
   readonly childList: StatusBarChildListInput;
   /** Availability/labels for the normal chat shortcuts row, shown when
-   *  neither `foreground` nor `childList` owns input. */
+   *  neither the foreground surface nor `childList` owns input. */
   readonly shortcuts: StatusBarShortcutsInput;
 }
 
@@ -187,11 +188,6 @@ interface StatusBarTurnInput {
    *  `loadingFrameAt`) shown ahead of the status label while a turn is
    *  active, so "running" reads as alive rather than a static word. */
   readonly runningFrame: string;
-}
-
-interface StatusBarForegroundInput {
-  /** True while a modal, form, palette, or search surface owns input. */
-  readonly inputActive: boolean;
 }
 
 interface StatusBarChildListInput {
@@ -242,10 +238,7 @@ function subscriptionQuotaSegment(
   snapshot: SubscriptionUsageSnapshot | undefined,
 ): StatusBarSegment | undefined {
   if (snapshot?.state !== 'available') return undefined;
-  // The bar shows the window the plan runs out of first: the most used.
-  const limiting = snapshot.windows.toSorted(
-    (left, right) => right.percentUsed - left.percentUsed,
-  )[0];
+  const limiting = limitingQuotaWindow(snapshot.windows);
   if (!limiting) return undefined;
   const used = subscriptionQuotaUsed(limiting);
   const tone = subscriptionQuotaTone(limiting);
@@ -547,7 +540,7 @@ function resolveStatusBarBindings(input: StatusBarChrome): string {
 
   const maxColumns = statusBarInnerWidth(input.width);
   const { ctrlCAction } = input;
-  if (input.foreground.inputActive) {
+  if (input.foregroundInputActive) {
     // The surface above prints its own keys, Esc included; only Ctrl-C,
     // which works over every surface, is the bar's to name.
     return keyHintText({ key: 'Ctrl-C', action: ctrlCAction });

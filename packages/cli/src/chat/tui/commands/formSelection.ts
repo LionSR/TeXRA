@@ -49,7 +49,7 @@ export function bindSelection<T>(
   } = {},
 ): (value: T) => void {
   const { chat } = context;
-  const { onPersist, echoOnPersist = false } = props;
+  const { onPersist, echoOnPersist } = props;
   const onDone = overrides.onDone ?? props.onDone;
   const { completion = 'afterAction', busyTitle } = overrides;
   // Reporting is a step of the failure path, not a wait inside it.

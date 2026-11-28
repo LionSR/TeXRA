@@ -71,6 +71,7 @@ interface ListFormProps<T> {
   readonly availableRows: number;
   readonly items: ReadonlyArray<SelectItem<T>>;
   readonly activeValue?: T;
+  readonly highlightedValue?: T;
   readonly onHighlightChange?: (value: T) => void;
   /** One dim line of guidance under the title. The form paints it and
    *  counts the rows it wraps to, so a long line never pushes the list out
@@ -134,6 +135,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
         <Select
           items={props.items}
           activeValue={props.activeValue}
+          highlightedValue={props.highlightedValue}
           onHighlightChange={props.onHighlightChange}
           maxVisibleItems={Math.min(
             props.items.length,
@@ -174,6 +176,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
         <Select
           items={props.items}
           activeValue={props.activeValue}
+          highlightedValue={props.highlightedValue}
           onHighlightChange={props.onHighlightChange}
           maxVisibleItems={selectWindow.maxVisibleItems}
           showOverflow={selectWindow.showOverflow}

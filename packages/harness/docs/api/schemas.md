@@ -2087,17 +2087,14 @@ type ScriptDeliverySummary = typeof ScriptDeliverySummarySchema.Type;
 
 ## serializeFilteredConfig
 
-Serialize a run record to pretty JSON for `/executions/{id}/config`,
-dropping agent-config fields irrelevant to the resolved display category
-so the serialized config the orchestrator reads stays relevant. Records
-without an agent execution mode are honest by construction and serialize
-unchanged.
+Serialize a run record to pretty JSON for `/executions/{id}/config` and
+`texra history show`, leaving out the agent-config fields that do not
+apply to the run: a program's run hides its program's source, and any
+other agent record (a conversation or a background script) hides a task's
+file fields. A task's record serializes unchanged.
 
 ```ts
-function serializeFilteredConfig(
-  record: RunRecord,
-  category: string | undefined,
-): string
+function serializeFilteredConfig(record: RunRecord): string
 ```
 
 ## sessionActivity

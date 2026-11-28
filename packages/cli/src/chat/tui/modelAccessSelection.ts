@@ -14,9 +14,9 @@ import {
   resolveLoginTransport,
   signInCliSubscription,
   type CliSubscriptionLoginOptions,
-} from './subscriptionLogin';
-import { type CliModelAccessSelection } from './modelAccessRoute';
-import type { CliContext } from '../platform/cliContext';
+} from '@cli/runtime/models/subscriptionLogin';
+import { type CliModelAccessSelection } from '@cli/runtime/models/modelAccessRoute';
+import type { CliContext } from '@cli/runtime/platform/cliContext';
 
 /**
  * Apply one preference change and word how it ended: the app decides

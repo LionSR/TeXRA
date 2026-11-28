@@ -9,7 +9,7 @@ import { Box, Text, useInput, useWindowSize, type Key } from 'ink';
 import { Effect, SubscriptionRef } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/worldline/schemas';
-import { attachClipboardImage } from '@cli/runtime/terminal/clipboardImage';
+import { attachClipboardImage } from '@cli/chat/tui/input/clipboardImage';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { BORDERED_PANEL_CHROME_COLUMNS } from '@cli/tui/ui/BorderedPanel';

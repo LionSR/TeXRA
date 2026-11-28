@@ -2,7 +2,7 @@
  * The Sessions drawer: a `wa-drawer` from the start edge, headed by the
  * project name with close (Escape and a click outside close it too), then
  * search, the real `<run-tabs>` in group
- * sections as its body, and "Open tasks in editor" as its footer. New
+ * sections as its body, and "Open Tasks in Editor" as its footer. New
  * task has one home, the shell header; the drawer carries no second one.
  *
  * `Surface.drawerOpen` opens it and `Surface.search` filters it; both reach
@@ -16,6 +16,7 @@ import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
+import { commandCatalogById } from '@texra/shared/commands/catalog';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
@@ -126,7 +127,9 @@ export class SessionDrawer extends TexraElement {
         <div class="drawer-footer">
           ${renderLabeledActionButton({
             icon: inEditor ? 'backward-step' : 'picture-in-picture',
-            text: inEditor ? 'Back to sidebar' : 'Open tasks in editor',
+            text: inEditor
+              ? 'Back to sidebar'
+              : commandCatalogById['texra.openProgressViewInTab'].title,
             kind: 'ghost',
             className: 'is-row',
             onClick: this.openInEditor,

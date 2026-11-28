@@ -88,14 +88,6 @@ PDFs use native multimodal support when the provider offers it; otherwise TeXRA 
 
 Paste any copied image directly into the instruction box with `Ctrl+V` / `Cmd+V`. TeXRA saves it as `pasted_<timestamp>_<random>.<ext>`, attaches it, and cleans up temporary pasted files after 3 days.
 
-## <wa-icon library="texra" name="wand"></wa-icon> Automatic figure extraction
-
-A program can attach the figures of its input files itself. An agent switches this on with the `args` of its `program` call; ask for it in plain words ("attach the paper's figures"):
-
-- `autoExtractFigure`: attaches the images that `\includegraphics` commands include.
-- `autoExtractTikzFigure`: extracts `tikzpicture` environments as standalone `.tex` files, compiles them and attaches the result.
-- `autoCompileInputPdf`: compiles each input file and attaches its PDF.
-
 ## <wa-icon library="texra" name="tools"></wa-icon> Figures in a chat
 
 A chat agent has no dedicated extraction tool. It finds the figures a document includes by searching the source for `\includegraphics`, and opens each file with `read_file`, which returns an image or a PDF as an attachment a multimodal model can read. For a `tikzpicture` it compiles the picture in the shell and reads the PDF; for a citation it searches the project's `.bib` files for the key. Ask for it in plain words ("look at Figure 3 and check the caption against it").

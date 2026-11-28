@@ -41,6 +41,19 @@ export function apiKeyEntry(
   return isApiProvider(provider) ? provider : 'unknown';
 }
 
+/**
+ * The provider whose API key a secret-store entry holds, when a write to it
+ * can change which models route: `undefined` for an entry that is no API key
+ * and for the key of a provider this build does not know, which routes no
+ * model.
+ */
+export function routedApiKeyProvider(
+  key: string,
+): ApiKeyProviderId | undefined {
+  const provider = apiKeyEntry(key);
+  return provider === 'unknown' ? undefined : provider;
+}
+
 /** A provider's key, sealed, and its origin. */
 export interface ResolvedApiKey {
   /**

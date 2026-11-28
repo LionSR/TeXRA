@@ -120,7 +120,7 @@ export function builtinSlashCommands(options: {
     const context = useSlashContext();
     return (
       <ModelListForm
-        currentModel={currentChatModel()}
+        currentModel={currentChatModel(context.session)}
         availableRows={props.availableRows}
         selectable={context.session.canSelectModel()}
         getModelSwitchDisabledReason={context.getModelSwitchDisabledReason}
@@ -134,7 +134,7 @@ export function builtinSlashCommands(options: {
     const context = useSlashContext();
     return (
       <EffortListForm
-        currentModel={currentChatModel()}
+        currentModel={currentChatModel(context.session)}
         availableRows={props.availableRows}
         selectable={context.session.canSelectModel()}
         onSelect={bindSelection(context, props, applyCliEffortSelection)}

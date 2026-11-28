@@ -13,7 +13,7 @@ import { usageCostLabel } from '@ui/copy/modelAccess';
 import { OWN_USAGE_LABEL } from '@ui/copy/tokenUsage';
 import { runStatus } from '@ui/copy/runStatus';
 
-import { formatResumeCommand } from './state/resumeHint';
+import { formatResumeCommand } from '../../runtime/resumeCommand';
 import type {
   ApprovalPolicy,
   RunView,

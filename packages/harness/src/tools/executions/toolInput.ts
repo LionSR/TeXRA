@@ -134,7 +134,7 @@ const QueryActionSchema = Schema.Struct({
   }),
   sql: Schema.NonEmptyString.annotate({
     description:
-      'One SELECT, WITH, EXPLAIN or VALUES statement; bind values as ?.',
+      'One SELECT, WITH or VALUES statement, or an EXPLAIN of one; bind values as ?.',
   }),
   params: nullishWithDefault(
     Schema.Array(Schema.String),

@@ -25,7 +25,7 @@ import {
   formatCliCodingPlanPreference,
   formatCliSubscriptionPreference,
   cliCodingPlanStatus,
-} from './modelAccessRoute';
+} from '@cli/runtime/models/modelAccessRoute';
 import {
   readModelAccessStatus,
   type ModelAccessStatus,

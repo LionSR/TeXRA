@@ -1020,7 +1020,8 @@ const SCENARIOS = [
     keys: ['/model', '\r'],
     frame: 'viewport',
     expect: [
-      'Available models',
+      'Reasoning level:',
+      '[Medium]',
       '+1 more',
       '↑/↓ navigate',
       'Enter close',

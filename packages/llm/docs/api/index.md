@@ -1201,6 +1201,19 @@ function routeConfig(
 ): ModelConfig
 ```
 
+## routedApiKeyProvider
+
+The provider whose API key a secret-store entry holds, when a write to it
+can change which models route: `undefined` for an entry that is no API key
+and for the key of a provider this build does not know, which routes no
+model.
+
+```ts
+function routedApiKeyProvider(
+  key: string,
+): ApiKeyProviderId | undefined
+```
+
 ## RouteFacts
 
 The facts a route reads, and nothing else.

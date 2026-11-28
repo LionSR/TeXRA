@@ -89,7 +89,7 @@ its kind is its `type` column.
 
 The store is one SQLite file under the storage root, named for the app's
 settings namespace: `<namespace>.project-v1.db` for projects and `<namespace>.db` for global settings
-(`utils/system/appNamespace.ts#storeFileName`). An ephemeral
+(`controllers/session/storeSchema.ts#storeFileName`). An ephemeral
 session runs the same schema in memory
 (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 

@@ -5,7 +5,7 @@ import { Text } from 'ink';
 import { Effect } from 'effect';
 
 import type { ReasoningEffort } from '@texra-ai/llm';
-import { readModelOptions } from '@texra-ai/worldline/host';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { getModelLabel, joinFacts } from '@texra-ai/worldline/schemas';
 import {
   effectiveReasoningLevel,
@@ -38,44 +38,28 @@ export function EffortListForm(props: EffortListFormProps): React.JSX.Element {
   const fallbackLabel = getModelLabel(props.currentModel || '-');
   const { data, loading, error } = useAsyncListForm<LoadedEffortChoices>({
     load: () =>
-      readModelOptions(roots, [props.currentModel]).pipe(
-        Effect.map(([verdict]): LoadedEffortChoices => {
-          if (verdict === undefined || !('config' in verdict)) {
-            return {
-              modelLabel: fallbackLabel,
-              activeLevel: undefined,
-              items: [],
-            };
-          }
-          const modelLabel = verdict.config.label;
-          const reasoning = verdict.reasoning;
-          if (reasoning === undefined || reasoning.efforts.length <= 1) {
-            return { modelLabel, activeLevel: undefined, items: [] };
-          }
-          const sent =
-            'refused' in reasoning.sent ? undefined : reasoning.sent.effort;
-          const defaultLevel =
-            'refused' in reasoning.fallback
-              ? undefined
-              : reasoning.fallback.effort;
-          const activeLevel = effectiveReasoningLevel(props.currentModel, {
-            levels: reasoning.efforts,
-            sent,
-          });
-          const items: SelectItem<ReasoningEffort>[] = reasoning.efforts.map(
-            (level) => {
-              const label = REASONING_LEVEL_LABELS[level];
-              const description = joinFacts([
-                level !== label.toLowerCase() && level,
-                level === defaultLevel && 'default',
-              ]);
-              return {
-                value: level,
-                label,
-                ...(description ? { description } : {}),
-              };
-            },
+      loadModelOptions(roots, [props.currentModel]).pipe(
+        Effect.map(([option]): LoadedEffortChoices => {
+          const modelLabel = option?.label ?? fallbackLabel;
+          const efforts = option?.efforts;
+          const activeLevel = effectiveReasoningLevel(
+            props.currentModel,
+            efforts,
           );
+          const items: SelectItem<ReasoningEffort>[] = (
+            efforts?.levels ?? []
+          ).map((level) => {
+            const label = REASONING_LEVEL_LABELS[level];
+            const description = joinFacts([
+              level !== label.toLowerCase() && level,
+              level === efforts?.fallback && 'default',
+            ]);
+            return {
+              value: level,
+              label,
+              ...(description ? { description } : {}),
+            };
+          });
           return { modelLabel, activeLevel, items };
         }),
       ),
@@ -101,13 +85,17 @@ export function EffortListForm(props: EffortListFormProps): React.JSX.Element {
       availableRows={props.availableRows}
       items={data.items}
       activeValue={data.activeLevel}
-      compactVisibleItems={data.items.length}
+      compactVisibleItems={props.availableRows - 5}
       description={
         props.selectable
           ? `Choose the reasoning effort for ${data.modelLabel}.`
           : `Reasoning effort for ${data.modelLabel}. Finish the active response before changing it.`
       }
-      compactDetail={<Text dimColor>{data.modelLabel}</Text>}
+      compactDetail={
+        <Text dimColor wrap="truncate-end">
+          {data.modelLabel}
+        </Text>
+      }
       selectMarginTop={1}
       emptyClosesOnEnter
       emptyMessage={`${data.modelLabel} does not offer selectable reasoning effort levels.`}

@@ -110,8 +110,8 @@ export const emitPagedCliResult = (
   CliInvocation.use(({ context }) =>
     context.outputFormat !== 'text' || !result.text
       ? Effect.sync(() => writeCliResult(context.outputFormat, result))
-      : pageStdout(result.text, {
-          stdoutIsTty: context.stdoutIsTty,
-          headless: context.mode === 'headless',
-        }),
+      : pageStdout(
+          result.text,
+          context.stdoutIsTty && context.mode !== 'headless',
+        ),
   );

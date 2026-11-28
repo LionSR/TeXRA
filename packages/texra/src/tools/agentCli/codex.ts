@@ -19,7 +19,11 @@ import { Effect, Schema, Stream } from 'effect';
 
 // Local imports
 import { type WorkspaceRoots } from '@texra-ai/worldline';
-import { ChildRuns, ToolContext } from '@texra-ai/worldline/plugins';
+import {
+  asToolError,
+  ChildRuns,
+  ToolContext,
+} from '@texra-ai/worldline/plugins';
 import {
   type TokenUsageStats,
   type ToolUseLog,
@@ -46,7 +50,6 @@ import { CodexThreads } from './agentCliSessionStores';
 import {
   agentCliTool,
   StreamedToolCards,
-  asToolError,
   type AgentCliTurn,
 } from './agentCliShared';
 import {

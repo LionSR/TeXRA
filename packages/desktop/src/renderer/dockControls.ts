@@ -22,7 +22,6 @@ const GROUP_OPEN_KINDS = [
   'agent',
   'files',
   'terminal',
-  'browser',
   'logs',
 ] as const satisfies readonly WorkbenchKind[];
 

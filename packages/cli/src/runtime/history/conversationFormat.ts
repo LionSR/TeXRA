@@ -12,18 +12,12 @@ import type {
 const CONVERSATION_PREVIEW_MESSAGE_LIMIT = 3;
 const CONVERSATION_PREVIEW_CONTENT_LIMIT = 4000;
 
-interface ConversationMessageFormatOptions {
-  readonly includeToolUseMarkers: boolean;
-  readonly contentLimit?: number;
-}
+type ConversationScope = CliHistoryConversation['scope'];
 
 export function createConversationPreview(
   conversation: readonly ExportNode[],
 ): CliHistoryConversation | null {
-  const transcript = buildConversationMessages(conversation, {
-    includeToolUseMarkers: false,
-    contentLimit: CONVERSATION_PREVIEW_CONTENT_LIMIT,
-  });
+  const transcript = buildConversationMessages(conversation, 'preview');
   if (!transcript) return null;
 
   const lastAssistant = transcript.messages.findLast(
@@ -33,48 +27,48 @@ export function createConversationPreview(
     ? [lastAssistant]
     : transcript.messages.slice(-CONVERSATION_PREVIEW_MESSAGE_LIMIT);
 
-  return { ...transcript, scope: 'preview', messages: selected };
+  return { ...transcript, messages: selected };
 }
 
 export function createConversationTranscript(
   conversation: readonly ExportNode[],
 ): CliHistoryConversation | null {
-  return buildConversationMessages(conversation, {
-    includeToolUseMarkers: true,
-  });
+  return buildConversationMessages(conversation, 'transcript');
 }
 
 function buildConversationMessages(
   conversation: readonly ExportNode[],
-  options: ConversationMessageFormatOptions,
+  scope: ConversationScope,
 ): CliHistoryConversation | null {
   if (conversation.length === 0) return null;
   const messages = conversation
-    .map((message, i) => toConversationPreviewMessage(message, i + 1, options))
+    .map((message, i) => toConversationPreviewMessage(message, i + 1, scope))
     .filter((message) => message.content.trim().length > 0);
   if (!messages.length) return null;
-  return { scope: 'transcript', messageCount: conversation.length, messages };
+  return { scope, messageCount: conversation.length, messages };
 }
 
 function toConversationPreviewMessage(
   message: ExportNode,
   index: number,
-  options: ConversationMessageFormatOptions,
+  scope: ConversationScope,
 ): CliHistoryConversationMessage {
   const { role, content } = formatConversationMessage(message, {
     // The CLI truncates once at the whole-message level below and hides
-    // provider reasoning and tool inputs from history output.
-    includeToolUseMarkers: options.includeToolUseMarkers,
+    // provider reasoning and tool inputs from history output; only the full
+    // transcript marks tool calls.
+    includeToolUseMarkers: scope === 'transcript',
     includeToolUseInput: false,
     hideProviderReasoning: true,
   });
+  // Only the preview caps each message's length.
   const truncated =
-    options.contentLimit !== undefined && content.length > options.contentLimit;
+    scope === 'preview' && content.length > CONVERSATION_PREVIEW_CONTENT_LIMIT;
   return {
     index,
     role,
     content: truncated
-      ? `${content.slice(0, options.contentLimit).trimEnd()}\n...[truncated]`
+      ? `${content.slice(0, CONVERSATION_PREVIEW_CONTENT_LIMIT).trimEnd()}\n...[truncated]`
       : content,
     truncated,
   };

@@ -6,6 +6,7 @@
  * surface's.
  */
 import {
+  isEditLikeToolName,
   toolDisplayKind,
   normalizeToolName,
   type TimelineEntry,
@@ -48,10 +49,10 @@ function clauseOf(row: RowOf<'tool' | 'webSearch'>): ToolRunClause {
   return toolDisplayKind(name) ?? 'other';
 }
 
-/** An edit to a file: the change itself is what a person reads, so no
- *  group stands in front of it. */
+/** An edit to a file, by the rule that draws its diff: the change itself
+ *  is what a person reads, so no group stands in front of it. */
 const isEdit = (row: TranscriptRow): boolean =>
-  row.kind === 'tool' && toolDisplayKind(row.log.toolName) === 'edit';
+  row.kind === 'tool' && isEditLikeToolName(row.log.toolName);
 
 /** A call still open keeps its own line, with its timer and live output,
  *  and an edit keeps its diff in view. */

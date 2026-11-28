@@ -73,8 +73,7 @@ export const openDesktopBrowserWindow = (options: {
       }),
   );
 
-/** Show the window on its first paint and start loading the renderer: last,
- *  once every surface that answers it is wired. */
+/** Show the window on its first paint and start loading the renderer. */
 export function loadDesktopWindow(
   window: BrowserWindow,
   /** The built renderer page, loaded when no dev server serves one. */

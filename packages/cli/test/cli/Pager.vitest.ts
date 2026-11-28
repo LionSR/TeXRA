@@ -12,12 +12,12 @@ type Answer = ReturnType<Parameters<typeof scriptedSpawnerLayer>[0]>;
 /** Page `text` on a scripted spawner that answers the pager with `answer`. */
 async function page(
   text: string,
-  options: Parameters<typeof pageStdout>[1],
+  interactive: boolean,
   answer: Answer = { exitCode: 0 },
 ): Promise<ChildProcess.StandardCommand[]> {
   const spawner = scriptedSpawnerLayer(() => answer);
   await Effect.runPromise(
-    pageStdout(text, options).pipe(Effect.provide(spawner.layer)),
+    pageStdout(text, interactive).pipe(Effect.provide(spawner.layer)),
   );
   return spawner.calls;
 }
@@ -40,7 +40,7 @@ describe('pageStdout', () => {
   it('is a strict no-op pager when stdout is not a TTY (headless parity)', async () => {
     // The sacred rule: piped / non-TTY output must be byte-identical to a
     // direct write — never spawn a pager, never alter bytes.
-    expect(await page('row1\nrow2', { stdoutIsTty: false })).toEqual([]);
+    expect(await page('row1\nrow2', false)).toEqual([]);
     expect(stdout).toBe('row1\nrow2\n');
   });
 });

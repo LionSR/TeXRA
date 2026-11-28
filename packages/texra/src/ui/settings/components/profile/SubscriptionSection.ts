@@ -35,6 +35,7 @@ import {
   renderSettingsSectionHeading,
   renderSettingsToggleRow,
 } from '@ui/wa/settingsSection';
+import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - settings view components
@@ -47,7 +48,6 @@ import {
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/tag/tag.js';
 
 /** Everything one provider contributes to the shared section. */
 interface SubscriptionSectionProvider {
@@ -119,9 +119,7 @@ export class SubscriptionSection extends TexraSignalElement {
           title: copy.subscriptionLabel,
           description: copy.connect.description,
           icon: 'circle-user',
-          actions: html`<wa-tag variant="neutral" size="s"
-            >Experimental</wa-tag
-          >`,
+          actions: renderStatusBadge({ label: 'Experimental' }),
         })}
         ${
           provider.note

@@ -23,7 +23,6 @@ import type { StartOptionsSchema } from '@shared/session/runtimeRequest';
 import {
   type Approvals,
   SessionViewAccess,
-  type HistoryQuery,
   type RunHistory,
   type SessionLog,
 } from '@shared/session/runHistory';
@@ -36,6 +35,7 @@ import type { SessionHandleInit } from './SessionHandle';
 import type { Interactions } from './HostInteractions';
 import type { ProjectTools } from './loop/step';
 import type { SessionRequests } from './requests';
+import type { HistoryQuery } from './historyQuery/HistoryQuery';
 
 /**
  * A session's own services: each owner its layer built (`sessionOwners.ts`),

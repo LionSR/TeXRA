@@ -34,7 +34,8 @@ programs:
 - **Parsing**: `latexParsingUtils.ts` (comment stripping, the packages and
   class a file loads); `labelSearch.ts` (`\\label{}` lookup);
   `criticismParser.ts` (the positions of the `\\criticize` annotations, for
-  the editor's inline decorations).
+  the editor's inline decorations, over the brace-balanced macro scanner in
+  `braceBalancedMacro.ts`).
 - **Output**: `texcount.ts` (word counts); `latexdiff.ts` (`latexdiff`:
   one run of the tool, its `--flatten` fallback and
   the clean-up of its output, which restores bibliography directives and

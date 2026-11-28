@@ -39,8 +39,8 @@ interface ModelListFormProps {
   readonly currentModel: string;
   readonly availableRows: number;
   readonly selectable: boolean;
-  readonly getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
-  readonly onSelect?: (pick: CliModelPick) => void;
+  readonly getModelSwitchDisabledReason: GetModelSwitchDisabledReason;
+  readonly onSelect: (pick: CliModelPick) => void;
   readonly onClose: () => void;
 }
 
@@ -230,6 +230,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
       availableRows={props.availableRows}
       items={items}
       activeValue={activeModelRef}
+      highlightedValue={focusedModelId}
       onHighlightChange={setHighlightedModel}
       description={
         props.selectable
@@ -272,7 +273,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           props.onClose();
           return;
         }
-        props.onSelect?.({ model: value, effort: draftEfforts[value] });
+        props.onSelect({ model: value, effort: draftEfforts[value] });
       }}
       onCancel={props.onClose}
     />

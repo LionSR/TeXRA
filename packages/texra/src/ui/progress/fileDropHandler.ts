@@ -1,5 +1,6 @@
 // Local imports - shared schemas
 import { filePathOfFileUrl } from '@texra-ai/worldline/schemas';
+import { HOST_BRIDGE_API_KEY } from '@texra/shared/hostBridgeTypes';
 import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 
@@ -55,10 +56,12 @@ function extractDroppedFilePaths(dataTransfer: DataTransfer | null): string[] {
 
   const paths = new Set<string>();
   for (const file of dataTransfer.files ?? []) {
-    // Electron's renderer adds the file's absolute `path`; a browser has none.
-    const dropped =
-      'path' in file && typeof file.path === 'string' ? file.path : undefined;
-    const path = normalizeDroppedPath(dropped, true);
+    // Read at the drop, not through `hostBridge`: only the desktop's bridge
+    // names a dropped file, and a file URI below serves the other hosts.
+    const path = normalizeDroppedPath(
+      globalThis[HOST_BRIDGE_API_KEY]?.filePath?.(file),
+      true,
+    );
     if (path) paths.add(path);
   }
 

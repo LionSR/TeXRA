@@ -321,6 +321,15 @@ Fail when a raw tool path contains a parent-directory segment.
 const assertNoParentTraversal: (targetPath: string) => Effect<void, ToolError, never>
 ```
 
+## asToolError
+
+What a tool's own code threw, as the `ToolError` its call fails with: a
+thrown `ToolError` as it is, anything else under its own message.
+
+```ts
+const asToolError: (cause: unknown) => ToolError
+```
+
 ## BoundModel
 
 One bound model: llm's `Binding` (or the validation model's) and the facts
@@ -729,6 +738,23 @@ type DefineToolOptions<T, R = never> = Required<
      *  an `Error` and the model reads its message as the tool's error. */
     execute: (input: T) => Effect.Effect<ToolResult | string, Error, R>;
   };
+```
+
+## describedString
+
+A required tool-input string field that arrives trimmed and non-empty.
+
+The model sees a plain string carrying `description`, written on the encoded
+side because that is the side the model's JSON Schema is generated from.
+Decoding trims surrounding whitespace and rejects an empty result, so
+`execute` receives a non-empty, trimmed value and needs no trim or presence
+check of its own. Naming the shape keeps every described path/text field a
+tool requires on the one spelling.
+
+```ts
+function describedString(
+  description: string,
+): Schema.Codec<string, string>
 ```
 
 ## DiffHunks

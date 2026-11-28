@@ -5,13 +5,12 @@ import { Effect, Fiber, Stream, SubscriptionRef, Context } from 'effect';
 import { TestClock } from 'effect/testing';
 import { expect } from 'vitest';
 
-import { HistoryQueryStore } from '@agent/runtime/historyQuery/HistoryQuery';
-import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {
   HistoryQuery,
-  SessionLog,
-  SessionViewAccess,
-} from '@shared/session/runHistory';
+  HistoryQueryStore,
+} from '@agent/runtime/historyQuery/HistoryQuery';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
@@ -94,6 +93,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             Effect.flip,
           );
           expect(pragma).toMatchObject({ reason: 'not-a-read' });
+          // SQLite applies this pragma when the statement is prepared, so an
+          // EXPLAIN of it would turn the store writable.
+          const explained = yield* query(
+            session,
+            'EXPLAIN PRAGMA query_only = OFF',
+          ).pipe(Effect.flip);
+          expect(explained).toMatchObject({ reason: 'not-a-read' });
           const two = yield* query(session, "SELECT 1; SELECT ';' -- ;").pipe(
             Effect.flip,
           );

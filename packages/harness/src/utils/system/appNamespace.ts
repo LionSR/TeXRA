@@ -14,15 +14,6 @@ export class AppNamespace extends Context.Service<AppNamespace, string>()(
 /** The project history format, shared by its filename and hosts that attach to a running service. */
 export const PROJECT_STORE_FORMAT = 'project-v1';
 
-/** Project histories use the v1 row formats. Global settings keep their original file. */
-export const storeFileName = (
-  namespace: string,
-  kind: 'project' | 'global',
-): string =>
-  kind === 'project'
-    ? `${namespace}.${PROJECT_STORE_FORMAT}.db`
-    : `${namespace}.db`;
-
 /** The app's variable for `name`: `<NAMESPACE>_<NAME>`. */
 export const appEnvName = (namespace: string, name: string): string =>
   `${namespace.toUpperCase()}_${name}`;

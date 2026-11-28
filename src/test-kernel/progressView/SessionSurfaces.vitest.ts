@@ -15,7 +15,7 @@ import { PersistedSurfaceSchema } from '@texra/shared/session/surface';
 import {
   createWebviewStorage,
   type KeyValueStore,
-} from '@texra/shared/state/PersistedState';
+} from '@ui/progress/PersistedState';
 import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { WebviewTransport } from '@ui/progress/sessionTransport';
