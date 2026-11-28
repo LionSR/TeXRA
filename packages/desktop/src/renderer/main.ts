@@ -72,7 +72,6 @@ import {
   type DesktopShellState,
 } from '../shared/desktopShellState';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
-import { DESKTOP_SHELL_COMMANDS } from '../shared/desktopShellMessages';
 import {
   resolveDesktopPushes,
   resolveSessionWire,
@@ -877,30 +876,6 @@ appRoot.addEventListener('surface-action', (event) => {
   if (event.detail.kind === 'select' && key !== shell.active) {
     selectProject(key);
   }
-});
-
-// A web link in a message opens in the user's browser. Left to the window
-// it would be a navigation, which the window refuses for every host but its
-// own allowed few, so the click would do nothing.
-appRoot.addEventListener('click', (event) => {
-  if (event.defaultPrevented || event.button !== 0) return;
-  const path = event.composedPath();
-  const link = path.find(
-    (node): node is HTMLAnchorElement => node instanceof HTMLAnchorElement,
-  );
-  if (
-    !link ||
-    !path.some(
-      (node) =>
-        node instanceof HTMLElement &&
-        node.classList.contains('markdown-content'),
-    )
-  )
-    return;
-  const url = URL.parse(link.href);
-  if (url?.protocol !== 'http:' && url?.protocol !== 'https:') return;
-  event.preventDefault();
-  postToMain({ command: DESKTOP_SHELL_COMMANDS.OPEN_LINK, url: url.href });
 });
 
 // The projects list arrives in reply; each project's session subscribes as it
