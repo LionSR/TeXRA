@@ -16,7 +16,7 @@ import {
   signOutCliSubscription,
   subscriptionSignOutPreferenceMessage,
 } from '@cli/runtime/models/subscriptionLogin';
-import { loadCliModelAccessOverview } from '@cli/runtime/models/apiStatus';
+import { loadCliModelAccessOverview } from '@cli/chat/tui/apiStatus';
 import {
   LOGIN_TRANSPORT_CONFLICT_MESSAGE,
   parseChatLoginSlashArgs,

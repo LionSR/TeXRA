@@ -321,6 +321,15 @@ Fail when a raw tool path contains a parent-directory segment.
 const assertNoParentTraversal: (targetPath: string) => Effect<void, ToolError, never>
 ```
 
+## asToolError
+
+What a tool's own code threw, as the `ToolError` its call fails with: a
+thrown `ToolError` as it is, anything else under its own message.
+
+```ts
+const asToolError: (cause: unknown) => ToolError
+```
+
 ## BoundModel
 
 One bound model: llm's `Binding` (or the validation model's) and the facts

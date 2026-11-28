@@ -14,7 +14,7 @@
  */
 import {
   Array as Arr,
-  type Context,
+  Context,
   Effect,
   Schema,
   type Scope,
@@ -36,13 +36,7 @@ import {
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import {
-  HistoryPageSchema,
-  HistoryQueryFailed,
-  HistoryQueryRefused,
   SessionLog,
-  type HistoryCell,
-  type HistoryPage,
-  type HistoryQuery,
   SessionViewAccess,
   runReadRefusal,
 } from '@shared/session/runHistory';
@@ -52,8 +46,13 @@ import {
   type CallPositions,
   failedStep,
   failedWith,
+  HistoryPageSchema,
+  HistoryQueryFailed,
+  HistoryQueryRefused,
   spawnQueryStore,
   request,
+  type HistoryCell,
+  type HistoryPage,
   type Store,
 } from './childSource';
 import {
@@ -259,6 +258,22 @@ const append = (store: Store, ops: readonly HistoryWrite[]) =>
       ),
     { discard: true },
   );
+
+/** The session's history query (`executions` `query`): one read over the
+ *  session's display rows and runs as of the call, in a store closed with
+ *  the session. */
+export class HistoryQuery extends Context.Service<
+  HistoryQuery,
+  {
+    readonly query: (
+      sql: string,
+      params: readonly HistoryCell[],
+    ) => Effect.Effect<
+      HistoryPage,
+      HistoryQueryRefused | HistoryQueryFailed | DatabaseReadFailed
+    >;
+  }
+>()('@texra-ai/worldline/session/HistoryQuery') {}
 
 /** The session's {@link HistoryQuery}, over its log and view. */
 export class HistoryQueryStore implements Context.Service.Shape<

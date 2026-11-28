@@ -12,15 +12,15 @@ import {
   readCliArgv,
 } from '../runtime/platform/cliContext';
 import { writeTextStdout } from '../runtime/platform/logSinks';
-import { bashCompletion } from '../runtime/completion/completionBash';
+import { bashCompletion } from './completion/completionBash';
 import {
   CLI_COMPLETION_SHELLS,
   collectCommands,
   type CliCompletionShell,
   type CompletionCommand,
-} from '../runtime/completion/completionCommandTree';
-import { fishCompletion } from '../runtime/completion/completionFish';
-import { zshCompletion } from '../runtime/completion/completionZsh';
+} from './completion/completionCommandTree';
+import { fishCompletion } from './completion/completionFish';
+import { zshCompletion } from './completion/completionZsh';
 
 import {
   CLI_GLOBAL_FLAG_DESCRIPTORS,

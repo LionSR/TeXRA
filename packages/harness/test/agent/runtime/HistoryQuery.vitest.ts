@@ -5,13 +5,12 @@ import { Effect, Fiber, Stream, SubscriptionRef, Context } from 'effect';
 import { TestClock } from 'effect/testing';
 import { expect } from 'vitest';
 
-import { HistoryQueryStore } from '@agent/runtime/historyQuery/HistoryQuery';
-import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {
   HistoryQuery,
-  SessionLog,
-  SessionViewAccess,
-} from '@shared/session/runHistory';
+  HistoryQueryStore,
+} from '@agent/runtime/historyQuery/HistoryQuery';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';

@@ -98,9 +98,18 @@ worth taking.
   `packages/harness/src/tools/executionFormatters.ts`) is keyed by bare
   strings in `packages/harness/src/shared/schemas/runRecords.ts` and derived
   a third way in `packages/cli/src/runtime/history.ts`. (#15245, #15216)
+  Landed 2026-11-28: `serializeFilteredConfig` takes the record alone and
+  reads whether it is a program's run from it (`programOf`), so the
+  string-keyed table, the CLI's mapping onto it and the executions tool's
+  view read for the category are gone. A run the session view no longer
+  lists is filtered too, where it used to print unfiltered.
 - **The `bash` timeout cap** is `600_000` in the schema, in its description
   and in the timeout message of `packages/harness/src/tools/bash.ts`.
   (#15245)
+  Landed 2026-11-28: one constant beside the schema, and the description
+  words the cap and the default from the two constants (the same text).
+  The timeout message states the elapsed time, never the cap, so it needed
+  no change.
 - **"Does the total include the agents' spend"** is decided by field
   comparison in `packages/texra/src/ui/progress/components/UsagePanel.ts` and
   by a child count in `packages/cli/src/chat/tui/sessionStatus.ts`.
@@ -108,6 +117,10 @@ worth taking.
 - **`RunTabs.ts` walks `childIds` by hand** where `descendantRuns` has a
   seen-set, and **`packages/texra/src/shared/state/PersistedState.ts`** is
   read only by renderers. (#15216)
+  Landed 2026-11-28 (#15216 closed without merging): the search filter
+  walks a run's tree with `descendantRuns`, and `PersistedState.ts` is
+  `packages/texra/src/ui/progress/PersistedState.ts`, beside the session
+  surfaces that read it; `shared/state/` held nothing else and is gone.
 - The items of section 1 of the 2026-11-26 note that #15229 freed are
   unchanged: the two leftover-run sweeps, `FAMILY_OF`, and the resume
   command formatted under `chat/tui/state/`, whose readers #15216 and

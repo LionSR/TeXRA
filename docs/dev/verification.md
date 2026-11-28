@@ -84,6 +84,6 @@ re-implementing one of these per host, push the new code into
 - WA color scheme observer: `packages/texra/src/ui/wa/waColorScheme.ts`
 - Action button helper: `packages/texra/src/ui/wa/actionButtons.ts`
 - Empty state helper: `packages/texra/src/ui/wa/emptyState.ts`
-- Persisted state: `packages/texra/src/shared/state/PersistedState.ts`
+- Persisted state: `packages/texra/src/ui/progress/PersistedState.ts`
 - Host bridge: `packages/texra/src/shared/hostBridge.ts`
 - Settings tabs: `packages/texra/src/shared/settingsView/settingsTarget.ts` (`SETTINGS_TAB_ORDER`)
