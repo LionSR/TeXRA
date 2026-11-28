@@ -20,6 +20,7 @@ import {
   APP_STATE,
   REPO_STATE,
   WORKSPACE_STORES,
+  type ValuesChange,
 } from '@shared/session/valueFamily';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -50,12 +51,7 @@ function appStateStoreFromDatabase(
     });
   const modify = <K extends string, A, E>(
     keys: readonly K[],
-    change: (
-      current: Readonly<Record<K, unknown>>,
-    ) => Result.Result<
-      readonly [A] | readonly [A, Readonly<Record<K, unknown>>],
-      E
-    >,
+    change: ValuesChange<K, unknown, A, E>,
   ): Effect.Effect<A, E | StateWriteFailed> =>
     values
       .modify(family, keys.map(rowKey), (current) =>
@@ -66,9 +62,7 @@ function appStateStoreFromDatabase(
               keys.map((key) => [key, current[rowKey(key)]]),
             ) as Readonly<Record<K, unknown>>,
           ),
-          (
-            result,
-          ): readonly [A] | readonly [A, Readonly<Record<string, unknown>>] =>
+          (result): readonly [A] | readonly [A, Record<string, unknown>] =>
             result.length === 1
               ? result
               : [

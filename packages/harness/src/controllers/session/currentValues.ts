@@ -19,7 +19,10 @@ import {
 import { logFailure } from '@logger/effectLog';
 import { CURRENT_VALUE_VERSION } from '@shared/schemas';
 import type { CurrentValues } from '@shared/session/database';
-import type { ValueFamily } from '@shared/session/valueFamily';
+import type {
+  ValueFamily,
+  ValuesChange,
+} from '@shared/session/valueFamily';
 import { CURRENT_VALUE_KIND, UPSERT_KINDS, type SqlRow } from './rowCodec';
 import { StoreCheckFailed } from './storeAside';
 import type { StoreConnection } from './storeConnection';
@@ -147,12 +150,7 @@ export function currentValues(
     modify: <T, K extends string, A, E>(
       family: ValueFamily<T>,
       keys: readonly K[],
-      change: (
-        current: Readonly<Record<K, T | undefined>>,
-      ) => Result.Result<
-        readonly [A] | readonly [A, Readonly<Record<K, T | undefined>>],
-        E
-      >,
+      change: ValuesChange<K, T | undefined, A, E>,
     ) =>
       transact(
         Effect.gen(function* () {

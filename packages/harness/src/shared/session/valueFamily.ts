@@ -9,7 +9,7 @@
  * decodes with at the database boundary; a row that no longer decodes fails
  * the read.
  */
-import { Schema } from 'effect';
+import { Schema, type Result } from 'effect';
 
 /**
  * One family of current values: its stored name and the schema its value
@@ -19,6 +19,16 @@ export interface ValueFamily<T> {
   readonly name: string;
   readonly schema: Schema.Codec<T, unknown>;
 }
+
+/**
+ * The change a read-modify-write applies to the values of its keys: it sees
+ * the stored ones and answers with its result and the next value of every
+ * key, with its result alone to write nothing, or refuses with its own error
+ * and nothing is written.
+ */
+export type ValuesChange<K extends string, V, A, E> = (
+  current: Readonly<Record<K, V>>,
+) => Result.Result<readonly [A] | readonly [A, Readonly<Record<K, V>>], E>;
 
 /** The process's settings store, keyed by the setting key. A settings
  *  store hands its callers' values on as they come (`unknown`): the write

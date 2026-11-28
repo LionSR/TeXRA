@@ -18,7 +18,6 @@ import {
   Context,
   type Effect,
   type RcMap,
-  type Result,
   Schema,
   type Stream,
 } from 'effect';
@@ -34,7 +33,7 @@ import type {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { WithBlobs } from './historyTurns';
 import type { RunRows } from './runRowsShape';
-import type { ValueFamily } from './valueFamily';
+import type { ValueFamily, ValuesChange } from './valueFamily';
 
 /** Current CLI history rows, ordered oldest first. */
 export const InputHistoryRecordSchema = Schema.Struct({
@@ -161,12 +160,7 @@ export interface CurrentValues {
   readonly modify: <T, K extends string, A, E = never>(
     family: ValueFamily<T>,
     keys: readonly K[],
-    change: (
-      current: Readonly<Record<K, T | undefined>>,
-    ) => Result.Result<
-      readonly [A] | readonly [A, Readonly<Record<K, T | undefined>>],
-      E
-    >,
+    change: ValuesChange<K, T | undefined, A, E>,
   ) => Effect.Effect<A, E | DatabaseWriteFailed>;
   /** Every row of a family, latest write first. */
   readonly list: <T>(
