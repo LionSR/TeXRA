@@ -354,7 +354,7 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
         <div class="desktop-empty-workspace-actions">
           ${renderLabeledActionButton({
             icon: 'folder-open',
-            text: 'Open project folder',
+            text: commandLabel(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
             kind: 'primary',
             onClick: () =>
               postToMain({
@@ -420,7 +420,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
     ${
       sidebarCollapsedWithPendingApproval
         ? html`<span
-            class="status-dot shell-header-pending-approval-badge tone-warning"
+            class="status-indicator shell-header-pending-approval-badge tone-warning"
             aria-hidden="true"
           ></span>`
         : nothing

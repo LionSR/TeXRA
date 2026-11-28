@@ -365,7 +365,7 @@ test('splits in both directions, keeps the explorer and agent, and restores the 
     .toBe(true);
   await expect(panel('agent')).toBeVisible();
   // New task reveals Agent without disturbing document groups.
-  await page.getByRole('button', { name: 'New task', exact: true }).click();
+  await page.getByRole('button', { name: 'New Task', exact: true }).click();
   await expect(panel('agent').locator('session-composer')).toBeVisible();
   await expect(panel('editor')).toHaveCount(2);
   await setWindowSize(960, 760);
@@ -572,7 +572,7 @@ test('preserves each project’s grid and unsaved editor when switching projects
       });
     }, otherPath);
     await page
-      .getByRole('button', { name: 'Open project folder', exact: true })
+      .getByRole('button', { name: 'Open Project Folder', exact: true })
       .click();
     await expect(page.locator('.shell-project-row')).toHaveCount(2);
     const projectB = await titleOf(activeRow);

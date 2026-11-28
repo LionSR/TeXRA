@@ -19,6 +19,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TexraSignalElement } from '@ui/litBase';
 import { SKILL_SOURCE_LABEL, skillSourceToggleLabel } from '@ui/copy/skills';
 import { captionDeclarations } from '@ui/styles/commonViewStyles';
+import { PLUGINS_PAGE } from '@ui/copy/plugins';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
@@ -124,7 +125,9 @@ export class SkillsTab extends TexraSignalElement {
         icon: item.enabled ? 'eye' : 'eye-slash',
         label: `Use ${item.name}`,
         pressed: item.enabled,
-        tooltip: item.enabled ? 'Available to agents' : 'Unavailable to agents',
+        tooltip: item.enabled
+          ? PLUGINS_PAGE.availableToAgents
+          : 'Unavailable to agents',
         disabled:
           !this.masterEnabled || this.disabledSources.includes(item.scope),
         onClick: (event) => {
@@ -147,7 +150,7 @@ export class SkillsTab extends TexraSignalElement {
       </div>
       <p class="catalog-detail-description">${item.description}</p>
       ${renderSettingsToggleRow({
-        label: 'Available to agents',
+        label: PLUGINS_PAGE.availableToAgents,
         checked: item.enabled,
         disabled:
           !this.masterEnabled || this.disabledSources.includes(item.scope),

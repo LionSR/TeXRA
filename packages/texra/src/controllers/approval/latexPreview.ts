@@ -142,9 +142,13 @@ const TEMP_ID_LENGTH = 8;
 /**
  * What the preview programs and the host build they call take from the
  * runtime a host runs them on: the temp files this module stages, and the
- * workspace-rooted compile a build display runs behind them.
+ * workspace-rooted compile a build display runs behind them. A host provides
+ * them once, where it forks the approval controller's `follow`.
  */
-type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
+export type PreviewServices =
+  | FileSystem.FileSystem
+  | Path.Path
+  | ChildProcessSpawner;
 
 /**
  * Delete a file and the LaTeX auxiliary files its build wrote, beside it or

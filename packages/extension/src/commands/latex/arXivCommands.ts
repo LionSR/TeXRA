@@ -93,18 +93,12 @@ export const downloadArXivSource: (
       },
       (progress, token) =>
         Effect.raceFirst(
-          Effect.gen(function* () {
-            const downloadResult = yield* downloadArxivSource(arxivId, {
-              roots,
-              destination,
-              indent,
-            }).pipe(
-              Effect.provideService(LatexProgress, (message, increment) =>
-                progress.report({ message, increment }),
-              ),
-            );
-            return Option.some(downloadResult.path);
-          }),
+          downloadArxivSource(arxivId, { roots, destination, indent }).pipe(
+            Effect.provideService(LatexProgress, (message, increment) =>
+              progress.report({ message, increment }),
+            ),
+            Effect.map(Option.some),
+          ),
           // Cancel interrupts the download, whose finalizers remove the
           // staging directory, and ends the command quietly.
           tokenCancelled(token).pipe(
