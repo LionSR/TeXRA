@@ -37,39 +37,27 @@ export type IndentLatexResult =
       /** The `.tex` files the formatter ran on and failed. */
       failed: readonly string[];
     }
-  | {
-      status: 'disabled';
-      count: 0;
-    }
-  | {
-      status: 'missing-config';
-      count: 0;
-      configPath: string;
-    }
-  | {
-      status: 'error';
-      count: 0;
-      error: unknown;
-    };
+  | { status: 'disabled' }
+  | { status: 'missing-config'; configPath: string }
+  | { status: 'error'; error: unknown };
 
 /**
- * Formats LaTeX files in a specific directory and its subdirectories
- * @param workspaceRoot Root a relative `directory` resolves against and the cwd
- * the formatter runs in, held by the caller as data. When `undefined`, a
- * relative `directory` resolves against the process cwd.
+ * Formats LaTeX files in a directory and its subdirectories
+ * @param workspaceRoot The cwd the formatter runs in, held by the caller as
+ * data.
  * @param formatter The resolved formatter, or null when formatting is disabled.
  * The caller resolves it from its own workspace configuration
  * (`resolveLatexFormatter(roots)`), so this never reads the roots the
  * calling fiber happens to carry.
- * @param directory The directory to process (relative to workspace). If not provided, uses the root.
+ * @param directory The absolute directory to process.
  * @returns The formatting outcome
  */
 export const indentLatexFilesInDirectory = Effect.fn(
   'latex.indentLatexFilesInDirectory',
 )(function* (
-  workspaceRoot: string | undefined,
+  workspaceRoot: string,
   formatter: LatexFormatter | null,
-  directory: string = '.',
+  directory: string,
 ): Effect.fn.Return<
   IndentLatexResult,
   PlatformError.PlatformError,
@@ -83,7 +71,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
     yield* Effect.logDebug(
       'LaTeX formatter disabled; skipping indentation',
     ).pipe(withLogChannel(CHANNEL));
-    return { status: 'disabled', count: 0 };
+    return { status: 'disabled' };
   }
   const { id, configPath: config, run: runFormatter } = formatter;
   yield* Effect.logDebug(`Formatter: ${id}, Config: ${config}`).pipe(
@@ -96,11 +84,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
     yield* Effect.logError(`Formatter config file not found at ${config}`).pipe(
       withLogChannel(CHANNEL),
     );
-    return {
-      status: 'missing-config',
-      count: 0,
-      configPath: config,
-    };
+    return { status: 'missing-config', configPath: config };
   }
 
   const formatFile = Effect.fn('latex.indentFile')(function* (
@@ -125,19 +109,15 @@ export const indentLatexFilesInDirectory = Effect.fn(
     return Result.fail(fullPath);
   });
 
-  const absoluteDirectory = path.resolve(workspaceRoot ?? '.', directory);
-
   // The formatter rewrites what the walk finds, so links are skipped: it
   // never formats a file outside the directory it was given.
   return yield* listWorkspaceFiles({
-    root: absoluteDirectory,
+    root: directory,
     configs: [TEX_SOURCES],
     links: 'skip',
   }).pipe(
     Effect.flatMap(([{ files }]) =>
-      Effect.forEach(files, (file) =>
-        formatFile(path.join(absoluteDirectory, file)),
-      ),
+      Effect.forEach(files, (file) => formatFile(path.join(directory, file))),
     ),
     Effect.flatMap((outcomes) => {
       const [indented, failed] = Arr.separate(outcomes);
@@ -157,11 +137,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
         `Error during indentation process: ${toErrorMessage(err)}`,
       ).pipe(
         withLogChannel(CHANNEL),
-        Effect.as({
-          status: 'error',
-          count: 0,
-          error: err,
-        } satisfies IndentLatexResult),
+        Effect.as({ status: 'error', error: err } satisfies IndentLatexResult),
       ),
     ),
   );

@@ -1,7 +1,7 @@
 # LaTeX source facts with two owners, and copy the CLI restates
 
 Date: 2026-11-18
-Status: proposed (the LaTeX findings have landed; of the terminal copy,
+Status: proposed (the LaTeX findings have landed or closed; of the terminal copy,
 items 3, 5 and 6 are closed and 1, 2 and 4 wait for a wording decision)
 Origin: the 2026-11-18 scheduled responsibility audit on `main` at
 `a90f320`. Two read-only surveys (the LaTeX, housekeeping, replacement and
@@ -73,12 +73,12 @@ The three open LaTeX findings, with their decisions, landed together.
    `packages/texra/src/common/files/fileHandlingRules.ts`, and the managed
    list derives from them.
 
-Still open on the LaTeX side: `collectFilesFromPatterns`
-(`packages/texra/src/housekeeping/artifactFiles.ts`) looks for build files
-in `<dir>/build`, but `perInputBuildDirectory` compiles into
-`<dir>/build/<stem>`. The latexdiff round build in
-`packages/texra/src/agent/output/revisionLatexdiffs.ts` shares one `build/`
-across a round's diffs. Which layout is right needs a decision first.
+The last LaTeX item, which build-folder layout a compile uses, closed on
+its own: the round build and the multi-input compile it compared went with
+the document pipeline (#15229). `auxFilesOf`
+(`packages/texra/src/housekeeping/artifactFiles.ts`) looks in `<dir>/build`,
+LaTeX Workshop's recommended output folder, and only the TikZ command
+compiles into `<dir>/build/<stem>` (2026-11-28).
 
 ## Open: copy the terminal restates
 

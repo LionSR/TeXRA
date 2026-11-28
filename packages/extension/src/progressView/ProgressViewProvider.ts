@@ -222,11 +222,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               label: folder.name,
               value: folder.uri.fsPath,
             })) ?? [],
-          shows: {
-            apiKeyBanner: true,
-            dependencyBanner: true,
-            gettingStarted: true,
-          },
+          shows: { apiKeyBanner: true, dependencyBanner: true },
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the diff editor shows, for each tool edit the session
@@ -243,7 +239,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             : focusChanged,
         ),
         draftRequests,
-        host: Effect.sync(() => ({
+        host: {
           ...createExtensionHostRequests({
             roots,
             extensionPath: context.extensionPath,
@@ -269,7 +265,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             revealProgress: (config: AgentConfig) =>
               onView((view) => view.revealProgress(config)),
           },
-        })),
+        },
       });
       const view = new ProgressViewProvider({
         window: gui,
