@@ -37,7 +37,6 @@ import type {
 import type { DesktopWindowHost } from './desktopWindowHost.js';
 
 interface ProjectBinding {
-  readonly project: DesktopProject;
   readonly bridge: SessionBridge;
   /** This window's port on the project's bridge. */
   readonly port: AttachedPort;
@@ -49,7 +48,6 @@ interface ProjectBinding {
 
 export interface ProjectBindings {
   get(key: string): ProjectBinding | undefined;
-  all(): readonly ProjectBinding[];
   /** Bind a project that opened and release one that closed. */
   readonly sync: Effect.Effect<void, never, ProcessServices>;
   /** Release every binding: a navigation destroys the document's request
@@ -230,12 +228,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       ).pipe(Effect.orDie);
       yield* Effect.addFinalizer(() => release);
       yield* Effect.forkScoped(snapshot.refresh);
-      return {
-        project,
-        bridge,
-        port,
-        workspace,
-      };
+      return { bridge, port, workspace };
     });
 
     const bind = Effect.fn('bind')(function* (project: DesktopProject) {
@@ -258,7 +251,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
 
     return {
       get: (key) => bindings.get(key),
-      all: () => [...bindings.values()],
       sync: Effect.gen(function* () {
         const open = new Map(
           [projects.fallback(), ...projects.list()].map(
