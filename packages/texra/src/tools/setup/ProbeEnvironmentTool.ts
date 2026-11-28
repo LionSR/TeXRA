@@ -232,10 +232,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
   ] = yield* Effect.all(
     [
       Effect.map(probeLatexTools(PROBED_LATEX_TOOLS), ({ tools }) => tools),
-      Effect.all(
-        OPTIONAL_TOOLS.map((name) => locateTool(name)),
-        { concurrency: 'unbounded' },
-      ),
+      Effect.forEach(OPTIONAL_TOOLS, locateTool, { concurrency: 'unbounded' }),
       Effect.all(
         API_KEY_PROVIDER_IDS.map((provider) =>
           apiKey(secrets, provider).pipe(

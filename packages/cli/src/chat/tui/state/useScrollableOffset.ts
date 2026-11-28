@@ -54,10 +54,10 @@ export function useScrollableOffset({
 
   useEffect(() => {
     setScrollOffset(
-      Math.max(
-        0,
-        Math.min(maxScrollOffsetRef.current, initialOffsetRef.current),
-      ),
+      Num.clamp(initialOffsetRef.current, {
+        minimum: 0,
+        maximum: Math.max(0, maxScrollOffsetRef.current),
+      }),
     );
   }, [resetKey]);
 

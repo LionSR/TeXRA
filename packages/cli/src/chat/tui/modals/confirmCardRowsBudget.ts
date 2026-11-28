@@ -1,3 +1,4 @@
+import { Number as Num } from 'effect';
 import { BORDERED_PANEL_CHROME_COLUMNS } from '@cli/tui/ui/BorderedPanel';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
@@ -70,8 +71,8 @@ export function confirmCardContentRowsBudget({
     return spaciousRows;
   }
 
-  return Math.max(
-    1,
-    Math.min(compactMaxRows, availableRows - compactFixedRows - fixedRows),
-  );
+  return Num.clamp(availableRows - compactFixedRows - fixedRows, {
+    minimum: 1,
+    maximum: compactMaxRows,
+  });
 }

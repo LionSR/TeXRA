@@ -42,13 +42,13 @@ function runGuardedSlashCommand(
     };
     if (command.echo === 'ifPersists') echo();
     return Effect.suspend(action).pipe(
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.failCause(cause)
-          : Effect.sync(() => {
-              echo();
-              appendLocalErrorTranscript(toErrorMessage(cause));
-            }),
+      Effect.catchCauseIf(
+        (cause) => !Cause.hasInterruptsOnly(cause),
+        (cause) =>
+          Effect.sync(() => {
+            echo();
+            appendLocalErrorTranscript(toErrorMessage(cause));
+          }),
       ),
     );
   });

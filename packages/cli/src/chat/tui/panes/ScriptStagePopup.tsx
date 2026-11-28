@@ -7,6 +7,7 @@
 // call's agent, which the script sees as `Skipped`.
 
 // Third-party imports
+import { Number as Num } from 'effect';
 import { joinFacts } from '@texra-ai/worldline/schemas';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
@@ -218,10 +219,10 @@ export function ScriptStagePopup({
       return;
     }
     if ((key.leftArrow || key.rightArrow) && stages.length > 1) {
-      const next = Math.min(
-        stages.length - 1,
-        Math.max(0, stageIndex + (key.rightArrow ? 1 : -1)),
-      );
+      const next = Num.clamp(stageIndex + (key.rightArrow ? 1 : -1), {
+        minimum: 0,
+        maximum: stages.length - 1,
+      });
       onViewChange({ stageId: stages[next]?.id, selectedId: undefined });
       return;
     }

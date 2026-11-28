@@ -1,3 +1,4 @@
+import { Number as Num } from 'effect';
 import { useMemo, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
@@ -115,10 +116,10 @@ function userQuestionFreeTextOptionRowsBudget({
 }): number {
   if (optionCount <= 0) return 0;
   if (isCompactUserQuestionRows(availableRows)) return 0;
-  return Math.min(
-    optionCount,
-    Math.max(0, availableRows - FULL_USER_QUESTION_CHROME_ROWS - 4),
-  );
+  return Num.clamp(availableRows - FULL_USER_QUESTION_CHROME_ROWS - 4, {
+    minimum: 0,
+    maximum: optionCount,
+  });
 }
 
 function userQuestionFreeTextControlRows(optionRows: number): number {

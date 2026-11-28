@@ -325,9 +325,7 @@ export const openDesktopProjectRegistry: (
             options.dataRoot,
             root,
             options.globalConfigStore,
-            Result.isSuccess(options.service)
-              ? options.service.success
-              : undefined,
+            Result.getOrUndefined(options.service),
             warn,
           ).pipe(
             Effect.provideService(StateStores, stateStores),

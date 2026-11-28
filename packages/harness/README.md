@@ -5,7 +5,7 @@
 Worldline is an embeddable agent runtime built on Effect 4 and SQLite. Write multi-agent workflows in JavaScript, resume a run, or fork it at an earlier turn to try a different approach.
 
 [![npm](https://img.shields.io/npm/v/@texra-ai/worldline?label=%40texra-ai%2Fworldline&color=6F387A&logo=npm&logoColor=white)](https://www.npmjs.com/package/@texra-ai/worldline)
-[![Effect](https://img.shields.io/badge/Effect-%5E4.1.3-270939?style=flat)](https://effect.website)
+[![Effect](https://img.shields.io/badge/Effect-%5E4.1.7-270939?style=flat)](https://effect.website)
 [![Node.js](https://img.shields.io/badge/Node.js-22.22%2B_%7C_24.15%2B-339933?style=flat&logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![SQLite](https://img.shields.io/badge/Store-SQLite-003B57?style=flat&logo=sqlite&logoColor=white)](#durable-invariants)
 [![MCP](https://img.shields.io/badge/MCP-2025--11--25-191919?style=flat)](#runtime-reference)
@@ -212,7 +212,7 @@ corrupt stores (`*.corrupt-<ms>`) are removed only on explicit user deletion
 <summary><strong>Peer deps, approvals, MCP, memory, logging, and limits</strong></summary>
 
 - **Peers & credentials:** Install `effect`, `@effect/platform-node`,
-  `@effect/sql-sqlite-node` (`^4.1.3`), and [`@texra-ai/llm`](../llm/README.md)
+  `@effect/sql-sqlite-node` (`^4.1.7`), and [`@texra-ai/llm`](../llm/README.md)
   (`^0.1.0`) with matching caret ranges so the host resolves one Effect and one
   `ModelError` instance. Keys come from `process.env` / workspace `.env` (Claude
   Max/Team and ChatGPT Pro/Business include monthly API credits).
@@ -232,7 +232,7 @@ corrupt stores (`*.corrupt-<ms>`) are removed only on explicit user deletion
   `session.attach({ approve })` (requests are durable rows; questions and
   post-retry prompts never auto-answer).
 - **Platform (`nodePlatform`):** Reads `<storageDir>/mcp.json` (stdio MCP
-  `2025-11-25`), loads `<storageDir>/AGENTS.md` then `<workspace>/AGENTS.md`,
+  `2025-03-26` to `2025-11-25`), loads `<storageDir>/AGENTS.md` then `<workspace>/AGENTS.md`,
   exposes writable Markdown memory folders (`MEMORY.md`, first 16,000 chars),
   strips provider keys from shell children, honors `HTTP_PROXY` / `HTTPS_PROXY`
   / `NO_PROXY` (30m stream timeout), and logs via your Effect `Logger` or
