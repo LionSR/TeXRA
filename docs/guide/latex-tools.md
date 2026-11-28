@@ -77,11 +77,11 @@ TeXRA extracts figures from your LaTeX so vision-capable models can see them.
 
 ### Standard figures
 
-A program attaches the images its input files include with `\includegraphics` when an agent starts it with `args: { autoExtractFigure: true }`. In a chat, an agent opens a figure file with `read_file`, which returns it as an attachment. Read the [figures guide](./working-with-figures.md).
+An agent opens a figure file with `read_file`, which returns it as an attachment. Read the [figures guide](./working-with-figures.md).
 
 ### TikZ figures
 
-A program started with `args: { autoExtractTikzFigure: true }` finds the `tikzpicture` environments of its input files, compiles each to a standalone PDF, and attaches the rendered output. It compiles with `pdflatex` and rasterizes with Ghostscript plus GraphicsMagick or ImageMagick. The Plugins page does not list these; **Settings → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick), each with a setup guide when it is missing. `texra doctor` reports the compiler rows (`latexmk`, `pdflatex`) but not the image tools:
+**TeXRA: Compile TikZ Figures from Current File** wraps each `tikzpicture` of the open file in a standalone document and compiles it with `pdflatex`; in a chat, the assistant compiles a picture in the shell and reads the PDF. For a model without native PDF support, reading a PDF rasterizes it with Ghostscript plus GraphicsMagick or ImageMagick. The Plugins page does not list these; **Settings → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick), each with a setup guide when it is missing. `texra doctor` reports the compiler rows (`latexmk`, `pdflatex`) but not the image tools:
 
 <TikzDepsHero />
 

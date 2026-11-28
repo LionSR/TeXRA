@@ -82,7 +82,7 @@ export function formatRelativeTime(timestamp: number, nowMs: number): string {
       'month',
     );
   }
-  if (abs < YEAR_MS && quarters < 4)
+  if (abs < YEAR_MS && Math.abs(quarters) < 4)
     return relativeTimeFormat.format(quarters, 'quarter');
   return relativeTimeFormat.format(years, 'year');
 }

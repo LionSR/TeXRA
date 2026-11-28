@@ -11,12 +11,13 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import type { SessionRequests } from '@cli/chat/tui/state/approvalQueue';
-import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { APPROVAL_POLICY_LINE } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_NOUN } from '@ui/copy/delegationApproval';
 import { type SlashCommandContext } from './slashContext';
 import type { ApprovalBypassKind } from '@texra-ai/worldline/schemas';
 
-const APPROVAL_USAGE = `Usage: /approval [${APPROVAL_POLICIES.join(' | ')}]`;
+/** What `/approval` answers a value it does not know. */
+export const APPROVAL_USAGE = `Usage: /approval [${APPROVAL_POLICIES.join(' | ')}]`;
 
 /**
  * `/approval` sets this chat's launch policy, like `--approval-policy`, here
@@ -29,10 +30,13 @@ export function applyCliApprovalPolicySelection(
 ): Effect.Effect<void> {
   const policy = parseApprovalPolicy(input.trim().toLowerCase());
   if (!policy) return Effect.sync(() => setTransientNotice(APPROVAL_USAGE));
-  const confirm = `Approval mode: ${formatApprovalPolicy(policy)}`;
   return context
     .setApprovalPolicy(policy)
-    .pipe(Effect.andThen(Effect.sync(() => appendLocalNotice(confirm))));
+    .pipe(
+      Effect.andThen(
+        Effect.sync(() => appendLocalNotice(APPROVAL_POLICY_LINE.chat(policy))),
+      ),
+    );
 }
 
 /**

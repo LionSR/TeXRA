@@ -17,7 +17,6 @@ import {
   settingSignal,
   settingsSnapshotRevisions,
 } from '@ui/settings/settingsState';
-import type { SettingEnumChoice } from '@texra/shared/settingsView/settingRows';
 import {
   settingEnumChoices,
   settingNumberBounds,
@@ -46,19 +45,6 @@ export function postStateSetting(key: string, value: StateSettingValue): void {
     key,
     value,
   });
-}
-
-/**
- * Enum values for a catalog row, paired with the catalog's display metadata.
- * The allowed values come from the row's `Schema.Literals` schema, so a
- * settings UI never hand-lists them. Non-enum rows yield an empty list; a row
- * with no settings-view placement is a defect and throws, like
- * {@link renderStateSettingToggleRow}.
- */
-export function catalogEnumChoices(
-  row: SettingRow,
-): readonly SettingEnumChoice[] {
-  return settingEnumChoices(placedRow(row)) ?? [];
 }
 
 /**
@@ -148,7 +134,7 @@ export function renderStateSettingSelectRow(
     label: entry.title,
     description: entry.description,
     value: settingSignal(row).get(),
-    choices: catalogEnumChoices(row).map((choice) => ({
+    choices: (settingEnumChoices(entry) ?? []).map((choice) => ({
       value: choice.value,
       label: choice.description
         ? `${choice.label}${DETAIL_SEPARATOR}${choice.description}`

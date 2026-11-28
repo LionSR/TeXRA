@@ -827,13 +827,11 @@ wa-input.desktop-command-palette-input {
   min-width: 0;
 }
 
-/* Small filled circle, shared by every status-indicator dot in the desktop
-   renderer (the editor's and the dock tab's unsaved-file dots,
-   desktopShell.css's pending-approval badge and project status). Callers size and color it through --dot-size/--dot-color and add
-   their own position/border on top. */
+/* The unsaved-file dot on an editor tab and a file-tree row. A dot that
+   shows a status is the kit's .status-indicator, coloured by its tone. */
 .status-dot {
-  width: var(--dot-size, 6px);
-  height: var(--dot-size, 6px);
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--dot-color, currentColor);
 }

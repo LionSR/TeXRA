@@ -53,12 +53,12 @@ Each entry changes something a user sees unless it says otherwise.
    `settings/components/shared/stateSettingRows.ts` and the desktop's
    `settingsDialog.ts` (Theme); `wa/settingsSection.ts` has a toggle row
    and a number row and no select row. No visible change.
-9. **The same action is worded twice.** `LaTeXTab.ts` says "Run in
-   Terminal" where `PLUGINS_PAGE.installInTerminal` says "Install in
-   terminal"; `SkillsTab.ts` types "Available to agents", which
-   `PLUGINS_PAGE.availableToAgents` holds; a settings section tab and the
-   heading under it differ in `settingsNav.ts` and `LaTeXTab.ts` /
-   `ApprovalTab.ts` ("Approval" and "Approval & safety").
+9. **A settings section tab and the heading under it differ** in
+   `settingsNav.ts` and `LaTeXTab.ts` / `ApprovalTab.ts` ("Approval" and
+   "Approval & safety", "Formatting" and "Formatting and review"). Which
+   name each section keeps is a wording call. (The 2026-11-28 run gave
+   `LaTeXTab.ts`'s "Run in Terminal" `PLUGINS_PAGE.installInTerminal` and
+   `SkillsTab.ts` `PLUGINS_PAGE.availableToAgents`.)
 
 ## Terminal
 

@@ -96,8 +96,8 @@ chat-only modules out of `packages/cli/src/runtime/` (item 5 of the
 - **"No model available" has three wordings in the CLI**
   (`packages/cli/src/runtime/doctor.ts`, and two in
   `packages/cli/src/runtime/models/modelAccess.ts`).
-- **The project's approval policy** reads "Approval policy:" in the
-  extension's status bar and "Project approval policy:" in the terminal.
+- **Closed.** The project's approval policy line is
+  `APPROVAL_POLICY_LINE.project` on both hosts.
 - **Dropped-file URLs are decoded twice**, by the renderer
   (`packages/texra/src/ui/progress/fileDropHandler.ts`) and by
   `MainViewDroppedFilesController.ts`. Not verified for Electron's
