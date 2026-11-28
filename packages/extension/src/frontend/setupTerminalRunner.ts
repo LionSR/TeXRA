@@ -238,8 +238,9 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
 // A control sequence the text ends inside: a lone ESC, a CSI (`ESC [`) with no
 // final byte yet, a character-set choice (`ESC (`, which `tput sgr0` writes)
 // with no set yet, or an OSC (`ESC ]`, which shell integration writes around
-// every command) with no BEL or ST (`ESC \\` or U+009C) yet. A sequence held past the limit is not
-// one a shell is still writing, so it goes to the output as it came.
+// every command) with no BEL or ST (`ESC \` or U+009C) yet. A sequence held
+// past the limit is not one a shell is still writing, so it goes to the
+// output as it came.
 const UNFINISHED_SEQUENCE =
   // eslint-disable-next-line no-control-regex -- matching ESC and BEL is the point
   /\u001B(?:\[[\u0020-\u003F]*|\][^\u0007\u001B\u009C]*\u001B?|[()#])?$/;
