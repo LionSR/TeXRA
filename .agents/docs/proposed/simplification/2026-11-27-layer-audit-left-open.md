@@ -98,6 +98,11 @@ worth taking.
   `packages/harness/src/tools/executionFormatters.ts`) is keyed by bare
   strings in `packages/harness/src/shared/schemas/runRecords.ts` and derived
   a third way in `packages/cli/src/runtime/history.ts`. (#15245, #15216)
+  Landed 2026-11-28: `serializeFilteredConfig` takes the record alone and
+  reads whether it is a program's run from it (`programOf`), so the
+  string-keyed table, the CLI's mapping onto it and the executions tool's
+  view read for the category are gone. A run the session view no longer
+  lists is filtered too, where it used to print unfiltered.
 - **The `bash` timeout cap** is `600_000` in the schema, in its description
   and in the timeout message of `packages/harness/src/tools/bash.ts`.
   (#15245)
