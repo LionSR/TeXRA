@@ -29,13 +29,13 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { type TranscriptSubscription } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { SessionView } from '@shared/session/sessionView';
 import type {
   SessionViewAccessShape,
+  SubscribeTranscripts,
   TranscriptInterest,
 } from '@shared/session/sessionViewAccess';
 import { TranscriptSubscriptions } from './sessionSources';
@@ -133,9 +133,7 @@ export class RemoteSessionView extends Context.Service<
     readonly changes: Stream.Stream<SessionView>;
     /** Subscribe `set`'s transcripts for the caller's scope; the handle
      *  replaces the set. */
-    readonly subscribe: (
-      set: readonly TranscriptSubscription[],
-    ) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;
+    readonly subscribe: SubscribeTranscripts;
   }
 >()('@texra-ai/worldline/session/RemoteSessionView') {
   /** Fresh per call: two views never share an updater, even in one memo

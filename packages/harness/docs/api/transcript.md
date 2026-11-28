@@ -359,9 +359,7 @@ class RemoteSessionView extends Context.Service<
     readonly changes: Stream.Stream<SessionView>;
     /** Subscribe `set`'s transcripts for the caller's scope; the handle
      *  replaces the set. */
-    readonly subscribe: (
-      set: readonly TranscriptSubscription[],
-    ) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;
+    readonly subscribe: SubscribeTranscripts;
   }
 >()('@texra-ai/worldline/session/RemoteSessionView')
 ```
@@ -533,6 +531,17 @@ interface StreamingTextRow extends TranscriptRowBase {
    *  `response.finalized` row; each reader words it. */
   readonly cut?: ResponseCut;
 }
+```
+
+## SubscribeTranscripts
+
+Subscribe `set`'s transcripts for the caller's scope; the handle replaces
+the set in place. The view's set is the union over every subscriber.
+
+```ts
+type SubscribeTranscripts = (
+  set: readonly TranscriptSubscription[],
+) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;
 ```
 
 ## TextBudget
