@@ -2,7 +2,6 @@ import { Text, useWindowSize } from 'ink';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
-import { truncateToWidth } from '@cli/runtime/terminal/terminalText';
 
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { pluginTrustFacts, REQUEST_ASK } from '@ui/copy/requestCards';
@@ -36,14 +35,10 @@ export function PluginTrustRequest(
   const width = confirmCardContentWidth(columns);
   const facts = pluginTrustFacts(payload);
   const title = `${REQUEST_ASK.pluginTrust} ${facts.plugin}`;
-  const lines = [
-    ...(payload.native ? [REQUEST_ASK.nativeCode] : []),
-    facts.location,
-  ].map((line) => truncateToWidth(line, width));
   const maxRows = scrollableModalTextRowsBudget({
     availableRows: props.availableRows,
     columns,
-    extraFixedRows: lines.length,
+    extraFixedRows: payload.native ? 2 : 1,
     title,
   });
   return (
@@ -54,8 +49,14 @@ export function PluginTrustRequest(
       grant={props.grant}
       onDecide={props.onDecide}
     >
-      {payload.native && <Text color={COLOR_WARNING}>{lines[0]}</Text>}
-      <Text dimColor>{lines.at(-1)}</Text>
+      {payload.native && (
+        <Text color={COLOR_WARNING} wrap="truncate-end">
+          {REQUEST_ASK.nativeCode}
+        </Text>
+      )}
+      <Text dimColor wrap="truncate-end">
+        {facts.location}
+      </Text>
       <ScrollableModalText
         marginWhenSpacious
         maxRows={maxRows}

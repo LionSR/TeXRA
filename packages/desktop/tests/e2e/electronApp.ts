@@ -136,7 +136,7 @@ export async function openDesktopAppearance(page: Page) {
   await expect(settings).toHaveJSProperty('open', true);
   await settings.getByRole('tab', { name: 'General', exact: true }).click();
   await settings.locator('[data-section="appearance"]').click();
-  const select = settings.locator('#desktopTheme');
+  const select = settings.locator('#settings-select-theme');
   await expect(select).toBeVisible();
   return select;
 }

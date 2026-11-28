@@ -6,7 +6,6 @@ import { join } from 'lit/directives/join.js';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared schemas, styles, and constants
@@ -31,6 +30,7 @@ import { toneStyles } from '@ui/styles/toneStyles';
 
 // Local imports - shared icons and utils
 import { factDot } from '@ui/wa/factDot';
+import { quotaBarStyles, renderMeterBar } from '@ui/wa/quotaBar';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /** Each counter's icon and tooltip anchor in the strip; its name, order
@@ -58,6 +58,7 @@ export class UsagePanel extends LitElement {
     designTokens,
     focusRingStyles,
     toneStyles,
+    quotaBarStyles,
     css`
       :host {
         display: block;
@@ -119,23 +120,14 @@ export class UsagePanel extends LitElement {
 
       /* Context gauge bar */
       .context-gauge {
-        --gauge-height: 6px;
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-2xs);
         border-radius: var(--border-radius-small);
       }
 
-      .context-gauge__track {
+      .context-gauge .quota-bar {
         width: 80px;
-        height: var(--gauge-height);
-      }
-
-      .context-gauge__bar {
-        width: 100%;
-        --track-height: var(--gauge-height);
-        --track-color: var(--color-border);
-        --indicator-color: var(--tone-color);
       }
 
       .run-summary {
@@ -279,13 +271,7 @@ export class UsagePanel extends LitElement {
     return html`
       <span id="usage-context-gauge" class="context-gauge" tabindex="0">
         <span class="context-label">Context</span>
-        <span class="context-gauge__track">
-          <wa-progress-bar
-            class="context-gauge__bar tone-${contextGaugeTone(clamped)}"
-            value=${clamped}
-            label="Context used"
-          ></wa-progress-bar>
-        </span>
+        ${renderMeterBar(clamped, contextGaugeTone(clamped), 'Context used')}
         <span class="context-state__value">${usageText}</span>
       </span>
       <wa-tooltip for="usage-context-gauge"
