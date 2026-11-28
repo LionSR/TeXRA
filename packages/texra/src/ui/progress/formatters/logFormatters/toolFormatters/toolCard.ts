@@ -25,6 +25,8 @@ export function buildToolUseDetails(opts: {
   /** Show a spinner in place of the icon. */
   running: boolean;
   label: string;
+  /** The row's tooltip: the tool's name, where the label leaves it out. */
+  title?: string;
   /** What the call acts on, beside its label. */
   detail?: string;
   isError: boolean;
@@ -48,7 +50,7 @@ export function buildToolUseDetails(opts: {
   const extraContent = html`${statusText}${opts.extraContent ?? nothing}`;
   // prettier-ignore
   return buildDetailsCard({
-    summary: { iconName: opts.iconName, running: opts.running, label: opts.label, detail: opts.detail, labelClass: 'tool-use-title', extraContent },
+    summary: { iconName: opts.iconName, running: opts.running, label: opts.label, title: opts.title, detail: opts.detail, labelClass: 'tool-use-title', extraContent },
     body: html`<div class="banner-content log-entry-content">${opts.content}</div>`,
     open: opts.defaultOpen,
     classes,

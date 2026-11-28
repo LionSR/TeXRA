@@ -125,18 +125,37 @@ export type CredentialRoute = Exclude<
 >;
 
 /**
- * How the Codex backend serves `model` on a ChatGPT subscription, or
- * `undefined` when it does not: the llm-zoo `codexSubscription` entry, which
- * records the backend's own model catalog and the input window it grants.
- * Serving status is a fact about the backend, so it lives in the registry
- * data; a retired model must drop the entry there.
+ * Baseline input window, in tokens, granted to a current OpenAI Responses
+ * model on a ChatGPT subscription when llm-zoo has not recorded a
+ * model-specific `codexSubscription` entry yet. Matches the Codex backend's
+ * conservative 272K floor so compaction never overstates the budget; a
+ * model-specific llm-zoo entry or `RouteFacts.chatgptContextWindow` overrides
+ * it.
+ */
+const DEFAULT_CHATGPT_SUBSCRIPTION_CONTEXT_WINDOW = 272_000;
+
+/**
+ * How the Codex / ChatGPT-subscription backend serves `model`, or `undefined`
+ * when it does not. Prefers llm-zoo's explicit `codexSubscription` entry
+ * (which carries model-specific windows such as 500K); when llm-zoo has not
+ * recorded one yet, current (non-retired, non-deprecated) OpenAI Responses
+ * models still qualify at the baseline subscription window so newly released
+ * OpenAI models work on a ChatGPT subscription without waiting for a catalog
+ * bump.
  */
 function codexSubscriptionOf(
   model: ModelConfig,
 ): ModelConfig['codexSubscription'] {
-  return model.provider === ModelProvider.OPENAI
-    ? model.codexSubscription
-    : undefined;
+  if (model.provider !== ModelProvider.OPENAI) return undefined;
+  if (model.codexSubscription !== undefined) return model.codexSubscription;
+  if (
+    model.requiresResponsesAPI === true &&
+    model.retired !== true &&
+    model.deprecated !== true
+  ) {
+    return { contextWindow: DEFAULT_CHATGPT_SUBSCRIPTION_CONTEXT_WINDOW };
+  }
+  return undefined;
 }
 
 /** Why TeXRA serves no run on `config` ({@link isUnservedModel}), as the

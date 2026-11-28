@@ -84,10 +84,11 @@ export interface DesktopWindows {
   /** Open the window when none is open, once the closed one has released,
    *  then run `then`; a reopen asked for while one is opening joins it. */
   reopen(then?: () => void): void;
-  /** Open the window unless one is open. Opening waits (a project of the
-   *  background service attaches the window over IPC), so it is always run
-   *  as a fiber, never synchronously; opens run one at a time, and one that
-   *  finds the window open does nothing. */
+  /** Open the window unless one is open. Opening waits (at launch for the
+   *  projects to open, and a project of the background service attaches the
+   *  window over IPC), so it is always run as a fiber, never synchronously;
+   *  opens run one at a time, and one that finds the window open does
+   *  nothing. */
   readonly open: Effect.Effect<void, never, ProcessServices>;
   /** Run `continueQuit` once the window has closed and released; the process
    *  shutdown resumes there. */

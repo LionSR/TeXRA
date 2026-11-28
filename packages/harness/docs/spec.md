@@ -89,7 +89,7 @@ its kind is its `type` column.
 
 The store is one SQLite file under the storage root, named for the app's
 settings namespace: `<namespace>.project-v1.db` for projects and `<namespace>.db` for global settings
-(`utils/system/appNamespace.ts#storeFileName`). An ephemeral
+(`controllers/session/storeSchema.ts#storeFileName`). An ephemeral
 session runs the same schema in memory
 (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
@@ -479,7 +479,7 @@ a loop turn may hold none, or several as the loop calls the model again after
 tool results) MUST commit once, as one `response` row with a fresh `responseId`,
 which puts the loop at `response.ready` without a position of its own
 (`shared/session/turnRowHandlers.ts#'response.ready'`). It carries one
-dispatch fact per local call (`agent/runtime/run/tools.ts#dispatchFactsFor`)
+dispatch fact per local call (`agent/runtime/run/tools.ts#dispatchFact`)
 (`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`,
 `shared/schemas/runHistoryEvent.ts#DispatchFactsSchema`). The loop MUST dispatch
 only the pending response its fold holds
@@ -509,8 +509,8 @@ before the result (`agent/runtime/loop/toolUseDispatch.ts#opening`). A body
 interrupted or cut by a crash commits no result; a resume settles it (section
 9, "`tool.intent`, no result"). A result no body returned names a card only
 when an attempt of the call opened one: a call a recovered response never
-started, a duplicate, a script's host function and a call after the turn ended
-name none, and one that settles a started call as outcome unknown closes the
+started, a script's host function and a call after the turn ended name
+none, and one that settles a started call as outcome unknown closes the
 card its intent opened (`agent/runtime/loop/toolUseDispatch.ts#skipCall`,
 `#commitResult`). The delivering `append` MUST
 commit only once every call of the response has settled, as one tool group bound
@@ -548,11 +548,11 @@ asked (`shared/session/runRowReads.ts#reportRecipients`).
 **W6.** Every failed attempt of a turn that reaches failure recording MUST
 commit a `failed` row whose `next` is the move after it; a call off the rows
 records none (`agent/runtime/run/modelCall.ts#callModel`)
-(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`, `#commitFailed`). A
+(`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`, `#recordFailure`). A
 `failed` row that asks MUST be
 preceded, in its batch, by the `request.opened` of its retry request, which
 opens at the one request door with the `failed` row beside it
-(`agent/runtime/ModelInvoker.ts#commitFailed`,
+(`agent/runtime/ModelInvoker.ts#recordFailure`,
 `agent/runtime/requests.ts#openRequest`,
 `shared/session/turnRowHandlers.ts#a failed attempt asks`).
 
@@ -677,7 +677,7 @@ The move a `failed` row records is decided once, by `failedNext`
 
 - A `continuation-gone` failure of an attempt that sent a continuation answers
   `unchain`, once per invocation (`shared/session/inFlight.ts#failedNext`,
-  `agent/runtime/ModelInvoker.ts#moveAfter`).
+  `agent/runtime/ModelInvoker.ts#recordFailure`).
 - A retryable failure answers `retry` while the invocation's earlier recorded
   failures, `unchain` ones excluded, are fewer than the budget
   (`shared/session/inFlight.ts#failuresBefore`, `#spentRetries`,
@@ -692,7 +692,7 @@ The move a `failed` row records is decided once, by `failedNext`
   request id; where nobody can be asked, `stop`
   (`shared/session/inFlight.ts#failedNext`).
 - A failed observation of an accepted operation never resubmits it automatically
-  (`agent/runtime/ModelInvoker.ts#moveAfter`).
+  (`agent/runtime/ModelInvoker.ts#recordFailure`).
 
 Every automatic send MUST run under the process's `ModelRetryGate`
 (`agent/runtime/ModelRetryGate.ts#RouteRetries`,
@@ -798,7 +798,7 @@ done: the call or turn that asked asks again under a new id. The one request
 the activation does not cancel is one a person answered while no process held
 the run: the decide door resumes the run for that answer, and the activation
 commits its `request.decided` after its `run.activate`
-(`agent/runtime/loop/runLoop.ts#heldAnswers`), so the call that asked starts
+(`agent/runtime/loop/runLoop.ts#takeAnswers`), so the call that asked starts
 again and takes the decision from the row when it asks the same thing
 (`agent/runtime/loop/toolGuard.ts#askOf`).
 

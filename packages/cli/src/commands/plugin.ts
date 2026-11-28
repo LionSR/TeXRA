@@ -65,9 +65,6 @@ const withPluginEnv = Effect.fn('withPluginEnv')(function* <A, E>(
   return yield* operation((yield* cliPlatform).roots);
 });
 
-const shortCommit = (commit: string | undefined) =>
-  commit === undefined ? undefined : shortPluginId(commit);
-
 function formatPluginList(plugins: readonly PluginListing[]): string {
   if (plugins.length === 0) {
     return 'No plugins installed. Install one with `texra plugin install <source>`.';
@@ -81,7 +78,7 @@ function formatPluginList(plugins: readonly PluginListing[]): string {
         `${plugin.name} (${pluginRowState(row)}${trust === null ? '' : `, ${trust}`})`,
         plugin.version,
         plugin.commit
-          ? `${plugin.source} @ ${shortCommit(plugin.commit)}`
+          ? `${plugin.source} @ ${shortPluginId(plugin.commit)}`
           : `${plugin.source} (local)`,
       ]
         .filter(Boolean)
@@ -101,10 +98,12 @@ function formatPluginList(plugins: readonly PluginListing[]): string {
 }
 
 function formatPluginUpdate(update: PluginUpdate): string {
-  if (update.to === undefined) return `${update.name}: reread (local plugin)`;
-  return update.from === update.to
-    ? `${update.name}: already at ${shortCommit(update.to)}`
-    : `${update.name}: ${shortCommit(update.from)} -> ${shortCommit(update.to)}`;
+  if (update.fetched === undefined)
+    return `${update.name}: reread (local plugin)`;
+  const { from, to } = update.fetched;
+  return from === to
+    ? `${update.name}: already at ${shortPluginId(to)}`
+    : `${update.name}: ${shortPluginId(from)} -> ${shortPluginId(to)}`;
 }
 
 /** Show what a plugin declares on stderr and ask to trust it, on stdin. An

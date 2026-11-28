@@ -77,6 +77,19 @@ const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
 const TIMELINE_ITEM_WINDOW_STEP = 120;
 const DEFAULT_STAGE_ROW_WINDOW = 400;
 const STAGE_ROW_WINDOW_STEP = 400;
+const WINDOW_TRIM_STEP = 40;
+
+/**
+ * How many of `count` items stay unrendered above a window of `size`: the
+ * excess, in whole steps. Removing the oldest item each time one arrives
+ * makes the browser restyle every item after it, tens of milliseconds per
+ * arrival on a long conversation, so a window lets up to a step more
+ * through and drops them together.
+ */
+function hiddenAbove(count: number, size: number): number {
+  const excess = Math.max(0, count - size);
+  return excess - (excess % WINDOW_TRIM_STEP);
+}
 
 const stageListStyles = css`
   /* Phase labels may come from workflow plans, so let long or untranslated
@@ -148,7 +161,8 @@ export class StageList extends LitElement {
    *  `turnLayout`), rebuilt when the transcript or the run changes. */
   private layout: LayoutItem[] = [];
 
-  /** Number of recent top-level timeline entries currently rendered. */
+  /** Number of recent top-level timeline entries rendered, before the
+   *  step {@link hiddenAbove} lets through. */
   @state() private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
 
   /** Number of recent rows rendered for each stage. Reassigned
@@ -277,7 +291,7 @@ export class StageList extends LitElement {
   ): TemplateResult {
     const windowSize =
       this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW;
-    const hiddenCount = Math.max(0, rows.length - windowSize);
+    const hiddenCount = hiddenAbove(rows.length, windowSize);
     const visibleRows = hiddenCount > 0 ? rows.slice(hiddenCount) : rows;
 
     return html`${
@@ -330,10 +344,11 @@ export class StageList extends LitElement {
   }
 
   private visibleLayoutItems(): LayoutItem[] {
-    const layout = this.layout;
-    return layout.length <= this.timelineItemWindow
-      ? layout
-      : layout.slice(-this.timelineItemWindow);
+    const hiddenCount = hiddenAbove(
+      this.layout.length,
+      this.timelineItemWindow,
+    );
+    return hiddenCount > 0 ? this.layout.slice(hiddenCount) : this.layout;
   }
 
   /** One item of the layout; the key names its kind, since a script's
@@ -420,7 +435,7 @@ export class StageList extends LitElement {
         const scope = `work:${work.id}`;
         const windowSize =
           this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW;
-        const hiddenCount = Math.max(0, work.items.length - windowSize);
+        const hiddenCount = hiddenAbove(work.items.length, windowSize);
         return html`${
           hiddenCount > 0
             ? this.renderRevealButton({
@@ -488,26 +503,59 @@ export class StageList extends LitElement {
     `;
   }
 
-  /** Rows of a stage, in transcript order. A script stage leads with its
-   *  calls as the script-stage model reads them; the calls' own cards, with
-   *  their output, open below it from the card's Log. */
+  /** Rows of a stage, in transcript order. A script stage is its calls as
+   *  the script-stage model reads them: a call that launched a child is
+   *  that view's row, and any other call's own card is slotted in at its place
+   *  in the list, so its disclosure opens its output where its row is. A
+   *  row of the stage that is no call follows the list. */
   private renderStageBody(node: StageEntry): TemplateResult {
     const script = this.scripts.get(node.stage.id);
-    const rows = this.renderRowEntries(node.rows, `stage:${node.stage.id}`);
-    const callsKey = `calls:${node.stage.id}`;
-    const callsOpen = this.expanded?.get(callsKey) === true;
+    if (!script || !this.view || !this.surface)
+      return this.renderRowEntries(node.rows, `stage:${node.stage.id}`);
+    const cards = new Set(
+      script.calls.flatMap((call) =>
+        call.childRunId === undefined ? [call.id] : [],
+      ),
+    );
+    const calls = new Set(script.calls.map((call) => call.id));
+    // Bounded like any stage's rows: a card mounts its sections (a
+    // terminal, a diff) whether or not it is open, so a script with
+    // thousands of calls shows its recent cards and reveals the rest. An
+    // older call's place in the list stays, empty, until then.
+    const scope = `stage:${node.stage.id}`;
+    const cardRows = node.rows.filter((row) => cards.has(row.id));
+    const hiddenCount = Math.max(
+      0,
+      cardRows.length -
+        (this.stageRowWindows.get(scope) ?? DEFAULT_STAGE_ROW_WINDOW),
+    );
     return html`${
-      script && this.view && this.surface
-        ? html`<script-stage
-              .stage=${script}
-              .view=${this.view}
-              .surface=${this.surface}
-              .runId=${this.runId}
-              ?logOpen=${callsOpen}
-            ></script-stage>
-            ${callsOpen ? rows : nothing}`
-        : rows
-    }`;
+        hiddenCount > 0
+          ? this.renderRevealButton({
+              hiddenCount,
+              step: STAGE_ROW_WINDOW_STEP,
+              scope,
+              kind: 'rows',
+              label: 'call',
+            })
+          : nothing
+      }<script-stage
+        .stage=${script}
+        .view=${this.view}
+        .surface=${this.surface}
+        >${repeat(
+          cardRows.slice(hiddenCount),
+          (row) => row.id,
+          (row) =>
+            html`<div slot=${row.id} class="script-call">
+              ${this.renderLogEntry(row)}
+            </div>`,
+        )}</script-stage
+      >${repeat(
+        node.rows.filter((row) => !calls.has(row.id)),
+        (row) => row.id,
+        (row) => this.renderLogEntry(row),
+      )}`;
   }
 
   /** Render a stage: a script stage as a plain container, its script-stage

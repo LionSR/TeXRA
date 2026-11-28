@@ -186,7 +186,12 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       const { text, scriptSummary } = followUpDisplay(content);
       const media = 'delivery' in content ? undefined : content.media;
       const attachments = kinds[i];
-      logUserMessage(logger, text, { attachments, media, scriptSummary });
+      logUserMessage(logger, text, {
+        from: content.from,
+        attachments,
+        media,
+        scriptSummary,
+      });
     }
   };
 

@@ -140,6 +140,6 @@ const callTool = defineTool({
   name: 'other_command',
   description: 'Run a command of another tool.',
   schema: Schema.Struct({ command: Schema.String }),
-  guard: { command: { text: ({ command }) => command } },
+  command: { text: ({ command }) => command },
   execute: ({ command }) => Effect.succeed(`ran ${command}`),
 });

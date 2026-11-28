@@ -10,6 +10,7 @@ import { INLINE_CRITICISM_SETTING } from '@texra/shared/settings/texraSettings';
 import {
   resolveToolPath,
   type ToolPathCall,
+  describedString,
   executed,
   ToolError,
   defineTool,
@@ -31,10 +32,9 @@ import {
 
 const CHANNEL = 'DiagnosticsTool';
 
-// Described on the encoded side, the one the model's JSON Schema shows.
-const DiagnosticsPathSchema = Schema.String.annotate({
-  description: 'Workspace-relative or absolute file path.',
-}).pipe(Schema.decodeTo(Schema.Trim.check(Schema.isMinLength(1))));
+const DiagnosticsPathSchema = describedString(
+  'Workspace-relative or absolute file path.',
+);
 
 const DiagnosticsInputSchema = Schema.Union([
   Schema.Struct({

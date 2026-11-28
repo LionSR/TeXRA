@@ -19,7 +19,11 @@ import { Effect, Schema, Stream } from 'effect';
 
 // Local imports
 import { type WorkspaceRoots } from '@texra-ai/worldline';
-import { ChildRuns, ToolContext } from '@texra-ai/worldline/plugins';
+import {
+  asToolError,
+  ChildRuns,
+  ToolContext,
+} from '@texra-ai/worldline/plugins';
 import {
   type TokenUsageStats,
   type ToolUseLog,
@@ -46,7 +50,6 @@ import { CodexThreads } from './agentCliSessionStores';
 import {
   agentCliTool,
   StreamedToolCards,
-  asToolError,
   type AgentCliTurn,
 } from './agentCliShared';
 import {
@@ -405,12 +408,10 @@ export const CodexTool = defineTool({
     'It runs in the working directory of the calling agent and takes no directory argument, so parallel codex agents share that directory.',
   schema: CodexInputSchema,
   card: codexCallCard,
-  guard: {
-    command: {
-      text: (input: CodexInput) => `[${CODEX_AGENT_NAME}] ${input.prompt}`,
-      // A resumed thread keeps its stored workspace: name none, not the wrong one.
-      cwd: 'unknown',
-    },
+  command: {
+    text: (input: CodexInput) => `[${CODEX_AGENT_NAME}] ${input.prompt}`,
+    // A resumed thread keeps its stored workspace: name none, not the wrong one.
+    cwd: 'unknown',
   },
   execute: agentCliTool({
     name: CODEX_AGENT_NAME,

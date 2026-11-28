@@ -76,6 +76,7 @@ export type {
   ErrorRow,
   ErrorRowDetail,
   LogRow,
+  MessageSender,
   ProgressStatusRow,
   StatItem,
   StreamingTextRow,
@@ -116,7 +117,11 @@ export type {
   ToolStatusSection,
   ToolTextSection,
 } from '@shared/transcript/toolRowModel';
-export { toolDisplayKind, type ToolDisplayKind } from '@shared/tools/toolKind';
+export {
+  isEditLikeToolName,
+  toolDisplayKind,
+  type ToolDisplayKind,
+} from '@shared/tools/toolKind';
 export {
   buildMcpToolName,
   isMcpToolName,

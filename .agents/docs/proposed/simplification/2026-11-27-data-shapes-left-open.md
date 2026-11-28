@@ -29,6 +29,9 @@ open PR, and only a session and a key route carry `plan`, so the read is an
 `in` test unless the route's cases are narrowed first. About twenty lines,
 one file.
 
+Landed 2026-11-28: the verdict is its kind (and an unserved reason);
+`optionOf` reads the plan off a session or key route.
+
 ## 2. The desktop's remembered projects are re-copied field by field
 
 `readRememberedDesktopProjects`
@@ -46,6 +49,8 @@ border) styles no element.
 
 Held back: the element is imported by `packages/desktop/src/renderer/main.ts`,
 which three open PRs touch, and the cut edits an E2E spec. About 25 lines.
+
+Landed 2026-11-28: the property and the non-fill frame are gone.
 
 ## 4. Checked and refused
 

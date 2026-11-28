@@ -15,7 +15,6 @@ import {
   splitContentLines,
   type FileLocation,
 } from '@texra-ai/worldline/schemas';
-import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
 import { runTool, type ToolMissing } from '@texra/utils/system/toolChecks';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -74,9 +73,15 @@ function buildKpathseaSearchPath(
 }
 
 /**
- * Build the kpathsea search-path overrides (TEXINPUTS / BIBINPUTS / BSTINPUTS)
- * for a LaTeX compile, prepending the workspace and TikZ input directories onto
- * any inherited values.
+ * The kpathsea search-path overrides (TEXINPUTS / BIBINPUTS / BSTINPUTS) for
+ * compiling a document in `documentDir`, prepended onto any inherited values.
+ * The document's own directory comes first — ahead of `.` (the compiler's
+ * cwd, which is the workspace root, not the document's folder) so a
+ * subfolder document's relative `\input{…}` resolves against its own tree
+ * rather than a same-named file at the workspace root. The workspace root
+ * (when the settings put it on the search path) and the TikZ directory
+ * follow. Bibliography search omits `.` and TikZ — only directories that can
+ * hold `.bib`/`.bst` matter there.
  *
  * The three inherited values come from the ambient Effect `ConfigProvider`
  * (the live process environment in production). The subprocess still inherits
@@ -84,14 +89,24 @@ function buildKpathseaSearchPath(
  * only override the three search paths that need prepending.
  */
 const latexInputEnv = Effect.fn('texTools.latexInputEnv')(function* (
-  texInputParts: readonly string[],
-  bibSearchParts: readonly string[],
+  documentDir: string,
+  workspaceRoot: string | undefined,
+  tikzInputDirectory: string,
 ): Effect.fn.Return<Record<string, string>> {
   const [tex, bib, bst] = (yield* Effect.all([
     Config.String('TEXINPUTS').pipe(Config.option, Effect.orDie),
     Config.String('BIBINPUTS').pipe(Config.option, Effect.orDie),
     Config.String('BSTINPUTS').pipe(Config.option, Effect.orDie),
   ])).map(Option.getOrUndefined);
+  // A blank part is dropped by `buildKpathseaSearchPath`.
+  const workspaceParts = workspaceRoot ? [workspaceRoot] : [];
+  const texInputParts = [
+    documentDir,
+    '.',
+    ...workspaceParts,
+    tikzInputDirectory,
+  ];
+  const bibSearchParts = [documentDir, ...workspaceParts];
   const texInputs = buildKpathseaSearchPath(texInputParts, tex);
   const bibInputs = buildKpathseaSearchPath(bibSearchParts, bib);
   const bstInputs = buildKpathseaSearchPath(bibSearchParts, bst);
@@ -101,30 +116,6 @@ const latexInputEnv = Effect.fn('texTools.latexInputEnv')(function* (
     ...(bstInputs && { BSTINPUTS: bstInputs }),
   };
 });
-
-/**
- * Compose the kpathsea search-path parts for a compile. The document's own
- * directory comes first — ahead of `.` (the compiler's cwd, which is the
- * workspace root, not the document's folder) so a subfolder document's
- * relative `\input{…}` resolves against its own tree rather than a same-named
- * file at the workspace root. The workspace root and TikZ dir follow.
- * Bibliography search omits `.` and TikZ — only directories that can hold
- * `.bib`/`.bst` matter there.
- */
-function buildLatexSearchParts(input: {
-  documentDir: string;
-  /** The workspace root, when the settings put it on the search path. */
-  workspaceRoot: string | undefined;
-  tikzInputDirectory: string | undefined;
-}): { texInputParts: string[]; bibSearchParts: string[] } {
-  const { documentDir, workspaceRoot, tikzInputDirectory } = input;
-  const workspaceParts = workspaceRoot ? [workspaceRoot] : [];
-  const tikzParts = tikzInputDirectory?.trim() ? [tikzInputDirectory] : [];
-  return {
-    texInputParts: [documentDir, '.', ...workspaceParts, ...tikzParts],
-    bibSearchParts: [documentDir, ...workspaceParts],
-  };
-}
 
 /**
  * Result of a {@link compileLatex2Pdf} attempt. A discriminated union on `ok`
@@ -138,20 +129,6 @@ function buildLatexSearchParts(input: {
 type CompileLatex2PdfResult =
   | { ok: true; pdfPath: string }
   | { ok: false; logTail: string };
-
-/**
- * The build folder of one input, `<dir>/build/<stem>`. Inputs compiled at
- * once get one each: two inputs in one folder that share an `\include` or a
- * `.bib` would otherwise write the same `.aux`/`.bbl` files into one `build/`
- * and corrupt each other's.
- */
-export function perInputBuildDirectory(texPath: string): string {
-  return path.join(
-    path.dirname(texPath),
-    LATEX_BUILD_DIRECTORY,
-    path.parse(texPath).name,
-  );
-}
 
 /**
  * Compile a LaTeX file to PDF.
@@ -223,15 +200,11 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
       stores,
       INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING,
     );
-    const { texInputParts, bibSearchParts } = buildLatexSearchParts({
+    const env = yield* latexInputEnv(
       documentDir,
-      workspaceRoot: includeWorkspace ? workspaceRoot : undefined,
+      includeWorkspace ? workspaceRoot : undefined,
       tikzInputDirectory,
-    });
-
-    // Build kpathsea search-path overrides, prepending workspace/TikZ dirs onto
-    // any inherited values. `path.delimiter` keeps it cross-platform.
-    const env = yield* latexInputEnv(texInputParts, bibSearchParts);
+    );
     for (const [key, value] of Object.entries(env)) {
       yield* Effect.logDebug(`Setting ${key} to: ${value}`);
     }

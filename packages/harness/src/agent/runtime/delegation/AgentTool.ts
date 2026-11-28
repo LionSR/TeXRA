@@ -30,8 +30,6 @@ import {
   AgentProposalSchema,
   type AgentProposal,
   toJsonValue,
-  type RunEnd,
-  type RunId,
   type ToolResult,
   programGrants,
   RUN_OUTCOME,
@@ -61,7 +59,7 @@ import {
   withinTime,
 } from './agentChild';
 import { selectAvailableDelegationModel } from './delegationAvailability';
-import { executeSubagentInBand } from './childLaunch';
+import { executeSubagentInBand, type ChildRunEnd } from './childLaunch';
 import {
   CALL_FIELDS,
   fileList,
@@ -119,13 +117,13 @@ type AgentInput = typeof AgentInputSchema.Type;
 type ChildLaunch = {
   readonly prompt: string;
   readonly model: string | null | undefined;
-  readonly workingDirectory: string | null | undefined;
+  readonly workingDirectory: string | undefined;
   readonly id: string | null | undefined;
   readonly background: boolean | null | undefined;
   /** How long an awaited call waits for the child (`withinTime`). */
-  readonly timeoutMs?: number | null | undefined;
+  readonly timeoutMs: number | null | undefined;
   /** The child's spend cap, recorded on its run (`run.start.maxCostUsd`). */
-  readonly maxCostUsd?: number | null | undefined;
+  readonly maxCostUsd: number | null | undefined;
 } & (
   | {
       readonly program: null;
@@ -145,7 +143,7 @@ type ChildLaunch = {
     }
 );
 
-/** The four lists of files a child is handed. */
+/** The three lists of files a child is handed. */
 type ChildFiles = {
   readonly inputFiles: readonly string[];
   readonly contextFiles: readonly string[];
@@ -211,7 +209,7 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
 export const childResult = Effect.fn('AgentTool.childResult')(function* (
   call: RunToolCall,
   agentName: string,
-  { runId, result }: { readonly runId: RunId; readonly result: RunEnd },
+  { runId, result }: ChildRunEnd,
   key: string | undefined,
 ) {
   if (result.outcome === RUN_OUTCOME.CANCELLED) {
@@ -315,7 +313,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const { program } = launch;
   // What the child is, decided once, the one place a chat and a program
   // differ in it. A program's child is the program's own run, named for it,
-  // over the program's four lists; a name no plugin registers fails here,
+  // over the program's three lists; a name no plugin registers fails here,
   // before anyone is asked to approve it. A chat's is what the call wrote,
   // or an installed plugin's agent read now, so the child's config holds
   // its system text and tools and a resume reads no file; its files are the
@@ -368,7 +366,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   }
   const { agent, files } = child;
   const unusable = yield* rejectUnusableWorkingDirectory(
-    launch.workingDirectory ?? undefined,
+    launch.workingDirectory,
   );
   if (unusable) return unusable;
   const outputSchema = yield* childOutputSchema(
@@ -467,9 +465,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     );
     if (Result.isFailure(recovered))
       return failedResult(agent.name, recovered.failure);
-    const settled = recovered.success;
-    if (settled.kind === 'ended')
-      return yield* childResult(call, agent.name, settled, key);
+    const ended = recovered.success;
+    if (ended !== null) return yield* childResult(call, agent.name, ended, key);
   }
 
   const model = yield* childModel(call, launch.model);
@@ -489,7 +486,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       mediaFiles: media.map(({ file }) => file),
       // The arguments, shown as the proposal's options.
       ...(program !== null && { options: program.args }),
-      ...(program === null && { rootUserInstruction: call.instruction }),
     },
   );
 

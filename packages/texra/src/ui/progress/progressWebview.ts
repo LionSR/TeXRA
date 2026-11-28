@@ -7,7 +7,7 @@
  * conversation.
  */
 import { hostBridge } from '@texra/shared/hostBridge';
-import { createWebviewStorage } from '@texra/shared/state/PersistedState';
+import { createWebviewStorage } from '@ui/progress/PersistedState';
 
 import { createSessionSurfaces } from './sessionSurfaces';
 import type { ProgressApp } from './ProgressApp';

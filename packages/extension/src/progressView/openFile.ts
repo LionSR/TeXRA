@@ -18,7 +18,7 @@ function openInEditor(
   at: (doc: vscode.TextDocument) => vscode.Position,
 ) {
   return openFileInEditor(absolutePath, { preview: true }).pipe(
-    Effect.map(({ editor }) => {
+    Effect.map((editor) => {
       const pos = at(editor.document);
       editor.revealRange(
         new vscode.Range(pos, pos),

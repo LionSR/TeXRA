@@ -39,7 +39,7 @@ import {
 import {
   PersistedState,
   type KeyValueStore,
-} from '@texra/shared/state/PersistedState';
+} from '@ui/progress/PersistedState';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { LAUNCH_FILE_LISTS } from '@ui/copy/fileSelectConfigs';
 

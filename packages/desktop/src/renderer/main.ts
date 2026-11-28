@@ -4,6 +4,7 @@
 // than fetched, since the app must render identically offline.
 import { Schema } from 'effect';
 import {
+  attentionOf,
   decodingDefault,
   extractErrorMessage,
 } from '@texra-ai/worldline/schemas';
@@ -26,9 +27,10 @@ import './TexraDiffView';
 import {
   PersistedState,
   type KeyValueStore,
-} from '@texra/shared/state/PersistedState';
+} from '@ui/progress/PersistedState';
 
 import { DESKTOP_THEME_KIND } from '@texra/shared/ipc';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
 import { ProgressApp } from '@ui/progress/ProgressApp';
 
@@ -44,12 +46,10 @@ import type { OsPlatform } from '@texra/shared/osPlatform';
 import { type Shell } from './shell';
 
 import {
-  DESKTOP_COMMAND_PALETTE_ID,
   DESKTOP_LOCAL_COMMANDS,
+  desktopCommandEntry,
   dispatchDesktopCommand,
-  paletteEntries,
   type DesktopCommandActions,
-  type DesktopCommandId,
 } from '../shared/desktopCommandSurface';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import {
@@ -66,13 +66,13 @@ import {
   initialDesktopShellState,
   openWorkbenchTab,
   workbenchTabId,
-  renameWorkbenchTab,
   setSidebarWidth,
   toggleSidebar,
   WORKBENCH_KIND_META,
   type DesktopShellState,
 } from '../shared/desktopShellState';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
+import { DESKTOP_SHELL_COMMANDS } from '../shared/desktopShellMessages';
 import {
   resolveDesktopPushes,
   resolveSessionWire,
@@ -83,7 +83,6 @@ import {
   createDesktopSettingsDialog,
   DesktopThemePreferenceSchema,
 } from './settingsDialog';
-import { trackNativeViewOverlays } from './nativeViewOverlays';
 import { createLogsPane } from './logsPane';
 import { createProjectWorkbench } from './projectWorkbench';
 import { injectXtermStyles } from './terminalPane';
@@ -229,7 +228,7 @@ const railProjects = (): RailProject[] =>
   });
 const activeRailProject = (projects: readonly RailProject[]) =>
   projects.find((project) => project.display.key === shell.active);
-let renamingProjectKey: string | null = null;
+let renamingProjectKey: string | undefined;
 
 function renameProject(key: string, name: string): void {
   const project = projectWorkbenches.get(key);
@@ -244,36 +243,16 @@ const rendererPlatform = ((): OsPlatform => {
   return 'linux';
 })();
 document.body.dataset.desktopPlatform = rendererPlatform;
-const desktopPaletteEntries = paletteEntries(rendererPlatform);
-// One name per action: chrome labels and tooltips quote the command catalog
-// verbatim (the same source the palette reads) instead of paraphrasing it in
-// sentence case.
-const commandsById = new Map<
-  string,
-  { readonly label: string; readonly accelerator?: string | undefined }
->(
-  [
-    ...desktopPaletteEntries,
-    desktopCommandPaletteShortcut(rendererPlatform),
-  ].map((entry) => [entry.id, entry]),
+// The palette button's tooltip quotes the command catalog's name verbatim
+// (the same source the palette reads), with its shortcut.
+const paletteShortcut = desktopCommandPaletteShortcut(rendererPlatform);
+const paletteAccelerator = formatDesktopAccelerator(
+  paletteShortcut.accelerator,
+  rendererPlatform,
 );
-
-function commandLabel(
-  commandId: DesktopCommandId | typeof DESKTOP_COMMAND_PALETTE_ID,
-): string {
-  return commandsById.get(commandId)?.label ?? commandId;
-}
-
-function commandTitle(
-  commandId: DesktopCommandId | typeof DESKTOP_COMMAND_PALETTE_ID,
-): string {
-  const shortcut = formatDesktopAccelerator(
-    commandsById.get(commandId)?.accelerator,
-    rendererPlatform,
-  );
-  const label = commandLabel(commandId);
-  return shortcut ? `${label} - ${shortcut}` : label;
-}
+const commandsTitle = paletteAccelerator
+  ? `${paletteShortcut.label} - ${paletteAccelerator}`
+  : paletteShortcut.label;
 
 // =============================================================================
 // Conversation-first shell state
@@ -355,7 +334,9 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
         <div class="desktop-empty-workspace-actions">
           ${renderLabeledActionButton({
             icon: 'folder-open',
-            text: 'Open project folder',
+            text: desktopCommandEntry(
+              DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+            ).title,
             kind: 'primary',
             onClick: () =>
               postToMain({
@@ -369,14 +350,7 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
   );
 }
 
-// Both hooks re-sync the browser view, which stays hidden while the dialog
-// is open (`isBrowserCovered`).
-const syncActiveBrowserView = () =>
-  projectWorkbenches.get(shell.active)?.workbench.syncBrowserViewBounds();
-const nativeViewOverlays = trackNativeViewOverlays(syncActiveBrowserView);
 const settingsDialog = createDesktopSettingsDialog(appRoot, {
-  onShown: syncActiveBrowserView,
-  onHidden: syncActiveBrowserView,
   getTheme: () => appearance.getState().theme,
   setTheme: (theme) => {
     appearance.setState({ theme });
@@ -405,7 +379,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
   // visible affordance (#11511). Surface the same signal on the toggle that
   // reopens the rail.
   const hasPendingApproval = projects.some(
-    (project) => project.view.rollup.waiting > 0,
+    (project) => attentionOf(project.view).requests.length > 0,
   );
   const sidebarCollapsedWithPendingApproval =
     shellState().sidebarCollapsed && hasPendingApproval;
@@ -413,7 +387,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
     ? 'Show sidebar'
     : 'Hide sidebar';
   if (sidebarCollapsedWithPendingApproval) {
-    sidebarToggleLabel = 'Show sidebar (waiting on you)';
+    sidebarToggleLabel = `Show sidebar (${runStatusLabel('waitingOnUser').toLowerCase()})`;
   }
   const sidebarToggle = html`<span class="shell-header-button-slot">
     ${renderIconActionButton({
@@ -428,7 +402,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
     ${
       sidebarCollapsedWithPendingApproval
         ? html`<span
-            class="status-dot shell-header-pending-approval-badge tone-warning"
+            class="status-indicator shell-header-pending-approval-badge tone-warning"
             aria-hidden="true"
           ></span>`
         : nothing
@@ -547,8 +521,7 @@ function shellTemplate(): TemplateResult {
               recent: recentProjects ?? [],
               renamingProjectKey,
               shell,
-              commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
-              commandsTitle: commandTitle(DESKTOP_COMMAND_PALETTE_ID),
+              commandsTitle,
             },
             {
               onNewTask: returnToLauncher,
@@ -578,7 +551,7 @@ function shellTemplate(): TemplateResult {
               },
               onRenameProject: renameProject,
               onCloseRename: () => {
-                renamingProjectKey = null;
+                renamingProjectKey = undefined;
                 rerenderShell();
               },
               onOpenSettings: () => settingsDialog.open(),
@@ -612,7 +585,6 @@ const surfaceResizeObserver = new ResizeObserver(() => {
     const project = projectWorkbenches.get(shell.active);
     if (!project) return;
     project.workbench.layoutVisibleSurfaces();
-    project.workbench.syncBrowserViewBounds();
   });
 });
 const observedSurfaces = new Set<Element>();
@@ -648,7 +620,12 @@ function rerenderShell(): void {
   render(
     projectWorkbenches.has(shell.active)
       ? shellTemplate()
-      : noWorkspacePlaceholder,
+      : // Until the first projects message says which folders reopened, the
+        // window is empty: the invitation to open one would be wrong for a
+        // launch that is about to show a project.
+        recentProjects === undefined
+        ? nothing
+        : noWorkspacePlaceholder,
     appRoot,
   );
   const project = projectWorkbenches.get(shell.active);
@@ -690,7 +667,7 @@ try {
 
 const desktopRendererCommandActions: DesktopCommandActions = {
   showLauncher: returnToLauncher,
-  openWorkbench: (kind) => currentWorkbench().workbench.openKind(kind),
+  showLogs: () => currentWorkbench().workbench.openKind('logs'),
   showSettings: settingsDialog.open,
   openDesktopDocs: () => {
     postToMain({ command: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS });
@@ -797,16 +774,6 @@ const routeMessage = createMessageRoutes({
     projectWorkbenches
       .get(message.session)
       ?.workbench.openTerminalCommand(message.initialCommand),
-  // Renames the document so a browser tab reads as its page rather than a
-  // generic "Browser".
-  'desktop:browser:state': (message) => {
-    const project = projectWorkbenches.get(message.session);
-    if (project) {
-      project.updateState(
-        renameWorkbenchTab(project.getState(), message.tabId, message.title),
-      );
-    }
-  },
   'desktop:projects': (message) => {
     const previousKey = shell.active;
     // The list changes resource ownership and selection together. Keep signal
@@ -836,8 +803,6 @@ const routeMessage = createMessageRoutes({
           logsPane,
           conversationView,
           isActive: () => shell.active === key,
-          isBrowserCovered: () =>
-            settingsDialog.isOpen() || nativeViewOverlays.isCovered(),
           confirmDiscard,
           onLayoutChanged: layoutChanged,
         });
@@ -854,10 +819,12 @@ const routeMessage = createMessageRoutes({
       applyingProjectList = false;
     }
     rerenderShell();
+    // The page shows the open projects: what a test's launch waits for. The
+    // page itself loads before the main process has opened them.
+    document.body.dataset.desktopReady = 'true';
     if (previousKey !== message.activeKey) {
       settingsDialog.remount();
       currentWorkbench().workbench.layoutVisibleSurfaces();
-      currentWorkbench().workbench.syncBrowserViewBounds();
     }
   },
 });
@@ -871,12 +838,9 @@ const routeHostMessage = (event: MessageEvent): void =>
 window.addEventListener('message', routeHostMessage);
 resolveDesktopPushes().listening();
 
-// Keep the embedded browser aligned when the window resizes: its view is
-// positioned in absolute window coordinates, not renderer layout.
 window.addEventListener('resize', () => {
   const project = projectWorkbenches.get(shell.active);
   if (!project) return;
-  project.workbench.syncBrowserViewBounds();
   project.workbench.layoutVisibleSurfaces();
   project.terminalPane.layout();
 });
@@ -915,11 +879,34 @@ appRoot.addEventListener('surface-action', (event) => {
   }
 });
 
+// A web link in a message opens in the user's browser. Left to the window
+// it would be a navigation, which the window refuses for every host but its
+// own allowed few, so the click would do nothing.
+appRoot.addEventListener('click', (event) => {
+  if (event.defaultPrevented || event.button !== 0) return;
+  const path = event.composedPath();
+  const link = path.find(
+    (node): node is HTMLAnchorElement => node instanceof HTMLAnchorElement,
+  );
+  if (
+    !link ||
+    !path.some(
+      (node) =>
+        node instanceof HTMLElement &&
+        node.classList.contains('markdown-content'),
+    )
+  )
+    return;
+  const url = URL.parse(link.href);
+  if (url?.protocol !== 'http:' && url?.protocol !== 'https:') return;
+  event.preventDefault();
+  postToMain({ command: DESKTOP_SHELL_COMMANDS.OPEN_LINK, url: url.href });
+});
+
 // The projects list arrives in reply; each project's session subscribes as it
 // opens, and the file tree refreshes when the list names the project this
 // window shows.
 postToMain({ command: DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS });
-document.body.dataset.desktopReady = 'true';
 
 // Sole owner of "the workspace has unsaved editor changes": the main process
 // keeps no copy and learns of it only when this veto raises will-prevent-unload.

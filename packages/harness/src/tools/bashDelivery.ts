@@ -16,6 +16,18 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendTail, headTail } from '@utils/text/appendTail';
 import { formatCount, splitContentLines } from '@utils/text/stringUtils';
 
+/**
+ * Max chars a background `bash` run records as `process.output` rows as
+ * they arrive, both streams together. Past it the run writes a truncation
+ * notice; a stream still records up to the delivery's head budget, and the
+ * rest is held back. When the command ends each stream's held-back tail is
+ * recorded as a row marking the gap before it (`elided`), so a capped log
+ * holds at most one head and one tail per stream beyond this figure. The
+ * writer (`tools/bash.ts`) and the reader (`/executions/{id}/output`) both
+ * read it, so the output header reports the figure the writer enforced.
+ */
+export const BASH_BACKGROUND_LOG_CAP_CHARS = 200_000;
+
 /** Last N lines of output for the delivery preview. */
 const OUTPUT_PREVIEW_LINES = 20;
 /**

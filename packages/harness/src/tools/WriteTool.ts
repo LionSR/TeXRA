@@ -40,7 +40,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
     target: prepared,
     proposedContent: input.content,
     sourceTool: 'write_file',
-    present: ({ appliedContent }) => {
+    present: (appliedContent) => {
       const originalLineCount = countLines(original ?? '');
       const newLineCount = countLines(appliedContent);
       const action = original === null ? 'Created' : 'Overwrote';

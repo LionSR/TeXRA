@@ -3,7 +3,8 @@
  * Host-neutral.
  */
 
-import type { RefusalDecision } from '@shared/schemas';
+import type { RefusalDecision, ToolResult } from '@shared/schemas';
+import { errorResult } from '@tools/core/result';
 
 /**
  * The one wording of a declined request, over the union's three refusal
@@ -43,4 +44,26 @@ export function refusalCopy(
         feedback: trimmed(refusal.feedback),
       };
   }
+}
+
+/**
+ * The result a call answers with when its request about `target` is
+ * declined: `rejected` for a person's reject, else the summary followed by
+ * `target`; a deny's or cancel's reason after it, and a reject's feedback as
+ * the instruction the model reads.
+ */
+export function refusalResult(
+  subject: string,
+  refusal: RefusalDecision,
+  wording: { readonly rejected: string; readonly target: string },
+): ToolResult {
+  const copy = refusalCopy(subject, refusal);
+  const summary =
+    refusal.action === 'reject'
+      ? wording.rejected
+      : `${copy.summary}: ${wording.target}`;
+  return errorResult(copy.detail ? `${summary}\n\n${copy.detail}` : summary, {
+    summary,
+    ...(copy.feedback && { userInstruction: copy.feedback }),
+  });
 }

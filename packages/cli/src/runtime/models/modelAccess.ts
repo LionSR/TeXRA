@@ -42,10 +42,6 @@ interface CliRunnableModelOptions {
   readonly recovery?: string;
 }
 
-export interface CliModelListOptions {
-  readonly includeUnavailable?: boolean;
-}
-
 /** The one sentence the terminal says when no model can run. */
 export const NO_RUNNABLE_MODEL_COPY = 'No models are currently available.';
 
@@ -81,14 +77,12 @@ export type GetModelSwitchDisabledReason = (
 
 export function modelSelectItemsForCli(
   models: readonly ModelOptionData[],
-  getModelSwitchDisabledReason?: GetModelSwitchDisabledReason,
+  getModelSwitchDisabledReason: GetModelSwitchDisabledReason,
 ) {
   return Effect.forEach(
     models.filter(isModelOptionAvailable),
     Effect.fnUntraced(function* (model) {
-      const disabledReason = getModelSwitchDisabledReason
-        ? yield* getModelSwitchDisabledReason(model.value)
-        : undefined;
+      const disabledReason = yield* getModelSwitchDisabledReason(model.value);
       const access = formatModelStatusForCli(model);
       const status = joinFacts([
         access,
@@ -140,18 +134,18 @@ export function cliModelRecord(
 
 export function listableModelAccessEntries(
   models: readonly ModelOptionData[],
-  options: CliModelListOptions = {},
+  includeUnavailable: boolean,
 ): readonly ModelOptionData[] {
-  if (options.includeUnavailable === true) return models;
+  if (includeUnavailable) return models;
   return models.filter(isModelOptionAvailable);
 }
 
 export function formatNoListableModelsMessage(
-  options: CliModelListOptions = {},
+  includeUnavailable: boolean,
 ): string {
   return [
     NO_RUNNABLE_MODEL_COPY,
-    ...(options.includeUnavailable === true
+    ...(includeUnavailable
       ? []
       : [
           'Run `texra models list --all` to see unavailable models and access status.',
@@ -172,6 +166,7 @@ export function formatCliModelDetails(model: ModelOptionData): string {
   if (model.availability === 'missing-key')
     lines.push(`recovery: ${CLI_SETUP_RECOVERY}`);
   if (model.context) lines.push(`context: ${model.context}`);
+  if (model.reasoning) lines.push(`reasoning: ${model.reasoning}`);
   if (model.cost) lines.push(`cost: ${model.cost}`);
   if (model.hint) {
     lines.push('');

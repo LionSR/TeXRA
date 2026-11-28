@@ -271,13 +271,16 @@ export class SessionRunRegistry implements RunsShape {
     this.answers.set(runId, held.set(requestId, decision));
   }
 
-  /** The answers held for `runId` ({@link holdAnswer}). */
-  heldAnswers(runId: RunId): ReadonlyMap<string, RequestDecision> {
-    return this.answers.get(runId) ?? new Map();
+  /** Take every answer held for `runId` ({@link holdAnswer}): its
+   *  activation commits those of requests still open. */
+  takeAnswers(runId: RunId): ReadonlyMap<string, RequestDecision> {
+    const held = this.answers.get(runId) ?? new Map<string, RequestDecision>();
+    this.answers.delete(runId);
+    return held;
   }
 
-  /** Stop holding an answer: an activation took it, or its decision's
-   *  caller withdrew it. False when it was not held. */
+  /** Stop holding an answer: its decision's caller withdrew it, or decides
+   *  it itself. False when it was not held. */
   dropAnswer(runId: RunId, requestId: string): boolean {
     return this.answers.get(runId)?.delete(requestId) ?? false;
   }

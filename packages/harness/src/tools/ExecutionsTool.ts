@@ -527,17 +527,7 @@ const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
     return yield* new ToolError(`Config not found for run: ${runId}.`);
   }
 
-  // Filter out fields irrelevant to this run's display category, which
-  // the fold decides from the stamped identity. Read from the fold's
-  // listing tier rather than the live view, so a run no port holds is
-  // filtered by the same rule as one that is.
-  const run = (yield* (yield* SessionViewAccess).read([])).runs.get(runId);
-  return executed(
-    serializeFilteredConfig(
-      record,
-      run === undefined ? undefined : runDisplayCategory(run),
-    ),
-  );
+  return executed(serializeFilteredConfig(record));
 });
 
 const showConversation = Effect.fn('ExecutionsTool.showConversation')(

@@ -6,9 +6,7 @@ import { createOverlayDialog, renderElement } from './overlayDialog';
 
 /**
  * Returns a function that asks before closing a tab with unsaved changes.
- * The `wa-dialog` counts as a native-view overlay (`trackNativeViewOverlays`),
- * so the browser view hides while it is open. `discard` runs only when
- * Discard is chosen; closing the dialog any other way keeps the tab.
+ * `discard` runs only when Discard is chosen; closing the dialog any other way keeps the tab.
  * Requests wait their turn: closing a group with several unsaved tabs
  * asks about each one in order.
  */

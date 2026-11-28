@@ -3,7 +3,7 @@
  * carry, and the reasoning-level labels. Plain data and pure predicates, so
  * the settings webview renders the same words the hosts build rows with.
  */
-import { ReasoningEffort, selectModel } from '@texra-ai/llm';
+import { nearestEffort, ReasoningEffort, selectModel } from '@texra-ai/llm';
 import { getModelLabel, joinFacts } from '@texra-ai/worldline/schemas';
 
 /**
@@ -66,6 +66,40 @@ export function isExpensiveModel(outputPrice: number | undefined): boolean {
   return (
     outputPrice !== undefined && outputPrice >= EXPENSIVE_OUTPUT_PRICE_FLOOR
   );
+}
+
+/**
+ * The reasoning level `selected` runs at on a route with `efforts`: the
+ * explicit `@effort` on `selected` (snapped to the route's nearest accepted
+ * level when the route lacks it), else what the route sends by default/saved
+ * preference. Shared by the desktop/VS Code picker and the CLI TUI.
+ */
+export function effectiveReasoningLevel(
+  selected: string,
+  efforts:
+    | {
+        readonly levels: readonly ReasoningEffort[];
+        readonly sent?: ReasoningEffort;
+      }
+    | undefined,
+): ReasoningEffort | undefined {
+  const named = selectModel(selected)?.request.effort;
+  if (named === undefined) return efforts?.sent;
+  return efforts === undefined ? named : nearestEffort(efforts.levels, named);
+}
+
+/**
+ * Format `ref` at `level`, preserving any active `+mode` (such as `+pro`)
+ * when `currentSelected` names the same model.
+ */
+export function modelChoiceWithEffort(
+  ref: string,
+  level: ReasoningEffort,
+  currentSelected?: string,
+): string {
+  const current = currentSelected ? selectModel(currentSelected) : undefined;
+  const mode = current?.config.ref === ref ? current.request.mode : undefined;
+  return `${ref}@${level}${mode ? `+${mode}` : ''}`;
 }
 
 /**

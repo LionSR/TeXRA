@@ -372,7 +372,7 @@ export class PluginCard extends TexraElement {
                 variant="neutral"
                 appearance="filled"
                 size="s"
-                ><bdi dir="auto">${tool.name}</bdi></wa-tag
+                ><bdi dir="auto">${tool}</bdi></wa-tag
               >
             </li>`,
         )}

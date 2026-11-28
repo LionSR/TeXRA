@@ -13,9 +13,9 @@ import { resolveToolPath } from '@tools/pathResolution';
 // Local imports - tools
 import {
   appendApprovalDiffNote,
-  buildApprovalRejectedResult,
   requestToolEditApproval,
 } from '@tools/approval/toolEditApproval';
+import { refusalResult } from '@tools/approval/refusalCopy';
 import { writeApprovedContent } from '@tools/approval/approvedWrite';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -109,10 +109,6 @@ export function replaceLiteralMatches({
   });
 }
 
-interface AppliedFileEdit {
-  appliedContent: string;
-}
-
 interface FileEditPresentation {
   summary: string;
   output: string;
@@ -122,7 +118,8 @@ interface ApprovedFileEditRequest {
   target: WritableFileTarget;
   proposedContent: string;
   sourceTool: string;
-  present: (edit: AppliedFileEdit) => FileEditPresentation;
+  /** Words the result from the text that was written. */
+  present: (appliedContent: string) => FileEditPresentation;
 }
 
 /**
@@ -149,20 +146,23 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
       sourceTool,
     });
     if (approval.action !== 'apply') {
-      return buildApprovalRejectedResult(displayPath, sourceTool, approval);
+      return refusalResult('Tool edit', approval, {
+        rejected: `User rejected ${sourceTool} for ${displayPath}.`,
+        target: `${sourceTool} for ${displayPath}.`,
+      });
     }
 
-    const written = yield* writeApprovedContent(
+    const appliedContent = yield* writeApprovedContent(
       path,
       approval.originalContent,
       approval.appliedContent,
     );
-    const presentation = present(written);
+    const presentation = present(appliedContent);
     const output = yield* appendApprovalDiffNote(
       presentation.output,
       displayPath,
       approval.proposedContent,
-      written.appliedContent,
+      appliedContent,
     );
 
     return {

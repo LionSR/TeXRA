@@ -21,7 +21,11 @@
 
 // Third-party imports
 import { Effect, Schema, type Scope, Stream } from 'effect';
-import { ChildRuns, ToolContext } from '@texra-ai/worldline/plugins';
+import {
+  asToolError,
+  ChildRuns,
+  ToolContext,
+} from '@texra-ai/worldline/plugins';
 
 // Local imports
 import { MESSAGE_TYPES, type ToolUseLog } from '@texra-ai/worldline/schemas';
@@ -49,7 +53,6 @@ import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
   agentCliTool,
   StreamedToolCards,
-  asToolError,
   type AgentCliTurn,
 } from './agentCliShared';
 import {
@@ -390,11 +393,8 @@ export const ClaudeAgentTool = defineTool({
     'Pass session_id on a later call to continue that session with a follow-up, one turn per call. ' +
     'Set fork_session to branch from that session while leaving the original unchanged. It runs in the working directory of the calling agent and takes no directory argument, so parallel claude_code agents share that directory.',
   schema: ClaudeAgentInputSchema,
-  guard: {
-    command: {
-      text: (input: ClaudeAgentInput) =>
-        `[${CLAUDE_AGENT_NAME}] ${input.prompt}`,
-    },
+  command: {
+    text: (input: ClaudeAgentInput) => `[${CLAUDE_AGENT_NAME}] ${input.prompt}`,
   },
   execute: agentCliTool({
     name: CLAUDE_AGENT_NAME,

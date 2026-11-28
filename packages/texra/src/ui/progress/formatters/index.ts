@@ -15,6 +15,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { toErrorMessage } from '@texra-ai/worldline/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { statusGlyph } from '@ui/copy/runStatus';
 
 // Local imports - formatter helpers
 import { formatBannerContentTemplate } from './logFormatters/bannerFormatters';
@@ -69,7 +70,7 @@ function renderLabel(row: TranscriptRow): string {
 /** Create an error fallback template when formatting fails. */
 function formatRenderError(label: string, errorMsg: string): TemplateResult {
   // prettier-ignore
-  return html`<div class="log-line log-line--render-error"><span class="render-error-icon">${waIcon('circle-exclamation')}</span><span class="render-error-text">Failed to render ${label}: ${errorMsg}</span></div>`;
+  return html`<div class="log-line log-line--render-error"><span class="render-error-icon">${waIcon(statusGlyph({ tone: 'warning' }))}</span><span class="render-error-text">Failed to render ${label}: ${errorMsg}</span></div>`;
 }
 
 /** Format a transcript row as a TemplateResult for direct Lit rendering. */

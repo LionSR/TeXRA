@@ -39,7 +39,10 @@ import {
   Interactions,
   presentTerminalResult,
 } from '@agent/runtime/HostInteractions';
-import { HistoryQueryStore } from '@agent/runtime/historyQuery/HistoryQuery';
+import {
+  HistoryQuery,
+  HistoryQueryStore,
+} from '@agent/runtime/historyQuery/HistoryQuery';
 import { sessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { SessionRequests, sessionPermission } from '@agent/runtime/requests';
 import { ProjectTools } from '@agent/runtime/loop/step';
@@ -61,7 +64,6 @@ import { Database, type DatabaseReadFailed } from '@shared/session/database';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import {
   Approvals,
-  HistoryQuery,
   RunHistory,
   SessionLog,
   SessionViewAccess,

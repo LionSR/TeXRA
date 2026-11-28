@@ -299,7 +299,9 @@ export class BackgroundTasksPanel extends TexraElement {
 
   private renderChildRow(child: RunView, depth: number): TemplateResult {
     const status = runStatus(child);
-    const latest = child.latestLine ?? child.description ?? '';
+    // A run with nothing to say beyond its name is its name once.
+    const said = child.latestLine ?? child.description ?? '';
+    const latest = said === child.label ? '' : said;
     const label = `Open ${child.label}: ${status.word}`;
     return html`
       <button

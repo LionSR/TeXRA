@@ -68,6 +68,11 @@ These landed in the PR that adds this note:
    `acceptedFileTarget.ts`, the document-task file actions and the arXiv and
    Zotero tools; only `vendorPackages.ts` and `asToolError` remain, both in
    the files #15230 deletes.
+   **Landed 2026-11-28:** #15230 closed without merging, so both stayed.
+   `binaryIfPresent` probes with `pathExists`, and the Codex and Claude
+   Code tools take the harness's `asToolError` from `./plugins`, which
+   passes a `ToolError` through instead of wrapping it in another; the
+   texra copy is gone.
 5. **Static manifest reads as JSON imports.**
    `packages/harness/scripts/bundle.mjs`, `packages/cli/scripts/build-bundle.mjs`,
    `scripts/code-sandbox-worker.mjs` and `scripts/vscode-host-e2e-runner.mjs`

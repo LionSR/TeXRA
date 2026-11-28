@@ -21,7 +21,7 @@ import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Side-effect import - register the <copy-button> element drawn below
-import '@ui/progress/components/CopyButton';
+import '@ui/wa/CopyButton';
 import { getComposedPathElement } from '@ui/progress/components/composedPath';
 
 // Local imports - formatter helpers
@@ -134,6 +134,8 @@ interface DetailsSummaryOptions {
   running?: boolean;
   label: string;
   labelClass?: string;
+  /** The label's tooltip. */
+  title?: string;
   /** What the label acts on (a path, a command), in the reading color
    *  beside the quieter label. */
   detail?: string;
@@ -148,12 +150,15 @@ interface DetailsSummaryOptions {
 
 /** The summary-slot header of {@link buildDetailsCard}: icon, label, and
  *  optional extras. */
-function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
+export function buildDetailsSummary(
+  options: DetailsSummaryOptions,
+): TemplateResult {
   const {
     iconName,
     running = false,
     label,
     labelClass = 'label',
+    title,
     detail,
     timestamp,
     copyButton,
@@ -172,7 +177,7 @@ function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
     : nothing;
   const extraTemplate = extraContent ?? nothing;
   // prettier-ignore
-  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto">${label}${detail ? html` <span class="summary-detail">${detail}</span>` : nothing}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
+  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto" title=${ifDefined(title)}>${label}${detail ? html`${label ? ' ' : nothing}<span class="summary-detail">${detail}</span>` : nothing}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
 }
 
 /**
@@ -197,12 +202,13 @@ export const FILE_LINK = '.file-link';
 /**
  * Build the clickable file-path span a view's delegated click handler turns
  * into an editor navigation (`fileLinkTarget`). `content` is the visible
- * label; pass `startLine` to target a line within the file.
+ * label and hovering shows the full path, the one hint a file path takes;
+ * pass `startLine` to target a line within the file.
  */
 export function buildFileLinkSpan(
   filePath: string,
   content: unknown,
-  options: { startLine?: number; id?: string; className?: string } = {},
+  options: { startLine?: number; className?: string } = {},
 ): TemplateResult {
   const lineSuffix = options.startLine ? `:${options.startLine}` : '';
   const accessibleName = `Open ${filePath}${lineSuffix}`;
@@ -212,7 +218,7 @@ export function buildFileLinkSpan(
     [options.className ?? '']: options.className !== undefined,
   };
   // prettier-ignore
-  return html`<span id=${ifDefined(options.id)} class=${classMap(classes)} data-file=${filePath} data-file-line=${ifDefined(options.startLine)} role="button" tabindex="0" aria-label=${accessibleName} dir="auto">${content}</span>`;
+  return html`<span class=${classMap(classes)} title=${filePath} data-file=${filePath} data-file-line=${ifDefined(options.startLine)} role="button" tabindex="0" aria-label=${accessibleName} dir="auto">${content}</span>`;
 }
 
 /** The file, and the line when it names one, of the file link a click or
