@@ -107,7 +107,7 @@ export function delegationSection(targets: DelegationTargets): string {
   if (targets.models === null)
     lines.push('Available models: the list could not be loaded.');
   else if (targets.models.length === 0)
-    lines.push('Available models: none; no model access is configured.');
+    lines.push('Available models: none currently available.');
   else lines.push(`Available models: ${targets.models.join(', ')}`);
   return `<delegation_targets>\n${lines.join('\n')}\n</delegation_targets>`;
 }

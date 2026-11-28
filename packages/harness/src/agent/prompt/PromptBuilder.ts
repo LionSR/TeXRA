@@ -34,7 +34,7 @@ export function stepInstructions(
       ? [
           [
             'skills',
-            `<available_skills>\nEach skill is the SKILL.md at its listed path; a skill's relative links resolve against its own directory.\n${skills.map(({ text }) => text).join('\n')}\n</available_skills>`,
+            `<available_skills>\nEach entry gives a skill's name, its description and the path of its SKILL.md, which holds the skill's instructions; a skill's relative links resolve against its own directory.\n${skills.map(({ text }) => text).join('\n')}\n</available_skills>`,
           ],
         ]
       : []),
