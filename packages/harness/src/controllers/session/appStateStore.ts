@@ -8,7 +8,11 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { logFailure } from '@logger/effectLog';
 import { GlobalValues, StateStores } from '@platform/processRuntime';
 import { AppState, type AppStateStore } from '@platform/interfaces';
-import { StateReadFailed, StateWriteFailed } from '@shared/config/settings';
+import {
+  StateReadFailed,
+  StateWriteFailed,
+  type StateChange,
+} from '@shared/config/settings';
 import type { SettingsCatalog } from '@shared/state/stateSettings';
 import {
   DatabaseWriteFailed,
@@ -50,12 +54,7 @@ function appStateStoreFromDatabase(
     });
   const modify = <K extends string, A, E>(
     keys: readonly K[],
-    change: (
-      current: Readonly<Record<K, unknown>>,
-    ) => Result.Result<
-      readonly [A] | readonly [A, Readonly<Record<K, unknown>>],
-      E
-    >,
+    change: StateChange<K, unknown, A, E>,
   ): Effect.Effect<A, E | StateWriteFailed> =>
     values
       .modify(family, keys.map(rowKey), (current) =>

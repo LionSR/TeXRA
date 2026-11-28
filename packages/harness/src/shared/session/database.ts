@@ -14,14 +14,7 @@
  * A row or draft that breaks the store's own protocol is a defect, never one
  * of these.
  */
-import {
-  Context,
-  type Effect,
-  type RcMap,
-  type Result,
-  Schema,
-  type Stream,
-} from 'effect';
+import { Context, type Effect, type RcMap, Schema, type Stream } from 'effect';
 import { RunIdSchema } from '@shared/schemas';
 import type {
   RunId,
@@ -31,6 +24,7 @@ import type {
   SessionRowDraft,
   UnreadableRun,
 } from '@shared/schemas';
+import type { StateChange } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { WithBlobs } from './historyTurns';
 import type { RunRows } from './runRowsShape';
@@ -161,12 +155,7 @@ export interface CurrentValues {
   readonly modify: <T, K extends string, A, E = never>(
     family: ValueFamily<T>,
     keys: readonly K[],
-    change: (
-      current: Readonly<Record<K, T | undefined>>,
-    ) => Result.Result<
-      readonly [A] | readonly [A, Readonly<Record<K, T | undefined>>],
-      E
-    >,
+    change: StateChange<K, T | undefined, A, E>,
   ) => Effect.Effect<A, E | DatabaseWriteFailed>;
   /** Every row of a family, latest write first. */
   readonly list: <T>(

@@ -17,6 +17,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { logFailure } from '@logger/effectLog';
+import type { StateChange } from '@shared/config/settings';
 import { CURRENT_VALUE_VERSION } from '@shared/schemas';
 import type { CurrentValues } from '@shared/session/database';
 import type { ValueFamily } from '@shared/session/valueFamily';
@@ -147,12 +148,7 @@ export function currentValues(
     modify: <T, K extends string, A, E>(
       family: ValueFamily<T>,
       keys: readonly K[],
-      change: (
-        current: Readonly<Record<K, T | undefined>>,
-      ) => Result.Result<
-        readonly [A] | readonly [A, Readonly<Record<K, T | undefined>>],
-        E
-      >,
+      change: StateChange<K, T | undefined, A, E>,
     ) =>
       transact(
         Effect.gen(function* () {

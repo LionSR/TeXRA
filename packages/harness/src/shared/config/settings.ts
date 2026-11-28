@@ -150,14 +150,20 @@ export interface StateStore {
    */
   modify<K extends string, A, E = never>(
     keys: readonly K[],
-    change: (
-      current: Readonly<Record<K, unknown>>,
-    ) => Result.Result<
-      readonly [A] | readonly [A, Readonly<Record<K, unknown>>],
-      E
-    >,
+    change: StateChange<K, unknown, A, E>,
   ): Effect.Effect<A, E | StateWriteFailed>;
 }
+
+/**
+ * The read-modify-write callback a store's `modify` takes. It sees the stored
+ * value of every key (`V` is `unknown` for a settings store, a family's
+ * `T | undefined` for a value store) and answers its result with the next
+ * value of every key (`undefined` deletes it), with its result alone to write
+ * nothing, or refuses with its own error and nothing is written.
+ */
+export type StateChange<K extends string, V, A, E> = (
+  current: Readonly<Record<K, V>>,
+) => Result.Result<readonly [A] | readonly [A, Readonly<Record<K, V>>], E>;
 
 /** The setting slots a caller holds: a `WorkspaceRoots` is one. */
 export interface SettingsStores {
