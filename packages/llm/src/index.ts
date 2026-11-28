@@ -122,6 +122,7 @@ export {
   apiKeyOrigins,
   apiKeySecretName,
   apiKeyEntry,
+  routedApiKeyProvider,
   exposeApiKey,
   hasUsableApiKey,
   isApiProvider,
