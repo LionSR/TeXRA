@@ -8,12 +8,12 @@ Origin: the scheduled audit for UI code written beside the kit
 `packages/cli/src/tui/ui/`). The PR that adds this note moves
 `<copy-button>` into `wa/`, makes `renderStatusBadge` the tag without an
 icon, adds `renderSettingsSelectRow`, draws the context gauge with
-`renderQuotaBar`, gives a received message's heading one rule for the web
+`renderMeterBar`, gives a received message's heading one rule for the web
 and the terminal, reads two settings wordings from `copy/plugins.ts`, and
-lets Ink truncate the request cards' fact lines. It closes entries 3, 4, 6
+lets Ink truncate the request cards' fact lines. It closes entries 3, 4
 and 8 of
-`.agents/docs/proposed/simplification/2026-11-27-ui-kit-bypasses-left-open.md`
-and half of its entries 9 and 11; the rest of that note and of
+`.agents/docs/proposed/simplification/2026-11-27-ui-kit-bypasses-left-open.md`,
+the three plain tags of its entry 6 and half of its entries 9 and 11; the rest of that note and of
 `.agents/docs/proposed/simplification/2026-11-25-ui-kit-bypasses-left-open.md`
 still stands.
 
@@ -49,6 +49,11 @@ native control with a local skin and no hand-drawn Ink box, spinner or list.
    two to four exclusive options is a segmented `wa-radio-group`; the row
    is now `renderSettingsSelectRow`, and the kit has no segmented settings
    row yet (`ApprovalTab.ts` writes its own).
+
+7. **The plugin card's tool badge** (`.catalog-tool-badge` in
+   `settings/components/plugins/PluginCard.ts`) is the one `<wa-tag>` still
+   written by hand: a filled tag around a `<bdi>` name, which
+   `renderStatusBadge` has no filled tag or template label for.
 
 ## Checked and declined
 
