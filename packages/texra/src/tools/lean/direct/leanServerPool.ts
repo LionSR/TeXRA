@@ -75,20 +75,6 @@ const SERVER_ENDED = [
   'JsonRpcConnectionDisposed',
 ] as const;
 
-/** The root's server ended under the call: it was stopped or crashed. */
-const serverStopped = (error: Error): LeanUnavailable =>
-  new LeanUnavailable({
-    message: `The Lean server stopped: ${error.message}`,
-    cause: error,
-  });
-
-/** No `lake env lean --server` could be started for the root. */
-const noToolchain = (error: LeanStartError): LeanUnavailable =>
-  new LeanUnavailable({
-    message: `${error.message}\n\nInstall elan so that \`lake\` is on PATH (https://leanprover-community.github.io/install/).`,
-    cause: error,
-  });
-
 /** A project command could not run or reported failure. */
 class LeanProjectCommandError extends Schema.TaggedError<LeanProjectCommandError>()(
   'LeanProjectCommandError',
@@ -207,6 +193,11 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
     return root;
   });
 
+  /**
+   * Run `use` on the file's server, held for the call and in the caller's
+   * scope. The server ending under the call (a stop or a crash) and no
+   * server starting at all (with the setup advice) are `LeanUnavailable`.
+   */
   const withServer = <A, E>(
     filePath: string,
     use: (server: LeanServer['Service']) => Effect.Effect<A, E>,
@@ -215,7 +206,24 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
       const owner = yield* Scope.Scope;
       const root = yield* requireRoot(filePath);
       return yield* Effect.scoped(Effect.flatMap(lease(root, owner), use));
-    });
+    }).pipe(
+      Effect.catchTag(SERVER_ENDED, (error) =>
+        Effect.fail(
+          new LeanUnavailable({
+            message: `The Lean server stopped: ${error.message}`,
+            cause: error,
+          }),
+        ),
+      ),
+      Effect.catchTag('LeanStartError', (error) =>
+        Effect.fail(
+          new LeanUnavailable({
+            message: `${error.message}\n\nInstall elan so that \`lake\` is on PATH (https://leanprover-community.github.io/install/).`,
+            cause: error,
+          }),
+        ),
+      ),
+    );
 
   const runLake = Effect.fn('LeanServerPool.runLake')(function* (
     roots: ReadonlyArray<string>,
@@ -308,12 +316,6 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
 
   const fetchDiagnosticsForFile = (file: string) =>
     withServer(file, (server) => server.diagnostics(file)).pipe(
-      Effect.catchTag(SERVER_ENDED, (error) =>
-        Effect.fail(serverStopped(error)),
-      ),
-      Effect.catchTag('LeanStartError', (error) =>
-        Effect.fail(noToolchain(error)),
-      ),
       // Reading the folders above the file for its project failed (e.g.
       // ENOENT): the file is the problem, so the tool keeps its "could not
       // open file" framing, as a failed read of the file itself does.
@@ -336,12 +338,6 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
   // Drop the cached open state and re-open with fresh contents.
   const restartFile = (filePath: string) =>
     withServer(filePath, (server) => server.restartFile(filePath)).pipe(
-      Effect.catchTag(SERVER_ENDED, (error) =>
-        Effect.fail(serverStopped(error)),
-      ),
-      Effect.catchTag('LeanStartError', (error) =>
-        Effect.fail(noToolchain(error)),
-      ),
       Effect.catchTag(
         ['LeanFileUnreadable', 'PlatformError', 'JsonRpcRequestError'],
         (error) =>
