@@ -101,12 +101,12 @@ that job needs; read [Multi-agent workflows](./multi-agent-workflows.md).
 
 ## Lean programs
 
-The Lean plugin adds four: `prove` completes the proofs in `.lean` files
-until Lean reports no error and no `sorry` and the files declare no new
-`axiom`; `lean-simplify` brings them toward Mathlib quality without changing
-what they state, under the same check; `blueprint` writes or updates a
-LeanBlueprint document until `leanblueprint web` and
-`leanblueprint checkdecls` pass; and `lean-search` finds what Mathlib and the
+The Lean plugin adds four: `prove` completes the proofs in `.lean` files,
+then reports whether Lean finds an error or a `sorry` and whether the files
+declare a new `axiom`; `lean-simplify` brings them toward Mathlib quality
+without changing what they state, under the same check; `blueprint` writes
+or updates a LeanBlueprint document, then reports whether
+`leanblueprint web` and `leanblueprint checkdecls` pass; and `lean-search` finds what Mathlib and the
 project already have for a statement or an API and says what is missing.
 Read [Lean 4 proofs](./lean.md#lean-programs).
 
