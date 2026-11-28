@@ -10,21 +10,21 @@
 import { Duration, Effect } from 'effect';
 
 import type { ToolResult } from '@shared/schemas';
-import type { ToolGuard } from '@tools/core/ToolTypes';
+import type { ToolCommand } from '@tools/core/ToolTypes';
 import { errorResult } from '@tools/core/result';
 
 /** How long a third-party tool's call may run. */
 const THIRD_PARTY_CALL_TIMEOUT = Duration.seconds(60);
 
 /**
- * The guard's command for a third-party call, spelled by `text`: no
+ * The command of a third-party call, spelled by `text`: no
  * standing grant answers it but the delegated-work one (it is never the
  * shell's), and the prompt names no directory, as the host cannot say
  * where the call acts.
  */
 export const thirdPartyCommand = <T>(
   text: (input: T) => string,
-): NonNullable<ToolGuard<T>['command']> => ({ text, cwd: 'unknown' });
+): ToolCommand<T> => ({ text, cwd: 'unknown' });
 
 /** `call` stopped at the third-party deadline, answering that `what` did
  *  not finish. A call that never yields to the event loop is not stopped. */

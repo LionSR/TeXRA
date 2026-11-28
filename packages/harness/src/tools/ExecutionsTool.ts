@@ -235,7 +235,7 @@ const EXECUTION_ROUTES: ReadonlyArray<{
   },
   {
     path: '/executions/{id}/conversation',
-    summary: 'Full message history (subagents)',
+    summary: 'Full message history',
     kinds: ['agent', 'task', 'script'],
     actions: {
       view: ({ input, runId }) =>
@@ -273,13 +273,13 @@ const EXECUTION_ROUTES: ReadonlyArray<{
   },
   {
     path: '/executions/{id}/files',
-    summary: 'Generated files (task runs only)',
+    summary: 'Generated files',
     kinds: ['task'],
     actions: { view: ({ runId }) => listFiles(runId) },
   },
   {
     path: '/executions/{id}/files/{path}',
-    summary: 'Read specific generated file (task runs only)',
+    summary: 'Read specific generated file',
     actions: {
       view: ({ input, runId, rest }) =>
         readFile(runId, rest, input.view_range ?? undefined),
@@ -673,7 +673,7 @@ Use view_range: [start, end] to paginate file and background-command output cont
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed runs to change.
 Use action: "kill" on /executions/{id} to terminate a live run.
-Use action: "send" with message on /executions/{id} to message any other run in this project: your subagent (a follow-up it continues from), your orchestrator, a sibling, or any other run. It reads the message after its current turn; an idle or ended run wakes to read it. A run that takes none (a headless one-shot run, a background command, an agent-CLI turn) refuses it.
+Use action: "send" with message on /executions/{id} to message any other run in this project: a run you started (it continues from the message), the run that started you, a sibling, or any other run. It reads the message after its current turn; an idle or ended run wakes to read it. A run that takes none (a headless one-shot run, a background command, an agent-CLI turn) refuses it.
 Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). In a script, query returns { columns, rows, more }; other actions return { output, summary }. Queries return at most ${HISTORY_QUERY_ROW_CAP} rows and refuse a JSON page larger than ${HISTORY_QUERY_PAGE_LIMIT_BYTES / (1024 * 1024)} MiB; use LIMIT or substr() to narrow it. Children: SELECT * FROM runs WHERE parent_id = ?. Views:
 ${HISTORY_VIEW_SUMMARY}
 The result of a run you launched is delivered automatically as a follow-up message.`,

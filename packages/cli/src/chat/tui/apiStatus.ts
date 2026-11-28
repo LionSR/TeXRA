@@ -10,7 +10,7 @@ import {
   joinFacts,
 } from '@texra-ai/worldline/schemas';
 import { Secrets, type SettingsStores } from '@texra-ai/worldline/plugins';
-import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
+import type { PlanUsage } from '@texra/shared/model/subscriptionUsage';
 import { formatSubscriptionUsageSummary } from '@ui/copy/subscriptionUsage';
 import {
   invalidateSubscriptionUsage,
@@ -119,10 +119,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
   const codingPlanUsage = new Map(codingPlanUsageEntries);
   const now = yield* Clock.currentTimeMillis;
   const lines: string[] = [];
-  const withUsage = (
-    line: string,
-    snapshot: SubscriptionUsageSnapshot | undefined,
-  ): string => {
+  const withUsage = (line: string, snapshot: PlanUsage | undefined): string => {
     if (!snapshot) return line;
     const summary = formatSubscriptionUsageSummary(snapshot, now);
     return joinFacts([line, summary]);

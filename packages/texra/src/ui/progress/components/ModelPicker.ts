@@ -16,16 +16,16 @@ import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/popover/popover.js';
 
 // Local imports
-import {
-  nearestEffort,
-  selectModel,
-  type ReasoningEffort,
-} from '@texra-ai/llm';
+import { selectModel, type ReasoningEffort } from '@texra-ai/llm';
 import {
   getModelLabel,
   isModelOptionAvailable,
 } from '@texra-ai/worldline/schemas';
-import { REASONING_LEVEL_LABELS } from '@texra/shared/model/modelPicker';
+import {
+  effectiveReasoningLevel,
+  modelChoiceWithEffort,
+  REASONING_LEVEL_LABELS,
+} from '@texra/shared/model/modelPicker';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { TexraElement } from '@ui/litBase';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
@@ -86,10 +86,7 @@ function levelOf(
   selected: string,
   current: ModelChoice,
 ): ReasoningEffort | undefined {
-  const named = selectModel(selected)?.request.effort;
-  const levels = current.row?.efforts?.levels;
-  if (named === undefined) return current.row?.efforts?.sent;
-  return levels === undefined ? named : nearestEffort(levels, named);
+  return effectiveReasoningLevel(selected, current.row?.efforts);
 }
 
 /** A composer chip's trigger, shared with the composer's other chips. */
@@ -268,10 +265,9 @@ export class ModelPicker extends TexraElement {
    *  remembers it for the next one. */
   private setLevel(current: ModelChoice, level: ReasoningEffort): void {
     const ref = refOf(current.value);
-    const mode = selectModel(this.selected)?.request.mode;
     this.dispatchEvent(
       new CustomEvent<string>('model-pick', {
-        detail: `${ref}@${level}${mode ? `+${mode}` : ''}`,
+        detail: modelChoiceWithEffort(ref, level, this.selected),
       }),
     );
     this.dispatchEvent(

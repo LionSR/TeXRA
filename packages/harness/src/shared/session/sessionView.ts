@@ -128,6 +128,8 @@ const RunViewSchema = Schema.Struct({
   takesFollowUps: Schema.Boolean,
   /** Its untaken messages (not its own requests); empty when none. */
   queuedFollowUps: QueuedFollowUpsSchema,
+  /** The model requested for the next call until the loop applies or drops the switch. */
+  queuedModel: Schema.optional(Schema.String),
   /** Its own approval grants (`RunRows.grants`): what it decided, never
    *  what it inherits (`resolveBypass` reads the ancestry). */
   grants: ApprovalGrantsSchema,

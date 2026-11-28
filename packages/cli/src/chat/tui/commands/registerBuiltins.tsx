@@ -17,16 +17,22 @@ import {
   type ApprovalFormValue,
 } from '../forms/ApprovalPolicyForm';
 import { CliConfigForm } from '../forms/CliConfigForm';
+import { EffortListForm } from '../forms/EffortListForm';
 import { EnabledModelsForm } from '../forms/EnabledModelsForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { PluginsListForm } from '../forms/PluginsListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { TasksForm } from '../forms/TasksForm';
 import { SkillsListForm } from '../forms/SkillsListForm';
-import { selectedRunId, sessionMeta } from '../state/cliState';
+import { selectedRunId } from '../state/cliState';
 import { currentView, runViewOf } from '../state/sessionView';
 import { appendLocalNotice } from '../state/transcript';
-import { applyCliModelSelection } from './handlers/modelCommands';
+import {
+  applyCliEffortSelection,
+  applyCliModelPick,
+  applyCliModelSelection,
+  currentChatModel,
+} from './handlers/modelCommands';
 import {
   applyCliApprovalPolicySelection,
   revokeCliRunGrant,
@@ -114,11 +120,24 @@ export function builtinSlashCommands(options: {
     const context = useSlashContext();
     return (
       <ModelListForm
-        currentModel={sessionMeta.get().model}
+        currentModel={currentChatModel(context.session)}
         availableRows={props.availableRows}
         selectable={context.session.canSelectModel()}
         getModelSwitchDisabledReason={context.getModelSwitchDisabledReason}
-        onSelect={bindSelection(context, props, applyCliModelSelection)}
+        onSelect={bindSelection(context, props, applyCliModelPick)}
+        onClose={() => props.onDone(undefined)}
+      />
+    );
+  }
+
+  function EffortListFormAdapter(props: SlashFormProps): React.JSX.Element {
+    const context = useSlashContext();
+    return (
+      <EffortListForm
+        currentModel={currentChatModel(context.session)}
+        availableRows={props.availableRows}
+        selectable={context.session.canSelectModel()}
+        onSelect={bindSelection(context, props, applyCliEffortSelection)}
         onClose={() => props.onDone(undefined)}
       />
     );
@@ -273,6 +292,15 @@ export function builtinSlashCommands(options: {
       pluginId: 'agent-model',
       commands: [
         model,
+        {
+          name: 'effort',
+          description: 'Choose the reasoning effort for this chat',
+          aliases: ['reasoning'],
+          category: 'configuration',
+          echo: 'ifPersists',
+          handler: applyCliEffortSelection,
+          formComponent: EffortListFormAdapter,
+        },
         {
           name: 'models',
           description: 'Enable or disable models in pickers',

@@ -60,7 +60,7 @@ export const WriteFileTool = defineTool({
   name: 'write_file',
   requiresApproval: 'inBody',
   description:
-    'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
+    'Overwrite a file with the provided content. Creates the file if it does not exist.',
   schema: WriteInputSchema,
   execute: write,
 });
