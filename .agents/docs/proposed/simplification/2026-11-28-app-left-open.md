@@ -80,3 +80,77 @@ Checked and kept:
 - The `host.request` switch in `openGuiWindow` stays a switch: a handler
   map is the same cases as properties, and lifting its multi-step cases is
   single-caller extraction (2026-11-25 ad-hoc implementation scan).
+
+## LaTeX
+
+The LaTeX layer (`packages/texra/src/latex/`, the toolchain catalog
+`packages/texra/src/shared/constants/latexToolchain.ts`, the runner in
+`packages/texra/src/utils/system/`) has been through several audits, and
+its large modules are large for their domain: the arXiv download's
+retry, extraction and ownership of the paper folder; latexdiff's output
+repairs; the catalog's install records. What the sweep landed: the TikZ
+template is filled by plain replacement instead of a template engine; the
+arXiv download and the directory formatter lost the fields and defaults
+their deleted callers used; each LaTeX setting row states its own choices
+(`latexConfig.ts` is gone); `probe_environment`'s description names the
+catalog's probed tools; two single-caller helpers in the compile path are
+folded into their callers; three guides no longer describe the removed
+program figure options.
+
+Open, in the order worth taking:
+
+1. **`renderPrompt` on the `./plugins` entry has no reader outside the
+   harness.** Its one app caller was the TikZ template. The export
+   (`packages/harness/src/tools/pluginSurface.ts`, recorded in
+   `config/api-reports/harness.plugins.api.md`) is the 0.x SDK's surface,
+   so dropping it is a public-surface decision; with it, the harness keeps
+   nunjucks only for the system prompt's `{{ CWD }}`, which item 3 of
+   `2026-11-27-responsibility-audit-left-open.md` already questions.
+2. **Ghostscript's Windows names are stated twice.** The catalog's `gs`
+   entry lists `alternates: ['gswin64c', 'gswin32c']`, which `probeTool`
+   tries in turn, and `toolCandidates`
+   (`packages/texra/src/utils/system/binaryResolver.ts`) adds the same names
+   and their `.exe` forms for `gs` alone. The probe's path lookup
+   (`probeLatexTools` calls `findCommand(name)`) is the only reader that
+   needs the resolver's copy. Reading the alternates from the catalog
+   changes the Windows search order (name-major instead of directory-major)
+   and adds a `gs.exe` candidate, so it wants a check on a Windows machine
+   with Ghostscript installed. `WINDOWS_EXTENSIONLESS_PERL_TOOLS` and
+   `TEXMF_SCRIPTS` in the same file are a property of five catalog entries
+   too, but they differ by `texcount` for a reason nobody recorded.
+3. **latexdiff drops a preamble line that says "Here is".**
+   `PREAMBLE_SKIP_MARKERS` (`packages/texra/src/latex/latexdiff.ts`) skips
+   lines before `\documentclass` that contain `Here is` or `以下是`: the
+   chatter a model wrote ahead of a document the deleted pipeline diffed.
+   Today latexdiff runs only on a workspace file and its proposed edit, so
+   those markers only drop a user's own comment. `%DIF ADD` is latexdiff's
+   header and stays. Removing the two keeps such a line in the diff, a
+   behavior change for the approval preview.
+4. **"No TikZ figures found" when every figure failed.**
+   `handleCompileTikzFigures`
+   (`packages/extension/src/commands/latex/figCommands.ts`) reads an empty
+   list from `compileTikzPictures` as "none found", which is also what a
+   file whose figures all failed to compile returns (each failure is logged
+   at warn with its log tail). Telling the two apart needs a wording
+   decision for the failure notice.
+5. **`openFirstLabelMatch` has one caller.** `packages/texra/src/latex/labelSearch.ts`
+   is generic over its read and its handler for
+   `packages/texra/src/controllers/session/workspaceFileOptions.ts` alone.
+   Moving it beside its caller is a file in another worker's area this
+   run; take it with the next pass over `controllers/session/`.
+
+Checked and left alone:
+
+- **`getTeXCount` succeeds with a `Result` of two strings** rather than
+  failing with a tagged error. A `TexcountFailed` would carry the same
+  sentence and move the branch to `catchTag` in the one host caller, for
+  no element removed.
+- **`DiagnosticsReadFailed.reason`** is printed, never branched on, so it
+  is a message; but it is in the diagnostics tool's model-facing text and
+  its producers are in `controllers/server/`.
+- **`extractTikzPictures` then `compileTikzPictures`** is called as one
+  pair by its one host; the suite tests the extraction alone, so merging
+  them would trade an export for a test seam.
+- **`LATEX_RECOMMENDED_SETTINGS` spells `build/`** where
+  `LATEX_BUILD_DIRECTORY` exists, but the catalog is browser code and the
+  constant's module imports `node:path`.
