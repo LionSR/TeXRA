@@ -124,7 +124,10 @@ type RoutedModels = ReadonlyMap<string, RoutedModel>;
  * The verdict a model's route gives on its own, or the provider whose key
  * decides it (stage 2 reads that key). Retired models need no provider key.
  */
-function routeVerdict({ rawConfig, route }: RoutedModel):
+function routeVerdict({
+  rawConfig,
+  route,
+}: RoutedModel):
   | { readonly verdict: ModelAvailabilityStatus }
   | { readonly keyOf: ApiKeyProviderId } {
   switch (route.kind) {

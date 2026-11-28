@@ -466,8 +466,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     if (Result.isFailure(recovered))
       return failedResult(agent.name, recovered.failure);
     const ended = recovered.success;
-    if (ended !== null)
-      return yield* childResult(call, agent.name, ended, key);
+    if (ended !== null) return yield* childResult(call, agent.name, ended, key);
   }
 
   const model = yield* childModel(call, launch.model);
