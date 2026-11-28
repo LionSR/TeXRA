@@ -58,6 +58,8 @@ These landed in the PR that adds this note:
    `stateSettingRows.ts` each call `TEXRA_SETTINGS.settingsViewByKey` and
    throw the same error. The owner is `texraSettings.ts`, which #15229
    holds: a throwing `settingsViewRow(key)` there.
+   **Landed 2026-11-28** for the two sites that throw; `settingsViewBody.ts`
+   ignores an unknown key and keeps `settingsViewByKey`.
 4. **The interactive-terminal rejection is assembled at four call sites**
    (`chat.ts`, `setup.ts`, `resumeRun.ts` twice): `interactiveTerminalFailure`
    then `formatInteractiveTerminalFailure`, which has no other caller. One

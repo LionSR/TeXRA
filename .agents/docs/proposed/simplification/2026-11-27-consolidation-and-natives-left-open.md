@@ -70,6 +70,8 @@ the PR that adds this note:
    `RemoteSessionView`'s shape equal to `ActivationViewSource`). One named
    type each; both are public, so the change rewrites
    `config/api-reports/`, which the open PRs hold.
+   **Landed 2026-11-28:** `ValuesChange` is the `change` type; the
+   transcript `subscribe` signature has one declaration left.
 5. **`bash.ts` still chains its two range checks**, and
    `chatSessionController.vitest.ts` the second copy of the signal-wait
    `until` (item 6 of the 2026-11-26 note). Both files are held.
