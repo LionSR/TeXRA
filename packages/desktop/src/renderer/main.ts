@@ -30,6 +30,7 @@ import {
 } from '@ui/progress/PersistedState';
 
 import { DESKTOP_THEME_KIND } from '@texra/shared/ipc';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
 import { ProgressApp } from '@ui/progress/ProgressApp';
 
@@ -406,7 +407,7 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
     ? 'Show sidebar'
     : 'Hide sidebar';
   if (sidebarCollapsedWithPendingApproval) {
-    sidebarToggleLabel = 'Show sidebar (waiting on you)';
+    sidebarToggleLabel = `Show sidebar (${runStatusLabel('waitingOnUser').toLowerCase()})`;
   }
   const sidebarToggle = html`<span class="shell-header-button-slot">
     ${renderIconActionButton({
