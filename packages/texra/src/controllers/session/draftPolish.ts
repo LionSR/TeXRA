@@ -56,11 +56,8 @@ class PolishFailed extends Schema.TaggedError<PolishFailed>()('PolishFailed', {
  * The helper model is resolved and bound against the requesting roots'
  * setting slots, and the call is gated on the process's retry gate.
  */
-export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
-  text: string,
-  roots: WorkspaceRoots,
-) {
-  return yield* Effect.gen(function* () {
+export const polishTextWithAI = Effect.fn('polishTextWithAI')(
+  function* (text: string, roots: WorkspaceRoots) {
     const { text: responseText } = yield* helperCall(
       roots,
       { userPrompt: POLISH_PROMPT_PREFIX + text },
@@ -77,15 +74,12 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
       ).pipe(withLogChannel(CHANNEL));
     }
     return (corrected || responseText).trim();
-  }).pipe(
-    Effect.catch((error) => {
-      const { message } = normalizeProviderError(error);
-      return Effect.logError(`Error polishing text: ${message}`).pipe(
-        withLogChannel(CHANNEL),
-        Effect.andThen(
-          Effect.fail(new PolishFailed({ message, cause: error })),
-        ),
-      );
-    }),
-  );
-});
+  },
+  Effect.catch((error) => {
+    const { message } = normalizeProviderError(error);
+    return Effect.logError(`Error polishing text: ${message}`).pipe(
+      withLogChannel(CHANNEL),
+      Effect.andThen(Effect.fail(new PolishFailed({ message, cause: error }))),
+    );
+  }),
+);

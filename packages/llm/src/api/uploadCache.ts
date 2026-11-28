@@ -168,8 +168,9 @@ export const filesApiUploads = Effect.fn('llm.uploads')(function* (
       .request((signal, headers) => provider.remove(fileId, signal, headers))
       .pipe(
         Effect.asVoid,
-        Effect.catchTag('ModelError', (error) =>
-          error.status === 404 ? Effect.void : Effect.fail(error),
+        Effect.catchIf(
+          (error) => error.status === 404,
+          () => Effect.void,
         ),
       );
 

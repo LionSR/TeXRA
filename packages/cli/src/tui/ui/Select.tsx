@@ -205,10 +205,10 @@ function visibleSelectRange({
   if (visibleCount <= 0) return { start: 0, end: 0 };
   const clampedHighlight = clampIndex(highlight, itemCount);
   const centerOffset = Math.floor(visibleCount / 2);
-  const start = Math.min(
-    Math.max(0, clampedHighlight - centerOffset),
-    itemCount - visibleCount,
-  );
+  const start = Num.clamp(clampedHighlight - centerOffset, {
+    minimum: 0,
+    maximum: itemCount - visibleCount,
+  });
   return { start, end: start + visibleCount };
 }
 

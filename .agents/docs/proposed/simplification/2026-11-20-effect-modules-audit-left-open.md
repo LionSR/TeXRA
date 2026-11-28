@@ -197,10 +197,11 @@ A dependency goes only when every import site converts. None does.
   Effect has no `PATH` lookup and no `Content-Disposition` parser.
 - **`safe-stable-stringify`**: `Formatter.formatJson` does not sort keys, and
   `idHash.ts` hashes the output.
-- **`pretty-bytes`**: `ByteSize.format` converts the one import site, with
-  two decimals where there were three significant digits (`953.67 MiB` for
-  `954 MiB`), and it throws on a fraction. A changed wording for one
-  dependency line.
+- **`pretty-bytes`**: declined here, then taken on 2026-11-28 on the
+  owner's word to be more aggressive: `formatBytes` is `ByteSize.format`,
+  with two decimals where there were three significant digits (`953.67 MiB`
+  for `954 MiB`). It throws on a fraction; every caller passes a file size
+  or a sum of them.
 - **Hand-written codecs**: none found. Base64 and hex are `Buffer` calls, the
   browser site already uses `effect/encoding`, and `SemVer` is adopted.
 

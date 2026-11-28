@@ -149,10 +149,10 @@ export function staticTranscriptRowBudget({
     return undefined;
   }
   const optionalRows = rows - footerRows - queuedFollowUpPanelRows;
-  const liveTranscriptReserveRows = Math.min(
-    COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS,
-    Math.max(0, optionalRows),
-  );
+  const liveTranscriptReserveRows = Num.clamp(optionalRows, {
+    minimum: 0,
+    maximum: COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS,
+  });
   return Math.max(0, optionalRows - liveTranscriptReserveRows);
 }
 

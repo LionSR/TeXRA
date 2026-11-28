@@ -189,20 +189,20 @@ export const makeWindowTable = () => {
         }),
         // A reply that did not decode is the window's; a call ended with no
         // reply at all is its client closing as the window detached.
-        Effect.catchCause((cause) =>
-          Cause.hasFails(cause)
-            ? Effect.failCause(cause)
-            : Effect.fail(
-                Cause.hasDies(cause)
-                  ? new WindowCallFailed({
-                      reason: 'failed',
-                      message: `The TeXRA window returned an unexpected response for ${kind}.`,
-                    })
-                  : new WindowCallFailed({
-                      reason: 'detached',
-                      message: 'The TeXRA window closed before responding.',
-                    }),
-              ),
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasFails(cause),
+          (cause) =>
+            Effect.fail(
+              Cause.hasDies(cause)
+                ? new WindowCallFailed({
+                    reason: 'failed',
+                    message: `The TeXRA window returned an unexpected response for ${kind}.`,
+                  })
+                : new WindowCallFailed({
+                    reason: 'detached',
+                    message: 'The TeXRA window closed before responding.',
+                  }),
+            ),
         ),
       );
     });

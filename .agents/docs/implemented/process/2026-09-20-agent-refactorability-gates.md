@@ -94,5 +94,5 @@ evidence cites the id, says what changed, and deletes or rewrites the entry.
   `content-disposition` (RFC 6266/5987 filename decoding),
   `diff-match-patch` (fuzzy `patch_apply` onto a file the user changed) and
   `ipaddr.js` (the SSRF range classification in the web fetch tool) stay
-  for the reasons given, and `pretty-bytes` stays by owner ruling
-  (2026-10-06).
+  for the reasons given. `pretty-bytes` stayed by owner ruling
+  (2026-10-06) until Effect's `ByteSize.format` replaced it (2026-11-28).

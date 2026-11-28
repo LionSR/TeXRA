@@ -47,9 +47,7 @@ export const loadInputHistory: Effect.Effect<
 > = Effect.gen(function* () {
   const database = yield* GlobalDatabase;
   const read = yield* Effect.result(database.inputHistory.read);
-  let records: readonly InputHistoryRecord[] = Result.isSuccess(read)
-    ? read.success
-    : [];
+  let records: readonly InputHistoryRecord[] = Result.getOrElse(read, () => []);
   const appends = yield* Queue.bounded<InputHistoryRecord, Cause.Done>(
     PENDING_APPENDS,
   );

@@ -2,11 +2,12 @@
  * How a renderer words a size, a change, a moment and a switch: English
  * copy every host prints the same way.
  */
-import prettyBytes from 'pretty-bytes';
+import { ByteSize } from 'effect';
 
-/** Human-readable byte size in binary units (`1.5 MiB`, `1023 B`). */
+/** Human-readable byte size in binary units, to two decimals (`1.5 MiB`,
+ *  `1023 B`). `bytes` is a whole number: a file's size or a sum of them. */
 export function formatBytes(bytes: number): string {
-  return prettyBytes(bytes, { binary: true });
+  return ByteSize.format(ByteSize.bytes(bytes), { system: 'binary' });
 }
 
 /** A file's line range as a path suffix: `:5-9`, `:5` for one line or an

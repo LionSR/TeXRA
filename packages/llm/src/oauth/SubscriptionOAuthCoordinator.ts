@@ -370,7 +370,7 @@ export class SubscriptionOAuthCoordinator<
               // adopt; the delete below reports a store that cannot be
               // reached.
               const stored = yield* this.loadSession().pipe(
-                Effect.catch(() => Effect.succeed(null)),
+                Effect.orElseSucceed(() => null),
               );
               if (
                 stored !== null &&

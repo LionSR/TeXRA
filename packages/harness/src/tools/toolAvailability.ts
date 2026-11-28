@@ -23,7 +23,6 @@
 
 // Third-party imports
 import {
-  Cause,
   Context,
   Duration,
   Effect,
@@ -304,15 +303,7 @@ const probeToolGroup = (
       statusLabel,
       statusDetail,
     })),
-    Effect.timeoutOrElse({
-      duration: GROUP_PROBE_TIMEOUT,
-      orElse: () =>
-        Effect.fail(
-          new Cause.TimeoutError(
-            `timed out after ${Duration.format(GROUP_PROBE_TIMEOUT)}`,
-          ),
-        ),
-    }),
+    Effect.timeout(GROUP_PROBE_TIMEOUT),
   );
   return Effect.scoped(
     Effect.flatMap(ownServices, (own) =>
