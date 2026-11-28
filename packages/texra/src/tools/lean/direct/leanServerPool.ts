@@ -43,12 +43,12 @@ import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
 import { LeanLanguageServices } from '../leanLanguageServices';
 import {
+  LEAN_INSPECTIONS,
   LeanFileCommandFailed,
   LeanFileUnreadable,
   LeanUnavailable,
-  LspHoverSchema,
-  PlainGoalSchema,
-  PlainTermGoalSchema,
+  type LeanInspection,
+  type LeanInspectionReply,
   type LeanProjectCommand,
 } from '../leanTypes';
 import type { LeanServerInfo } from '../leanServerInfo';
@@ -355,32 +355,32 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
       Effect.withSpan('LeanServerPool.restartFile'),
     );
 
-  /** `reply` decodes Lean's non-null answer; a mismatch is the result's error. */
-  const positionRequest = <T>(
+  const inspect = <K extends LeanInspection>(
+    kind: K,
     filePath: string,
     line: number,
     column: number,
-    method: string,
-    reply: Schema.Codec<T, unknown>,
-  ) =>
-    withServer(filePath, (server) =>
+  ) => {
+    const { method, reply } = LEAN_INSPECTIONS[kind];
+    return withServer(filePath, (server) =>
       server.requestElaborated(filePath, line, column, method),
     ).pipe(
       Effect.flatMap(Schema.decodeUnknownEffect(Schema.NullOr(reply))),
-      Effect.map((data): Result.Result<T, string> =>
+      Effect.map((data): Result.Result<LeanInspectionReply<K>, string> =>
         data
           ? Result.succeed(data)
           : Result.fail('Lean returned no data for this position.'),
       ),
       Effect.catch((error) =>
-        Effect.succeed<Result.Result<T, string>>(
+        Effect.succeed<Result.Result<LeanInspectionReply<K>, string>>(
           Result.fail(toErrorMessage(error)),
         ),
       ),
-      Effect.withSpan('LeanServerPool.positionRequest', {
+      Effect.withSpan('LeanServerPool.inspect', {
         attributes: { method },
       }),
     );
+  };
 
   const listServers = Effect.flatMap(heldRoots, (held) =>
     Effect.forEach(held, ({ root, start }): Effect.Effect<LeanServerInfo> => {
@@ -404,30 +404,7 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
     fetchDiagnosticsForFile,
     restartFile,
     executeProjectCommand,
-    getGoalState: (filePath, line, column) =>
-      positionRequest(
-        filePath,
-        line,
-        column,
-        '$/lean/plainGoal',
-        PlainGoalSchema,
-      ),
-    getTermGoal: (filePath, line, column) =>
-      positionRequest(
-        filePath,
-        line,
-        column,
-        '$/lean/plainTermGoal',
-        PlainTermGoalSchema,
-      ),
-    getHoverInfo: (filePath, line, column) =>
-      positionRequest(
-        filePath,
-        line,
-        column,
-        'textDocument/hover',
-        LspHoverSchema,
-      ),
+    inspect,
   });
 });
 

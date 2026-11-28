@@ -9,12 +9,11 @@ import type { LeanServerInfo } from './leanServerInfo';
 import type {
   LeanFileCommandFailed,
   LeanFileUnreadable,
+  LeanInspection,
+  LeanInspectionReply,
   LeanProjectCommand,
   LeanUnavailable,
   FetchDiagnosticsResult,
-  LspHover,
-  PlainGoal,
-  PlainTermGoal,
 } from './leanTypes';
 
 /**
@@ -32,28 +31,28 @@ import type {
  * model's input against the run's working directory (`leanFilePath` in
  * `LspTools.ts`) before the call, so the pool never re-resolves.
  */
-export interface LeanLanguageServicesShape {
+interface LeanLanguageServicesShape {
   /** The servers the pool holds now, for the Tools dashboard. */
   readonly listServers: Effect.Effect<readonly LeanServerInfo[]>;
   /** Close the file at its server and open it again with fresh contents. */
   restartFile(
     filePath: string,
   ): Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable, Scope.Scope>;
-  getGoalState(
+  /**
+   * Ask the file's server, once Lean has elaborated the file, what `kind`
+   * shows at the 0-based position (`LEAN_INSPECTIONS`). A failure, or an
+   * answer with no data, is the result's message.
+   */
+  inspect<K extends LeanInspection>(
+    kind: K,
     filePath: string,
     line: number,
     column: number,
-  ): Effect.Effect<Result.Result<PlainGoal, string>, never, Scope.Scope>;
-  getTermGoal(
-    filePath: string,
-    line: number,
-    column: number,
-  ): Effect.Effect<Result.Result<PlainTermGoal, string>, never, Scope.Scope>;
-  getHoverInfo(
-    filePath: string,
-    line: number,
-    column: number,
-  ): Effect.Effect<Result.Result<LspHover, string>, never, Scope.Scope>;
+  ): Effect.Effect<
+    Result.Result<LeanInspectionReply<K>, string>,
+    never,
+    Scope.Scope
+  >;
   fetchDiagnosticsForFile(
     file: string,
   ): Effect.Effect<
