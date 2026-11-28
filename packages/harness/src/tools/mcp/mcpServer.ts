@@ -167,7 +167,7 @@ function mcpTool(
         : 'unsafe',
     // The call as the approval prompt shows it; the loop asks the session's
     // one approval authority before the body runs.
-    guard: { command: thirdPartyCommand(describe) },
+    command: thirdPartyCommand(describe),
     call: (rawInput) => {
       if (!Schema.is(McpArgumentsSchema)(rawInput))
         return Effect.succeed(

@@ -2,7 +2,7 @@
 import { Cause, Effect, Result, Schema, type Scope } from 'effect';
 
 // Local imports
-import type { ITool, ToolGuard } from '@tools/core/ToolTypes';
+import type { ITool, ToolCommand } from '@tools/core/ToolTypes';
 import { logFailure } from '@logger/effectLog';
 import {
   ToolError,
@@ -22,13 +22,13 @@ const CHANNEL = 'tools';
  */
 export type DefinedTool<T, R = never, Name extends string = string> = Omit<
   ITool<Error, R>,
-  'call' | 'guard' | 'definition'
+  'call' | 'command' | 'definition'
 > & {
   readonly definition: ToolDefinition & { readonly name: Name };
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
-  readonly guard?: ToolGuard<T>;
+  readonly command?: ToolCommand<T>;
 };
 
 export type DefineToolOptions<T, R = never> = Required<
@@ -46,15 +46,9 @@ export type DefineToolOptions<T, R = never> = Required<
   > & {
     /** Decodes the model's input into `T`. */
     schema: Schema.Codec<T, unknown>;
-    /**
-     * What the run loop checks before this tool's body runs: the paths the
-     * call writes and the command it must get approved. Declared here; the
-     * loop applies it once, so the body never re-checks it.
-     *
-     * `NoInfer<R>`: the guard is checked against the requirement channel the
-     * tool already has, it never sets it.
-     */
-    guard?: ToolGuard<T>;
+    /** The command a call runs, which the run loop gets approved before
+     *  the body; the body never asks again. */
+    command?: ToolCommand<T>;
     /** The card a call states from its decoded input (`ToolUseLog.card`).
      *  A call whose input does not decode gets none. */
     card?: (input: T) => ToolCard | undefined;

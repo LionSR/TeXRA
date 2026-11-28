@@ -283,12 +283,10 @@ const hostRun = (
     definition,
     ...(replay !== undefined && { replay }),
     ...(hostCapability !== undefined && { hostCapability }),
-    guard: {
-      command: thirdPartyCommand(
-        (input: unknown) =>
-          `plugin ${name} ${definition.name} ${JSON.stringify(input)}`,
-      ),
-    },
+    command: thirdPartyCommand(
+      (input: unknown) =>
+        `plugin ${name} ${definition.name} ${JSON.stringify(input)}`,
+    ),
     call: (input) =>
       withinDeadline(
         Effect.gen(function* () {

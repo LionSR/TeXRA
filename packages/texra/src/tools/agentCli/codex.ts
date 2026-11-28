@@ -410,12 +410,10 @@ export const CodexTool = defineTool({
     'codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task.',
   schema: CodexInputSchema,
   card: codexCallCard,
-  guard: {
-    command: {
-      text: (input: CodexInput) => `[${CODEX_AGENT_NAME}] ${input.prompt}`,
-      // A resumed thread keeps its stored workspace: name none, not the wrong one.
-      cwd: 'unknown',
-    },
+  command: {
+    text: (input: CodexInput) => `[${CODEX_AGENT_NAME}] ${input.prompt}`,
+    // A resumed thread keeps its stored workspace: name none, not the wrong one.
+    cwd: 'unknown',
   },
   execute: agentCliTool({
     name: CODEX_AGENT_NAME,
