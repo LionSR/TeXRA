@@ -9,7 +9,7 @@ import {
   DETAIL_SEPARATOR,
   MODEL_AVAILABILITY_STATUS,
   HELPER_MODEL_SETTING,
-  pluralize,
+  formatResultCount,
 } from '@texra-ai/worldline/schemas';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { settingSignal } from '@ui/settings/settingsState';
@@ -249,8 +249,7 @@ export class ModelSelectionList extends TexraSignalElement {
         ${renderDisclosureToggle({
           expanded: isOpen,
           onToggle: () => this.toggleDeprecated(group.provider),
-          content: html`${group.deprecated.length}
-          ${pluralize(group.deprecated.length, 'deprecated model', 'deprecated models')}`,
+          content: html`${formatResultCount(group.deprecated.length, 'deprecated model')}`,
         })}
       </div>
       ${

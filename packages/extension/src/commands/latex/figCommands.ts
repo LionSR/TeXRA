@@ -20,7 +20,7 @@ import {
   withLogChannel,
   pathToLocationIn,
 } from '@texra-ai/worldline/plugins';
-import { pluralize } from '@texra-ai/worldline/schemas';
+import { formatResultCount } from '@texra-ai/worldline/schemas';
 
 const CHANNEL = 'FigCommands';
 
@@ -82,7 +82,7 @@ export function handleCompileTikzFigures(
           }
 
           yield* showLoggedInfoMessage(
-            `Compiled ${compiledFiles.length} TikZ ${pluralize(compiledFiles.length, 'figure')}.`,
+            `Compiled ${formatResultCount(compiledFiles.length, 'TikZ figure')}.`,
           );
         }),
       );

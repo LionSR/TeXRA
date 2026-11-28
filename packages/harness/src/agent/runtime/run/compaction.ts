@@ -20,7 +20,7 @@ import { startCompactionActivity } from '@agent/trace/traceLogs';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { Settings, type SettingsStores } from '@shared/config/settings';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
-import { pluralize } from '@utils/text/stringUtils';
+import { formatResultCount } from '@utils/text/stringUtils';
 import { type RunId } from '@shared/schemas';
 import type { RunCell } from '@shared/session/runHistory';
 import { turnText } from '@shared/session/runFacts';
@@ -67,7 +67,7 @@ Write a structured summary with enough context to continue the task. Output only
 const compactionUserPrompt = (kept: number) =>
   kept === 0
     ? 'Summarize the conversation history above now. Follow the compaction instructions exactly and output only the summary.'
-    : `The conversation above opens with ${kept} earlier ${pluralize(kept, 'summary')}, each marked "${COMPACTION_SUMMARY_PREFIX.trim()}". They stay in the conversation as they are: summarize only what comes after them, and do not repeat what they already say. Follow the compaction instructions exactly and output only the summary.`;
+    : `The conversation above opens with ${formatResultCount(kept, 'earlier summary')}, each marked "${COMPACTION_SUMMARY_PREFIX.trim()}". They stay in the conversation as they are: summarize only what comes after them, and do not repeat what they already say. Follow the compaction instructions exactly and output only the summary.`;
 
 /** The share of the threshold a threshold summary leaves as written: the
  *  newest messages, which the model goes on reading whole. */

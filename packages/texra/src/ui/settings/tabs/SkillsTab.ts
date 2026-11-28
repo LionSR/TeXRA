@@ -11,7 +11,7 @@ import {
   type SkillDisplayItem,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
-  pluralize,
+  formatResultCount,
 } from '@texra-ai/worldline/schemas';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postToHost } from '@ui/settings/messageDispatcher';
@@ -192,7 +192,7 @@ export class SkillsTab extends TexraSignalElement {
         this.issues.length
           ? html`<wa-details
               class="collapsible-quiet skill-issues"
-              summary=${`${this.issues.length} skill load ${pluralize(this.issues.length, 'issue')}`}
+              summary=${formatResultCount(this.issues.length, 'skill load issue')}
               ><ul>
                 ${this.issues.map((issue) => html`<li>${issue.message}</li>`)}
               </ul></wa-details
