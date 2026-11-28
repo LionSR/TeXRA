@@ -152,6 +152,9 @@ interface StatusBarChrome {
   readonly commandName: string;
   readonly approvalDepth: number;
   readonly approvalKind: ApprovalQueueStatusKind;
+  /** The active model and its effective reasoning level (matching the desktop
+   *  composer chip), omitted when no model is known yet. */
+  readonly modelChip?: { readonly label: string; readonly compact: string };
   readonly modelAccess: UsageRoute | undefined;
   /** The prospective subscription route could not be resolved. */
   readonly subscriptionProbeFailed: boolean;
@@ -313,6 +316,7 @@ const STATUS_BAR_PRIORITY = {
   approvalDepth: 60,
   rootActive: 65,
   subscriptionQuota: 67,
+  modelChip: 68,
   elapsed: 70,
   accessMode: 72,
   location: 74,
@@ -660,6 +664,15 @@ export function buildStatusBarDisplay(
               text: 'root active',
               color: TONE_PAINT.warning.color,
               priority: STATUS_BAR_PRIORITY.rootActive,
+              policy: 'drop',
+            }
+          : undefined,
+        input.modelChip !== undefined
+          ? {
+              text: input.modelChip.label,
+              compactText: input.modelChip.compact,
+              dim: true,
+              priority: STATUS_BAR_PRIORITY.modelChip,
               policy: 'drop',
             }
           : undefined,

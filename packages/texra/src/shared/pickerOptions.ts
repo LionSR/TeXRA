@@ -43,6 +43,7 @@ export const ModelOptionDataSchema = Schema.Struct({
     Schema.Struct({
       levels: Schema.Array(ReasoningEffortSchema),
       sent: Schema.optional(ReasoningEffortSchema),
+      fallback: Schema.optional(ReasoningEffortSchema),
     }),
   ),
   ...ModelAvailabilityFieldsSchema.fields,

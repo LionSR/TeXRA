@@ -2,8 +2,9 @@ import { Box, Text, useStderr, useWindowSize } from 'ink';
 import { Effect, Exit, Stream, type Duration } from 'effect';
 import { useCallback, useEffect, useState } from 'react';
 
-import { readModelOptions } from '@texra-ai/worldline/host';
+import { selectModel } from '@texra-ai/llm';
 import {
+  getModelLabel,
   isEmptyUsage,
   joinFacts,
   toErrorMessage,
@@ -14,6 +15,11 @@ import { COLOR_BADGE_TEXT } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { currentUsageWindows } from '@ui/copy/subscriptionUsage';
 import { subscriptionUsage } from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import {
+  effectiveReasoningLevel,
+  REASONING_LEVEL_LABELS,
+} from '@texra/shared/model/modelPicker';
 
 import {
   transientNotice as transientNoticeSignal,
@@ -119,16 +125,25 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? displayRun.usage
       : undefined;
   // Use root-session access facts only before any stream exists.
-  const accessModel = displayRun?.model ?? sessionMeta.model;
+  const accessModel =
+    displayRun?.queuedModel ?? displayRun?.model ?? sessionMeta.model;
 
   // Which subscription, if any, would serve the selected stream's model on its
-  // next request. The completed usage snapshot supersedes this prospective
-  // value in the display. A probe failure is reported once per run of
-  // failures.
+  // next request, plus its effective reasoning level for the status bar chip.
+  // The completed usage snapshot supersedes the prospective route in display.
+  // A probe failure is reported once per run of failures.
   const readRoute = useCallback(
     (model: string) =>
-      readModelOptions(roots, [model]).pipe(
-        Effect.map(([option]) => option?.usageRoute),
+      loadModelOptions(roots, [model]).pipe(
+        Effect.map(([option]) => {
+          const effort = effectiveReasoningLevel(model, option?.efforts);
+          return {
+            usageRoute: option?.usageRoute,
+            modelLabel: option?.label ?? getModelLabel(model),
+            effortLabel:
+              effort === undefined ? undefined : REASONING_LEVEL_LABELS[effort],
+          };
+        }),
       ),
     [roots],
   );
@@ -144,10 +159,27 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       `[warn] [cli.tui] subscription route probe failed for ${accessModel}: ${toErrorMessage(routeRead.cause)}\n`,
     );
   }, [routeRead, accessModel, writeStderr]);
-  const prospectiveRoute =
+  const probed =
     routeRead !== undefined && Exit.isSuccess(routeRead)
       ? routeRead.value
       : undefined;
+  const prospectiveRoute = probed?.usageRoute;
+  const proMode = accessModel
+    ? selectModel(accessModel)?.request.mode === 'pro'
+    : false;
+  const modelChip = accessModel
+    ? {
+        label: joinFacts([
+          probed?.modelLabel ?? getModelLabel(accessModel),
+          probed?.effortLabel,
+          proMode && 'Pro',
+        ]),
+        compact:
+          probed?.effortLabel ??
+          probed?.modelLabel ??
+          getModelLabel(accessModel),
+      }
+    : undefined;
   const subscriptionProbeFailed =
     routeRead !== undefined &&
     Exit.isFailure(routeRead) &&
@@ -209,6 +241,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     approvalKind: approvalQueueStatusKind(
       attention.map((request) => request.payload.kind),
     ),
+    modelChip,
     modelAccess,
     subscriptionProbeFailed,
     subscriptionQuota,
