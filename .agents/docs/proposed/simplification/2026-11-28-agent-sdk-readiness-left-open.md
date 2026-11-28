@@ -1,9 +1,9 @@
 # Agent SDK readiness: what the 2026-11-28 audit landed, and what it left
 
 Date: 2026-11-28
-Status: proposed (two owner-use consolidations landed with this note; the
-remaining items are owner-gated design decisions or behavior changes, recorded
-so the theme is not re-mined)
+Status: proposed (one owner-use consolidation landed with this note; the rest
+are claimed by a concurrent PR, owner-gated, or a behavior change, recorded so
+the theme is not re-mined)
 
 Origin: the scheduled review of the harness for Agent SDK readiness — the agent
 core, the model handler, the logger and the public host surface — looking for
@@ -18,18 +18,24 @@ agent-SDK-readiness notes
 [2026-11-24](2026-11-24-agent-sdk-readiness-left-open.md),
 [2026-11-25](2026-11-25-agent-sdk-readiness-left-open.md),
 [2026-11-27](2026-11-27-declarations-with-no-consumer.md))
-and clearing the two items the 2026-11-27 dead-surface scan
+and picking up the two items the 2026-11-27 dead-surface scan
 ([2026-11-27](2026-11-27-dead-and-unread-surface-scan.md), "Open: blocked by an
-open PR") had queued for "fix once it lands" — their holding PRs have merged.
+open PR") had queued for "fix once it lands."
 
 ## Headline
 
 The SDK surface stays well-aligned, for the seventh run running. Every forbidden
 import edge is zero, the run loop is one program with one publisher, no shallow
-presenter or re-encoding wrapper survives in the host surface, and the dead-export
-and re-derived-fact scans are a verified negative. There is no large mechanical
-or structural consolidation left in this area; the landable work is two owner-use
-consolidations that an open PR held until now, and this run lands both.
+presenter or re-encoding wrapper survives in the host surface, and the
+dead-export and re-derived-fact scans are a verified negative. There is no large
+mechanical or structural consolidation left in this area.
+
+Six other audits opened PRs the same morning (#15278–#15283), so the tree was
+being swept in parallel. One of this run's two queued items — the throwing
+settings-view row owner — was landed by the concurrent #15283 ("one throwing
+lookup for a settings-view row", the same `TEXRA_SETTINGS.settingsViewRow`), so
+this run dropped it rather than collide. The other item was unclaimed and landed
+here.
 
 ## Landed with this note
 
@@ -48,18 +54,15 @@ trim/non-empty decode are identical — behavior-preserving. The new public expo
 regenerates `config/api-reports/harness.plugins.api.md` and
 `packages/harness/docs/api/plugins.md`.
 
-**One throwing owner for a settings-view row lookup.**
-`TEXRA_SETTINGS.settingsViewByKey(key)` (`shared/settings/texraSettings.ts`)
-returns `undefined`, and two readers each threw the same
-`No settings-view catalog row for setting "${key}"` after it: `placedRow`
-(`ui/settings/components/shared/stateSettingRows.ts`) and `signalFor`
-(`ui/settings/settingsState.ts`). A signal or control bound to a key no snapshot
-can reach is a defect, not a silent default, so the wording is a fact with one
-home. `settingsViewByKey` and a new throwing `settingsViewRow(key)` now share one
-module-local lookup (`settingsViewRowOf`); the two readers call `settingsViewRow`
-and drop their own throw. `settingsViewByKey` keeps its one genuine optional
-caller (`controllers/settingsView/settingsViewBody.ts`). App-only (no `.d.ts`),
-behavior-preserving.
+## Claimed by a concurrent PR
+
+**The throwing settings-view row owner.** `settingsViewByKey(key)`
+(`shared/settings/texraSettings.ts`) returns `undefined`, and two readers each
+threw the same `No settings-view catalog row for setting "${key}"` after it
+(`placedRow`, `signalFor`). #15283 lands exactly this as
+`TEXRA_SETTINGS.settingsViewRow`. This run committed and then reverted it (a
+revert rather than a history rewrite because force-push is restricted in the
+scheduled environment); recorded so an eighth run does not re-raise it.
 
 ## Open: owner-gated design decisions
 
@@ -125,13 +128,14 @@ the design doc rules out ("no flow engine").
 ## Verified
 
 - Read `main` at `5b7f63e`. The `describedString` swap is type- and
-  schema-identical; the `settingsViewRow` change keeps every in-file use and the
-  one optional caller. No persisted, wire or digest change. `npm run docgen`
+  schema-identical; no persisted, wire or digest change. `npm run docgen`
   regenerates the `harness.plugins` API report with one added export
   (`describedString`); no other public surface moves.
 - `npm run gate` passed (lint and invariants with the API reports, docs,
   typecheck + format across 8 projects with the harness declaration build,
   Effect diagnostics clean).
-- `npm run test:changed`: 151 files, 436 passed, 1 skipped (9 changed files).
+- `npm run test:changed`: 151 files, 436 passed, 1 skipped (run before the
+  settings-view commit was reverted; the surviving change touches a strict
+  subset of those files).
 - Not run: the full `npm test` crash replays, a live model, the desktop and VS
   Code e2e.
