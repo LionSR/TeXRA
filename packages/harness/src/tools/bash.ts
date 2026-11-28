@@ -94,6 +94,13 @@ function boundedOutput(streamName: 'stdout' | 'stderr') {
   };
 }
 
+/** The longest `timeout` a call may ask for (ms). */
+const BASH_TOOL_MAX_TIMEOUT_MS = 600_000;
+
+/** `ms` as the timeout description words it: `600,000 ms / 10 min`. */
+const timeoutWords = (ms: number) =>
+  `${formatCount(ms)} ms / ${ms / 60_000} min`;
+
 const BashInputSchema = Schema.Struct({
   command: Schema.String,
   description: optionalInput(
@@ -102,10 +109,10 @@ const BashInputSchema = Schema.Struct({
   ),
   timeout: nullishWithDefault(
     Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
-      Schema.isLessThanOrEqualTo(600_000),
+      Schema.isLessThanOrEqualTo(BASH_TOOL_MAX_TIMEOUT_MS),
     ),
     BASH_TOOL_DEFAULT_TIMEOUT_MS,
-    'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
+    `Timeout in milliseconds (max ${timeoutWords(BASH_TOOL_MAX_TIMEOUT_MS)}, default ${timeoutWords(BASH_TOOL_DEFAULT_TIMEOUT_MS)}).`,
   ),
   run_in_background: nullishWithDefault(
     Schema.Boolean,

@@ -106,6 +106,9 @@ worth taking.
 - **The `bash` timeout cap** is `600_000` in the schema, in its description
   and in the timeout message of `packages/harness/src/tools/bash.ts`.
   (#15245)
+  Landed 2026-11-28: one constant beside the schema, and the description
+  words the cap and the default from the two constants (the same text).
+  The timeout message no longer states the cap.
 - **"Does the total include the agents' spend"** is decided by field
   comparison in `packages/texra/src/ui/progress/components/UsagePanel.ts` and
   by a child count in `packages/cli/src/chat/tui/sessionStatus.ts`.
