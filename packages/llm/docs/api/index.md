@@ -1209,7 +1209,9 @@ and for the key of a provider this build does not know, which routes no
 model.
 
 ```ts
-function routedApiKeyProvider(key: string): ApiKeyProviderId | undefined
+function routedApiKeyProvider(
+  key: string,
+): ApiKeyProviderId | undefined
 ```
 
 ## RouteFacts
