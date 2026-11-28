@@ -42,7 +42,7 @@ function relationNoun(run: RunView, caller: RunView): string | undefined {
 /** The caller's session's runs, as the run asking (`caller`) relates to
  *  each. */
 export const listExecutions = Effect.fn('listExecutions')(function* (
-  caller: RunId | undefined,
+  caller: RunId,
   offset: number,
   limit: number,
 ) {
@@ -61,7 +61,7 @@ export const listExecutions = Effect.fn('listExecutions')(function* (
 
   // Unread input is the live fold's: the listing tier carries no follow-ups.
   const live = SubscriptionRef.getUnsafe(access.ref).runs;
-  const asking = caller === undefined ? undefined : view.runs.get(caller);
+  const asking = view.runs.get(caller);
   const relationTo = (run: RunView): string | undefined => {
     if (run.id === caller) return '(you)';
     const noun = asking === undefined ? undefined : relationNoun(run, asking);
