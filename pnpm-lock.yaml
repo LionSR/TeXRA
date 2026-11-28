@@ -75,9 +75,6 @@ catalogs:
     postal-mime:
       specifier: ^4.2.1
       version: 4.2.1
-    pretty-bytes:
-      specifier: 7.2.0
-      version: 7.2.0
     quickjs-emscripten-core:
       specifier: 0.32.0
       version: 0.32.0
@@ -587,9 +584,6 @@ importers:
       monaco-editor:
         specifier: ^0.58.0
         version: 0.58.0
-      pretty-bytes:
-        specifier: 'catalog:'
-        version: 7.2.0
       sortablejs:
         specifier: ^1.15.7
         version: 1.15.7
@@ -3863,10 +3857,6 @@ packages:
     resolution: {integrity: sha512-b9Eb8h2eVqNE8edvKdwqkrY6O7kAwmI8kcnBv1NScolYJbo59XUF0noFq+lxbC1yN20bmC0WBEbDC5H/7ASb0A==}
     engines: {node: '>=14.0.0'}
     hasBin: true
-
-  pretty-bytes@7.2.0:
-    resolution: {integrity: sha512-T2kroepGB5DRVbkN/nOpW03+VRWqdtJhZNuCW3wYk3chdPjgi4GcTBOaxWfHq1MIM0ypidxsSWbQaAiRpxnXmg==}
-    engines: {node: '>=20'}
 
   proc-log@6.1.0:
     resolution: {integrity: sha512-iG+GYldRf2BQ0UDUAd6JQ/RwzaQy6mXmsk/IzlYyal4A4SNFw54MeH4/tLkF4I5WoWG9SQwuqWzS99jaFQHBuQ==}
@@ -7736,8 +7726,6 @@ snapshots:
     dependencies:
       commander: 9.5.0
     optional: true
-
-  pretty-bytes@7.2.0: {}
 
   proc-log@6.1.0: {}
 
