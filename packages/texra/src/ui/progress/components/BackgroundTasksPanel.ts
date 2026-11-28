@@ -46,7 +46,10 @@ import {
 } from '@ui/copy/runStatus';
 import { TexraElement } from '@ui/litBase';
 import { toneStyles } from '@ui/styles/toneStyles';
-import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import {
+  captionDeclarations,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
 import { statusMark } from '@ui/wa/statusIcons';
 import { toneVariant } from '@ui/wa/waVariant';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -151,8 +154,7 @@ export class BackgroundTasksPanel extends TexraElement {
         flex: 1 1 8rem;
         min-width: 0;
         ${truncateDeclarations}
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
+        ${captionDeclarations}
       }
 
       .task-elapsed {
@@ -168,8 +170,7 @@ export class BackgroundTasksPanel extends TexraElement {
 
       .task-chevron {
         flex-shrink: 0;
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
+        ${captionDeclarations}
       }
       :dir(rtl) .task-chevron {
         transform: scaleX(-1);

@@ -1,5 +1,8 @@
 import { css, type CSSResult } from 'lit';
-import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import {
+  captionDeclarations,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
 
 export const settingsCatalogStyles: CSSResult = css`
   :host {
@@ -41,8 +44,7 @@ export const settingsCatalogStyles: CSSResult = css`
     align-items: center;
     gap: var(--wa-space-2xs);
     padding: var(--wa-space-2xs) var(--wa-space-xs);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    ${captionDeclarations}
     background: var(--wa-color-surface-default);
   }
   .catalog-group-count {
@@ -95,14 +97,12 @@ export const settingsCatalogStyles: CSSResult = css`
     font-weight: var(--font-weight-medium);
   }
   .catalog-row-description {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    ${captionDeclarations}
   }
   .catalog-row-badges {
     display: flex;
     gap: var(--wa-space-3xs);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    ${captionDeclarations}
   }
   .catalog-row-toggle {
     justify-self: center;
@@ -129,8 +129,7 @@ export const settingsCatalogStyles: CSSResult = css`
     background: var(--surface-hover);
   }
   .catalog-row-status {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    ${captionDeclarations}
   }
   .catalog-detail {
     container: settings / inline-size;

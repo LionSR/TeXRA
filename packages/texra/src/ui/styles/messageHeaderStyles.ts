@@ -1,5 +1,6 @@
 import { css } from 'lit';
 
+import { captionDeclarations } from './commonViewStyles';
 import { panelHeaderStyles, panelContentStyles } from './surfaceStyles';
 
 /** Author and time form one reading group; actions share the trailing edge. */
@@ -117,8 +118,7 @@ export const messageDisclosureStyles = css`
     width: var(--control-size-s);
     height: var(--control-size-s);
     margin: 0;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    ${captionDeclarations}
     border-radius: var(--field-radius);
   }
   wa-details.message-disclosure:hover::part(icon),

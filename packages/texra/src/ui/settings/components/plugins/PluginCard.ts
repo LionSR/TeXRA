@@ -28,6 +28,7 @@ import type {
   ToolInstallAction,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { DetailsOpenController } from '@ui/litControllers/DetailsOpenController';
+import { captionDeclarations } from '@ui/styles/commonViewStyles';
 import {
   PLUGINS_PAGE,
   pluginRowName,
@@ -139,8 +140,7 @@ export class PluginCard extends TexraElement {
 
       .plugin-note {
         margin-top: var(--wa-space-2xs);
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
+        ${captionDeclarations}
         overflow-wrap: anywhere;
       }
     `,

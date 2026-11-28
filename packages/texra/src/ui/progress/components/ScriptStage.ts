@@ -31,7 +31,10 @@ import {
   scriptStageSummary,
 } from '@ui/copy/scriptStage';
 import { designTokens } from '@ui/styles';
-import { truncateDeclarations } from '@ui/styles/commonViewStyles';
+import {
+  captionDeclarations,
+  truncateDeclarations,
+} from '@ui/styles/commonViewStyles';
 import { buttonStyles, formControlStyles } from '@ui/styles/controlStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { isActivationKey } from '@ui/wa/keyActivation';
@@ -63,8 +66,7 @@ const scriptStageStyles = css`
 
   .section {
     padding: var(--wa-space-xs) var(--wa-space-2xs) var(--wa-space-3xs);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    ${captionDeclarations}
   }
 
   .summary {
@@ -107,8 +109,7 @@ const scriptStageStyles = css`
 
   .row-open {
     flex: 0 0 auto;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    ${captionDeclarations}
   }
 
   .row-last,
