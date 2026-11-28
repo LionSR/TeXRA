@@ -1,11 +1,10 @@
 import { Result, Schema } from 'effect';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
-import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@ui/settings';
-import { html, render } from 'lit';
+import { render } from 'lit';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
-import { readSelectValue } from '@ui/wa/selectTemplates';
+import { renderSettingsSelectRow } from '@ui/wa/settingsSection';
 import { resolvePostMessageTargetOrigin } from '../shared/postMessageOrigin';
 
 import { createOverlayDialog } from './overlayDialog';
@@ -48,34 +47,22 @@ export function createDesktopSettingsDialog(
     const appearance = document.createElement('section');
     appearance.slot = 'appearance';
     render(
-      html`
-        <div class="settings-row">
-          <div class="settings-row-text">
-            <label for="desktopTheme" class="settings-row-label">Theme</label>
-            <span id="desktopThemeHelp" class="settings-row-help">
-              Match your OS or pick a fixed appearance.
-            </span>
-          </div>
-          <div class="settings-row-control">
-            <wa-select
-              id="desktopTheme"
-              size="s"
-              aria-describedby="desktopThemeHelp"
-              .value=${hooks.getTheme()}
-              @change=${(event: Event) => {
-                const result = Schema.decodeUnknownResult(
-                  DesktopThemePreferenceSchema,
-                )(readSelectValue(event));
-                if (Result.isSuccess(result)) hooks.setTheme(result.success);
-              }}
-            >
-              <wa-option value="system">System</wa-option>
-              <wa-option value="light">Light</wa-option>
-              <wa-option value="dark">Dark</wa-option>
-            </wa-select>
-          </div>
-        </div>
-      `,
+      renderSettingsSelectRow({
+        label: 'Theme',
+        description: 'Match your OS or pick a fixed appearance.',
+        value: hooks.getTheme(),
+        choices: [
+          { value: 'system', label: 'System' },
+          { value: 'light', label: 'Light' },
+          { value: 'dark', label: 'Dark' },
+        ],
+        onChange: (value) => {
+          const result = Schema.decodeUnknownResult(
+            DesktopThemePreferenceSchema,
+          )(value);
+          if (Result.isSuccess(result)) hooks.setTheme(result.success);
+        },
+      }),
       appearance,
     );
     view.append(appearance);

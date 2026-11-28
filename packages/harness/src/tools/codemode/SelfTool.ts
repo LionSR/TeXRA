@@ -150,7 +150,7 @@ const runSelf = Effect.fn('self.call')(function* (
     recoverAgentChild(call, { notify, timeoutMs: input.timeoutMs }),
   );
   if (Result.isFailure(recovered)) return failedResult(name, recovered.failure);
-  if (recovered.success.kind === 'ended')
+  if (recovered.success !== null)
     return yield* childResult(call, name, recovered.success, undefined);
 
   // A model the call names is chosen as `agent()` chooses one: it runs, or

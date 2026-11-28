@@ -36,7 +36,6 @@ export function createReviewPane(): ReviewPaneController {
   element.className = 'desktop-review-pane';
   const diffView = document.createElement('texra-diff-view');
   diffView.className = 'desktop-review-diff';
-  diffView.fill = true;
 
   // Keyed by `previewId`, the diff a close names, in the order they opened:
   // two pending edits of one file (parallel subagents) are two reviews, and
@@ -177,10 +176,7 @@ export function createReviewPane(): ReviewPaneController {
                   ? renderTree(
                       shown,
                       buildEditorTree(
-                        visible.map((entry) => ({
-                          path: entry.displayPath,
-                          isDirectory: false,
-                        })),
+                        visible.map((entry) => entry.displayPath),
                       ),
                     )
                   : renderEmptyMessage('No matching files')

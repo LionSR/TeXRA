@@ -213,9 +213,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     width: columns,
     ctrlCAction: ctrlCActionFor(displayRun, canStop),
     locationLabel: focusedLabel,
-    foreground: {
-      inputActive: props.foregroundInputActive,
-    },
+    foregroundInputActive: props.foregroundInputActive,
     childList: {
       focused: childListFocused,
       selectionKillable: killableRunId(highlightedChild) !== undefined,

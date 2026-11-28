@@ -15,7 +15,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles
-import './CopyButton';
+import '@ui/wa/CopyButton';
 import { designTokens } from '@ui/styles';
 import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
 import { markdownStyles } from '@ui/styles/markdownStyles';

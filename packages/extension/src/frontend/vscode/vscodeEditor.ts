@@ -83,8 +83,7 @@ function showDocument(
 }
 
 /**
- * Open a file in a VS Code editor, optionally positioning the cursor at a
- * line.
+ * Open a file in a VS Code editor, answering the editor that shows it.
  *
  * A failure is the typed `HostFailed`, so every caller decides for
  * itself what an unopenable file means instead of reading back an absent
@@ -93,32 +92,16 @@ function showDocument(
 export const openFileInEditor = Effect.fn('openFileInEditor')(function* (
   absolutePath: string,
   options: {
-    line?: number;
     preserveFocus?: boolean;
     /** Open a fresh document in the preview tab, not a permanent one. */
     preview?: boolean;
   } = {},
-): Effect.fn.Return<
-  { editor: vscode.TextEditor; absolutePath: string },
-  HostFailed
-> {
-  const { line } = options;
+): Effect.fn.Return<vscode.TextEditor, HostFailed> {
   const uri = vscode.Uri.file(absolutePath);
-  const editor = yield* showDocument(
+  return yield* showDocument(
     uri,
     findVisibleEditor(uri),
     options.preserveFocus ?? false,
     options.preview ?? false,
   );
-
-  if (line !== undefined) {
-    const position = new vscode.Position(toZeroBasedLine(line), 0);
-    editor.selection = new vscode.Selection(position, position);
-    editor.revealRange(
-      new vscode.Range(position, position),
-      vscode.TextEditorRevealType.InCenterIfOutsideViewport,
-    );
-  }
-
-  return { editor, absolutePath: uri.fsPath };
 });

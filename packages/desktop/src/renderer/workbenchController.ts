@@ -489,10 +489,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       updateShell(next);
       syncState();
       if (!isActive() && next.activeTabId)
-        terminalPane.activate(next.activeTabId, {
-          focus: false,
-          background: true,
-        });
+        terminalPane.activate(next.activeTabId, true);
     },
     takePendingTerminalCommand(id: string) {
       const command = pendingTerminalCommands.get(id);

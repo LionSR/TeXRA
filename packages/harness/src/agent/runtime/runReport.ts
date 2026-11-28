@@ -1,4 +1,4 @@
-import type { RunEnd, RunEndError, RunId } from '@shared/schemas';
+import type { RunEnd, RunEndError } from '@shared/schemas';
 
 /**
  * A run's report to its lifecycle, not an end: what it answered and edited,
@@ -7,6 +7,5 @@ import type { RunEnd, RunEndError, RunId } from '@shared/schemas';
  * which its delivery words.
  */
 export type RunReport = Pick<RunEnd, 'outcome' | 'output'> & {
-  readonly runId: RunId;
   readonly failure?: RunEndError;
 };

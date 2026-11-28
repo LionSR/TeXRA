@@ -2,7 +2,6 @@ import { Text, useWindowSize } from 'ink';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
-import { truncateToWidth } from '@cli/runtime/terminal/terminalText';
 
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
@@ -24,26 +23,11 @@ interface BashRequestProps {
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
-function bashCwdDisplayLine({
-  cwd,
-  width,
-}: {
-  readonly cwd?: string;
-  readonly width: number;
-}): string | undefined {
-  const trimmedCwd = cwd?.trim();
-  if (!trimmedCwd) return undefined;
-
-  return truncateToWidth(`${WORKING_DIRECTORY_LABEL}: ${trimmedCwd}`, width);
-}
-
 export function BashRequest(props: BashRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const commandWidth = confirmCardContentWidth(columns);
-  const cwdLine = bashCwdDisplayLine({
-    cwd: props.payload.cwd,
-    width: commandWidth,
-  });
+  const cwd = props.payload.cwd?.trim();
+  const cwdLine = cwd ? `${WORKING_DIRECTORY_LABEL}: ${cwd}` : undefined;
   const maxCommandRows = scrollableModalTextRowsBudget({
     availableRows: props.availableRows,
     columns,
@@ -59,7 +43,11 @@ export function BashRequest(props: BashRequestProps): React.JSX.Element {
       grant={props.grant}
       onDecide={props.onDecide}
     >
-      {cwdLine && <Text dimColor>{cwdLine}</Text>}
+      {cwdLine && (
+        <Text dimColor wrap="truncate-end">
+          {cwdLine}
+        </Text>
+      )}
       <ScrollableModalText
         firstLinePrefix="$ "
         continuationPrefix="  "

@@ -74,6 +74,13 @@ export function formatSubscriptionUsageUpdated(
     : 'updated just now';
 }
 
+/** The window a plan runs out of first, which a chip or a status segment
+ *  stands for: the one nearest its limit, whichever windows the plan has. */
+export const limitingQuotaWindow = <W extends { readonly percentUsed: number }>(
+  windows: readonly W[],
+): W | undefined =>
+  windows.toSorted((a, b) => b.percentUsed - a.percentUsed).at(0);
+
 /** Why a plan's usage cannot be shown, as the settings page and the status
  *  bar both say it. */
 export function subscriptionUsageUnavailable(reason: PlanQuotaFailure): string {

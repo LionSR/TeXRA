@@ -7,7 +7,7 @@ import {
 } from '@texra-ai/worldline/transcript';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
-import { messageSenderLabel } from '@ui/copy/messageSender';
+import { messageSenderHeading } from '@ui/copy/messageSender';
 import { errorRowText } from '@ui/copy/modelAccess';
 
 /**
@@ -40,11 +40,15 @@ function deriveTranscriptRowHeadline(row: TranscriptRow): string {
       return safeTerminalText(errorRowText(row).summary);
     case 'progressStatus':
       return safeTerminalText(row.summary.full);
-    case 'user':
-      // A received message is headed by its sender; the person's is not.
-      return row.sender === undefined
-        ? rowHeadline(row)
-        : `${safeTerminalText(messageSenderLabel(row.sender))}\n${rowHeadline(row)}`;
+    case 'user': {
+      // A received message is headed by its sender unless it names it
+      // itself; the person's is not.
+      const text = rowHeadline(row);
+      const heading = row.sender && messageSenderHeading(row.sender, text);
+      return heading === undefined
+        ? text
+        : `${safeTerminalText(heading)}\n${text}`;
+    }
     default:
       return rowHeadline(row);
   }

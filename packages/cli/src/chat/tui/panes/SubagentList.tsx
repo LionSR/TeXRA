@@ -182,12 +182,12 @@ function SessionRow({
 }
 
 interface SubagentListProps {
-  readonly activeRunId?: RunId;
-  readonly keyboardActive?: boolean;
-  readonly maxRows?: number;
-  readonly onCancel?: () => void;
-  readonly onFocusRun?: (runId: RunId) => void;
-  readonly onKillRun?: (runId: RunId) => void;
+  readonly activeRunId: RunId | undefined;
+  readonly keyboardActive: boolean;
+  readonly maxRows: number;
+  readonly onCancel: () => void;
+  readonly onFocusRun: (runId: RunId) => void;
+  readonly onKillRun: (runId: RunId) => void;
   readonly rows: readonly SessionListRow[];
 }
 
@@ -219,8 +219,7 @@ export function SubagentList(
   const nowMs = useLiveNowMsSince(startedAts);
   const { columns } = useWindowSize();
   const metadataColumn = columns >= CHILD_ROW_METADATA_MIN_COLUMNS;
-  const contentRows =
-    props.maxRows === undefined ? undefined : Math.max(0, props.maxRows - 1);
+  const contentRows = Math.max(0, props.maxRows - 1);
   useInput(
     (input, key) => {
       if (key.ctrl || key.meta || selectedRow?.kind !== 'run') return;
@@ -230,19 +229,18 @@ export function SubagentList(
         actOnSurface({ kind: 'expand', runId: run.id, expanded: next });
       } else if (input === 'x') {
         const runId = killableRunId(run);
-        if (runId) props.onKillRun?.(runId);
+        if (runId) props.onKillRun(runId);
       }
     },
-    { isActive: props.keyboardActive ?? false },
+    { isActive: props.keyboardActive },
   );
-  if (items.length === 0 || (contentRows !== undefined && contentRows <= 0))
-    return null;
+  if (items.length === 0 || contentRows <= 0) return null;
   return (
     <Box
       flexDirection="column"
       height={contentRows}
       marginTop={1}
-      overflowY={contentRows === undefined ? undefined : 'hidden'}
+      overflowY="hidden"
       paddingX={1}
       width={metadataColumn ? columns : undefined}
     >
@@ -255,13 +253,13 @@ export function SubagentList(
         isActive={props.keyboardActive}
         items={items}
         maxVisibleItems={contentRows}
-        onCancel={props.onCancel ?? (() => undefined)}
+        onCancel={props.onCancel}
         wrap={false}
         onHighlightChange={(row) => {
           if (row.kind === 'run') highlightChildListRun(row.run.id);
         }}
         onSelect={(row) => {
-          if (row.kind === 'run') props.onFocusRun?.(row.run.id);
+          if (row.kind === 'run') props.onFocusRun(row.run.id);
         }}
         renderItem={({ value: row }, state) =>
           row.kind === 'group' ? (

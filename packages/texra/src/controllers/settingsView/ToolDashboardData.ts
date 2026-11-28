@@ -94,9 +94,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         id: plugin.id,
         name: card.name,
         description: card.description,
-        tools: (plugin.tools ?? []).map(({ definition: { name } }) => ({
-          name,
-        })),
+        tools: (plugin.tools ?? []).map(({ definition }) => definition.name),
         setup: null,
         switch: 'always-on' as const,
       }));
@@ -117,7 +115,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         id: plugin.id,
         name: card.name,
         description: card.description,
-        tools: tools.map((name) => ({ name })),
+        tools,
         setup: {
           status,
           statusLabel,

@@ -20,7 +20,10 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - shared schemas and utilities
 import { LOG_LEVEL_LOOK } from '@ui/copy/logLevels';
-import { messageSenderLabel } from '@ui/copy/messageSender';
+import {
+  messageSenderHeading,
+  messageSenderLabel,
+} from '@ui/copy/messageSender';
 import { errorRowText } from '@ui/copy/modelAccess';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -108,9 +111,7 @@ function formatReceivedMessageTemplate(
   const [head = '', ...rest] = text.split('\n');
   const summary = {
     iconName: SENDER_ICON[sender.kind],
-    // A report that opens with its sender's name ("✓ drafter completed")
-    // is not headed by it again.
-    label: head.includes(from) ? '' : from,
+    label: messageSenderHeading(sender, text) ?? '',
     labelClass: 'tool-use-title',
     detail: truncateWithEllipsis(head, RECEIVED_PREVIEW_MAX_CHARS),
     extraContent: open,
