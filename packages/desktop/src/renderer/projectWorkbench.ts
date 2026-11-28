@@ -41,7 +41,6 @@ export function createProjectWorkbench(options: {
   logsPane: HTMLElement;
   conversationView: ProgressApp;
   isActive(): boolean;
-  isBrowserCovered(): boolean;
   confirmDiscard(title: string, discard: () => void): void;
   onLayoutChanged(
     session: string,
@@ -192,8 +191,6 @@ export function createProjectWorkbench(options: {
         ),
       ),
   });
-  // A browser tab loads its page the first time its panel is laid out.
-  const loadedBrowserTabs = new Set<string>();
   const panes = {
     agent: {
       zone: 'edge',
@@ -246,28 +243,6 @@ export function createProjectWorkbench(options: {
       update: (tab) => void pdfPane.elementFor(tab),
       release: (tab) => pdfPane.dispose(tab.id),
     },
-    browser: {
-      zone: 'document',
-      mount: (tab, host) => {
-        host.dataset.browserSlot = tab.id;
-      },
-      layout: (tab) => {
-        if (!tab.target || loadedBrowserTabs.has(tab.id)) return;
-        loadedBrowserTabs.add(tab.id);
-        send({
-          command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN,
-          tabId: tab.id,
-          url: tab.target,
-        });
-      },
-      release: (tab) => {
-        loadedBrowserTabs.delete(tab.id);
-        send({
-          command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE,
-          tabId: tab.id,
-        });
-      },
-    },
     // One logs element serves every project: the visible project holds it.
     logs: {
       zone: 'bottom',
@@ -293,13 +268,11 @@ export function createProjectWorkbench(options: {
   const workbench = createWorkbenchController({
     session,
     isActive: options.isActive,
-    isBrowserCovered: options.isBrowserCovered,
     confirmDiscard: options.confirmDiscard,
     panes,
     terminalPane,
     getState,
     updateShell: updateState,
-    postMessage: send,
   });
 
   return {
@@ -325,32 +298,6 @@ export function createProjectWorkbench(options: {
     reviewPane,
     pdfPane,
     workbench,
-    /** Show `url` in the project's browser tab, opening the tab when there
-     *  is none. An open tab is reused: it loads `url` in place. */
-    openBrowser(url: URL) {
-      const id = workbenchTabId('browser');
-      const current = getState();
-      const open = current.workbenchTabs.some((tab) => tab.id === id);
-      updateState(
-        openWorkbenchTab(
-          {
-            ...current,
-            workbenchTabs: current.workbenchTabs.map((tab) =>
-              tab.id === id ? { ...tab, target: url.href } : tab,
-            ),
-          },
-          { kind: 'browser', target: url.href, title: url.host },
-        ),
-      );
-      // A new tab loads its target when its panel is first laid out.
-      if (!open) return;
-      loadedBrowserTabs.add(id);
-      send({
-        command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN,
-        tabId: id,
-        url: url.href,
-      });
-    },
     setTheme(theme: Theme) {
       currentTheme = theme;
       for (const editor of editors.values()) editor.setTheme(theme);
@@ -365,11 +312,6 @@ export function createProjectWorkbench(options: {
       terminalPane.disposeAll();
       for (const tab of getState().workbenchTabs) {
         if (tab.kind === 'pdf') pdfPane.dispose(tab.id);
-        if (tab.kind === 'browser')
-          send({
-            command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE,
-            tabId: tab.id,
-          });
       }
       reviewPane.clear();
     },

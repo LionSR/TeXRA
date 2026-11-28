@@ -239,7 +239,9 @@ const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
   //
   // `npm prefix -g` reports the global prefix, which does not depend on the
   // directory it is asked from: the process cwd, not a workspace root, and
-  // no workspace settings either.
+  // no workspace settings either. It does depend on the environment the
+  // lookup runs with (a project's `.env` may set `NPM_CONFIG_PREFIX`), so
+  // it is asked on every lookup that misses and never kept.
   const prefixResult = yield* executeCommand(['npm', 'prefix', '-g'], {
     cwd: process.cwd(),
     timeout: 5000,

@@ -18,7 +18,6 @@ import type { DesktopPush } from './desktopOutboundMessages.js';
 
 export const DESKTOP_LOCAL_COMMANDS = Object.freeze({
   SHOW_LOGS: 'texra.desktop.showLogs',
-  SHOW_BROWSER: 'texra.desktop.showBrowser',
   TOGGLE_BOTTOM_BAR: 'texra.desktop.toggleBottomBar',
   TOGGLE_SIDE_PANEL: 'texra.desktop.toggleSidePanel',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
@@ -74,10 +73,6 @@ const DESKTOP_ONLY_COMMANDS = {
     category: 'View',
     keybinding: { key: 'ctrl+alt+b', mac: 'cmd+option+b' },
   },
-  [DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER]: {
-    title: 'Show Browser',
-    category: 'View',
-  },
   [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: {
     title: 'Save',
     category: 'File',
@@ -122,7 +117,6 @@ const DESKTOP_PALETTE_COMMANDS = [
   'texra.showDashboard',
   DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
   DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
-  DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER,
   // One row per settings page that has a command, in nav order.
   'texra.showModels',
   'texra.showTools',
@@ -163,7 +157,6 @@ const DESKTOP_COMMAND_ICONS = {
   'texra.showDashboard': 'gear',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: 'terminal',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: 'folder-tree',
-  [DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER]: 'globe',
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: 'book',
 } as const satisfies Record<
   Exclude<DesktopCommandId, SettingsTabCommandId>,
@@ -203,7 +196,7 @@ interface DesktopPaletteEntry {
  */
 export interface DesktopCommandActions {
   showLauncher(): void;
-  openWorkbench(kind: 'logs' | 'browser'): void;
+  showLogs(): void;
   showSettings(tab?: SettingsTarget): void;
   openDesktopDocs(): void;
   openLogFolder(): void;
@@ -234,8 +227,7 @@ export function paletteEntries(platform: OsPlatform): DesktopPaletteEntry[] {
 
 const DESKTOP_COMMAND_HANDLERS = {
   'texra.showMainView': (a) => a.showLauncher(),
-  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: (a) => a.openWorkbench('logs'),
-  [DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER]: (a) => a.openWorkbench('browser'),
+  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: (a) => a.showLogs(),
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: (a) => a.showTerminal(),
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: (a) => a.showFiles(),
   'texra.showDashboard': (a) => a.showSettings(),

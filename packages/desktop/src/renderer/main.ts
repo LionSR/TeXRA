@@ -66,13 +66,13 @@ import {
   initialDesktopShellState,
   openWorkbenchTab,
   workbenchTabId,
-  renameWorkbenchTab,
   setSidebarWidth,
   toggleSidebar,
   WORKBENCH_KIND_META,
   type DesktopShellState,
 } from '../shared/desktopShellState';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
+import { DESKTOP_SHELL_COMMANDS } from '../shared/desktopShellMessages';
 import {
   resolveDesktopPushes,
   resolveSessionWire,
@@ -83,7 +83,6 @@ import {
   createDesktopSettingsDialog,
   DesktopThemePreferenceSchema,
 } from './settingsDialog';
-import { trackNativeViewOverlays } from './nativeViewOverlays';
 import { createLogsPane } from './logsPane';
 import { createProjectWorkbench } from './projectWorkbench';
 import { injectXtermStyles } from './terminalPane';
@@ -369,14 +368,7 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
   );
 }
 
-// Both hooks re-sync the browser view, which stays hidden while the dialog
-// is open (`isBrowserCovered`).
-const syncActiveBrowserView = () =>
-  projectWorkbenches.get(shell.active)?.workbench.syncBrowserViewBounds();
-const nativeViewOverlays = trackNativeViewOverlays(syncActiveBrowserView);
 const settingsDialog = createDesktopSettingsDialog(appRoot, {
-  onShown: syncActiveBrowserView,
-  onHidden: syncActiveBrowserView,
   getTheme: () => appearance.getState().theme,
   setTheme: (theme) => {
     appearance.setState({ theme });
@@ -612,7 +604,6 @@ const surfaceResizeObserver = new ResizeObserver(() => {
     const project = projectWorkbenches.get(shell.active);
     if (!project) return;
     project.workbench.layoutVisibleSurfaces();
-    project.workbench.syncBrowserViewBounds();
   });
 });
 const observedSurfaces = new Set<Element>();
@@ -648,7 +639,12 @@ function rerenderShell(): void {
   render(
     projectWorkbenches.has(shell.active)
       ? shellTemplate()
-      : noWorkspacePlaceholder,
+      : // Until the first projects message says which folders reopened, the
+        // window is empty: the invitation to open one would be wrong for a
+        // launch that is about to show a project.
+        recentProjects === undefined
+        ? nothing
+        : noWorkspacePlaceholder,
     appRoot,
   );
   const project = projectWorkbenches.get(shell.active);
@@ -690,7 +686,7 @@ try {
 
 const desktopRendererCommandActions: DesktopCommandActions = {
   showLauncher: returnToLauncher,
-  openWorkbench: (kind) => currentWorkbench().workbench.openKind(kind),
+  showLogs: () => currentWorkbench().workbench.openKind('logs'),
   showSettings: settingsDialog.open,
   openDesktopDocs: () => {
     postToMain({ command: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS });
@@ -797,16 +793,6 @@ const routeMessage = createMessageRoutes({
     projectWorkbenches
       .get(message.session)
       ?.workbench.openTerminalCommand(message.initialCommand),
-  // Renames the document so a browser tab reads as its page rather than a
-  // generic "Browser".
-  'desktop:browser:state': (message) => {
-    const project = projectWorkbenches.get(message.session);
-    if (project) {
-      project.updateState(
-        renameWorkbenchTab(project.getState(), message.tabId, message.title),
-      );
-    }
-  },
   'desktop:projects': (message) => {
     const previousKey = shell.active;
     // The list changes resource ownership and selection together. Keep signal
@@ -836,8 +822,6 @@ const routeMessage = createMessageRoutes({
           logsPane,
           conversationView,
           isActive: () => shell.active === key,
-          isBrowserCovered: () =>
-            settingsDialog.isOpen() || nativeViewOverlays.isCovered(),
           confirmDiscard,
           onLayoutChanged: layoutChanged,
         });
@@ -854,10 +838,12 @@ const routeMessage = createMessageRoutes({
       applyingProjectList = false;
     }
     rerenderShell();
+    // The page shows the open projects: what a test's launch waits for. The
+    // page itself loads before the main process has opened them.
+    document.body.dataset.desktopReady = 'true';
     if (previousKey !== message.activeKey) {
       settingsDialog.remount();
       currentWorkbench().workbench.layoutVisibleSurfaces();
-      currentWorkbench().workbench.syncBrowserViewBounds();
     }
   },
 });
@@ -871,12 +857,9 @@ const routeHostMessage = (event: MessageEvent): void =>
 window.addEventListener('message', routeHostMessage);
 resolveDesktopPushes().listening();
 
-// Keep the embedded browser aligned when the window resizes: its view is
-// positioned in absolute window coordinates, not renderer layout.
 window.addEventListener('resize', () => {
   const project = projectWorkbenches.get(shell.active);
   if (!project) return;
-  project.workbench.syncBrowserViewBounds();
   project.workbench.layoutVisibleSurfaces();
   project.terminalPane.layout();
 });
@@ -915,9 +898,9 @@ appRoot.addEventListener('surface-action', (event) => {
   }
 });
 
-// A web link in a message opens in its project's browser tab. Left to the
-// window it would be a navigation, which the window refuses for every host
-// but its own allowed few, so the click would do nothing.
+// A web link in a message opens in the user's browser. Left to the window
+// it would be a navigation, which the window refuses for every host but its
+// own allowed few, so the click would do nothing.
 appRoot.addEventListener('click', (event) => {
   if (event.defaultPrevented || event.button !== 0) return;
   const path = event.composedPath();
@@ -935,17 +918,14 @@ appRoot.addEventListener('click', (event) => {
     return;
   const url = URL.parse(link.href);
   if (url?.protocol !== 'http:' && url?.protocol !== 'https:') return;
-  const project = projectWorkbenches.get(sessionOf(event) ?? shell.active);
-  if (!project) return;
   event.preventDefault();
-  project.openBrowser(url);
+  postToMain({ command: DESKTOP_SHELL_COMMANDS.OPEN_LINK, url: url.href });
 });
 
 // The projects list arrives in reply; each project's session subscribes as it
 // opens, and the file tree refreshes when the list names the project this
 // window shows.
 postToMain({ command: DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS });
-document.body.dataset.desktopReady = 'true';
 
 // Sole owner of "the workspace has unsaved editor changes": the main process
 // keeps no copy and learns of it only when this veto raises will-prevent-unload.

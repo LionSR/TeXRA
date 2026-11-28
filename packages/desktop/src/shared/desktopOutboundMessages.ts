@@ -1,5 +1,5 @@
 // Main → renderer pushes for the desktop-only surfaces: the editor tree's
-// change notice, terminal runs, browser state, the diff/pdf/prompt overlays, shell
+// change notice, terminal runs, the diff/pdf/prompt overlays, shell
 // navigation, and logs.
 //
 // This union adds no new wire shape — it composes the per-surface schemas the
@@ -30,7 +30,6 @@ import { DesktopShowPromptMessageSchema } from './desktopPromptMessages.js';
 import { DesktopRunCommandMessageSchema } from './desktopCommandSurface.js';
 import { DesktopOpenSettingsMessageSchema } from './desktopShellMessages.js';
 import {
-  DesktopBrowserStateMessageSchema,
   DesktopTerminalDataMessageSchema,
   DesktopTerminalErrorMessageSchema,
   DesktopTerminalExitMessageSchema,
@@ -46,8 +45,6 @@ export const DesktopOutboundMessageSchema = Schema.Union([
   DesktopTerminalExitMessageSchema,
   DesktopTerminalErrorMessageSchema,
   DesktopTerminalOpenCommandMessageSchema,
-  // Browser
-  DesktopBrowserStateMessageSchema,
   // Overlays
   DesktopShowDiffMessageSchema,
   DesktopCloseDiffMessageSchema,

@@ -23,10 +23,6 @@ import {
   DesktopWorkspaceInboundMessageSchema,
   type DesktopWorkspaceReply,
 } from '../shared/desktopWorkspaceMessages.js';
-import {
-  createDesktopBrowserViews,
-  type DesktopBrowserViews,
-} from './desktopBrowserViews.js';
 import { createDesktopHostRequests } from './desktopHostRequests.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
@@ -47,7 +43,6 @@ interface ProjectBinding {
   readonly port: AttachedPort;
   /** The settings view's verbs on the project's runs. */
   readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
-  readonly browserViews: DesktopBrowserViews;
   /** The binding's lifetime; closing it releases everything above. */
   readonly scope: Scope.Closeable;
 }
@@ -60,7 +55,7 @@ export interface ProjectBindings {
   /** Release every binding: a navigation destroys the document's request
    *  correlations and recording ownership, new ports on the same sessions. */
   readonly releaseAll: Effect.Effect<void>;
-  /** Answer a project's workspace message (files, terminals, browser views).
+  /** Answer a project's workspace message (files, terminals).
    *  A closed project's request is dropped, not routed to a stranger. */
   readonly workspaceRoute: DesktopCommandRoute;
 }
@@ -129,45 +124,10 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
           }),
         onError: host.reportBackgroundError,
       });
-      const browserViews = createDesktopBrowserViews({
-        getWindow: () => (host.window.isDestroyed() ? undefined : host.window),
-        // Electron's window-open handler is the caller here, so the hand-off
-        // forks on the binding's spawner rather than reaching the view as a
-        // program. The window shows the failure, and it is recorded too.
-        openExternalUrl: (url) =>
-          spawn(
-            host
-              .presented(host.previewHost.openExternal(url))
-              .pipe(
-                Effect.catch((error) =>
-                  Effect.sync(() => host.reportBackgroundError(error)),
-                ),
-              ),
-          ),
-        onNavigated: (state) =>
-          post({ command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE, ...state }),
-        onError: host.reportAsyncError,
-        onBlockedExternalUrl: host.reportBackgroundError,
-      });
-      const workspace = createDesktopWorkspaceIpc(post, {
-        ptyHost,
-        browserViews,
-        toWindowBounds: (bounds) => {
-          const zoom = host.window.isDestroyed()
-            ? 1
-            : host.window.webContents.getZoomFactor();
-          return {
-            x: Math.round(bounds.x * zoom),
-            y: Math.round(bounds.y * zoom),
-            width: Math.round(bounds.width * zoom),
-            height: Math.round(bounds.height * zoom),
-          };
-        },
-      });
+      const workspace = createDesktopWorkspaceIpc(post, { ptyHost });
       return {
         workspace,
-        browserViews,
-        /** Stop posting, then release the terminals and browser views. */
+        /** Stop posting, then release the terminals. */
         release: Effect.sync(() => {
           released = true;
           workspace.disposeRendererResources();
@@ -183,7 +143,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         yield* Scope.Scope,
         project.roots.workspace,
       );
-      const { workspace, browserViews, release } = createProjectWorkspace(
+      const { workspace, release } = createProjectWorkspace(
         project,
         spawn,
         yield* terminalCwd(project.roots.workspace),
@@ -279,7 +239,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         bridge,
         port,
         workspace,
-        browserViews,
       };
     });
 
@@ -330,13 +289,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
               `Dropped a workspace request for closed project ${message.session}`,
             ).pipe(withLogChannel('desktop'));
           }
-          // Hidden projects retain their resources, but cannot cover the
-          // visible project with a late browser-bounds notification.
-          if (
-            message.command === DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS &&
-            binding.project !== projects.active()
-          )
-            return Effect.void;
           return binding.workspace.handle(message);
         },
       ),
