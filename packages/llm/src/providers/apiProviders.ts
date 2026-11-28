@@ -47,7 +47,9 @@ export function apiKeyEntry(
  * and for the key of a provider this build does not know, which routes no
  * model.
  */
-export function routedApiKeyProvider(key: string): ApiKeyProviderId | undefined {
+export function routedApiKeyProvider(
+  key: string,
+): ApiKeyProviderId | undefined {
   const provider = apiKeyEntry(key);
   return provider === 'unknown' ? undefined : provider;
 }
