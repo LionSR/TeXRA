@@ -28,12 +28,9 @@ lands.
    `title`; the file-path hint is still open.)
 2. **Closed.** `buildFileLinkSpan` draws every clickable file path and
    `fileLinkTarget` reads the click.
-3. **`PluginsTab.renderSelectRow` restates `renderStateSettingSelectRow`**
-   (`settings/components/shared/stateSettingRows.ts`): the same catalog
-   lookup, row markup and write. The plugin card passes its own label and
-   a narrower select, so the helper needs a `label` first. The only rows
-   that use it are the Codex and Claude Code plugins' inline settings, which
-   #15230 deletes; if that lands, the method goes with them.
+3. **Closed.** `PluginsTab.renderSelectRow` is gone from `main`, and the
+   plugin card has no select row; `renderStateSettingSelectRow` is the one
+   select row, and it reads its choices from the row it already holds.
 4. **Closed.** The user message's Copy is the shared `<copy-button>`.
 5. **Closed.** `factDot` (`wa/factDot.ts`) is the dot between two
    elements, hidden from a screen reader.
