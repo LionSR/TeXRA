@@ -13,9 +13,9 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
 import type { SessionView } from '@texra-ai/worldline/schemas';
+import type { PlanUsage } from '@texra/shared/model/subscriptionUsage';
 import {
   projectName,
-  type PlanUsage,
   type ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';

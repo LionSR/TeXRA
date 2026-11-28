@@ -4,10 +4,12 @@ import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 import { joinFacts } from '@texra-ai/worldline/schemas';
-import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
+import type { PlanUsage } from '@texra/shared/model/subscriptionUsage';
 import {
+  currentUsageWindows,
   formatSubscriptionUsageReset,
   formatSubscriptionUsageUpdated,
+  planUsageName,
   subscriptionQuotaUsed,
   subscriptionUsageUnavailable,
   subscriptionUsageWindowLabel,
@@ -102,17 +104,15 @@ export class SubscriptionUsageRow extends TexraElement {
     `,
   ];
 
-  @property({ attribute: false }) snapshot: SubscriptionUsageSnapshot | null =
-    null;
+  @property({ attribute: false }) snapshot: PlanUsage | null = null;
   @property({ attribute: false }) now = 0;
 
   override render(): TemplateResult | typeof nothing {
     const snapshot = this.snapshot;
     if (!snapshot) return nothing;
-    if (snapshot.state === 'unavailable') {
-      if (snapshot.reason === 'missing_credentials') {
-        return nothing;
-      }
+    // A plan with no credential has no usage to show; its key row says so.
+    if (snapshot.unknown === 'missing_credentials') return nothing;
+    if (snapshot.unknown !== undefined) {
       return html`
         <div class="settings-row subscription-usage-row">
           <div class="settings-row-text">
@@ -121,7 +121,7 @@ export class SubscriptionUsageRow extends TexraElement {
               summary=${joinFacts(['Plan usage', 'unavailable'])}
             >
               <span class="usage-unavailable-detail">
-                ${subscriptionUsageUnavailable(snapshot.reason)}
+                ${subscriptionUsageUnavailable(snapshot.unknown)}
               </span>
             </wa-details>
           </div>
@@ -129,14 +129,15 @@ export class SubscriptionUsageRow extends TexraElement {
       `;
     }
 
+    const planName = planUsageName(snapshot);
     return html`
       <div class="settings-row subscription-usage-row">
         <div class="settings-row-text">
           <div class="usage-card">
             <span class="usage-plan"
-              ><bdi dir="auto">${snapshot.planName}</bdi> usage</span
+              ><bdi dir="auto">${planName}</bdi> usage</span
             >
-            ${snapshot.windows.map((window) => {
+            ${currentUsageWindows(snapshot, this.now).map((window) => {
               const label = subscriptionUsageWindowLabel(window);
               const percent = subscriptionQuotaUsed(window);
               const reset = formatSubscriptionUsageReset(
@@ -149,19 +150,20 @@ export class SubscriptionUsageRow extends TexraElement {
                     ><bdi dir="auto">${label}</bdi>:
                     <bdi dir="auto">${percent}</bdi></span
                   >
-                  ${renderQuotaBar(
-                    window,
-                    `${snapshot.providerName} ${label} usage`,
-                  )}
+                  ${renderQuotaBar(window, `${planName} ${label} usage`)}
                   <span class="usage-reset"
                     ><bdi dir="auto">${reset ?? ''}</bdi></span
                   >
                 </div>
               `;
             })}
-            <span class="usage-updated">
-              ${formatSubscriptionUsageUpdated(snapshot.fetchedAt, this.now)}
-            </span>
+            ${
+              snapshot.at === undefined
+                ? nothing
+                : html`<span class="usage-updated">
+                    ${formatSubscriptionUsageUpdated(snapshot.at, this.now)}
+                  </span>`
+            }
           </div>
         </div>
       </div>

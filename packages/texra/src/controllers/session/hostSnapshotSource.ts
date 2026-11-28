@@ -55,6 +55,7 @@ import type {
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
+import { planUsageOf } from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsage';
 import { workspaceInputFiles } from '@texra/controllers/session/workspaceFileOptions';
 import {
   hasUsableSetupCredential,
@@ -294,34 +295,14 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         const planUsage = yield* Effect.forEach(
           plans,
           (plan) =>
-            Effect.map(quotas.read(plan, stores), (quota) => {
-              switch (quota.state) {
-                case 'read':
-                case 'observed':
-                  return [
-                    {
-                      plan,
-                      ...(quota.state === 'read' &&
-                        quota.planName && { planName: quota.planName }),
-                      at: quota.at,
-                      windows: quota.windows.map((window) => ({
-                        name: window.name,
-                        percentUsed: window.percentUsed,
-                        resetAt: window.resetAt,
-                      })),
-                    },
-                  ];
-                case 'failed':
-                  return [{ plan, windows: [], unknown: quota.reason }];
-                case 'unobserved':
-                  return [{ plan, windows: [], unknown: quota.state }];
-                case 'unread':
-                  return [];
-              }
-            }),
+            Effect.map(quotas.read(plan, stores), (quota) =>
+              planUsageOf(plan, quota),
+            ),
           { concurrency: 'unbounded' },
         );
-        yield* write({ planUsage: planUsage.flat() });
+        yield* write({
+          planUsage: planUsage.filter((usage) => usage !== undefined),
+        });
       }).pipe(underProjectEnv),
     );
     const loadFiles = yield* producer(

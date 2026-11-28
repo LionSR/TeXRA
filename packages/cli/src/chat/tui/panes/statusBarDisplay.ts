@@ -25,8 +25,8 @@ import {
   truncateSummaryToWidth,
 } from '@cli/runtime/terminal/terminalText';
 import type {
+  PlanUsage,
   SubscriptionUsageProvider,
-  SubscriptionUsageSnapshot,
 } from '@texra/shared/model/subscriptionUsage';
 import {
   contextGaugeTone,
@@ -36,6 +36,8 @@ import {
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
 import {
+  limitingUsageWindow,
+  planUsageName,
   subscriptionQuotaTone,
   subscriptionQuotaUsed,
 } from '@ui/copy/subscriptionUsage';
@@ -153,8 +155,9 @@ interface StatusBarChrome {
   readonly modelAccess: UsageRoute | undefined;
   /** The prospective subscription route could not be resolved. */
   readonly subscriptionProbeFailed: boolean;
-  /** Latest quota snapshot for the subscription serving this model. */
-  readonly subscriptionQuota: SubscriptionUsageSnapshot | undefined;
+  /** The usage of the plan serving this model, with the windows still
+   *  running (`currentUsageWindows`). */
+  readonly subscriptionQuota: PlanUsage | undefined;
   /** Session approval policy, for the resume hint. */
   readonly approvalPolicy: ApprovalPolicy;
   /** Terminal width in columns. */
@@ -236,18 +239,15 @@ function accessModeSegment(
 }
 
 function subscriptionQuotaSegment(
-  snapshot: SubscriptionUsageSnapshot | undefined,
+  usage: PlanUsage | undefined,
 ): StatusBarSegment | undefined {
-  if (snapshot?.state !== 'available') return undefined;
-  // The bar shows the window the plan runs out of first: the most used.
-  const limiting = snapshot.windows.toSorted(
-    (left, right) => right.percentUsed - left.percentUsed,
-  )[0];
+  if (usage === undefined) return undefined;
+  const limiting = limitingUsageWindow(usage.windows);
   if (!limiting) return undefined;
   const used = subscriptionQuotaUsed(limiting);
   const tone = subscriptionQuotaTone(limiting);
   return {
-    text: `${snapshot.planName} ${used}`,
+    text: `${planUsageName(usage)} ${used}`,
     compactText: used,
     ...(tone === undefined ? { dim: true } : { color: TONE_PAINT[tone].color }),
     priority: STATUS_BAR_PRIORITY.subscriptionQuota,
