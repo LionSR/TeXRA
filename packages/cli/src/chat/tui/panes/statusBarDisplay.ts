@@ -25,8 +25,8 @@ import {
   truncateSummaryToWidth,
 } from '@cli/runtime/terminal/terminalText';
 import type {
+  PlanUsage,
   SubscriptionUsageProvider,
-  SubscriptionUsageSnapshot,
 } from '@texra/shared/model/subscriptionUsage';
 import {
   contextGaugeTone,
@@ -36,7 +36,8 @@ import {
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
 import {
-  limitingQuotaWindow,
+  limitingUsageWindow,
+  planUsageName,
   subscriptionQuotaTone,
   subscriptionQuotaUsed,
 } from '@ui/copy/subscriptionUsage';
@@ -151,11 +152,15 @@ interface StatusBarChrome {
   readonly commandName: string;
   readonly approvalDepth: number;
   readonly approvalKind: ApprovalQueueStatusKind;
+  /** The active model and its effective reasoning level (matching the desktop
+   *  composer chip), omitted when no model is known yet. */
+  readonly modelChip?: { readonly label: string; readonly compact: string };
   readonly modelAccess: UsageRoute | undefined;
   /** The prospective subscription route could not be resolved. */
   readonly subscriptionProbeFailed: boolean;
-  /** Latest quota snapshot for the subscription serving this model. */
-  readonly subscriptionQuota: SubscriptionUsageSnapshot | undefined;
+  /** The usage of the plan serving this model, with the windows still
+   *  running (`currentUsageWindows`). */
+  readonly subscriptionQuota: PlanUsage | undefined;
   /** Session approval policy, for the resume hint. */
   readonly approvalPolicy: ApprovalPolicy;
   /** Terminal width in columns. */
@@ -232,15 +237,15 @@ function accessModeSegment(
 }
 
 function subscriptionQuotaSegment(
-  snapshot: SubscriptionUsageSnapshot | undefined,
+  usage: PlanUsage | undefined,
 ): StatusBarSegment | undefined {
-  if (snapshot?.state !== 'available') return undefined;
-  const limiting = limitingQuotaWindow(snapshot.windows);
+  if (usage === undefined) return undefined;
+  const limiting = limitingUsageWindow(usage.windows);
   if (!limiting) return undefined;
   const used = subscriptionQuotaUsed(limiting);
   const tone = subscriptionQuotaTone(limiting);
   return {
-    text: `${snapshot.planName} ${used}`,
+    text: `${planUsageName(usage)} ${used}`,
     compactText: used,
     ...(tone === undefined ? { dim: true } : { color: TONE_PAINT[tone].color }),
     priority: STATUS_BAR_PRIORITY.subscriptionQuota,
@@ -311,6 +316,7 @@ const STATUS_BAR_PRIORITY = {
   approvalDepth: 60,
   rootActive: 65,
   subscriptionQuota: 67,
+  modelChip: 68,
   elapsed: 70,
   accessMode: 72,
   location: 74,
@@ -658,6 +664,15 @@ export function buildStatusBarDisplay(
               text: 'root active',
               color: TONE_PAINT.warning.color,
               priority: STATUS_BAR_PRIORITY.rootActive,
+              policy: 'drop',
+            }
+          : undefined,
+        input.modelChip !== undefined
+          ? {
+              text: input.modelChip.label,
+              compactText: input.modelChip.compact,
+              dim: true,
+              priority: STATUS_BAR_PRIORITY.modelChip,
               policy: 'drop',
             }
           : undefined,

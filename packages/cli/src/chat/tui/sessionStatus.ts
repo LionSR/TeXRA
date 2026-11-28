@@ -27,6 +27,8 @@ interface CliSessionStatusInput {
   readonly agent: string;
   /** The session's model, shown until a run records its own. */
   readonly model: string;
+  /** The effective reasoning setting on the model's current route, if any. */
+  readonly modelReasoning?: string;
   /** The route the next request would take; a run's completed request
    *  cannot change route, so its own outranks this one. */
   readonly modelAccess: UsageRoute | undefined;
@@ -120,6 +122,7 @@ export function formatCliSessionStatus(
   return [
     `agent: ${input.agent}`,
     `model: ${getModelLabel(run?.model ?? input.model)}`,
+    ...(input.modelReasoning ? [`reasoning: ${input.modelReasoning}`] : []),
     `model access: ${usageRouteBadge(run?.usage.usageRoute ?? input.modelAccess)?.label ?? OWN_API_KEYS.inline}`,
     `approval: ${formatApprovalPolicy(input.approvalPolicy)}`,
     ...(bypassLabels.length > 0

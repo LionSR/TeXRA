@@ -46,6 +46,19 @@ regenerates `packages/harness/dist/`, followed by a `tsc` pass over
 (`packages/harness/tsconfig.example.json`). The `packed example` CI job still
 installs the packed tarballs and runs the examples.
 
+**CI runs no tests on a pull request.** `.github/workflows/ci.yml` (every
+pull request and push) is the static gate plus a compile of the extension.
+Every suite (the kernel shards on Linux and Windows, both hosts' e2e, the
+packed example, the CLI runtime and TUI validations, the VSIX package) runs
+in `.github/workflows/nightly.yml`, once a night on `main`. A failing night
+opens the `nightly-ci` issue, and a scheduled Claude Code task
+(`.github/prompts/nightly-fix-prompt.md`) reads it each morning: it opens a
+fix PR from a `claude/nightly-fix-*` branch, where every push runs `Nightly`,
+and continues until that run is green; a person merges. So `npm test` before a PR is the
+only test run your change gets before it lands, and
+`gh workflow run Nightly --ref <branch>` runs every suite on a branch whose
+risk is a platform or a host.
+
 The pre-commit hook runs oxfmt on the staged paths; when it rewrites a file
 the commit stops, and you stage the output and commit again. CI runs
 `npm run format:check`.

@@ -7,7 +7,8 @@
 
 import { Effect, SubscriptionRef } from 'effect';
 
-import { getModelLabel, joinFacts } from '@texra-ai/worldline/schemas';
+import { joinFacts } from '@texra-ai/worldline/schemas';
+import { modelSelectionLabel } from '@texra/shared/model/modelPicker';
 import type { ScopeRunner } from '../../scopeRunner';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 
@@ -129,7 +130,7 @@ function sessionHeaderIdentityLine(
       child.modelLabel !== null && `model: ${child.modelLabel}`,
     ]);
   }
-  const model = getModelLabel(meta.model || '-');
+  const model = meta.model ? modelSelectionLabel(meta.model) : '-';
   return joinFacts([`agent: ${meta.chat.label || 'chat'}`, `model: ${model}`]);
 }
 

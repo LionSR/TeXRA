@@ -9,7 +9,7 @@ import { Context, Effect, Record as EffectRecord, String as Str } from 'effect';
 
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { isPathWithin } from '@utils/core/pathCore';
-import { canonicalizePath } from '@utils/files/externalRoots';
+import { canonicalizePath } from '@utils/files/canonicalPath';
 import { envNameKey } from '@utils/system/platformPaths';
 
 /**

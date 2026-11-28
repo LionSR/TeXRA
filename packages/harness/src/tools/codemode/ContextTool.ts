@@ -232,7 +232,7 @@ export const ContextTool = defineTool({
 - view: each message with its index, role, kind, estimated tokens and a preview; the window size and the tokens in use; and the replacements this response already asked for.
 - replace: messages [from, to) are replaced, before your next request, by one message holding \`with\`. Indices are the view's, as this response was sent; ranges asked for in one response must not overlap. The range ends at or before the response that makes the call, and keeps each tool call with its results.
 
-The replaced messages stay in the stored history: the person still sees them, and the executions tool, where offered, reads them back (/executions/current/conversation). A replacement ends prompt-cache reuse from its first message on, and any provider-side continuation, so the next request pays full input price for everything after that point. Keep what the user asked of you, in substance.`,
+The replaced messages stay in the stored history: the user still sees them, and the executions tool, where offered, reads them back (/executions/current/conversation). A replacement ends prompt-cache reuse from its first message on, and any provider-side continuation, so the next request pays full input price for everything after that point. Keep what the user asked of you, in substance.`,
   schema: ContextInputSchema,
   execute: (input: ContextInput) =>
     inRunSession((call) =>

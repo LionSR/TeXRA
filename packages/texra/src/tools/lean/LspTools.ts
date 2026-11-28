@@ -283,12 +283,6 @@ Commands:
 - "list" (default): Full diagnostic messages with locations
 - "count": Summary counts only (faster for checking if file compiles)
 
-Returns diagnostics from the Lean 4 language server including:
-- Compilation errors with location
-- Type mismatches
-- Unsolved goals
-- Warnings and hints
-
 Tips:
 - If diagnostics seem stale, use lean_file on the file to refresh the Lean server
 - Lean reports nothing about axioms here. In a script, \`axioms\` lists what the file's text declares with \`axiom\`, each as its name and statement; \`#print axioms <name>\` in the file is what makes Lean list what a declaration depends on
