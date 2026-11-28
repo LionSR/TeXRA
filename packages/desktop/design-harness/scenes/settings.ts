@@ -17,10 +17,10 @@ const ROWS: PluginRow[] = [
       description:
         'Interact with Lean 4 projects: check diagnostics, inspect terms, and manage files.',
       tools: [
-        { name: 'lean_diagnostics' },
-        { name: 'lean_file' },
-        { name: 'lean_project' },
-        { name: 'lean_inspect' },
+        'lean_diagnostics',
+        'lean_file',
+        'lean_project',
+        'lean_inspect',
       ],
       setup: { status: 'available', installActions: [] },
       switch: 'always-on',
