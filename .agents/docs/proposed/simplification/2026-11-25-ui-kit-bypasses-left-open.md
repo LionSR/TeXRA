@@ -19,13 +19,11 @@ lands.
 
 ## Web views
 
-1. **A file path's hover hint has two forms.** It is a `<wa-tooltip>` in
-   `ProposalRequestPanel.ts` and a native `title` in
-   `FileSelectGroup.ts`, `LaunchAttachments.ts` and `htmlBuilders.ts`. A
-   `<wa-tooltip>` anchors by `id`, and the formatter rows render many to a
-   shadow root, so the choice is between a native `title` everywhere and an
-   id per row. (The 2026-11-27 run gave the user message's time the native
-   `title`; the file-path hint is still open.)
+1. **Closed.** A file path's hover hint is a native `title` everywhere:
+   `buildFileLinkSpan` sets it on every file link, and the proposal card's
+   read-only names carry it; the card's `<wa-tooltip>`s, their ids and the
+   helper's `id` option are gone, and so is the tooltip that repeated the
+   working directory the card already shows in full.
 2. **Closed.** `buildFileLinkSpan` draws every clickable file path and
    `fileLinkTarget` reads the click.
 3. **Closed.** `PluginsTab.renderSelectRow` is gone from `main`, and the
