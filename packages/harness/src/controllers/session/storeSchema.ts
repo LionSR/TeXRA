@@ -16,6 +16,7 @@
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import { pathExists } from '@utils/files/fsEntryExists';
+import { PROJECT_STORE_FORMAT } from '@utils/system/appNamespace';
 import {
   isDamaged,
   pragmaValue,
@@ -26,6 +27,16 @@ import {
 } from './storeAside';
 
 const CHANNEL = 'sessionDatabase';
+
+/** A store's file name under its storage root: a project's names the row
+ *  format it holds, the global store keeps its original name. */
+export const storeFileName = (
+  namespace: string,
+  kind: 'project' | 'global',
+): string =>
+  kind === 'project'
+    ? `${namespace}.${PROJECT_STORE_FORMAT}.db`
+    : `${namespace}.db`;
 
 /** One kind of store's DDL. */
 interface StoreSchema {

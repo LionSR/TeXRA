@@ -25,12 +25,12 @@ import {
   InputHistoryRecordSchema,
 } from '@shared/session/database';
 import { ensureError } from '@utils/errors/errorMessage';
-import { AppNamespace, storeFileName } from '@utils/system/appNamespace';
+import { AppNamespace } from '@utils/system/appNamespace';
 import { changeRead, currentValues } from './currentValues';
 import { storeFile } from './databaseLayer';
 import { mapDatabaseFailure } from './storeAside';
 import { storeConnection } from './storeConnection';
-import { GLOBAL_SCHEMA, openStore } from './storeSchema';
+import { GLOBAL_SCHEMA, openStore, storeFileName } from './storeSchema';
 
 /** Append an entry unless it repeats the latest; a row back when it did. */
 const APPEND_HISTORY = `INSERT INTO input_history (at, value)

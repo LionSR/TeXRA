@@ -73,6 +73,13 @@ It belongs with the store schema. Left because
 `packages/harness/docs/spec.md` cites the current path and #15229 holds that
 file.
 
+Landed 2026-11-28: `storeFileName` is in `controllers/session/storeSchema.ts`
+and the spec cites it there. `PROJECT_STORE_FORMAT` stays in
+`appNamespace.ts`: the `./schemas` entry exports it to hosts that attach to
+a running service, and that entry's closure must stay browser-safe. The
+`${namespace}.db` beside it in `projectDatabase.ts` is the pre-v1 project
+file name, not the global store's, so it stays spelled out.
+
 ## 3. Why a model cannot be served is worded twice in the harness
 
 `routeDecision.ts` (`packages/harness/src/agent/runtime/modelAccess/`) words

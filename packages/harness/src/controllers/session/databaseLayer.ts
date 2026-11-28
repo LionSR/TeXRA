@@ -57,7 +57,7 @@ import {
   RunChanged,
 } from '@shared/session/database';
 import { ToolRegistry } from '@tools/toolTable';
-import { AppNamespace, storeFileName } from '@utils/system/appNamespace';
+import { AppNamespace } from '@utils/system/appNamespace';
 import { currentValues } from './currentValues';
 import {
   LISTED_KINDS,
@@ -93,6 +93,7 @@ import {
   openStore,
   PROJECT_SCHEMA,
   reclaimFreePages,
+  storeFileName,
 } from './storeSchema';
 /** The store file `name` under `storage`, by the directory's real path.
  *  SQLite makes only the file, so `create` makes the directory first. */

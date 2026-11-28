@@ -21,10 +21,11 @@ import { GlobalValues } from '@platform/processRuntime';
 import { Database, ProjectDatabases } from '@shared/session/database';
 import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 import { pathExists } from '@utils/files/fsEntryExists';
-import { AppNamespace, storeFileName } from '@utils/system/appNamespace';
+import { AppNamespace } from '@utils/system/appNamespace';
 
 import { databaseLayer, storeOpenElsewhere } from './databaseLayer';
 import { asideCopies } from './storeAside';
+import { storeFileName } from './storeSchema';
 import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 
 /** No idle retention or explicit invalidation: the project owns its state
