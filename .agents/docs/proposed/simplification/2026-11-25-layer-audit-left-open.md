@@ -110,6 +110,15 @@ the groups, the lock and the helper choices. The wire shape is
   read only by `chat/tui/`. Moving them is mechanical; left to keep this PR
   to modules with a wrong import direction or a duplicated fact.
 
+Landed 2026-11-28: the completion scripts are `commands/completion/`, the
+account status and access selection are `chat/tui/apiStatus.ts` and
+`chat/tui/modelAccessSelection.ts`, and the clipboard paste is
+`chat/tui/input/clipboardImage.ts` beside the paste queue.
+`loginOptions.ts` stays in `runtime/models/`: `texra auth` and
+`subscriptionLogin.ts` read it too. `taskAttach.ts` stays: the 2026-11-27
+terminal note found reading the chat's layout is the point of
+`texra tasks attach`.
+
 ## 6. Smaller single-owner moves
 
 - `common/files/fileHandlingRules.ts` imports `WORKSPACE_DIFF_SUFFIX` from
