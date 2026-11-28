@@ -10,7 +10,6 @@ import type { Plugin } from '@tools/plugins';
 import type { PromptSection } from '@tools/toolTable';
 
 // Local imports - utilities
-import { renderPrompt } from '@agent/prompt/promptRender';
 import { loadAgentsMd } from '@agent/prompt/agentsMd';
 import type { MemoryFolder } from '@agent/memory/memoryLayout';
 import { buildWorkspaceInfoBlock } from './workspaceInfo';
@@ -75,20 +74,20 @@ export function contextUpdate(
 }
 
 /**
- * The system text a conversation opens with: its run's own system text
- * rendered, then the user's and project's `AGENTS.md`, and the workspace
- * facts, which a text-only run (one that declares no tools) goes without.
- * Only the run's own system text is a template: the workspace facts (a path,
- * a branch name) come from the project, so they are data and are never
- * rendered. What each step's plugins add is appended per request
+ * The system text a conversation opens with: its run's own system text,
+ * then the user's and project's `AGENTS.md`, and the workspace facts, which
+ * a text-only run (one that declares no tools) goes without. Every part
+ * reaches the model as written: a run's system text may be a model's (an
+ * `agent` call's) or an installed plugin's, so none of it is a template.
+ * What each step's plugins add is appended per request
  * (`stepInstructions`).
  */
 export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
   function* (
     system: string,
     options: {
-      /** The run's working directory (else its workspace, else `.`): the
-       *  one variable its system text may read, `{{ CWD }}`. */
+      /** The run's working directory (else its workspace, else `.`), which
+       *  `<workspace_info>` states. */
       cwd: string;
       /** The run's session roots: the workspace whose `AGENTS.md` and
        *  `<workspace_info>` it reads, the storage root whose `AGENTS.md`
@@ -108,7 +107,6 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const rendered = yield* renderPrompt(system, { CWD: options.cwd });
     const { roots } = options;
     // The two workspace reads are independent; run them together.
     const [agentsMd, workspaceInfo] = yield* Effect.all(
@@ -125,7 +123,7 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
       ],
       { concurrency: 'unbounded' },
     );
-    const systemPrompt = [rendered, agentsMd].filter(Boolean).join('\n');
+    const systemPrompt = [system, agentsMd].filter(Boolean).join('\n');
     if (options.textOnly) return systemPrompt;
     return [systemPrompt, workspaceInfo].filter(Boolean).join('\n');
   },

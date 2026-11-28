@@ -6,7 +6,6 @@ import { Effect, FileSystem, Iterable, Result } from 'effect';
 
 // Local imports - log
 import {
-  renderPrompt,
   withLogChannel,
   Settings,
   type SettingsStores,
@@ -23,7 +22,7 @@ import { TIKZ_TEMPLATE_SETTING } from '@texra/shared/settings/texraSettings';
 
 /**
  * Create a standalone LaTeX file for a TikZ picture
- * @param template The `texra.latex.tikzTemplate` the picture is rendered into
+ * @param template The `texra.latex.tikzTemplate`, whose `{{ tikzpicture }}` slot takes the picture
  * @param buildDir Absolute build directory path
  * @param workspaceRoot The session's workspace root the file is located in
  * @param suffix Optional suffix for multiple pictures with same label
@@ -38,9 +37,13 @@ const createStandalone = Effect.fn('tikzPictures.createStandalone')(function* (
   suffix?: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const standaloneContent = yield* renderPrompt(template, {
-    tikzpicture: tikzpictures,
-  });
+  // The template is a setting a project's config file can answer, so it is
+  // text with one slot, never a program: the slot takes the pictures as
+  // written (a replacer function, so `$` in them is not a pattern).
+  const standaloneContent = template.replaceAll(
+    /\{\{\s*tikzpicture\s*\}\}/g,
+    () => tikzpictures,
+  );
 
   const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
   const texLocation = pathToLocationIn(

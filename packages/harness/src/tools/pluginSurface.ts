@@ -176,8 +176,6 @@ export type { RunHistoryInconsistent } from '@shared/session/runState';
 // policy, trace and stages, model binding and run files.
 export type { ToolRun } from '@tools/core/ToolTypes';
 export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
-// Renders a prompt template (Nunjucks) with its variables.
-export { PromptRenderFailed, renderPrompt } from '@agent/prompt/promptRender';
 export type {
   AgentTrace,
   StreamHandle,
