@@ -105,7 +105,7 @@
       "ruling": ".agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md#service-scopes-externalroots-stays-a-module-ruled-2026-09-20",
       "symbols": [
         {
-          "file": "packages/harness/src/utils/files/externalRoots.ts",
+          "file": "packages/harness/src/utils/files/canonicalPath.ts",
           "symbol": "registerExternalRoot",
           "signature": "export function registerExternalRoot( absolutePath: string, options: ExternalRootOptions, ): () => void {…}"
         }

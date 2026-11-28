@@ -860,7 +860,7 @@ notes cite the rules by number; this is their text.
 
 ## Service scopes: ExternalRoots stays a module (ruled 2026-09-20)
 
-`ExternalRoots` (`packages/harness/src/utils/files/externalRoots.ts`) is not
+`ExternalRoots` (`packages/harness/src/utils/files/canonicalPath.ts`) is not
 made a standalone service: one writer, four readers, keyed by kind, a sound
 freeze rule; a service is +4 signatures for 0 deletions. Reopen when a
 consumer needs it to be scoped per session. Pinned by
