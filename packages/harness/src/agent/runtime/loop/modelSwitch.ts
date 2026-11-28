@@ -3,11 +3,11 @@
  * tool-use loop at its next model boundary: the rows that record it are
  * appended by the one fiber that holds the run's state.
  */
-import { Array as Arr, Effect, Option, ScopedRef } from 'effect';
+import { Effect, ScopedRef } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
-import { controlOf, type QueuedFollowUp } from '@shared/session/runRows';
+import { queuedModelOf, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunState } from '@shared/session/runState';
 
 import type { RunCell } from '@shared/session/runHistory';
@@ -30,14 +30,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
   ): Effect.fn.Return<RunState, Error, AgentRun | ModelAccess> {
     const run = yield* AgentRun;
     const access = yield* ModelAccess;
-    const model = Option.getOrUndefined(
-      Arr.findLast(controls, (followUp) => {
-        const control = controlOf(followUp);
-        return control?.kind === 'model'
-          ? Option.some(control.model)
-          : Option.none();
-      }),
-    );
+    const model = queuedModelOf(controls);
     if (model === undefined) return yield* cell.current;
     const requests = consumedRows(run.runId, 'model');
     const dropped = requests(controls, { kind: 'dropped', reason: 'noop' });

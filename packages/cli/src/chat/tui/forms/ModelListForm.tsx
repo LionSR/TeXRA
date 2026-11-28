@@ -4,6 +4,7 @@
 // conversation to a compatible model for future turns. `←/→` adjusts the
 // highlighted model's reasoning effort inline.
 
+import { signal } from '@lit-labs/signals';
 import { Box, Text, useInput } from 'ink';
 import { Effect } from 'effect';
 import { useState } from 'react';
@@ -25,6 +26,7 @@ import {
 } from '@cli/runtime/models/modelAccess';
 import type { CliModelPick } from '../commands/handlers/modelCommands';
 import { CHAT_KEY_RECOVERY } from '../commands/handlers/slashContext';
+import { useSignal } from '../state/useSignal';
 import { useChatProcess } from '../chatProcess';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
@@ -133,9 +135,12 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const [highlightedModel, setHighlightedModel] = useState<string | undefined>(
     undefined,
   );
-  const [draftEfforts, setDraftEfforts] = useState<
-    Readonly<Record<string, ReasoningEffort>>
-  >({});
+  // Enter can arrive in the same input burst as an arrow, before React
+  // paints the change. The key handlers and the strip read the same drafts.
+  const [drafts] = useState(() =>
+    signal<Readonly<Record<string, ReasoningEffort>>>({}),
+  );
+  const draftEfforts = useSignal(drafts);
 
   const { data, loading, error } = useAsyncListForm<LoadedModelList>({
     load: () =>
@@ -197,16 +202,17 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
 
   const stepFocusedEffort = (direction: -1 | 1): void => {
     if (!focusedRow || !focusedLevels) return;
-    const currentIndex =
-      focusedEffort === undefined ? 0 : focusedLevels.indexOf(focusedEffort);
+    const previous = drafts.get();
+    const level = previous[focusedRow.value] ?? focusedEffort;
+    const currentIndex = level === undefined ? 0 : focusedLevels.indexOf(level);
     const startIndex = currentIndex >= 0 ? currentIndex : 0;
     const nextIndex = Math.max(
       0,
       Math.min(focusedLevels.length - 1, startIndex + direction),
     );
     const nextLevel = focusedLevels[nextIndex];
-    if (nextLevel === undefined || nextLevel === focusedEffort) return;
-    setDraftEfforts((prev) => ({ ...prev, [focusedRow.value]: nextLevel }));
+    if (nextLevel === undefined || nextLevel === level) return;
+    drafts.set({ ...previous, [focusedRow.value]: nextLevel });
   };
 
   // Reflect any drafted effort in the row's description so the list and the
@@ -273,7 +279,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           props.onClose();
           return;
         }
-        props.onSelect({ model: value, effort: draftEfforts[value] });
+        props.onSelect({ model: value, effort: drafts.get()[value] });
       }}
       onCancel={props.onClose}
     />

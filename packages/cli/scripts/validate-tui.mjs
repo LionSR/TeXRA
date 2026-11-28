@@ -596,7 +596,8 @@ const SCENARIOS = [
       'Sign in or out, and choose subscri…',
       '/models',
       'Enable or disable models in pickers',
-      '… 9 more rows',
+      '/effort',
+      '… 10 more rows',
     ],
     unexpect: [
       '/ap  Switch',
@@ -776,6 +777,20 @@ const SCENARIOS = [
       'Platform not initialized',
       '/model · error',
     ],
+  },
+  {
+    name: 'model-form-resize-and-confirm-effort',
+    smoke: true,
+    env: {
+      HARNESS_CAN_SELECT_MODEL: '1',
+      HARNESS_VISIBLE_MODELS: 'openai/gpt-6.2-sol||openai/gpt-6.2-astra',
+      OPENAI_API_KEY: 'harness-openai-key',
+    },
+    keys: [...MODEL_PICKER_KEYS, DOWN],
+    resizes: [{ cols: 100, rows: 12 }],
+    // Enter in the same input burst must commit the draft on the focused row.
+    keysAfterResize: [RIGHT + '\r'],
+    expect: ['Model switched to openai/gpt-6.2-astra@high.'],
   },
   {
     name: 'model-form-buffered-hotkey',
@@ -1135,9 +1150,9 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       '… 5 previous rows',
-      "› /plan      Read the focused agent's work plan",
+      '› /status    Show task details and cost',
       '/plugins',
-      '… 5 more rows',
+      '… 6 more rows',
       'Esc close',
     ],
   },

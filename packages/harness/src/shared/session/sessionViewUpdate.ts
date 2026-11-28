@@ -51,6 +51,7 @@ import {
   freshSharedRunRows,
   isSharedRunRow,
   isMessage,
+  queuedModelOf,
   ownCopy,
   type SharedRunRow,
 } from './runRows';
@@ -776,7 +777,11 @@ function applyRowFacts(u: Update, run: RunView, event: SharedRunRow): RunView {
   const queued =
     moved.followUps === undefined
       ? run
-      : { ...run, queuedFollowUps: queuedMessages(after) };
+      : {
+          ...run,
+          queuedFollowUps: queuedMessages(after),
+          queuedModel: queuedModelOf(after.followUps),
+        };
   // A position moves the turn, and a wait is a point a fork may cut at;
   // where it leaves the run is `applyEvent`'s.
   if (moved.at === undefined) return queued;

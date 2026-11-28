@@ -124,7 +124,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? displayRun.usage
       : undefined;
   // Use root-session access facts only before any stream exists.
-  const accessModel = displayRun?.model ?? sessionMeta.model;
+  const accessModel =
+    displayRun?.queuedModel ?? displayRun?.model ?? sessionMeta.model;
 
   // Which subscription, if any, would serve the selected stream's model on its
   // next request, plus its effective reasoning level for the status bar chip.

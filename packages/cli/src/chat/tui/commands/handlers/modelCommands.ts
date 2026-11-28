@@ -30,11 +30,8 @@ export function currentChatModel(
 ): string {
   if (session.canStartRootRun()) return sessionMeta.get().model;
   const runId = rootRunId.get();
-  return (
-    (runId === undefined
-      ? undefined
-      : runViewOf(currentView(), runId)?.model) ?? sessionMeta.get().model
-  );
+  const run = runViewOf(currentView(), runId);
+  return run?.queuedModel ?? run?.model ?? sessionMeta.get().model;
 }
 
 /** Persist `level` for `modelName` and notify listeners (matching desktop). */

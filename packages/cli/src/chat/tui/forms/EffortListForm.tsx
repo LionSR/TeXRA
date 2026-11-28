@@ -4,7 +4,7 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
-import type { ReasoningEffort } from '@texra-ai/llm';
+import { selectModel, type ReasoningEffort } from '@texra-ai/llm';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { getModelLabel, joinFacts } from '@texra-ai/worldline/schemas';
 import {
@@ -36,9 +36,16 @@ interface EffortListFormProps {
 export function EffortListForm(props: EffortListFormProps): React.JSX.Element {
   const { roots } = useChatProcess();
   const fallbackLabel = getModelLabel(props.currentModel || '-');
+  // Ask for the route's defaults without the current effort override. The
+  // mode still belongs to the route, since it can change which one serves it.
+  const selected = selectModel(props.currentModel);
+  const routeModel = selected
+    ? selected.config.ref +
+      (selected.request.mode ? `+${selected.request.mode}` : '')
+    : props.currentModel;
   const { data, loading, error } = useAsyncListForm<LoadedEffortChoices>({
     load: () =>
-      loadModelOptions(roots, [props.currentModel]).pipe(
+      loadModelOptions(roots, [routeModel]).pipe(
         Effect.map(([option]): LoadedEffortChoices => {
           const modelLabel = option?.label ?? fallbackLabel;
           const efforts = option?.efforts;
