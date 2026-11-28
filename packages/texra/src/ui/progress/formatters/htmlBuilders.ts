@@ -21,7 +21,7 @@ import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Side-effect import - register the <copy-button> element drawn below
-import '@ui/progress/components/CopyButton';
+import '@ui/wa/CopyButton';
 import { getComposedPathElement } from '@ui/progress/components/composedPath';
 
 // Local imports - formatter helpers
