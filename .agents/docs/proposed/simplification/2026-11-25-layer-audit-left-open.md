@@ -57,6 +57,13 @@ Same rule as above; each fix edits a file #15229 or #15230 holds.
 - `packages/harness/src/agent/runtime/delegation/bashDelivery.ts` is read
   only by `tools/bash.ts`.
 
+Landed 2026-11-28: `bashDelivery.ts` is `tools/bashDelivery.ts`, and
+`BASH_BACKGROUND_LOG_CAP_CHARS` sits in it beside the excerpt budgets the
+same writer keeps. `toolResultText.ts` and the HTTP status reads had left
+on 2026-11-27. `backoffSchedule.ts` stays: `randomizedExponentialBackoff`
+is on the `./plugins` entry and the app's arXiv download and usage-log
+flush read it.
+
 ## 2. The store file's name sits in `utils/`
 
 `storeFileName` (`packages/harness/src/utils/system/appNamespace.ts`) is read

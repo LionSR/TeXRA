@@ -12,20 +12,17 @@ import {
 } from '@agent/runtime/RunCall';
 import {
   BACKGROUND_OUTPUT,
+  BASH_BACKGROUND_LOG_CAP_CHARS,
   bashErrorDelivery,
   bashResultDelivery,
   type BackgroundBashCall,
-} from '@agent/runtime/delegation/bashDelivery';
+} from '@tools/bashDelivery';
 import {
   launchProcessChild,
   type ProcessTurn,
 } from '@agent/runtime/processRun';
 import { SessionRoots } from '@platform/rootedFs';
-import {
-  BASH_BACKGROUND_LOG_CAP_CHARS,
-  BASH_TOOL_DEFAULT_TIMEOUT_MS,
-  elidedNote,
-} from '@shared/toolUse';
+import { BASH_TOOL_DEFAULT_TIMEOUT_MS, elidedNote } from '@shared/toolUse';
 import {
   processExit,
   ToolError,
